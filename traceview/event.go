@@ -70,6 +70,31 @@ func (e *Event) AddInt32(key string, value int32) {
 	C.free(unsafe.Pointer(ckey))
 }
 
+// Adds float32 key/value to event
+func (e *Event) AddFloat32(key string, value float32) {
+	var ckey *C.char = C.CString(key)
+	C.oboe_event_add_info_double(&e.event, ckey, C.double(value))
+	C.free(unsafe.Pointer(ckey))
+}
+
+// Adds float64 key/value to event
+func (e *Event) AddFloat64(key string, value float64) {
+	var ckey *C.char = C.CString(key)
+	C.oboe_event_add_info_double(&e.event, ckey, C.double(value))
+	C.free(unsafe.Pointer(ckey))
+}
+
+// Adds float key/value to event
+func (e *Event) AddBool(key string, value bool) {
+	var ckey *C.char = C.CString(key)
+	true := 0
+	if value {
+		true = 1
+	}
+	C.oboe_event_add_info_bool(&e.event, ckey, C.int(true))
+	C.free(unsafe.Pointer(ckey))
+}
+
 // Adds edge (reference to previous event) to event
 func (e *Event) AddEdge(ctx *Context) {
 	C.oboe_event_add_edge(&e.event, &ctx.metadata)
