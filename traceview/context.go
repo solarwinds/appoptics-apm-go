@@ -53,7 +53,7 @@ func NewSampledContext(layer, mdstr string, reportEntry bool) (ctx SampledContex
 	if sampled {
 		ctx = NewContext()
 		if reportEntry {
-			ctx.ReportEvent(LabelEntry, layer, "SampleRate", rate, "SampleSource", source)
+			ctx.(*Context).reportEvent(LabelEntry, layer, false, "SampleRate", rate, "SampleSource", source)
 		}
 	} else {
 		ctx = &NullContext{}
@@ -67,13 +67,18 @@ func (ctx *Context) NewEvent(label Label, layer string) *Event {
 
 // Create and report an event using KVs from variadic args
 func (ctx *Context) ReportEvent(label Label, layer string, args ...interface{}) error {
+	return ctx.reportEvent(label, layer, true, args...)
+}
+
+// Create and report an event using KVs from variadic args
+func (ctx *Context) reportEvent(label Label, layer string, addCtxEdge bool, args ...interface{}) error {
 	// create new event from context
 	e := ctx.NewEvent(label, layer)
 	for i := 0; i < len(args); i += 2 {
 		// load key name
 		key, is_str := args[i].(string)
 		if !is_str {
-			return errors.New(fmt.Sprintf("Key %v not a string", key))
+			return errors.New(fmt.Sprintf("Key %v (type %T) not a string", key, key))
 		}
 		// load value and add KV to event
 		switch val := args[i+1].(type) {
@@ -99,6 +104,11 @@ func (ctx *Context) ReportEvent(label Label, layer string, args ...interface{}) 
 			// fmt.Fprintf(os.Stderr, "Unrecognized Event key %v val %v", key, val)
 		}
 	}
+
+	if addCtxEdge {
+		e.AddEdge(ctx)
+	}
+
 	// report event
 	return e.Report(ctx)
 }
