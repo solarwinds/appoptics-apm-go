@@ -5,7 +5,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/appneta/go-traceview/traceview"
+	"github.com/tracelytics/go-traceview/traceview"
 	"math/rand"
 	"net/http"
 	"time"
