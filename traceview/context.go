@@ -215,7 +215,7 @@ func oboe_metadata_tostr(md *oboe_metadata_t, buf []byte) int {
 		return -1
 	}
 	enc := make([]byte, 2*result)
-	_ = hex.Encode(enc, buf)
+	_ = hex.Encode(enc, buf[:result])
 	copy(buf[0:2*result], enc)
 	buf[2*result] = byte(0)
 
