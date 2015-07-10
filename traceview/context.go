@@ -69,6 +69,17 @@ func oboe_metadata_random(md *oboe_metadata_t) {
 	}
 }
 
+func oboe_random_op_id(md *oboe_metadata_t) {
+	_, err := rand.Read(md.ids.op_id)
+	if err != nil {
+		return
+	}
+}
+
+func oboe_ids_set_op_id(ids *oboe_ids_t, op_id []byte) {
+	copy(ids.op_id, op_id)
+}
+
 /*
  * Pack a metadata struct into a buffer.
  *
