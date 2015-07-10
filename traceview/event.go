@@ -11,7 +11,8 @@ import (
 import "C"
 
 type Event struct {
-	event C.oboe_event_t
+	metadata oboe_metadata_t
+	bbuf     bson_buffer
 }
 
 // Every event needs a label:
@@ -23,7 +24,50 @@ const (
 	LabelInfo  = "info"
 )
 
-func NewEvent(md *C.oboe_metadata_t, label Label, layer string) *Event {
+func oboe_event_init(evt *Event, md *oboe_metadata_t) int {
+    assert(evt);
+    assert(md);
+
+    var result int
+    md_buf := make([]byte, 64)
+
+    // Metadata initialization
+
+    result = oboe_metadata_init(&evt.metadata)
+    if (result < 0) {
+		return result
+	}
+
+    evt.metadata.task_len = md.task_len;
+    evt.metadata.op_len = md.op_len;
+
+	copy(evt.metadata.ids.task_id, md.ids.task_id)
+    oboe_random_op_id(evt.metadata.ids.op_id);
+
+    // Buffer initialization 
+
+    if (!bson_buffer_init(&evt->bbuf)) goto destroy_metadata;
+
+    // Copy header to buffer
+    // TODO errors?
+    if (!bson_append_string(&evt->bbuf, "_V", header)) goto destroy_buf;
+
+    // Pack metadata
+    if (oboe_metadata_tostr(&evt->metadata, md_buf, 64) < 0) goto destroy_buf;
+
+    if(!bson_append_string(&evt->bbuf, "X-Trace", md_buf)) goto destroy_buf;
+
+    return 0;
+
+destroy_buf:
+    bson_buffer_destroy(&evt->bbuf);
+destroy_metadata:
+    oboe_metadata_destroy(&evt->metadata);
+fail:
+    return -1;
+}
+
+func NewEvent(md *oboe_metadata_t, label Label, layer string) *Event {
 	var event C.oboe_event_t
 	C.oboe_event_init(&event, md)
 	e := &Event{event}
