@@ -16,7 +16,7 @@ func NewUDPReporter() *Reporter {
 	// XXX: make connection configurable?
 	var conn *net.UDPConn
 	serverAddr, err := net.ResolveUDPAddr("udp4", "127.0.0.1:7831")
-	if err != nil {
+	if err == nil {
 		conn, err = net.DialUDP("udp4", nil, serverAddr)
 	}
 	if err != nil {
