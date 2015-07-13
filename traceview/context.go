@@ -7,14 +7,6 @@ import (
 	"fmt"
 )
 
-/*
-#cgo pkg-config: openssl
-#cgo LDFLAGS: -loboe
-#include <stdlib.h>
-#include <oboe/oboe.h>
-*/
-import "C"
-
 const OBOE_METADATA_STRING_LEN = 58
 const MASK_TASK_ID_LEN = 0x03
 const MASK_OP_ID_LEN = 0x08

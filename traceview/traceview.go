@@ -8,6 +8,8 @@ import (
 )
 
 /*
+#cgo pkg-config: openssl
+#cgo LDFLAGS: -loboe
 #include <stdlib.h>
 #include <oboe/oboe.h>
 */
@@ -46,6 +48,7 @@ func init() {
 }
 
 // Determines if request should be traced, based on sample rate settings:
+// This is our only dependency on the liboboe C library
 func ShouldTraceRequest(layer, xtrace_header string) (bool, int, int) {
 	var sample_rate, sample_source C.int
 	var clayer *C.char = C.CString(layer)
