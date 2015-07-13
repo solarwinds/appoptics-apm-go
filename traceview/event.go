@@ -86,14 +86,14 @@ func (e *Event) AddInt32(key string, value int32) {
 
 // Adds edge (reference to previous event) to event
 func (e *Event) AddEdge(ctx *Context) {
-	bson_append_string(&e.bbuf, "Edge", metadataString(&ctx.metadata))
+	bson_append_string(&e.bbuf, "Edge", ctx.metadata.op_string())
 }
 
 func (e *Event) AddEdgeFromMetaDataString(mdstr string) {
 	var md oboe_metadata_t
 	oboe_metadata_init(&md)
 	oboe_metadata_fromstr(&md, mdstr)
-	bson_append_string(&e.bbuf, "Edge", metadataString(&md))
+	bson_append_string(&e.bbuf, "Edge", md.op_string())
 }
 
 // Reports event using specified Reporter

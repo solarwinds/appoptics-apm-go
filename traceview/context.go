@@ -221,6 +221,12 @@ func oboe_metadata_tostr(md *oboe_metadata_t) (string, error) {
 	return string(enc[:len]), nil
 }
 
+func (md *oboe_metadata_t) op_string() string {
+	enc := make([]byte, 2*md.op_len)
+	len := hex.Encode(enc, md.ids.op_id[:md.op_len])
+	return string(enc[:len])
+}
+
 // Allocates context with random metadata (new trace)
 func NewContext() *Context {
 	ctx := &Context{}
