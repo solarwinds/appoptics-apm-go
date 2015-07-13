@@ -20,10 +20,8 @@ const (
 
 func oboe_event_init(evt *Event, md *oboe_metadata_t) int {
 	var result int
-	md_buf := make([]byte, 64)
 
 	// Metadata initialization
-
 	result = oboe_metadata_init(&evt.metadata)
 	if result < 0 {
 		return result
@@ -44,8 +42,10 @@ func oboe_event_init(evt *Event, md *oboe_metadata_t) int {
 	bson_append_string(&evt.bbuf, "_V", EventHeader)
 
 	// Pack metadata
-	oboe_metadata_tostr(&evt.metadata, md_buf) // XXX: probably should just return a string ...
-	bson_append_string(&evt.bbuf, "X-Trace", string(md_buf))
+	md_str, err := oboe_metadata_tostr(&evt.metadata)
+	if err == nil {
+		bson_append_string(&evt.bbuf, "X-Trace", md_str)
+	}
 
 	return 0
 }

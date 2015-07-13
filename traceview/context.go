@@ -3,6 +3,7 @@ package traceview
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 )
 
@@ -200,26 +201,24 @@ func oboe_metadata_fromstr(md *oboe_metadata_t, buf string) int {
 	return oboe_metadata_unpack(md, ubuf)
 }
 
-func oboe_metadata_tostr(md *oboe_metadata_t, buf []byte) int {
-	if md == nil || buf == nil {
-		return -1
+func oboe_metadata_tostr(md *oboe_metadata_t) (string, error) {
+	if md == nil {
+		return "", errors.New("invalid metadata")
 	}
 
+	buf := make([]byte, 64)
 	result := oboe_metadata_pack(md, buf)
 	if result < 0 {
-		return result
+		return "", errors.New("unable to pack metadata")
 	}
 
 	/* result is # of packed bytes */
 	if !(2*result < len(buf)) { // hex repr of md is 2*(# of packed bytes)
-		return -1
+		return "", errors.New("buffer too small")
 	}
 	enc := make([]byte, 2*result)
-	_ = hex.Encode(enc, buf[:result])
-	copy(buf[0:2*result], enc)
-	buf[2*result] = byte(0)
-
-	return 0
+	len := hex.Encode(enc, buf[:result-1])
+	return string(enc[:len]), nil
 }
 
 // Allocates context with random metadata (new trace)
@@ -248,13 +247,7 @@ func (ctx *Context) String() string {
 
 // converts metadata (*oboe_metadata_t) to a string representation
 func metadataString(metadata *oboe_metadata_t) string {
-	buf := make([]byte, 64)
-	var md_str string
-
-	rc := oboe_metadata_tostr(metadata, buf)
-	if rc == 0 {
-		md_str = string(buf)
-	}
-
+	md_str, _ := oboe_metadata_tostr(metadata)
+	// XXX: error check?
 	return md_str
 }
