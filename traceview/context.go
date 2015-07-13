@@ -133,7 +133,7 @@ func oboe_metadata_pack(md *oboe_metadata_t, buf []byte) int {
 	buf[0] |= ((uint8(md.op_len) >> 2) - 1) << 3
 
 	copy(buf[1:1+md.task_len], md.ids.task_id)
-	copy(buf[md.task_len:md.task_len+md.op_len], md.ids.op_id)
+	copy(buf[1+md.task_len:1+md.task_len+md.op_len], md.ids.op_id)
 
 	return req_len
 }
@@ -217,7 +217,7 @@ func oboe_metadata_tostr(md *oboe_metadata_t) (string, error) {
 		return "", errors.New("buffer too small")
 	}
 	enc := make([]byte, 2*result)
-	len := hex.Encode(enc, buf[:result-1])
+	len := hex.Encode(enc, buf[:result])
 	return string(enc[:len]), nil
 }
 
