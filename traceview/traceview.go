@@ -17,6 +17,8 @@ import "C"
 
 var udp_reporter *Reporter
 var settings Settings
+var emptyCString *C.char
+var layerCache *CStringCache
 
 // Global configuration settings (sample rate, tracing mode.)
 type Settings struct {
@@ -45,19 +47,31 @@ func init() {
 	case "never":
 		settings.settings_cfg.tracing_mode = C.OBOE_TRACE_NEVER
 	}
+
+	// To save a malloc/free, we preallocate an empty C string that can be passed into C
+	emptyCString = C.CString("")
+	layerCache = NewCStringCache()
 }
 
 // Determines if request should be traced, based on sample rate settings:
-// This is our only dependency on the liboboe C library
+// This is our only dependency on the liboboe C library.
 func ShouldTraceRequest(layer, xtrace_header string) (bool, int, int) {
 	var sample_rate, sample_source C.int
-	var clayer *C.char = C.CString(layer)
-	var cxt *C.char = C.CString(xtrace_header)
+	var clayer *C.char = layerCache.Get(layer)
+	var cxt *C.char
+
+	if xtrace_header == "" {
+		// common case, where we are the entry layer
+		cxt = emptyCString
+	} else {
+		cxt = C.CString(xtrace_header)
+	}
 
 	sample := int(C.oboe_sample_request(clayer, cxt, &settings.settings_cfg, &sample_rate, &sample_source))
 
-	C.free(unsafe.Pointer(clayer))
-	C.free(unsafe.Pointer(cxt))
+	if cxt != emptyCString {
+		C.free(unsafe.Pointer(cxt))
+	}
 
 	return sample != 0, int(sample_rate), int(sample_source)
 }
