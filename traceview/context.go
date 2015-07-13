@@ -7,17 +7,18 @@ import (
 	"fmt"
 )
 
-const OBOE_METADATA_STRING_LEN = 58
-const MASK_TASK_ID_LEN = 0x03
-const MASK_OP_ID_LEN = 0x08
-const MASK_HAS_OPTIONS = 0x04
-const MASK_VERSION = 0xF0
+const (
+	OBOE_METADATA_STRING_LEN = 58
+	MASK_TASK_ID_LEN         = 0x03
+	MASK_OP_ID_LEN           = 0x08
+	MASK_HAS_OPTIONS         = 0x04
+	MASK_VERSION             = 0xF0
 
-const XTR_CURRENT_VERSION = 1
-
-const OBOE_MAX_TASK_ID_LEN = 20
-const OBOE_MAX_OP_ID_LEN = 8
-const OBOE_MAX_METADATA_PACK_LEN = 512
+	XTR_CURRENT_VERSION        = 1
+	OBOE_MAX_TASK_ID_LEN       = 20
+	OBOE_MAX_OP_ID_LEN         = 8
+	OBOE_MAX_METADATA_PACK_LEN = 512
+)
 
 type oboe_ids_t struct {
 	task_id []byte
