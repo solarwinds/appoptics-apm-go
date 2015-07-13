@@ -15,6 +15,10 @@ func TestSendEvent(t *testing.T) {
 		t.Errorf("Unexpected %v", err)
 	}
 
+	ctx.ReportEvent("info", test_layer,
+		"Controller", "test_controller",
+		"Action", "test_action")
+
 	e = ctx.NewEvent(LabelExit, test_layer)
 	e.AddEdge(ctx)
 	if err := e.Report(ctx); err != nil {

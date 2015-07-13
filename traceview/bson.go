@@ -44,7 +44,21 @@ func bson_append_int64(b *bson_buffer, k string, v int64) {
 	b.addInt64(v)
 }
 
-// Based on https://github.com/go-mgo/mgo/blob/v2/bson/encodb.go
+func bson_append_float64(b *bson_buffer, k string, v float64) {
+	b.addElemName('\x01', k)
+	b.addFloat64(v)
+}
+
+func bson_append_bool(b *bson_buffer, k string, v bool) {
+	b.addElemName('\x08', k)
+	if v {
+		b.addBytes(1)
+	} else {
+		b.addBytes(0)
+	}
+}
+
+// Based on https://github.com/go-mgo/mgo/blob/v2/bson/encode.go
 // --------------------------------------------------------------------------
 // Marshaling of elements in a document.
 

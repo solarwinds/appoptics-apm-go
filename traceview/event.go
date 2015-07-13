@@ -84,6 +84,21 @@ func (e *Event) AddInt32(key string, value int32) {
 	bson_append_int32(&e.bbuf, key, value)
 }
 
+// Adds float32 key/value to event
+func (e *Event) AddFloat32(key string, value float32) {
+	bson_append_float64(&e.bbuf, key, float64(value))
+}
+
+// Adds float64 key/value to event
+func (e *Event) AddFloat64(key string, value float64) {
+	bson_append_float64(&e.bbuf, key, value)
+}
+
+// Adds float key/value to event
+func (e *Event) AddBool(key string, value bool) {
+	bson_append_bool(&e.bbuf, key, value)
+}
+
 // Adds edge (reference to previous event) to event
 func (e *Event) AddEdge(ctx *Context) {
 	bson_append_string(&e.bbuf, "Edge", ctx.metadata.op_string())
