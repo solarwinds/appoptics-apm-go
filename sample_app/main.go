@@ -5,10 +5,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/appneta/go-traceview/traceview"
 	"math/rand"
 	"net/http"
 	"time"
+
+	"github.com/appneta/go-traceview/traceview"
 )
 
 // Our "app" doesn't do much:

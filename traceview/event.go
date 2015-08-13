@@ -1,17 +1,8 @@
 package traceview
 
-import (
-	"unsafe"
-)
-
-/*
-#include <stdlib.h>
-#include <oboe/oboe.h>
-*/
-import "C"
-
 type Event struct {
-	event C.oboe_event_t
+	metadata oboe_metadata_t
+	bbuf     bson_buffer
 }
 
 // Every event needs a label:
@@ -23,10 +14,45 @@ const (
 	LabelInfo  = "info"
 )
 
-func NewEvent(md *C.oboe_metadata_t, label Label, layer string) *Event {
-	var event C.oboe_event_t
-	C.oboe_event_init(&event, md)
-	e := &Event{event}
+const (
+	EventHeader = "1"
+)
+
+func oboe_event_init(evt *Event, md *oboe_metadata_t) int {
+	var result int
+
+	// Metadata initialization
+	result = oboe_metadata_init(&evt.metadata)
+	if result < 0 {
+		return result
+	}
+
+	evt.metadata.task_len = md.task_len
+	evt.metadata.op_len = md.op_len
+
+	copy(evt.metadata.ids.task_id, md.ids.task_id)
+	oboe_random_op_id(&evt.metadata)
+
+	// Buffer initialization
+
+	bson_buffer_init(&evt.bbuf)
+
+	// Copy header to buffer
+	// TODO errors?
+	bson_append_string(&evt.bbuf, "_V", EventHeader)
+
+	// Pack metadata
+	md_str, err := oboe_metadata_tostr(&evt.metadata)
+	if err == nil {
+		bson_append_string(&evt.bbuf, "X-Trace", md_str)
+	}
+
+	return 0
+}
+
+func NewEvent(md *oboe_metadata_t, label Label, layer string) *Event {
+	e := &Event{}
+	oboe_event_init(e, md)
 	e.addLabelLayer(label, layer)
 	return e
 }
@@ -40,48 +66,49 @@ func (e *Event) addLabelLayer(label Label, layer string) {
 
 // Adds string key/value to event
 func (e *Event) AddString(key, value string) {
-	var ckey *C.char = C.CString(key)
-	var cvalue *C.char = C.CString(value)
-
-	C.oboe_event_add_info(&e.event, ckey, cvalue)
-
-	C.free(unsafe.Pointer(ckey))
-	C.free(unsafe.Pointer(cvalue))
+	bson_append_string(&e.bbuf, key, value)
 }
 
 // Adds int key/value to event
 func (e *Event) AddInt(key string, value int) {
-	var ckey *C.char = C.CString(key)
-	C.oboe_event_add_info_int64(&e.event, ckey, C.int64_t(value))
-	C.free(unsafe.Pointer(ckey))
+	bson_append_int(&e.bbuf, key, value)
 }
 
 // Adds int64 key/value to event
 func (e *Event) AddInt64(key string, value int64) {
-	var ckey *C.char = C.CString(key)
-	C.oboe_event_add_info_int64(&e.event, ckey, C.int64_t(value))
-	C.free(unsafe.Pointer(ckey))
+	bson_append_int64(&e.bbuf, key, value)
 }
 
 // Adds int32 key/value to event
 func (e *Event) AddInt32(key string, value int32) {
-	var ckey *C.char = C.CString(key)
-	C.oboe_event_add_info_int64(&e.event, ckey, C.int64_t(value))
-	C.free(unsafe.Pointer(ckey))
+	bson_append_int32(&e.bbuf, key, value)
+}
+
+// Adds float32 key/value to event
+func (e *Event) AddFloat32(key string, value float32) {
+	bson_append_float64(&e.bbuf, key, float64(value))
+}
+
+// Adds float64 key/value to event
+func (e *Event) AddFloat64(key string, value float64) {
+	bson_append_float64(&e.bbuf, key, value)
+}
+
+// Adds float key/value to event
+func (e *Event) AddBool(key string, value bool) {
+	bson_append_bool(&e.bbuf, key, value)
 }
 
 // Adds edge (reference to previous event) to event
 func (e *Event) AddEdge(ctx *Context) {
-	C.oboe_event_add_edge(&e.event, &ctx.metadata)
+	bson_append_string(&e.bbuf, "Edge", ctx.metadata.op_string())
 }
 
 func (e *Event) AddEdgeFromMetaDataString(mdstr string) {
-	var cmdstr *C.char = C.CString(mdstr)
-	var md C.oboe_metadata_t
-	C.oboe_metadata_init(&md)
-	C.oboe_metadata_fromstr(&md, cmdstr, C.size_t(len(mdstr)))
-	C.oboe_event_add_edge(&e.event, &md)
-	C.free(unsafe.Pointer(cmdstr))
+	var md oboe_metadata_t
+	oboe_metadata_init(&md)
+	oboe_metadata_fromstr(&md, mdstr)
+	bson_append_string(&e.bbuf, "Edge", md.op_string())
 }
 
 // Reports event using specified Reporter
@@ -96,5 +123,5 @@ func (e *Event) Report(c *Context) error {
 
 // Returns Metadata string (X-Trace header)
 func (e *Event) MetaDataString() string {
-	return metadataString(&e.event.metadata)
+	return metadataString(&e.metadata)
 }

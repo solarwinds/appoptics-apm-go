@@ -35,7 +35,7 @@ You should see these requests appear on your TraceView dashboard.
 
 ## License
 
-Copyright (c) 2013 Appneta
+Copyright (c) 2015 Appneta
 
 Released under the [AppNeta Open License](http://www.appneta.com/appneta-license), Version 1.0
 

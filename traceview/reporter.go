@@ -1,42 +1,59 @@
 package traceview
 
 import (
-	"errors"
-	"fmt"
 	"log"
-	"unsafe"
+	"net"
+	"os"
+	"time"
 )
 
-/*
-#include <stdlib.h>
-#include <oboe/oboe.h>
-*/
-import "C"
-
+// XXX: make this an interface ...
 type Reporter struct {
-	reporter C.oboe_reporter_t
+	conn *net.UDPConn
 }
 
 func NewUDPReporter() *Reporter {
-	r := Reporter{}
-	var host *C.char = C.CString("127.0.0.1")
-	var port *C.char = C.CString("7831")
-
-	if C.oboe_reporter_udp_init(&r.reporter, host, port) < 0 {
-		log.Printf("Failed to initialize UDP reporter")
+	// XXX: make connection configurable?
+	var conn *net.UDPConn
+	serverAddr, err := net.ResolveUDPAddr("udp4", "127.0.0.1:7831")
+	if err == nil {
+		conn, err = net.DialUDP("udp4", nil, serverAddr)
 	}
-
-	C.free(unsafe.Pointer(host))
-	C.free(unsafe.Pointer(port))
-
-	return &r
+	if err != nil {
+		log.Printf("Failed to initialize UDP reporter: %v", err)
+	}
+	return &Reporter{conn}
 }
 
 func (r *Reporter) ReportEvent(ctx *Context, e *Event) error {
-	var err error
-	rc := C.oboe_reporter_send(&r.reporter, &ctx.metadata, &e.event)
-	if rc < 0 {
-		err = errors.New(fmt.Sprintf("Error Reporting Event: %v", int(rc)))
+	if r.conn == nil {
+		// Reporter didn't initialize, nothing to do...
+		return nil
+	}
+
+	// XXX add validation from oboe_reporter_send
+
+	us := time.Now().UnixNano() / 1000
+	e.AddInt64("Timestamp_u", us)
+
+	// XXX could cache hostname and PID:
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Println("Unable to get hostname: %v", err)
+		return err
+	}
+	e.AddString("Hostname", hostname)
+	e.AddInt("PID", os.Getpid())
+
+	// Update the context's op_id to that of the event
+	oboe_ids_set_op_id(&ctx.metadata.ids, e.metadata.ids.op_id)
+
+	// Send BSON:
+	bson_buffer_finish(&e.bbuf)
+	_, err = r.conn.Write(e.bbuf.buf)
+	if err != nil {
+		log.Printf("Unable to send event: %v", err)
+		return err
 	}
 	return err
 }
