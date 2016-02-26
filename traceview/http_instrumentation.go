@@ -4,7 +4,6 @@ package traceview
 
 import (
 	"net/http"
-	"reflect"
 )
 
 var layer = "go_http"
@@ -17,6 +16,7 @@ func InstrumentedHttpHandler(handler func(http.ResponseWriter, *http.Request)) f
 		var event *Event
 		xtrace_header := r.Header.Get("X-Trace")
 		sampled, sample_rate, sample_source := ShouldTraceRequest(layer, xtrace_header)
+		status := http.StatusOK
 
 		if sampled {
 			// Create context:
@@ -38,7 +38,9 @@ func InstrumentedHttpHandler(handler func(http.ResponseWriter, *http.Request)) f
 
 			// Create exit event, but do not report yet. Just add its X-Trace header:
 			event = exitEvent(ctx)
-			w.Header()["X-Trace"] = []string{event.MetaDataString()}
+			w.Header().Set("X-Trace", event.MetaDataString())
+
+			w = httpResponseWriter{w, &status}
 		}
 
 		// Call original HTTP handler:
@@ -46,10 +48,9 @@ func InstrumentedHttpHandler(handler func(http.ResponseWriter, *http.Request)) f
 
 		if sampled {
 			// Add status code and report exit event:
-			event.AddInt64("Status", getStatusCode(w))
+			event.AddInt("Status", status)
 			event.Report(ctx)
 		}
-
 	}
 }
 
@@ -78,21 +79,14 @@ func exitEvent(ctx *Context) *Event {
 	return e
 }
 
-// Extracts HTTP status code from writer, using reflection. This depends on http.response internals.
-// Returns -1 if status was not found.
-func getStatusCode(w http.ResponseWriter) int64 {
-	var status int64 = -1
+// httpResponseWriter observes calls to another http.ResponseWriter that change
+// the HTTP status code.
+type httpResponseWriter struct {
+	http.ResponseWriter
+	status *int
+}
 
-	ptr := reflect.ValueOf(w)
-	if ptr.Kind() == reflect.Ptr {
-		val := ptr.Elem()
-		if val.Kind() == reflect.Struct {
-			field := val.FieldByName("status")
-			if field.Kind() == reflect.Int {
-				status = field.Int()
-			}
-		}
-	}
-
-	return status
+func (w httpResponseWriter) WriteHeader(status int) {
+	w.ResponseWriter.WriteHeader(status)
+	*w.status = status
 }
