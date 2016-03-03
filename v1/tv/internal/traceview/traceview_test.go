@@ -1,3 +1,5 @@
+// Copyright (C) 2016 AppNeta, Inc. All rights reserved.
+
 package traceview
 
 import (
@@ -7,10 +9,11 @@ import (
 
 // Excercise sampling rate logic:
 func TestSampleRequest(t *testing.T) {
+	_ = SetTestReporter() // set up test reporter
 	sampled := 0
 	total := 1000
 	for i := 0; i < total; i++ {
-		if ok, _, _ := ShouldTraceRequest(test_layer, ""); ok {
+		if ok, _, _ := shouldTraceRequest(test_layer, ""); ok {
 			sampled++
 		}
 	}

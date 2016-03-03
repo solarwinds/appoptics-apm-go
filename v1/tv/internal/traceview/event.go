@@ -1,3 +1,5 @@
+// Copyright (C) 2016 AppNeta, Inc. All rights reserved.
+
 package traceview
 
 type Event struct {
@@ -9,20 +11,25 @@ type Event struct {
 type Label string
 
 const (
-	LabelEntry = "entry"
-	LabelExit  = "exit"
-	LabelInfo  = "info"
+	LabelEntry        = "entry"
+	LabelExit         = "exit"
+	LabelInfo         = "info"
+	LabelError        = "error"
+	LabelProfileEntry = "profile_entry"
+	LabelProfileExit  = "profile_exit"
 )
 
 const (
-	EventHeader = "1"
+	eventHeader = "1"
 )
 
 func oboe_event_init(evt *Event, md *oboe_metadata_t) int {
-	var result int
+	if evt == nil || md == nil {
+		return -1
+	}
 
 	// Metadata initialization
-	result = oboe_metadata_init(&evt.metadata)
+	result := oboe_metadata_init(&evt.metadata)
 	if result < 0 {
 		return result
 	}
@@ -39,7 +46,7 @@ func oboe_event_init(evt *Event, md *oboe_metadata_t) int {
 
 	// Copy header to buffer
 	// TODO errors?
-	bson_append_string(&evt.bbuf, "_V", EventHeader)
+	bson_append_string(&evt.bbuf, "_V", eventHeader)
 
 	// Pack metadata
 	md_str, err := oboe_metadata_tostr(&evt.metadata)
@@ -64,9 +71,14 @@ func (e *Event) addLabelLayer(label Label, layer string) {
 	}
 }
 
-// Adds string key/value to event
+// Adds string key/value to event. BSON strings are assumed to be Unicode.
 func (e *Event) AddString(key, value string) {
 	bson_append_string(&e.bbuf, key, value)
+}
+
+// Adds a binary buffer as a key/value to this event. This uses a binary-safe BSON buffer type.
+func (e *Event) AddBinary(key string, value []byte) {
+	bson_append_binary(&e.bbuf, key, value)
 }
 
 // Adds int key/value to event
@@ -104,7 +116,7 @@ func (e *Event) AddEdge(ctx *Context) {
 	bson_append_string(&e.bbuf, "Edge", ctx.metadata.op_string())
 }
 
-func (e *Event) AddEdgeFromMetaDataString(mdstr string) {
+func (e *Event) AddEdgeFromMetadataString(mdstr string) {
 	var md oboe_metadata_t
 	oboe_metadata_init(&md)
 	oboe_metadata_fromstr(&md, mdstr)
@@ -112,16 +124,23 @@ func (e *Event) AddEdgeFromMetaDataString(mdstr string) {
 }
 
 // Reports event using specified Reporter
-func (e *Event) ReportUsing(c *Context, r *Reporter) error {
-	return r.ReportEvent(c, e)
+func (e *Event) ReportUsing(c *Context, r Reporter) error {
+	return reportEvent(r, c, e)
 }
 
 // Reports event using default (UDP) Reporter
 func (e *Event) Report(c *Context) error {
-	return e.ReportUsing(c, udp_reporter)
+	return e.ReportUsing(c, reporter)
+}
+
+// Report event using SampledContext interface
+func (e *Event) ReportContext(c SampledContext, addCtxEdge bool, args ...interface{}) {
+	if ctx, ok := c.(*Context); ok {
+		ctx.report(e, addCtxEdge, args...)
+	}
 }
 
 // Returns Metadata string (X-Trace header)
-func (e *Event) MetaDataString() string {
-	return metadataString(&e.metadata)
+func (e *Event) MetadataString() string {
+	return MetadataString(&e.metadata)
 }

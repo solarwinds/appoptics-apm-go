@@ -1,3 +1,6 @@
+// Copyright (C) 2016 AppNeta, Inc. All rights reserved.
+
+// Low-level API for creating and reporting events for distributed tracing with TraceView
 package traceview
 
 import (
@@ -5,19 +8,20 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 const (
-	OBOE_METADATA_STRING_LEN = 58
-	MASK_TASK_ID_LEN         = 0x03
-	MASK_OP_ID_LEN           = 0x08
-	MASK_HAS_OPTIONS         = 0x04
-	MASK_VERSION             = 0xF0
+	oboe_metadata_string_len = 58
+	mask_task_id_len         = 0x03
+	mask_op_id_len           = 0x08
+	mask_has_options         = 0x04
+	mask_version             = 0xF0
 
-	XTR_CURRENT_VERSION        = 1
-	OBOE_MAX_TASK_ID_LEN       = 20
-	OBOE_MAX_OP_ID_LEN         = 8
-	OBOE_MAX_METADATA_PACK_LEN = 512
+	xtr_current_version        = 1
+	oboe_max_task_id_len       = 20
+	oboe_max_op_id_len         = 8
+	oboe_max_metadata_pack_len = 512
 )
 
 type oboe_ids_t struct {
@@ -40,10 +44,10 @@ func oboe_metadata_init(md *oboe_metadata_t) int {
 		return -1
 	}
 
-	md.task_len = OBOE_MAX_TASK_ID_LEN
-	md.op_len = OBOE_MAX_OP_ID_LEN
-	md.ids.task_id = make([]byte, OBOE_MAX_TASK_ID_LEN)
-	md.ids.op_id = make([]byte, OBOE_MAX_TASK_ID_LEN)
+	md.task_len = oboe_max_task_id_len
+	md.op_len = oboe_max_op_id_len
+	md.ids.task_id = make([]byte, oboe_max_task_id_len)
+	md.ids.op_id = make([]byte, oboe_max_task_id_len)
 
 	return 0
 }
@@ -117,7 +121,7 @@ func oboe_metadata_pack(md *oboe_metadata_t, buf []byte) int {
 	 */
 	task_bits = (uint8(md.task_len) >> 2) - 1
 
-	buf[0] = XTR_CURRENT_VERSION << 4
+	buf[0] = xtr_current_version << 4
 	if task_bits == 4 {
 		buf[0] |= 3
 	} else {
@@ -144,18 +148,18 @@ func oboe_metadata_unpack(md *oboe_metadata_t, data []byte) int {
 	var task_len, op_len int
 
 	/* don't recognize this? */
-	if (flag&MASK_VERSION)>>4 != XTR_CURRENT_VERSION {
+	if (flag&mask_version)>>4 != xtr_current_version {
 		return -2
 	}
 
-	task_len = (int(flag&MASK_TASK_ID_LEN) + 1) << 2
+	task_len = (int(flag&mask_task_id_len) + 1) << 2
 	if task_len == 16 {
 		task_len = 20
 	}
-	op_len = ((int(flag&MASK_OP_ID_LEN) >> 3) + 1) << 2
+	op_len = ((int(flag&mask_op_id_len) >> 3) + 1) << 2
 
 	/* do header lengths describe reality? */
-	if (task_len + op_len + 1) != len(data) {
+	if (task_len + op_len + 1) > len(data) { // header contains more bytes than buffer
 		return -1
 	}
 
@@ -173,7 +177,7 @@ func oboe_metadata_fromstr(md *oboe_metadata_t, buf string) int {
 		return -1
 	}
 
-	ubuf := make([]byte, OBOE_MAX_METADATA_PACK_LEN)
+	ubuf := make([]byte, oboe_max_metadata_pack_len)
 
 	// a hex string's length would be an even number
 	if len(buf)%2 == 1 {
@@ -181,7 +185,7 @@ func oboe_metadata_fromstr(md *oboe_metadata_t, buf string) int {
 	}
 
 	// check if there are more hex bytes than we want
-	if len(buf)/2 > OBOE_MAX_METADATA_PACK_LEN {
+	if len(buf)/2 > oboe_max_metadata_pack_len {
 		return -1
 	}
 
@@ -190,15 +194,11 @@ func oboe_metadata_fromstr(md *oboe_metadata_t, buf string) int {
 	if ret != len(buf)/2 || err != nil {
 		return -1
 	}
-
+	ubuf = ubuf[:ret] // truncate buffer to fit decoded bytes
 	return oboe_metadata_unpack(md, ubuf)
 }
 
 func oboe_metadata_tostr(md *oboe_metadata_t) (string, error) {
-	if md == nil {
-		return "", errors.New("invalid metadata")
-	}
-
 	buf := make([]byte, 64)
 	result := oboe_metadata_pack(md, buf)
 	if result < 0 {
@@ -211,26 +211,50 @@ func oboe_metadata_tostr(md *oboe_metadata_t) (string, error) {
 	}
 	enc := make([]byte, 2*result)
 	len := hex.Encode(enc, buf[:result])
-	return string(enc[:len]), nil
+	return strings.ToUpper(string(enc[:len])), nil
 }
 
 func (md *oboe_metadata_t) op_string() string {
 	enc := make([]byte, 2*md.op_len)
 	len := hex.Encode(enc, md.ids.op_id[:md.op_len])
-	return string(enc[:len])
+	return strings.ToUpper(string(enc[:len]))
 }
 
 // a Context that may or not be tracing (due to sample rate)
 type SampledContext interface {
 	ReportEvent(label Label, layer string, args ...interface{}) error
+	ReportEventMap(label Label, layer string, keys map[string]interface{}) error
+	Copy() SampledContext
+	IsTracing() bool
+	String() string
+	NewSampledEvent(label Label, layer string, addCtxEdge bool) SampledEvent
+}
+
+type SampledEvent interface {
+	ReportContext(c SampledContext, addCtxEdge bool, args ...interface{})
+	MetadataString() string
 }
 
 // a NullContext never reports events
 type NullContext struct{}
+type NullEvent struct{}
 
 func (e *NullContext) ReportEvent(label Label, layer string, args ...interface{}) error {
 	return nil
 }
+func (e *NullContext) ReportEventMap(label Label, layer string, keys map[string]interface{}) error {
+	return nil
+}
+func (e *NullContext) Copy() SampledContext { return &NullContext{} }
+func (e *NullContext) IsTracing() bool      { return false }
+func (e *NullContext) String() string       { return "" }
+func (e *NullContext) NewSampledEvent(label Label, layer string, addCtxEdge bool) SampledEvent {
+	return &NullEvent{}
+}
+
+func (e *NullEvent) ReportContext(c SampledContext, addCtxEdge bool, args ...interface{}) {
+}
+func (e *NullEvent) MetadataString() string { return "" }
 
 // Allocates context with random metadata (new trace)
 func NewContext() *Context {
@@ -241,19 +265,32 @@ func NewContext() *Context {
 }
 
 // Allocates context with existing metadata (for continuing traces)
-func NewContextFromMetaDataString(mdstr string) *Context {
+func NewContextFromMetadataString(mdstr string) *Context {
 	ctx := &Context{}
 	oboe_metadata_init(&ctx.metadata)
 	oboe_metadata_fromstr(&ctx.metadata, mdstr)
 	return ctx
 }
 
-func NewSampledContext(layer, mdstr string, reportEntry bool) (ctx SampledContext) {
-	sampled, rate, source := ShouldTraceRequest(layer, mdstr)
+func NewSampledContext(layer, mdstr string, reportEntry bool, cb func() map[string]interface{}) (ctx SampledContext) {
+	sampled, rate, source := shouldTraceRequest(layer, mdstr)
 	if sampled {
-		ctx = NewContext()
+		if mdstr == "" {
+			ctx = NewContext()
+		} else {
+			ctx = NewContextFromMetadataString(mdstr)
+		}
 		if reportEntry {
-			ctx.(*Context).reportEvent(LabelEntry, layer, false, "SampleRate", rate, "SampleSource", source)
+			var kvs map[string]interface{}
+			if cb != nil {
+				kvs = cb()
+			}
+			if len(kvs) == 0 {
+				kvs = make(map[string]interface{})
+			}
+			kvs["SampleRate"] = rate
+			kvs["SampleSource"] = source
+			ctx.(*Context).reportEventMap(LabelEntry, layer, false, kvs)
 		}
 	} else {
 		ctx = &NullContext{}
@@ -261,8 +298,39 @@ func NewSampledContext(layer, mdstr string, reportEntry bool) (ctx SampledContex
 	return
 }
 
+func (ctx *Context) Copy() SampledContext {
+	md := oboe_metadata_t{}
+	oboe_metadata_init(&md)
+	copy(md.ids.task_id, ctx.metadata.ids.task_id)
+	copy(md.ids.op_id, ctx.metadata.ids.op_id)
+	return &Context{metadata: md}
+}
+func (ctx *Context) IsTracing() bool { return true }
+
 func (ctx *Context) NewEvent(label Label, layer string) *Event {
 	return NewEvent(&ctx.metadata, label, layer)
+}
+
+func (ctx *Context) NewSampledEvent(label Label, layer string, addCtxEdge bool) SampledEvent {
+	e := NewEvent(&ctx.metadata, label, layer)
+	if addCtxEdge {
+		e.AddEdge(ctx)
+	}
+	return e
+}
+
+// Create and report and event using a map of KVs
+func (ctx *Context) ReportEventMap(label Label, layer string, keys map[string]interface{}) error {
+	return ctx.reportEventMap(label, layer, true, keys)
+}
+
+func (ctx *Context) reportEventMap(label Label, layer string, addCtxEdge bool, keys map[string]interface{}) error {
+	args := make([]interface{}, 0)
+	for k, v := range keys {
+		args = append(args, k)
+		args = append(args, v)
+	}
+	return ctx.reportEvent(label, layer, addCtxEdge, args...)
 }
 
 // Create and report an event using KVs from variadic args
@@ -274,6 +342,11 @@ func (ctx *Context) ReportEvent(label Label, layer string, args ...interface{}) 
 func (ctx *Context) reportEvent(label Label, layer string, addCtxEdge bool, args ...interface{}) error {
 	// create new event from context
 	e := ctx.NewEvent(label, layer)
+	return ctx.report(e, addCtxEdge, args...)
+}
+
+// report an event using KVs from variadic args
+func (ctx *Context) report(e *Event, addCtxEdge bool, args ...interface{}) error {
 	for i := 0; i < len(args); i += 2 {
 		// load key name
 		key, is_str := args[i].(string)
@@ -284,6 +357,8 @@ func (ctx *Context) reportEvent(label Label, layer string, addCtxEdge bool, args
 		switch val := args[i+1].(type) {
 		case string:
 			e.AddString(key, val)
+		case []byte:
+			e.AddBinary(key, val)
 		case int:
 			e.AddInt(key, val)
 		case int64:
@@ -300,8 +375,10 @@ func (ctx *Context) reportEvent(label Label, layer string, addCtxEdge bool, args
 			if key == "Edge" {
 				e.AddEdge(val)
 			}
-		default: // XXX log error?
-			// fmt.Fprintf(os.Stderr, "Unrecognized Event key %v val %v", key, val)
+		default:
+			// silently skip unsupported value type
+			// TODO log error message? return err?
+			//fmt.Fprintf(os.Stderr, "Unrecognized Event key %v val %v\n", key, val)
 		}
 	}
 
@@ -314,11 +391,11 @@ func (ctx *Context) reportEvent(label Label, layer string, addCtxEdge bool, args
 }
 
 func (ctx *Context) String() string {
-	return fmt.Sprintf("Context: %s", metadataString(&ctx.metadata))
+	return MetadataString(&ctx.metadata)
 }
 
 // converts metadata (*oboe_metadata_t) to a string representation
-func metadataString(metadata *oboe_metadata_t) string {
+func MetadataString(metadata *oboe_metadata_t) string {
 	md_str, _ := oboe_metadata_tostr(metadata)
 	// XXX: error check?
 	return md_str

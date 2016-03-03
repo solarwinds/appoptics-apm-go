@@ -1,3 +1,5 @@
+// Copyright (C) 2016 AppNeta, Inc. All rights reserved.
+
 package traceview
 
 import (
@@ -9,7 +11,6 @@ type bson_buffer struct {
 }
 
 // Conforms to C interface to simplify port
-// XXX: convert to something more go-like
 
 func bson_buffer_init(b *bson_buffer) {
 	b.buf = make([]byte, 0, 4)
@@ -24,6 +25,11 @@ func bson_buffer_finish(b *bson_buffer) {
 func bson_append_string(b *bson_buffer, k, v string) {
 	b.addElemName('\x02', k)
 	b.addStr(v)
+}
+
+func bson_append_binary(b *bson_buffer, k string, v []byte) {
+	b.addElemName('\x05', k)
+	b.addBinary(v)
 }
 
 func bson_append_int(b *bson_buffer, k string, v int) {
@@ -70,16 +76,10 @@ func (b *bson_buffer) addElemName(kind byte, name string) {
 
 // Marshaling of base types.
 
-func (b *bson_buffer) addBinary(subtype byte, v []byte) {
-	if subtype == 0x02 {
-		// Wonder how that brilliant idea came to lifb. Obsolete, luckily.
-		b.addInt32(int32(len(v) + 4))
-		b.addBytes(subtype)
-		b.addInt32(int32(len(v)))
-	} else {
-		b.addInt32(int32(len(v)))
-		b.addBytes(subtype)
-	}
+func (b *bson_buffer) addBinary(v []byte) {
+	subtype := byte(0) // don't use obsolete 0x02 subtype
+	b.addInt32(int32(len(v)))
+	b.addBytes(subtype)
 	b.addBytes(v...)
 }
 

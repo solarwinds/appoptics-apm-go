@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/appneta/go-traceview/traceview"
+	"github.com/appneta/go-traceview/v1/tv"
 )
 
 // Our "app" doesn't do much:
@@ -19,6 +19,6 @@ func slow_handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/", traceview.InstrumentedHttpHandler(slow_handler))
+	http.HandleFunc("/", tv.HttpHandler(slow_handler))
 	http.ListenAndServe(":8899", nil)
 }

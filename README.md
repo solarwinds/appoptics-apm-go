@@ -9,11 +9,7 @@ Follow the instructions during signup to install the Host Agent (â€œtracelyzerâ€
 
 Then, install the following (which assumes you are running Ubuntu/Debian):
 
-* [Go 1.2](http://code.google.com/p/go/)
-
-* OpenSSL libraries and dev headers: apt-get install libssl-dev
-
-* pkg-config: apt-get install pkg-config
+* [Go 1.5](http://code.google.com/p/go/)
 
 * This code: go get github.com/appneta/go-traceview/traceview
 
