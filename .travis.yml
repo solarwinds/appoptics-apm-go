@@ -1,0 +1,22 @@
+language: go
+
+go:
+  - 1.4
+  - 1.5
+  - 1.6
+
+env:
+  global:
+    - GO15VENDOREXPERIMENT=1
+        
+install:
+  - go get golang.org/x/tools/cmd/cover
+  - go get github.com/mattn/goveralls
+  - go get github.com/wadey/gocovmerge
+  - go get golang.org/x/net/context github.com/stretchr/testify/assert gopkg.in/mgo.v2/bson
+
+script:
+  - cd $GOPATH/src/github.com/appneta/go-traceview/v1/tv && go test -v -covermode=count -coverprofile=cov.out -coverpkg github.com/appneta/go-traceview/v1/tv/internal/traceview,github.com/appneta/go-traceview/v1/tv
+#  - pushd internal/traceview/; go test -cover -covermode=count -coverprofile=cov.out; popd
+#  - gocovmerge cov.out internal/traceview/cov.out > covmerge.out
+#  - $HOME/gopath/bin/goveralls -coverprofile=covmerge.out -service=travis-ci -repotoken $COVERALLS_TOKEN
