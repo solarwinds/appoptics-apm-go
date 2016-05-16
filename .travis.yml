@@ -1,7 +1,6 @@
 language: go
 
 go:
-  - 1.4
   - 1.5
   - 1.6
 
@@ -17,6 +16,6 @@ install:
 
 script:
   - cd $GOPATH/src/github.com/appneta/go-traceview/v1/tv && go test -v -covermode=count -coverprofile=cov.out -coverpkg github.com/appneta/go-traceview/v1/tv/internal/traceview,github.com/appneta/go-traceview/v1/tv
-#  - pushd internal/traceview/; go test -cover -covermode=count -coverprofile=cov.out; popd
-#  - gocovmerge cov.out internal/traceview/cov.out > covmerge.out
-#  - $HOME/gopath/bin/goveralls -coverprofile=covmerge.out -service=travis-ci -repotoken $COVERALLS_TOKEN
+  - pushd internal/traceview/; go test -cover -covermode=count -coverprofile=cov.out; popd
+  - gocovmerge cov.out internal/traceview/cov.out > covmerge.out
+  - $GOPATH/bin/goveralls -coverprofile=covmerge.out -service=travis-ci -repotoken $COVERALLS_TOKEN
