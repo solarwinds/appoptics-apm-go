@@ -74,10 +74,16 @@ func reportEvent(r Reporter, ctx *Context, e *Event) error {
 	bson_buffer_finish(&e.bbuf)
 	_, err := r.WritePacket(e.bbuf.buf)
 	if err != nil {
-		log.Printf("Unable to send event: %v", err)
+		//log.Printf("Unable to send event: %v", err)
 		return err
 	}
 	return err
+}
+
+// Determines if request should be traced, based on sample rate settings:
+// This is our only dependency on the liboboe C library.
+func shouldTraceRequest(layer, xtraceHeader string) (sampled bool, sampleRate, sampleSource int) {
+	return oboeSampleRequest(layer, xtraceHeader)
 }
 
 // SetTestReporter sets and returns a test reporter that captures raw event bytes
