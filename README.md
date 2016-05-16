@@ -1,6 +1,8 @@
 
 # TraceView for Go
 
+[![Coverage Status](https://coveralls.io/repos/github/appneta/go-traceview/badge.svg)](https://coveralls.io/github/appneta/go-traceview)
+
 ## Installing
 
 To install, you should first [sign up for a TraceView account](http://www.appneta.com/products/traceview-free-account/).
