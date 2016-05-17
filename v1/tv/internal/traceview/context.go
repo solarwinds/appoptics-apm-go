@@ -204,11 +204,7 @@ func oboe_metadata_tostr(md *oboe_metadata_t) (string, error) {
 	if result < 0 {
 		return "", errors.New("unable to pack metadata")
 	}
-
-	/* result is # of packed bytes */
-	if !(2*result < len(buf)) { // hex repr of md is 2*(# of packed bytes)
-		return "", errors.New("buffer too small")
-	}
+	// encode as hex
 	enc := make([]byte, 2*result)
 	len := hex.Encode(enc, buf[:result])
 	return strings.ToUpper(string(enc[:len])), nil

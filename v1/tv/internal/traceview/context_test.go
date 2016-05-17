@@ -43,6 +43,24 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, 0, oboe_metadata_unpack(&mdUnpack, buf))       // unpack valid buf into md
 	assert.Equal(t, MetadataString(&mdUnpack), md1Str)             // unpacked md string should match
 
+	// oboe_metadata_pack for 12-byte shorter trace/task ID (default is 20 + 8-byte op ID)
+	short_task_len := 12
+	var mdS, mdSU oboe_metadata_t
+	assert.Equal(t, 0, oboe_metadata_init(&mdS)) // init regular metadata
+	mdS.task_len = short_task_len                // override task ID len
+	oboe_metadata_random(&mdS)                   // generate random task & op IDs
+	bufS := make([]byte, 128)                    // buffer to pack
+	assert.Equal(t, (1 + short_task_len + 8),
+		oboe_metadata_pack(&mdS, bufS)) // pack buf
+	mdSStr, err := oboe_metadata_tostr(&mdS) // encode as string
+	assert.NoError(t, err)
+	t.Logf("mdS: %s", mdSStr)                             // log 50 char hex string
+	assert.Len(t, mdSStr, (1+short_task_len+8)*2)         // check len=(1 + 12 + 8)*2
+	mdSU.task_len = short_task_len                        // override target MD task len
+	assert.Equal(t, 0, oboe_metadata_unpack(&mdSU, bufS)) // unpack
+	assert.Equal(t, short_task_len, mdSU.task_len)        // verify target MD task len
+	assert.Equal(t, mdSStr, MetadataString(&mdSU))        // verify unpacked value
+
 	// oboe_metadata_fromstr
 	var md2 oboe_metadata_t
 	nullMd := "1B00000000000000000000000000000000000000000000000000000000"
