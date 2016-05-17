@@ -73,10 +73,6 @@ func reportEvent(r Reporter, ctx *Context, e *Event) error {
 	// Send BSON:
 	bson_buffer_finish(&e.bbuf)
 	_, err := r.WritePacket(e.bbuf.buf)
-	if err != nil {
-		//log.Printf("Unable to send event: %v", err)
-		return err
-	}
 	return err
 }
 

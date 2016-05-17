@@ -252,9 +252,8 @@ func (e *NullContext) NewSampledEvent(label Label, layer string, addCtxEdge bool
 	return &NullEvent{}
 }
 
-func (e *NullEvent) ReportContext(c SampledContext, addCtxEdge bool, args ...interface{}) {
-}
-func (e *NullEvent) MetadataString() string { return "" }
+func (e *NullEvent) ReportContext(c SampledContext, addCtxEdge bool, args ...interface{}) {}
+func (e *NullEvent) MetadataString() string                                               { return "" }
 
 // Allocates context with random metadata (new trace)
 func NewContext() *Context {

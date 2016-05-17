@@ -2,6 +2,8 @@
 
 package traceview
 
+import "bytes"
+
 type Event struct {
 	metadata oboe_metadata_t
 	bbuf     bson_buffer
@@ -120,7 +122,10 @@ func (e *Event) AddEdgeFromMetadataString(mdstr string) {
 	var md oboe_metadata_t
 	oboe_metadata_init(&md)
 	oboe_metadata_fromstr(&md, mdstr)
-	bson_append_string(&e.bbuf, "Edge", md.op_string())
+	// only add Edge if metadata references same trace as ours
+	if bytes.Compare(e.metadata.ids.task_id, md.ids.task_id) == 0 {
+		bson_append_string(&e.bbuf, "Edge", md.op_string())
+	}
 }
 
 // Reports event using specified Reporter

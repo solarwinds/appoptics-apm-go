@@ -5,8 +5,8 @@ package traceview
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	g "github.com/appneta/go-traceview/v1/tv/internal/graphtest"
+	"github.com/stretchr/testify/assert"
 )
 
 var test_layer string = "go_test"
@@ -18,19 +18,18 @@ func TestSendEvent(t *testing.T) {
 	e := ctx.NewEvent(LabelEntry, test_layer)
 	e.AddInt("IntTest", 123)
 
-	if err := e.Report(ctx); err != nil {
-		t.Errorf("Unexpected %v", err)
-	}
+	err := e.Report(ctx)
+	assert.NoError(t, err)
 
-	ctx.ReportEvent("info", test_layer,
+	err = ctx.ReportEvent("info", test_layer,
 		"Controller", "test_controller",
 		"Action", "test_action")
+	assert.NoError(t, err)
 
 	e = ctx.NewEvent(LabelExit, test_layer)
 	e.AddEdge(ctx)
-	if err := e.Report(ctx); err != nil {
-		t.Errorf("Unexpected %v", err)
-	}
+	err = e.Report(ctx)
+	assert.NoError(t, err)
 
 	g.AssertGraph(t, r.Bufs, 3, map[g.MatchNode]g.AssertNode{
 		{"go_test", "entry"}: {nil, func(n g.Node) {
@@ -57,4 +56,59 @@ func TestEvent(t *testing.T) {
 	assert.Equal(t, evt.metadata.ids.task_id, md.ids.task_id) // task IDs should match
 	assert.NotEqual(t, evt.metadata.ids.op_id, md.ids.op_id)  // op IDs should not match
 	assert.Len(t, evt.MetadataString(), 58)                   // event md string correct length
+}
+
+func TestEventMetadata(t *testing.T) {
+	r := SetTestReporter()
+
+	ctx := NewContext()
+	e := ctx.NewEvent(LabelExit, "alice")
+	e2 := ctx.NewEvent(LabelEntry, "bob")
+
+	ctx2 := NewContext() // context for unassociated trace
+	assert.Len(t, ctx.String(), 58)
+	assert.Len(t, ctx2.String(), 58)
+	assert.NotEqual(t, ctx.String()[2:42], ctx2.String()[2:42])
+	// try to add ctx2 to to this event -- no effect
+	e.AddEdgeFromMetadataString(ctx2.String())
+	err := e.Report(ctx)
+	assert.NoError(t, err)
+	// try to add e to e2 -- should work
+	e2.AddEdgeFromMetadataString(e.MetadataString())
+	e2.Report(ctx)
+	// test event pair
+	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+		{"alice", "exit"}: {},
+		{"bob", "entry"}:  {g.OutEdges{{"alice", "exit"}}, nil},
+	})
+}
+
+func TestSampledEvent(t *testing.T) {
+	r := SetTestReporter()
+	ctx := NewContext()
+	e := ctx.NewEvent(LabelEntry, test_layer)
+	err := e.Report(ctx)
+	assert.NoError(t, err)
+	// create SampledEvent with edge to entry
+	se := ctx.NewSampledEvent(LabelExit, test_layer, true)
+	se.ReportContext(ctx, false)
+
+	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+		{"go_test", "entry"}: {},
+		{"go_test", "exit"}:  {g.OutEdges{{"go_test", "entry"}}, nil},
+	})
+}
+func TestSampledEventNoEdge(t *testing.T) {
+	r := SetTestReporter()
+	ctx := NewContext()
+	e := ctx.NewEvent(LabelEntry, test_layer)
+	err := e.Report(ctx)
+	assert.NoError(t, err)
+	se := ctx.NewSampledEvent(LabelExit, test_layer, false) // create event without edge
+	se.ReportContext(ctx, false)                            // report event without edge
+	// exit event is unconnected
+	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+		{"go_test", "entry"}: {},
+		{"go_test", "exit"}:  {},
+	})
 }

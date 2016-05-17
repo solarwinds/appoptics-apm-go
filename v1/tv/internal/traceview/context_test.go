@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	g "github.com/appneta/go-traceview/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -75,4 +76,43 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, md1Str, ctx.String())
 	nctx := &NullContext{}
 	assert.Equal(t, "", nctx.String())
+}
+
+func TestReportEventMap(t *testing.T) {
+	r := SetTestReporter()
+	ctx := NewContext()
+	e := ctx.NewEvent(LabelEntry, "myLayer")
+	err := e.Report(ctx)
+	assert.NoError(t, err)
+
+	ctx.ReportEventMap(LabelInfo, "myLayer", map[string]interface{}{
+		"testK":  "testV",
+		"intval": 333,
+	})
+	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+		{"myLayer", "entry"}: {},
+		{"myLayer", "info"}: {g.OutEdges{{"myLayer", "entry"}}, func(n g.Node) {
+			assert.EqualValues(t, 333, n.Map["intval"])
+			assert.Equal(t, "testV", n.Map["testK"])
+		}},
+	})
+}
+
+func TestNullContext(t *testing.T) {
+	r := SetTestReporter()
+	r.ShouldTrace = false
+
+	ctx := NewSampledContext("testLayer", "", false, nil) // nullContext{}
+	assert.False(t, ctx.IsTracing())
+	assert.Empty(t, ctx.String())
+	assert.False(t, ctx.Copy().IsTracing())
+	// reporting shouldn't work
+	ctx.ReportEvent(LabelEntry, "testLayer")
+	ctx.ReportEventMap(LabelInfo, "testLayer", map[string]interface{}{"K": "V"})
+	// try and make an event
+	e := ctx.NewSampledEvent(LabelExit, "testLayer", false)
+	assert.Empty(t, e.MetadataString())
+	e.ReportContext(ctx, false)
+
+	assert.Len(t, r.Bufs, 0) // no reporting
 }
