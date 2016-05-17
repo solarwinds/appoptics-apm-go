@@ -1,10 +1,10 @@
 
 # TraceView for Go
 
+[![GoDoc](https://godoc.org/github.com/appneta/go-traceview/v1/tv?status.svg)](https://godoc.org/github.com/appneta/go-traceview/v1/tv)
 [![Build Status](https://travis-ci.org/appneta/go-traceview.svg?branch=master)](https://travis-ci.org/appneta/go-traceview)
 [![Coverage Status](https://coveralls.io/repos/github/appneta/go-traceview/badge.svg?branch=master)](https://coveralls.io/github/appneta/go-traceview?branch=master)
 [![codecov](https://codecov.io/gh/appneta/go-traceview/branch/master/graph/badge.svg)](https://codecov.io/gh/appneta/go-traceview)
-[![GoDoc](https://godoc.org/github.com/appneta/go-traceview/v1/tv?status.svg)](https://godoc.org/github.com/appneta/go-traceview/v1/tv)
 
 ### Usage examples
 
@@ -94,14 +94,14 @@ logically matches your application; for more information [see our custom layer
 documentation](http://docs.appneta.com/traceview-instrumentation#custom-layers).
 
 The [Go blog](https://blog.golang.org/context) recommends propagating request context using the
-package `golang.org/x/net/context.Context`: "At Google, we require that Go programmers pass a
+package [golang.org/x/net/context](godoc.org/golang.org/x/net/context): "At Google, we require that Go programmers pass a
 [Context](https://godoc.org/golang.org/x/net/context) parameter as the first argument to every
 function on the call path between incoming and outgoing requests." Frameworks like
 [Gin](https://godoc.org/github.com/gin-gonic/gin#Context) and
 [Gizmo](https://godoc.org/github.com/NYTimes/gizmo/server#ContextHandler) use Context
 implementations, for example. We provide helper methods that allow a Trace to be associated with a
-[context.Context](https://godoc.org/golang.org/x/net/context) interface; for example, tv.BeginLayer
-returns both a new Layer span and an associated context.Context.
+[context.Context](https://godoc.org/golang.org/x/net/context) interface; for example, `tv.BeginLayer`
+returns both a new Layer span and an associated context.
 
 It is not required to work with context.Context to trace your app, however. You can also use just
 the Trace, Layer, and Profile interfaces directly, if it better suits your application.
