@@ -43,16 +43,17 @@ func runTraceCtx(ctx context.Context, f func(t Trace)) {
 	}
 }
 
-// EndTrace reports the exit event for the layer name that was used when calling NewTrace(),
-// given a context that was associated with trace.
-// XXX return ctx with Trace removed?
+// EndTrace ends an active trace, given a context that was associated with trace.
 func EndTrace(ctx context.Context) { runTraceCtx(ctx, func(t Trace) { t.End() }) }
 
-// tv.End(ctx)
-// XXX remove current Layer from ctx?
+// End ends an active span, given a context ctx that was associated with it.
 func End(ctx context.Context, args ...interface{}) { runCtx(ctx, func(l Layer) { l.End(args...) }) }
 
-// tv.Info reports KV pairs provided by args on the root span.
+// Info reports KV pairs provided by args on the span associated with the context ctx.
 func Info(ctx context.Context, args ...interface{}) { runCtx(ctx, func(l Layer) { l.Info(args...) }) }
-func Error(ctx context.Context, class, msg string)  { runCtx(ctx, func(l Layer) { l.Error(class, msg) }) }
-func Err(ctx context.Context, err error)            { runCtx(ctx, func(l Layer) { l.Err(err) }) }
+
+// Error reports details about an error (along with a stack trace) on the span associated with the context ctx.
+func Error(ctx context.Context, class, msg string) { runCtx(ctx, func(l Layer) { l.Error(class, msg) }) }
+
+// Err reports details error err (along with a stack trace) on the span associated with the context ctx.
+func Err(ctx context.Context, err error) { runCtx(ctx, func(l Layer) { l.Err(err) }) }

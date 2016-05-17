@@ -7,9 +7,9 @@ import "net/http"
 
 var httpLayerName = "net/http"
 
-// Wraps an http handler function with entry / exit events.
-// Returns a new function that can be used in its place.
-func HttpHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+// HTTPHandler wraps an http handler function with entry / exit events,
+// returning a new function that can be used in its place.
+func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		t := NewTraceFromID(httpLayerName, r.Header.Get("X-Trace"), func() KVMap {
 			return KVMap{

@@ -83,7 +83,7 @@ func (t *tvTrace) EndCallback(cb func() KVMap) {
 		if cb != nil {
 			kvs = cb()
 		}
-		args := make([]interface{}, 0)
+		var args []interface{}
 		for k, v := range kvs {
 			args = append(args, k)
 			args = append(args, v)

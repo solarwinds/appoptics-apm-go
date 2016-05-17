@@ -19,6 +19,6 @@ func slow_handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/", tv.HttpHandler(slow_handler))
+	http.HandleFunc("/", tv.HTTPHandler(slow_handler))
 	http.ListenAndServe(":8899", nil)
 }
