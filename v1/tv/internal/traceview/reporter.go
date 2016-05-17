@@ -22,6 +22,7 @@ func NewReporter() Reporter {
 	}
 	if err != nil {
 		log.Printf("Failed to initialize UDP reporter: %v", err)
+		return &nullReporter{}
 	}
 	return &udpReporter{conn: conn}
 }
