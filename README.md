@@ -3,6 +3,7 @@
 
 [![Build Status](https://travis-ci.org/appneta/go-traceview.svg?branch=master)](https://travis-ci.org/appneta/go-traceview)
 [![Coverage Status](https://coveralls.io/repos/github/appneta/go-traceview/badge.svg?branch=master)](https://coveralls.io/github/appneta/go-traceview?branch=master)
+[![codecov](https://codecov.io/gh/appneta/go-traceview/branch/master/graph/badge.svg)](https://codecov.io/gh/appneta/go-traceview)
 [![GoDoc](https://godoc.org/github.com/appneta/go-traceview/v1/tv?status.svg)](https://godoc.org/github.com/appneta/go-traceview/v1/tv)
 
 ## Installing
@@ -13,7 +14,7 @@ Follow the instructions during signup to install the Host Agent (â€œtracelyzerâ€
 
 Then, install the following (which assumes you are running Ubuntu/Debian):
 
-* [Go 1.5](http://code.google.com/p/go/)
+* [Go >= 1.5](https://golang.org/dl/)
 
 * This code: go get github.com/appneta/go-traceview/traceview
 
