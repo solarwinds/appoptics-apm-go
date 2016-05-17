@@ -14,13 +14,18 @@ import (
 // Layer is used to measure a span of time associated with an actvity
 // such as an RPC call, DB query, or method invocation.
 type Layer interface {
+	// BeginLayer starts a new layer span, returning a child of this Layer.
+	BeginLayer(layerName string, args ...interface{}) Layer
+	// BeginProfile starts a new profile, used to measure a named span of time spent in this Layer.
+	BeginProfile(profileName string, args ...interface{}) Profile
 	// End ends a layer, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
-	BeginLayer(layerName string, args ...interface{}) Layer
-	BeginProfile(profileName string, args ...interface{}) Profile
 
+	// Info reports KV pairs provided by args for this Layer.
 	Info(args ...interface{})
+	// Error reports details about an error (along with a stack trace) for this Layer.
 	Error(class, msg string)
+	// Err reports details about error err (along with a stack trace) for this Layer.
 	Err(error)
 
 	addChildEdge(traceview.SampledContext)
@@ -33,12 +38,14 @@ type Layer interface {
 type Profile interface {
 	// End ends a profile, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
+	// Error reports details about an error (along with a stack trace) for this Profile.
 	Error(class, msg string)
+	// Err reports details about error err (along with a stack trace) for this Profile.
 	Err(error)
 }
 
-// BeginLayer starts a traced layer, returning an object to be used for reporting
-// events attributed to or following from that layer.
+// BeginLayer starts a new layer span, provided a parent context and name. It returns a Layer
+// and context bound to the new child Layer.
 func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Layer, context.Context) {
 	if parent, ok := FromContext(ctx); ok { // report layer entry from parent context
 		l := newLayer(parent.tvContext().Copy(), layerName, parent, args...)
@@ -47,6 +54,7 @@ func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Lay
 	return &nullSpan{}, ctx
 }
 
+// BeginLayer starts a new layer span, returning a child of this Layer.
 func (s *layerSpan) BeginLayer(layerName string, args ...interface{}) Layer {
 	if s.ok() { // copy parent context and report entry from child
 		return newLayer(s.tvCtx.Copy(), layerName, s, args...)
@@ -67,7 +75,8 @@ func BeginProfile(ctx context.Context, profileName string, args ...interface{}) 
 	return &nullSpan{}
 }
 
-// Begin a profiled block or method and return a context that should be closed with End().
+// BeginProfile starts a new profile, used to measure a named span of time spent in this Layer.
+// The returned Profile should be closed with End().
 func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profile {
 	if s.ok() { // copy parent context and report entry from child
 		return newProfile(s.tvCtx.Copy(), profileName, s, args...)

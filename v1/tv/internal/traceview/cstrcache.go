@@ -7,10 +7,9 @@ import (
 	"sync"
 )
 
-// Caches CStrings
-// Currently used for entry layer names to avoid repetitive malloc/free of the same string.
+// Caches CStrings:
+// currently used for entry layer names to avoid repetitive malloc/free of the same string.
 // We intentionally do not free here.
-// Based on http://arslan.io/thread-safe-set-data-structure-in-go
 type CStringCache struct {
 	m map[string]*C.char
 	sync.RWMutex

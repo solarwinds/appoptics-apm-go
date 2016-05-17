@@ -9,7 +9,7 @@ type Event struct {
 	bbuf     bson_buffer
 }
 
-// Every event needs a label:
+// Every event needs a label.
 type Label string
 
 const (
