@@ -11,14 +11,21 @@ import (
 	"github.com/appneta/go-traceview/v1/tv/internal/traceview"
 )
 
+// Layer is used to measure a span of time associated with an actvity
+// such as an RPC call, DB query, or method invocation.
 type Layer interface {
+	// BeginLayer starts a new layer span, returning a child of this Layer.
+	BeginLayer(layerName string, args ...interface{}) Layer
+	// BeginProfile starts a new profile, used to measure a named span of time spent in this Layer.
+	BeginProfile(profileName string, args ...interface{}) Profile
 	// End ends a layer, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
-	BeginLayer(layerName string, args ...interface{}) Layer
-	BeginProfile(profileName string, args ...interface{}) Profile
 
+	// Info reports KV pairs provided by args for this Layer.
 	Info(args ...interface{})
+	// Error reports details about an error (along with a stack trace) for this Layer.
 	Error(class, msg string)
+	// Err reports details about error err (along with a stack trace) for this Layer.
 	Err(error)
 
 	addChildEdge(traceview.SampledContext)
@@ -26,15 +33,19 @@ type Layer interface {
 	tvContext() traceview.SampledContext
 	ok() bool
 }
+
+// Profile is used to provide micro-benchmarks of named timings inside a layer.
 type Profile interface {
 	// End ends a profile, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
+	// Error reports details about an error (along with a stack trace) for this Profile.
 	Error(class, msg string)
+	// Err reports details about error err (along with a stack trace) for this Profile.
 	Err(error)
 }
 
-// BeginLayer starts a traced layer, returning an object to be used for reporting
-// events attributed to or following from that layer.
+// BeginLayer starts a new layer span, provided a parent context and name. It returns a Layer
+// and context bound to the new child Layer.
 func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Layer, context.Context) {
 	if parent, ok := FromContext(ctx); ok { // report layer entry from parent context
 		l := newLayer(parent.tvContext().Copy(), layerName, parent, args...)
@@ -43,17 +54,18 @@ func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Lay
 	return &nullSpan{}, ctx
 }
 
-func (l *layerSpan) BeginLayer(layerName string, args ...interface{}) Layer {
-	if l.ok() { // copy parent context and report entry from child
-		return newLayer(l.tvCtx.Copy(), layerName, l, args...)
+// BeginLayer starts a new layer span, returning a child of this Layer.
+func (s *layerSpan) BeginLayer(layerName string, args ...interface{}) Layer {
+	if s.ok() { // copy parent context and report entry from child
+		return newLayer(s.tvCtx.Copy(), layerName, s, args...)
 	}
 	return &nullSpan{}
 }
 
-// Begin a profiled block or method and return a context that should be closed with End().
-// You can use defer to profile inside a method or block's scope, as below:
+// BeginProfile begins a profiled block or method and return a context that should be closed with End().
+// You can use defer to profile a function in one line, as below:
 //   func exampleFunc(ctx context.Context) {
-//       defer tv.BeginProfile(ctx, "exampleFunc").EndProfile()
+//       defer tv.BeginProfile(ctx, "exampleFunc").End()
 //       // ... do something ...
 //    }
 func BeginProfile(ctx context.Context, profileName string, args ...interface{}) Profile {
@@ -63,10 +75,11 @@ func BeginProfile(ctx context.Context, profileName string, args ...interface{}) 
 	return &nullSpan{}
 }
 
-// Begin a profiled block or method and return a context that should be closed with End().
-func (l *layerSpan) BeginProfile(profileName string, args ...interface{}) Profile {
-	if l.ok() { // copy parent context and report entry from child
-		return newProfile(l.tvCtx.Copy(), profileName, l, args...)
+// BeginProfile starts a new profile, used to measure a named span of time spent in this Layer.
+// The returned Profile should be closed with End().
+func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profile {
+	if s.ok() { // copy parent context and report entry from child
+		return newProfile(s.tvCtx.Copy(), profileName, s, args...)
 	}
 	return &nullSpan{}
 }
@@ -85,20 +98,20 @@ type layerSpan struct{ span }   // satisfies Layer
 type profileSpan struct{ span } // satisfies Profile
 type nullSpan struct{}          // a span that is not tracing; satisfies Layer & Profile
 
-func (_ *nullSpan) BeginLayer(layerName string, args ...interface{}) Layer { return &nullSpan{} }
-func (_ *nullSpan) BeginProfile(name string, args ...interface{}) Profile  { return &nullSpan{} }
-func (_ *nullSpan) End(args ...interface{})                                {}
-func (_ *nullSpan) Error(class, msg string)                                {}
-func (_ *nullSpan) Err(err error)                                          {}
-func (_ *nullSpan) Info(args ...interface{})                               {}
-func (_ *nullSpan) addChildEdge(traceview.SampledContext)                  {}
-func (_ *nullSpan) addProfile(Profile)                                     {}
-func (_ *nullSpan) ok() bool                                               { return false }
-func (_ *nullSpan) tvContext() traceview.SampledContext                    { return &traceview.NullContext{} }
+func (s *nullSpan) BeginLayer(layerName string, args ...interface{}) Layer { return &nullSpan{} }
+func (s *nullSpan) BeginProfile(name string, args ...interface{}) Profile  { return &nullSpan{} }
+func (s *nullSpan) End(args ...interface{})                                {}
+func (s *nullSpan) Error(class, msg string)                                {}
+func (s *nullSpan) Err(err error)                                          {}
+func (s *nullSpan) Info(args ...interface{})                               {}
+func (s *nullSpan) addChildEdge(traceview.SampledContext)                  {}
+func (s *nullSpan) addProfile(Profile)                                     {}
+func (s *nullSpan) ok() bool                                               { return false }
+func (s *nullSpan) tvContext() traceview.SampledContext                    { return &traceview.NullContext{} }
 
 // is this layer still valid (has it timed out, expired, not sampled)
-func (l *span) ok() bool                            { return l != nil && !l.ended }
-func (t *span) tvContext() traceview.SampledContext { return t.tvCtx }
+func (s *span) ok() bool                            { return s != nil && !s.ended }
+func (s *span) tvContext() traceview.SampledContext { return s.tvCtx }
 
 // addChildEdge keep track of edges closed child spans
 func (s *span) addChildEdge(ctx traceview.SampledContext) {
@@ -120,8 +133,8 @@ type layerLabeler struct{ name string }
 type profileLabeler struct{ name string }
 
 // TV's "layer" and "profile" spans report their layer and label names slightly differently
-func (_ layerLabeler) entryLabel() traceview.Label { return traceview.LabelEntry }
-func (_ layerLabeler) exitLabel() traceview.Label  { return traceview.LabelExit }
+func (l layerLabeler) entryLabel() traceview.Label { return traceview.LabelEntry }
+func (l layerLabeler) exitLabel() traceview.Label  { return traceview.LabelExit }
 func (l layerLabeler) layerName() string           { return l.name }
 func newLayer(tvCtx traceview.SampledContext, layerName string, parent Layer, args ...interface{}) *layerSpan {
 	ll := layerLabeler{layerName}
@@ -129,9 +142,9 @@ func newLayer(tvCtx traceview.SampledContext, layerName string, parent Layer, ar
 	return &layerSpan{span: span{tvCtx: tvCtx.Copy(), labeler: ll, parent: parent}}
 }
 
-func (_ profileLabeler) entryLabel() traceview.Label { return traceview.LabelProfileEntry }
-func (_ profileLabeler) exitLabel() traceview.Label  { return traceview.LabelProfileExit }
-func (_ profileLabeler) layerName() string           { return "" }
+func (l profileLabeler) entryLabel() traceview.Label { return traceview.LabelProfileEntry }
+func (l profileLabeler) exitLabel() traceview.Label  { return traceview.LabelProfileExit }
+func (l profileLabeler) layerName() string           { return "" }
 func newProfile(tvCtx traceview.SampledContext, profileName string, parent Layer, args ...interface{}) *profileSpan {
 	var fname string
 	pc, file, line, ok := runtime.Caller(2) // Caller(1) is BeginProfile

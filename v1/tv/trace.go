@@ -10,6 +10,8 @@ type Trace interface {
 	IsTracing() bool
 
 	// Inherited from the Layer interface
+	//  BeginLayer(layerName string, args ...interface{}) Layer
+	//  BeginProfile(profileName string, args ...interface{}) Profile
 	//	End(args ...interface{})
 	//	Info(args ...interface{})
 	//  Error(class, msg string)
@@ -26,7 +28,8 @@ type Trace interface {
 // KVMap is a map of additional key-value pairs to report along with the event data provided
 // to TraceView. Certain key names (such as "Query" or "RemoteHost") are used by AppNeta to
 // provide details about program activity and distinguish between different types of layers.
-// Please visit https://docs.appneta.com/ for more details.
+// Please visit http://docs.appneta.com/traceview-instrumentation#special-interpretation for
+// details on the key names that TraceView looks for.
 type KVMap map[string]interface{}
 
 type tvTrace struct {
@@ -83,7 +86,7 @@ func (t *tvTrace) EndCallback(cb func() KVMap) {
 		if cb != nil {
 			kvs = cb()
 		}
-		args := make([]interface{}, 0)
+		var args []interface{}
 		for k, v := range kvs {
 			args = append(args, k)
 			args = append(args, v)

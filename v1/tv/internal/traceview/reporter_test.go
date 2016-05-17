@@ -3,9 +3,10 @@
 package traceview
 
 import (
-	"log"
+	"errors"
 	"testing"
 
+	g "github.com/appneta/go-traceview/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,8 +20,7 @@ func TestSampleRequest(t *testing.T) {
 			sampled++
 		}
 	}
-
-	log.Printf("Sampled %d / %d requests", sampled, total)
+	t.Logf("Sampled %d / %d requests", sampled, total)
 
 	if sampled == 0 {
 		t.Errorf("Expected to sample a request.")
@@ -42,4 +42,52 @@ func TestNullReporter(t *testing.T) {
 	cnt, err := reporter.WritePacket(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, len(buf), cnt)
+}
+
+func TestNewReporter(t *testing.T) {
+	assert.IsType(t, &udpReporter{}, NewReporter())
+
+	reporterAddr = "127.0.0.1:777831"
+	assert.IsType(t, &nullReporter{}, NewReporter())
+	reporterAddr = "127.0.0.1:7831"
+}
+
+// dependency injection for os.Hostname and net.{ResolveUDPAddr/DialUDP}
+type failHostnamer struct{}
+
+func (h failHostnamer) Hostname() (string, error) {
+	return "", errors.New("couldn't resolve hostname")
+}
+func TestCacheHostname(t *testing.T) {
+	assert.IsType(t, &udpReporter{}, NewReporter())
+
+	cacheHostname(failHostnamer{})
+	assert.IsType(t, &nullReporter{}, NewReporter())
+}
+
+func TestReportEvent(t *testing.T) {
+	r := SetTestReporter()
+	ctx := NewContext()
+	assert.Error(t, reportEvent(r, ctx, nil))
+	assert.Len(t, r.Bufs, 0) // no reporting
+
+	// mismatched task IDs
+	ev := ctx.NewEvent(LabelExit, test_layer)
+	assert.Error(t, reportEvent(r, nil, ev))
+	assert.Len(t, r.Bufs, 0) // no reporting
+
+	ctx2 := NewContext()
+	e2 := ctx2.NewEvent(LabelEntry, "layer2")
+	assert.Error(t, reportEvent(r, ctx2, ev))
+	assert.Error(t, reportEvent(r, ctx, e2))
+
+	// successful event
+	reportEvent(r, ctx, ev)
+	assert.Len(t, r.Bufs, 1)
+	// re-report: shouldn't work (op IDs the same)
+	assert.Error(t, reportEvent(r, ctx, ev))
+
+	g.AssertGraph(t, r.Bufs, 1, map[g.MatchNode]g.AssertNode{
+		{"go_test", "exit"}: {},
+	})
 }

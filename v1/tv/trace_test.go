@@ -4,15 +4,16 @@ package tv_test
 
 import (
 	"errors"
+	"os"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/appneta/go-traceview/v1/tv"
 	g "github.com/appneta/go-traceview/v1/tv/internal/graphtest"
 	"github.com/appneta/go-traceview/v1/tv/internal/traceview"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTraceMetadata(t *testing.T) {
@@ -147,7 +148,11 @@ func TestTraceExampleCtx(t *testing.T) {
 func assertTraceExample(t *testing.T, bufs [][]byte) {
 	g.AssertGraph(t, bufs, 13, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
-		{"myExample", "entry"}: {},
+		{"myExample", "entry"}: {nil, func(n g.Node) {
+			h, err := os.Hostname()
+			assert.NoError(t, err)
+			assert.Equal(t, h, n.Map["Hostname"])
+		}},
 		// first profile event should link to entry event
 		{"", "profile_entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")

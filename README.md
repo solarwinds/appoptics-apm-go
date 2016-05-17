@@ -1,7 +1,9 @@
 
 # TraceView for Go
 
-[![Coverage Status](https://coveralls.io/repos/github/appneta/go-traceview/badge.svg)](https://coveralls.io/github/appneta/go-traceview)
+[![Build Status](https://travis-ci.org/appneta/go-traceview.svg?branch=master)](https://travis-ci.org/appneta/go-traceview)
+[![Coverage Status](https://coveralls.io/repos/github/appneta/go-traceview/badge.svg?branch=master)](https://coveralls.io/github/appneta/go-traceview?branch=master)
+[![GoDoc](https://godoc.org/github.com/appneta/go-traceview/v1/tv?status.svg)](https://godoc.org/github.com/appneta/go-traceview/v1/tv)
 
 ## Installing
 
@@ -33,7 +35,7 @@ You should see these requests appear on your TraceView dashboard.
 
 ## License
 
-Copyright (c) 2015 Appneta
+Copyright (c) 2016 Appneta, Inc.
 
 Released under the [AppNeta Open License](http://www.appneta.com/appneta-license), Version 1.0
 

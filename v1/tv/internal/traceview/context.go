@@ -216,7 +216,7 @@ func (md *oboe_metadata_t) op_string() string {
 	return strings.ToUpper(string(enc[:len]))
 }
 
-// a Context that may or not be tracing (due to sample rate)
+// a Context that may or not be tracing (due to sampling)
 type SampledContext interface {
 	ReportEvent(label Label, layer string, args ...interface{}) error
 	ReportEventMap(label Label, layer string, keys map[string]interface{}) error
@@ -251,7 +251,7 @@ func (e *NullContext) NewSampledEvent(label Label, layer string, addCtxEdge bool
 func (e *NullEvent) ReportContext(c SampledContext, addCtxEdge bool, args ...interface{}) {}
 func (e *NullEvent) MetadataString() string                                               { return "" }
 
-// Allocates context with random metadata (new trace)
+// Allocates context with random metadata (for a new trace)
 func NewContext() *Context {
 	ctx := &Context{}
 	oboe_metadata_init(&ctx.metadata)
@@ -389,9 +389,8 @@ func (ctx *Context) String() string {
 	return MetadataString(&ctx.metadata)
 }
 
-// converts metadata (*oboe_metadata_t) to a string representation
+// Converts metadata (*oboe_metadata_t) to hex string representation
 func MetadataString(metadata *oboe_metadata_t) string {
 	md_str, _ := oboe_metadata_tostr(metadata)
-	// XXX: error check?
 	return md_str
 }

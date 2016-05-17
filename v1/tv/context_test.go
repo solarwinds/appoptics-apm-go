@@ -5,8 +5,8 @@ package tv
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/appneta/go-traceview/v1/tv/internal/traceview"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )
 
@@ -36,9 +36,14 @@ func TestNullSpan(t *testing.T) {
 	l1, _ := BeginLayer(ctx, "L1")
 	l1.End()
 
+	p1 := l1.BeginProfile("P2") // try to start profile after end: no effect
+	p1.End()
+
 	c1 := l1.BeginLayer("C1") // child after parent ended
 	assert.IsType(t, c1, &nullSpan{})
 	assert.False(t, c1.ok())
+	c1.addChildEdge(l1.tvContext())
+	c1.addProfile(p1)
 
 	nctx := c1.tvContext()
 	assert.IsType(t, nctx, &traceview.NullContext{})

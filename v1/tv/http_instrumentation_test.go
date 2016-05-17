@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/appneta/go-traceview/v1/tv"
 	g "github.com/appneta/go-traceview/v1/tv/internal/graphtest"
 	"github.com/appneta/go-traceview/v1/tv/internal/traceview"
+	"github.com/stretchr/testify/assert"
 )
 
 func httpTest() *httptest.ResponseRecorder {
@@ -18,7 +18,7 @@ func httpTest() *httptest.ResponseRecorder {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
 	}
-	h := http.HandlerFunc(tv.HttpHandler(f))
+	h := http.HandlerFunc(tv.HTTPHandler(f))
 	//sm := http.NewServeMux()
 	//sm.HandleFunc("/", h)
 
@@ -29,7 +29,7 @@ func httpTest() *httptest.ResponseRecorder {
 	return w
 }
 
-func TestHttpHandler(t *testing.T) {
+func TestHTTPHandler(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 	response := httpTest()
 
@@ -44,7 +44,7 @@ func TestHttpHandler(t *testing.T) {
 	})
 }
 
-func TestHttpHandlerNoTrace(t *testing.T) {
+func TestHTTPHandlerNoTrace(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 	r.ShouldTrace = false
 	httpTest()
