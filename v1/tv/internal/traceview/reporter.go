@@ -3,6 +3,8 @@
 package traceview
 
 import (
+	"bytes"
+	"errors"
 	"log"
 	"net"
 	"os"
@@ -16,7 +18,7 @@ type Reporter interface {
 
 func NewReporter() Reporter {
 	var conn *net.UDPConn
-	serverAddr, err := net.ResolveUDPAddr("udp4", "127.0.0.1:7831")
+	serverAddr, err := net.ResolveUDPAddr("udp4", reporterAddr)
 	if err == nil {
 		conn, err = net.DialUDP("udp4", nil, serverAddr)
 	}
@@ -39,17 +41,19 @@ type udpReporter struct {
 func (r *udpReporter) IsOpen() bool                        { return r.conn != nil }
 func (r *udpReporter) WritePacket(buf []byte) (int, error) { return r.conn.Write(buf) }
 
+var reporterAddr = "127.0.0.1:7831"
 var reporter Reporter = &nullReporter{}
 var usingTestReporter bool
-var cachedHostname = func() string {
+var cachedHostname string
+
+func init() {
 	h, err := os.Hostname()
 	if err != nil {
-		// TODO report _Error event? use stderr?
 		log.Printf("Unable to get hostname, TraceView tracing disabled: %v", err)
 		reporter = &nullReporter{} // disable reporting
 	}
-	return h
-}()
+	cachedHostname = h
+}
 
 var cachedPid = os.Getpid()
 
@@ -58,8 +62,19 @@ func reportEvent(r Reporter, ctx *Context, e *Event) error {
 		// Reporter didn't initialize, nothing to do...
 		return nil
 	}
+	if ctx == nil || e == nil {
+		return errors.New("Invalid context, event")
+	}
 
-	// XXX add validation from oboe_reporter_send
+	// The context metadata must have the same task_id as the event.
+	if bytes.Compare(ctx.metadata.ids.task_id, e.metadata.ids.task_id) != 0 {
+		return errors.New("Invalid event, different task_id from context")
+	}
+
+	// The context metadata must have a different op_id than the event.
+	if bytes.Compare(ctx.metadata.ids.op_id, e.metadata.ids.op_id) == 0 {
+		return errors.New("Invalid event, same as context")
+	}
 
 	us := time.Now().UnixNano() / 1000
 	e.AddInt64("Timestamp_u", us)
