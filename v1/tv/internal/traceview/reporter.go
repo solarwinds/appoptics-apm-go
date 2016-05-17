@@ -18,6 +18,9 @@ type Reporter interface {
 
 func NewReporter() Reporter {
 	var conn *net.UDPConn
+	if reportingDisabled {
+		return &nullReporter{}
+	}
 	serverAddr, err := net.ResolveUDPAddr("udp4", reporterAddr)
 	if err == nil {
 		conn, err = net.DialUDP("udp4", nil, serverAddr)
@@ -43,14 +46,26 @@ func (r *udpReporter) WritePacket(buf []byte) (int, error) { return r.conn.Write
 
 var reporterAddr = "127.0.0.1:7831"
 var reporter Reporter = &nullReporter{}
+var reportingDisabled bool
 var usingTestReporter bool
 var cachedHostname string
 
+type hostnamer interface {
+	Hostname() (name string, err error)
+}
+type osHostnamer struct{}
+
+func (h osHostnamer) Hostname() (string, error) { return os.Hostname() }
+
 func init() {
-	h, err := os.Hostname()
+	cacheHostname(osHostnamer{})
+}
+func cacheHostname(hn hostnamer) {
+	h, err := hn.Hostname()
 	if err != nil {
 		log.Printf("Unable to get hostname, TraceView tracing disabled: %v", err)
 		reporter = &nullReporter{} // disable reporting
+		reportingDisabled = true
 	}
 	cachedHostname = h
 }

@@ -3,6 +3,7 @@
 package traceview
 
 import (
+	"errors"
 	"testing"
 
 	g "github.com/appneta/go-traceview/v1/tv/internal/graphtest"
@@ -47,6 +48,20 @@ func TestNewReporter(t *testing.T) {
 	assert.IsType(t, &udpReporter{}, NewReporter())
 
 	reporterAddr = "127.0.0.1:777831"
+	assert.IsType(t, &nullReporter{}, NewReporter())
+	reporterAddr = "127.0.0.1:7831"
+}
+
+// dependency injection for os.Hostname and net.{ResolveUDPAddr/DialUDP}
+type failHostnamer struct{}
+
+func (h failHostnamer) Hostname() (string, error) {
+	return "", errors.New("couldn't resolve hostname")
+}
+func TestCacheHostname(t *testing.T) {
+	assert.IsType(t, &udpReporter{}, NewReporter())
+
+	cacheHostname(failHostnamer{})
 	assert.IsType(t, &nullReporter{}, NewReporter())
 }
 
