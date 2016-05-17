@@ -1,4 +1,3 @@
-
 # TraceView for Go
 
 [![GoDoc](https://godoc.org/github.com/appneta/go-traceview/v1/tv?status.svg)](https://godoc.org/github.com/appneta/go-traceview/v1/tv)
@@ -8,10 +7,11 @@
 
 ### Usage examples
 
-To profile the performance of basic web service, you can use our tv.HTTPHandler wrapper.  This will
-automatically propagate any distributed trace described the request headers (e.g. from TraceView's
-Java, Node.js Python, Ruby, C# or Scala instruentation) through to the response headers, if one
-exists.
+To profile the performance of basic web service, you can use our
+[tv.HTTPHandler](https://godoc.org/github.com/appneta/go-traceview/v1/tv#HTTPHandler) wrapper.  This
+will automatically propagate any distributed trace described in the request headers (e.g. from
+TraceView's Java, Node.js Python, Ruby, C# or Scala instrumentation) through to the response
+headers, if one exists.
 
 ```go
 package main
@@ -41,7 +41,7 @@ TraceView provides two ways of measuring time spent by your code: a "Layer" span
 single DB query or cache request, an outgoing HTTP or RPC request, or the entire time spent within a
 controller method. A "Profile" provides a named measurement of time spent inside a Layer, and is
 typically used to measure a single function call or code block, e.g. to represent the time of
-expensive computation(s) occuring in a Layer. Layer spans can be created as children of other
+expensive computation(s) occurring in a Layer. Layer spans can be created as children of other
 Layers, but a Profile cannot have children.
 
 TraceView's backend identifies a Layer's type by examining the key-value pairs associated with it;
@@ -50,7 +50,10 @@ query. Our documentation on [custom
 instrumentation](http://docs.appneta.com/traceview-instrumentation#extending-traceview-customizing)
 describes key names that can be used to describe incoming HTTP requests, DB queries, cache/KV server
 calls, outgoing RPCs, and web framework information such as controller/action names. They can be
-provided as extra arguments when calling BeginLayer(), Layer.Info(), or Layer.End().
+provided as extra arguments when calling the
+[BeginLayer()](https://godoc.org/github.com/appneta/go-traceview/v1/tv#BeginLayer),
+[Info()](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Layer), or
+[End()](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Layer) methods.
 
 ```go
 func slowFunc(ctx context.Context) {
@@ -94,17 +97,24 @@ logically matches your application; for more information [see our custom layer
 documentation](http://docs.appneta.com/traceview-instrumentation#custom-layers).
 
 The [Go blog](https://blog.golang.org/context) recommends propagating request context using the
-package [golang.org/x/net/context](godoc.org/golang.org/x/net/context): "At Google, we require that Go programmers pass a
-[Context](https://godoc.org/golang.org/x/net/context) parameter as the first argument to every
-function on the call path between incoming and outgoing requests." Frameworks like
+package [golang.org/x/net/context](godoc.org/golang.org/x/net/context): "At Google, we require that
+Go programmers pass a [Context](https://godoc.org/golang.org/x/net/context) parameter as the first
+argument to every function on the call path between incoming and outgoing requests." Frameworks like
 [Gin](https://godoc.org/github.com/gin-gonic/gin#Context) and
 [Gizmo](https://godoc.org/github.com/NYTimes/gizmo/server#ContextHandler) use Context
 implementations, for example. We provide helper methods that allow a Trace to be associated with a
-[context.Context](https://godoc.org/golang.org/x/net/context) interface; for example, `tv.BeginLayer`
-returns both a new Layer span and an associated context.
+[context.Context](https://godoc.org/golang.org/x/net/context) interface; for example,
+[tv.BeginLayer](https://godoc.org/github.com/appneta/go-traceview/v1/tv#BeginLayer) returns both a
+new Layer span and an associated context, and
+[tv.Info(ctx)](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Info) and
+[tv.End(ctx)](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Layer) both use the Layer
+defined in the provided context.
 
 It is not required to work with context.Context to trace your app, however. You can also use just
-the Trace, Layer, and Profile interfaces directly, if it better suits your application.
+the [Trace](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Trace),
+[Layer](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Layer), and
+[Profile](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Profile) interfaces directly, if it
+better suits your application.
 
 ```go
 func runQuery(ctx context.Context) {
@@ -176,7 +186,7 @@ You should see these requests appear on your TraceView dashboard.
 
 ## License
 
-Copyright (c) 2016 Appneta, Inc.
+Copyright (c) 2016 AppNeta, Inc.
 
 Released under the [AppNeta Open License](http://www.appneta.com/appneta-license), Version 1.0
 
