@@ -53,30 +53,34 @@ calls, outgoing RPCs, and web framework information such as controller/action na
 provided as extra arguments when calling BeginLayer(), Layer.Info(), or Layer.End().
 
 ```go
-// create trace and bind to new context
-ctx := tv.NewContext(context.Background(), tv.NewTrace("myApp"))
-// create new layer span for this trace
-l := tv.BeginLayer(ctx, "myLayer")
-
-// profile a function call, or part of a Layer
-slowFunc := function() {
-    defer l.BeginProfile("slowFunc").End()
+func slowFunc(ctx context.Context) {
+    // profile a function call (as part of a Layer)
+    defer tv.BeginProfile(ctx, "slowFunc").End()
     // ... do something slow
 }
-slowFunc()
 
-// Start a new span, given a parent layer
-q1L := l.BeginLayer("myDB", "Query", "SELECT * FROM tbl1", "RemoteHost", "db1.com")
-// perform a query
-q1L.End()
+func main() {
+    // create trace and bind to new context
+    ctx := tv.NewContext(context.Background(), tv.NewTrace("myApp"))
+    // create new layer span for this trace
+    l, ctxL := tv.BeginLayer(ctx, "myLayer")
 
-// Start a new span, given a context.Context
-q2L, _ := tv.BeginLayer(ctx, "myDB", "Query", "SELECT * FROM tbl2", "RemoteHost", "db2.com")
-// perform a query
-q2L.End()
+    // profile a slow part of this layer
+    slowFunc(ctxL)
 
-l.End()
-tv.EndTrace(ctx)
+    // Start a new span, given a parent layer
+    q1L := l.BeginLayer("myDB", "Query", "SELECT * FROM tbl1", "RemoteHost", "db1.com")
+    // perform a query
+    q1L.End()
+
+    // Start a new span, given a context.Context
+    q2L, _ := tv.BeginLayer(ctxL, "myDB", "Query", "SELECT * FROM tbl2", "RemoteHost", "db2.com")
+    // perform a query
+    q2L.End()
+
+    l.End()
+    tv.EndTrace(ctx)
+}
 ```
 
 ### Distributed tracing and context propagation
