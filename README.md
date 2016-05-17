@@ -1,6 +1,8 @@
 
 # TraceView for Go
 
+[![Coverage Status](https://coveralls.io/repos/github/appneta/go-traceview/badge.svg)](https://coveralls.io/github/appneta/go-traceview)
+
 ## Installing
 
 To install, you should first [sign up for a TraceView account](http://www.appneta.com/products/traceview-free-account/).
@@ -9,11 +11,7 @@ Follow the instructions during signup to install the Host Agent (â€œtracelyzerâ€
 
 Then, install the following (which assumes you are running Ubuntu/Debian):
 
-* [Go 1.2](http://code.google.com/p/go/)
-
-* OpenSSL libraries and dev headers: apt-get install libssl-dev
-
-* pkg-config: apt-get install pkg-config
+* [Go 1.5](http://code.google.com/p/go/)
 
 * This code: go get github.com/appneta/go-traceview/traceview
 
