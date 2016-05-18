@@ -8,9 +8,12 @@ import (
 )
 
 func ExampleNewTrace() {
-	f0 := func(ctx context.Context) { // example work function
-		defer tv.BeginProfile(ctx, "f0").End()
-		// ... something slow ...
+	f0 := func(ctx context.Context) { // example layer
+		l, _ := tv.BeginLayer(ctx, "myDB",
+			"Query", "SELECT * FROM tbl1",
+			"RemoteHost", "db1.com")
+		// ... run a query ...
+		l.End()
 	}
 
 	// create a new trace, and a context to carry it around
