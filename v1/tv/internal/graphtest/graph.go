@@ -131,14 +131,21 @@ func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, nodeMap map[MatchNod
 func assertOutEdges(t *testing.T, g eventGraph, n Node, edges ...MatchNode) {
 	assert.Equal(t, len(n.Edges), len(edges),
 		"[layer %s label %s] len(n.Edges) %d expected %d", n.Layer, n.Label, len(n.Edges), len(edges))
+	foundEdges := 0
 	if len(edges) <= len(n.Edges) {
 		for i, edge := range edges {
+			_, ok := g[n.Edges[i]] // check if node for this edge exists
+			assert.True(t, ok, "Edge from {%s, %s} missing to {%s, %s} no node %d", n.Layer, n.Label, edge.Layer, edge.Label, i)
 			assert.Equal(t, edge.Layer, g[n.Edges[i]].Layer,
 				"Edge from {%s, %s} missing to {%s, %s} actual %d {%s, %s}", n.Layer, n.Label, edge.Layer, edge.Label, i, g[n.Edges[i]].Layer, g[n.Edges[i]].Label)
 			assert.Equal(t, edge.Label, g[n.Edges[i]].Label,
 				"Edge from {%s, %s} missing to {%s, %s} actual %d {%s, %s}", n.Layer, n.Label, edge.Layer, edge.Label, i, g[n.Edges[i]].Layer, g[n.Edges[i]].Label)
+			if edge.Layer == g[n.Edges[i]].Layer && edge.Label == g[n.Edges[i]].Label {
+				foundEdges++
+			}
 			checkedEdges++
 		}
+		assert.Equal(t, foundEdges, len(edges))
 	}
 }
 
