@@ -27,14 +27,14 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 		}
 
 		// wrap writer with status-observing writer
-		writer := httpResponseWriter{w, http.StatusOK}
-		w = writer
+		status := http.StatusOK
+		w = httpResponseWriter{w, &status}
 
 		// Add status code and report exit event
-		defer t.EndCallback(func() KVMap { return KVMap{"Status": writer.status} })
+		defer t.EndCallback(func() KVMap { return KVMap{"Status": status} })
 
 		// Call original HTTP handler:
-		handler(writer, r)
+		handler(w, r)
 	}
 }
 
@@ -42,10 +42,10 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 // the HTTP status code.
 type httpResponseWriter struct {
 	http.ResponseWriter
-	status int
+	status *int
 }
 
 func (w httpResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
-	w.status = status
+	*w.status = status
 }
