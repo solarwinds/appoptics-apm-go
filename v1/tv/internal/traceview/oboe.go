@@ -43,6 +43,7 @@ func init() {
 
 func readEnvSettings() {
 	// Configure tracing mode setting using environment variable
+	C.oboe_settings_cfg_init(&settings.settings_cfg)
 	mode := strings.ToLower(os.Getenv("GO_TRACEVIEW_TRACING_MODE"))
 	switch mode {
 	case "always":
