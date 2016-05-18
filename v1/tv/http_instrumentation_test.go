@@ -13,13 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func httpTest() *httptest.ResponseRecorder {
-	// create & wrap 404 handler
-	f := func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(404)
-	}
-	h := http.HandlerFunc(tv.HTTPHandler(f))
+func handler404(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) }
+func handler200(w http.ResponseWriter, r *http.Request) {} // do nothing (default should be 200)
 
+func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
+	h := http.HandlerFunc(tv.HTTPHandler(f))
 	// test a single GET request
 	req, _ := http.NewRequest("GET", "", nil)
 	w := httptest.NewRecorder()
@@ -27,9 +25,9 @@ func httpTest() *httptest.ResponseRecorder {
 	return w
 }
 
-func TestHTTPHandler(t *testing.T) {
+func TestHTTPHandler404(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
-	response := httpTest()
+	response := httpTest(handler404)
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
@@ -44,10 +42,27 @@ func TestHTTPHandler(t *testing.T) {
 	})
 }
 
+func TestHTTPHandler200(t *testing.T) {
+	r := traceview.SetTestReporter() // set up test reporter
+	response := httpTest(handler200)
+
+	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+		// entry event should have no edges
+		{"net/http", "entry"}: {},
+		{"net/http", "exit"}: {g.OutEdges{{"net/http", "entry"}}, func(n g.Node) {
+			// assert that response X-Trace header matches trace exit event
+			assert.Len(t, response.HeaderMap["X-Trace"], 1)
+			assert.Equal(t, response.HeaderMap["X-Trace"][0], n.Map["X-Trace"])
+			assert.EqualValues(t, response.Code, n.Map["Status"])
+			assert.EqualValues(t, 200, n.Map["Status"])
+		}},
+	})
+}
+
 func TestHTTPHandlerNoTrace(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 	r.ShouldTrace = false
-	httpTest()
+	httpTest(handler404)
 
 	// tracing disabled, shouldn't report anything
 	assert.Len(t, r.Bufs, 0)
