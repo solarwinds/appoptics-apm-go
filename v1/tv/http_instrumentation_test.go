@@ -19,8 +19,6 @@ func httpTest() *httptest.ResponseRecorder {
 		w.WriteHeader(404)
 	}
 	h := http.HandlerFunc(tv.HTTPHandler(f))
-	//sm := http.NewServeMux()
-	//sm.HandleFunc("/", h)
 
 	// test a single GET request
 	req, _ := http.NewRequest("GET", "", nil)
@@ -40,6 +38,8 @@ func TestHTTPHandler(t *testing.T) {
 			// assert that response X-Trace header matches trace exit event
 			assert.Len(t, response.HeaderMap["X-Trace"], 1)
 			assert.Equal(t, response.HeaderMap["X-Trace"][0], n.Map["X-Trace"])
+			assert.EqualValues(t, response.Code, n.Map["Status"])
+			assert.EqualValues(t, 404, n.Map["Status"])
 		}},
 	})
 }
