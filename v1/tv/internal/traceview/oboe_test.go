@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	g "github.com/appneta/go-traceview/v1/tv/internal/graphtest"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestInitMessage(t *testing.T) {
@@ -18,7 +18,7 @@ func TestInitMessage(t *testing.T) {
 	sendInitMessage()
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
-		{"go", "entry"}: {g.OutEdges{{}}, func(n g.Node) {
+		{"go", "entry"}: {g.OutEdges{}, func(n g.Node) {
 			assert.Equal(t, 1, n.Map["__Init"])
 			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
 			assert.NotEmpty(t, n.Map["Oboe.Version"])

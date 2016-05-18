@@ -62,7 +62,8 @@ var initOnce sync.Once
 
 func sendInitMessage() {
 	ctx := NewContext()
-	ctx.ReportEvent(LabelEntry, initLayer, "__Init", 1,
+	ctx.reportEvent(LabelEntry, initLayer, false,
+		"__Init", 1,
 		"Go.Version", runtime.Version(),
 		"Go.Oboe.Version", initVersion,
 		"Oboe.Version", oboeVersion,
