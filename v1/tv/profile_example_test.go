@@ -3,19 +3,20 @@
 package tv_test
 
 import (
+	"time"
+
 	"github.com/appneta/go-traceview/v1/tv"
 	"golang.org/x/net/context"
 )
 
-func ExampleBeginProfile(ctx context.Context) {
-	defer tv.BeginProfile(ctx, "example").End()
-	// ... do something ...
+func slowFunc(ctx context.Context) {
+	defer tv.BeginProfile(ctx, "slowFunc").End()
+	// ... do something else ...
+	time.Sleep(1 * time.Second)
 }
 
-func ExampleBeginProfile_func(ctx context.Context) {
-	// typically this would be used in a named function
-	func() {
-		defer tv.BeginProfile(ctx, "example_func").End()
-		// ... do something else ...
-	}()
+func Example() {
+	ctx := tv.NewContext(context.Background(), tv.NewTrace("myLayer"))
+	slowFunc(ctx)
+	tv.EndTrace(ctx)
 }
