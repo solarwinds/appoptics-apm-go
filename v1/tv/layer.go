@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/appneta/go-traceview/v1/tv/internal/traceview"
+	"github.com/appneta/go-appneta/v1/tv/internal/traceview"
 )
 
 // Layer is used to measure a span of time associated with an actvity

@@ -5,9 +5,9 @@ package tv_test
 import (
 	"testing"
 
-	"github.com/appneta/go-traceview/v1/tv"
-	g "github.com/appneta/go-traceview/v1/tv/internal/graphtest"
-	"github.com/appneta/go-traceview/v1/tv/internal/traceview"
+	"github.com/appneta/go-appneta/v1/tv"
+	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
+	"github.com/appneta/go-appneta/v1/tv/internal/traceview"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )
@@ -26,8 +26,8 @@ func TestBeginProfile(t *testing.T) {
 		{"", "profile_entry"}: {g.OutEdges{{"testLayer", "entry"}}, func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testProf")
-			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-traceview/v1/tv_test.testProf")
-			assert.Contains(t, n.Map["File"], "/go-traceview/v1/tv/profile_test.go")
+			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test.testProf")
+			assert.Contains(t, n.Map["File"], "/go-appneta/v1/tv/profile_test.go")
 		}},
 	})
 }
@@ -51,8 +51,8 @@ func TestBeginLayerProfile(t *testing.T) {
 		{"", "profile_entry"}: {g.OutEdges{{"L1", "entry"}}, func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testProf")
-			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-traceview/v1/tv_test.testLayerProf")
-			assert.Contains(t, n.Map["File"], "/go-traceview/v1/tv/profile_test.go")
+			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test.testLayerProf")
+			assert.Contains(t, n.Map["File"], "/go-appneta/v1/tv/profile_test.go")
 		}},
 		{"", "profile_exit"}:  {g.OutEdges{{"", "profile_entry"}}, nil},
 		{"L1", "exit"}:        {g.OutEdges{{"", "profile_exit"}, {"L1", "entry"}}, nil},

@@ -1,14 +1,14 @@
 # TraceView for Go
 
-[![GoDoc](https://godoc.org/github.com/appneta/go-traceview/v1/tv?status.svg)](https://godoc.org/github.com/appneta/go-traceview/v1/tv)
-[![Build Status](https://travis-ci.org/appneta/go-traceview.svg?branch=master)](https://travis-ci.org/appneta/go-traceview)
-[![Coverage Status](https://coveralls.io/repos/github/appneta/go-traceview/badge.svg?branch=master)](https://coveralls.io/github/appneta/go-traceview?branch=master)
-[![codecov](https://codecov.io/gh/appneta/go-traceview/branch/master/graph/badge.svg)](https://codecov.io/gh/appneta/go-traceview)
+[![GoDoc](https://godoc.org/github.com/appneta/go-appneta/v1/tv?status.svg)](https://godoc.org/github.com/appneta/go-appneta/v1/tv)
+[![Build Status](https://travis-ci.org/appneta/go-appneta.svg?branch=master)](https://travis-ci.org/appneta/go-appneta)
+[![Coverage Status](https://coveralls.io/repos/github/appneta/go-appneta/badge.svg?branch=master)](https://coveralls.io/github/appneta/go-appneta?branch=master)
+[![codecov](https://codecov.io/gh/appneta/go-appneta/branch/master/graph/badge.svg)](https://codecov.io/gh/appneta/go-appneta)
 
 ### Usage examples
 
 To profile the performance of basic web service, you can use our
-[tv.HTTPHandler](https://godoc.org/github.com/appneta/go-traceview/v1/tv#HTTPHandler) wrapper.  This
+[tv.HTTPHandler](https://godoc.org/github.com/appneta/go-appneta/v1/tv#HTTPHandler) wrapper.  This
 will automatically propagate any distributed trace described in the request headers (e.g. from
 TraceView's Java, Node.js Python, Ruby, C# or Scala instrumentation) through to the response
 headers, if one exists.
@@ -17,7 +17,7 @@ headers, if one exists.
 package main
 
 import (
-    "github.com/appneta/go-traceview/v1/tv"
+    "github.com/appneta/go-appneta/v1/tv"
     "math/rand"
     "net/http"
     "time"
@@ -51,9 +51,9 @@ instrumentation](http://docs.appneta.com/traceview-instrumentation#extending-tra
 describes key names that can be used to describe incoming HTTP requests, DB queries, cache/KV server
 calls, outgoing RPCs, and web framework information such as controller/action names. They can be
 provided as extra arguments when calling the
-[BeginLayer()](https://godoc.org/github.com/appneta/go-traceview/v1/tv#BeginLayer),
-[Info()](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Layer), or
-[End()](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Layer) methods.
+[BeginLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginLayer),
+[Info()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer), or
+[End()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer) methods.
 
 ```go
 func slowFunc(ctx context.Context) {
@@ -104,16 +104,16 @@ argument to every function on the call path between incoming and outgoing reques
 [Gizmo](https://godoc.org/github.com/NYTimes/gizmo/server#ContextHandler) use Context
 implementations, for example. We provide helper methods that allow a Trace to be associated with a
 [context.Context](https://godoc.org/golang.org/x/net/context) interface; for example,
-[tv.BeginLayer](https://godoc.org/github.com/appneta/go-traceview/v1/tv#BeginLayer) returns both a
+[tv.BeginLayer](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginLayer) returns both a
 new Layer span and an associated context, and
-[tv.Info(ctx)](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Info) and
-[tv.End(ctx)](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Layer) both use the Layer
+[tv.Info(ctx)](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Info) and
+[tv.End(ctx)](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer) both use the Layer
 defined in the provided context.
 
 It is not required to work with context.Context to trace your app, however. You can also use just
-the [Trace](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Trace),
-[Layer](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Layer), and
-[Profile](https://godoc.org/github.com/appneta/go-traceview/v1/tv#Profile) interfaces directly, if it
+the [Trace](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Trace),
+[Layer](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer), and
+[Profile](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Profile) interfaces directly, if it
 better suits your application.
 
 ```go
@@ -145,7 +145,7 @@ install the liboboe and liboboe-dev packages on your platform.
 Then, install the following:
 
 * [Go >= 1.5](https://golang.org/dl/)
-* This package: go get github.com/appneta/go-traceview/v1/tv
+* This package: go get github.com/appneta/go-appneta/v1/tv
 
 ### Building your app with tracing
 
@@ -172,9 +172,9 @@ and under active development. We welcome your feedback, issues and feature reque
 
 ### Demo
 
-If you have installed TraceView and the this package, you can run the sample “web app” included with go-traceview:
+If you have installed TraceView and the this package, you can run the sample “web app” included with go-appneta:
 
-    cd $GOPATH/src/github.com/appneta/go-traceview/examples/sample_app
+    cd $GOPATH/src/github.com/appneta/go-appneta/examples/sample_app
     go run -tags traceview main.go
 
 A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:
