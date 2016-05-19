@@ -174,7 +174,7 @@ and under active development. We welcome your feedback, issues and feature reque
 
 If you have installed TraceView and the this package, you can run the sample “web app” included with go-traceview:
 
-    cd $GOPATH/src/github.com/appneta/go-traceview/sample_app
+    cd $GOPATH/src/github.com/appneta/go-traceview/examples/sample_app
     go run -tags traceview main.go
 
 A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var test_layer string = "go_test"
+var test_layer = "go_test"
 
 func TestSendEvent(t *testing.T) {
 	r := SetTestReporter()
