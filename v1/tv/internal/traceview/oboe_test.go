@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	g "github.com/appneta/go-traceview/v1/tv/internal/graphtest"
+	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
 )
 

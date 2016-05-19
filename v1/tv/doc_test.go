@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/appneta/go-traceview/v1/tv"
-	g "github.com/appneta/go-traceview/v1/tv/internal/graphtest"
-	"github.com/appneta/go-traceview/v1/tv/internal/traceview"
+	"github.com/appneta/go-appneta/v1/tv"
+	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
+	"github.com/appneta/go-appneta/v1/tv/internal/traceview"
 	"golang.org/x/net/context"
 )
 
