@@ -17,10 +17,10 @@ install:
   - go get golang.org/x/net/context github.com/stretchr/testify/assert gopkg.in/mgo.v2/bson
 
 script:
-  - cd $GOPATH/src/github.com/appneta/go-traceview/v1/tv
-  - go build -v github.com/appneta/go-traceview/v1/tv github.com/appneta/go-traceview/v1/tv/internal/traceview
-  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appneta/go-traceview/v1/tv/internal/traceview,github.com/appneta/go-traceview/v1/tv
-  - go test -v -tags traceview -covermode=atomic -coverprofile=covtv.out -coverpkg github.com/appneta/go-traceview/v1/tv/internal/traceview,github.com/appneta/go-traceview/v1/tv
+  - cd $GOPATH/src/github.com/appneta/go-appneta/v1/tv
+  - go build -v github.com/appneta/go-appneta/v1/tv github.com/appneta/go-appneta/v1/tv/internal/traceview
+  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appneta/go-appneta/v1/tv/internal/traceview,github.com/appneta/go-appneta/v1/tv
+  - go test -v -tags traceview -covermode=atomic -coverprofile=covtv.out -coverpkg github.com/appneta/go-appneta/v1/tv/internal/traceview,github.com/appneta/go-appneta/v1/tv
   - pushd internal/traceview/
   - go test -v -covermode=atomic -coverprofile=cov.out
   - go test -v -tags traceview -covermode=atomic -coverprofile=covtv.out
