@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/appneta/go-traceview/v1/tv"
+	"github.com/appneta/go-appneta/v1/tv"
 )
 
 // Our "app" doesn't do much:
