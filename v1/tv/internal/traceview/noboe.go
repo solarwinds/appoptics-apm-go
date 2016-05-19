@@ -7,7 +7,6 @@ package traceview
 func oboeSampleRequest(layer, xtrace_header string) (bool, int, int) {
 	if r, ok := reporter.(*testReporter); ok {
 		return r.ShouldTrace, 1000000, 2 // trace tests
-	} else {
-		return false, 0, 6
 	}
+	return false, 0, 6
 }

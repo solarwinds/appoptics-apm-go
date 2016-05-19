@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Excercise sampling rate logic:
+// Exercise sampling rate logic:
 func TestSampleRequest(t *testing.T) {
 	_ = SetTestReporter() // set up test reporter
 	sampled := 0

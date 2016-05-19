@@ -1,6 +1,7 @@
 // Copyright (C) 2016 AppNeta, Inc. All rights reserved.
 
-// Low-level API for creating and reporting events for distributed tracing with TraceView
+// Package traceview provides a low-level API for creating and reporting events for
+// distributed tracing with AppNeta's TraceView.
 package traceview
 
 import (
@@ -216,7 +217,7 @@ func (md *oboe_metadata_t) op_string() string {
 	return strings.ToUpper(string(enc[:len]))
 }
 
-// a Context that may or not be tracing (due to sampling)
+// A SampledContext is a Context that may or not be tracing (due to sampling).
 type SampledContext interface {
 	ReportEvent(label Label, layer string, args ...interface{}) error
 	ReportEventMap(label Label, layer string, keys map[string]interface{}) error
@@ -231,7 +232,7 @@ type SampledEvent interface {
 	MetadataString() string
 }
 
-// a NullContext never reports events
+// A NullContext never reports events.
 type NullContext struct{}
 type NullEvent struct{}
 
@@ -320,7 +321,7 @@ func (ctx *Context) ReportEventMap(label Label, layer string, keys map[string]in
 }
 
 func (ctx *Context) reportEventMap(label Label, layer string, addCtxEdge bool, keys map[string]interface{}) error {
-	args := make([]interface{}, 0)
+	var args []interface{}
 	for k, v := range keys {
 		args = append(args, k)
 		args = append(args, v)
@@ -346,7 +347,7 @@ func (ctx *Context) report(e *Event, addCtxEdge bool, args ...interface{}) error
 		// load key name
 		key, is_str := args[i].(string)
 		if !is_str {
-			return errors.New(fmt.Sprintf("Key %v (type %T) not a string", key, key))
+			return fmt.Errorf("Key %v (type %T) not a string", key, key)
 		}
 		// load value and add KV to event
 		switch val := args[i+1].(type) {

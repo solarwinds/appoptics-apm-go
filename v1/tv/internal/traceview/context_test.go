@@ -70,7 +70,7 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, -1, oboe_metadata_fromstr(nil, md1Str))                                 // unpack str to nil md
 	assert.Equal(t, -1, oboe_metadata_fromstr(&md2, "1BA70"))                               // load md2 from invalid str
 	assert.Equal(t, nullMd, MetadataString(&md2))                                           // no change to md2 from previous
-	assert.Equal(t, -2, oboe_metadata_fromstr(&md2, "2"+md1Str[1:len(md1Str)]))             // load md2 from bad ver
+	assert.Equal(t, -2, oboe_metadata_fromstr(&md2, "2"+md1Str[1:]))                        // load md2 from bad ver
 	assert.Equal(t, nullMd, MetadataString(&md2))                                           // no change to md2 from previous
 	assert.Equal(t, -1, oboe_metadata_fromstr(&md2, string(make([]byte, 2048))))            // load md2 from too-long string
 	assert.Equal(t, nullMd, MetadataString(&md2))                                           // no change to md2 from previous
