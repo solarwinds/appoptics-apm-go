@@ -4,8 +4,8 @@
 
 package traceview
 
-func oboeSampleRequest(layer, xtrace_header string) (bool, int, int) {
-	if r, ok := reporter.(*testReporter); ok {
+func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
+	if r, ok := globalReporter.(*TestReporter); ok {
 		return r.ShouldTrace, 1000000, 2 // trace tests
 	}
 	return false, 0, 6

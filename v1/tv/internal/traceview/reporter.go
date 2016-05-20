@@ -11,12 +11,12 @@ import (
 	"time"
 )
 
-type Reporter interface {
+type reporter interface {
 	WritePacket([]byte) (int, error)
 	IsOpen() bool
 }
 
-func NewReporter() Reporter {
+func newReporter() reporter {
 	var conn *net.UDPConn
 	if reportingDisabled {
 		return &nullReporter{}
@@ -26,7 +26,9 @@ func NewReporter() Reporter {
 		conn, err = net.DialUDP("udp4", nil, serverAddr)
 	}
 	if err != nil {
-		log.Printf("Failed to initialize UDP reporter: %v", err)
+		if os.Getenv("TRACEVIEW_DEBUG") != "" {
+			log.Printf("TraceView failed to initialize UDP reporter: %v", err)
+		}
 		return &nullReporter{}
 	}
 	return &udpReporter{conn: conn}
@@ -45,10 +47,11 @@ func (r *udpReporter) IsOpen() bool                        { return r.conn != ni
 func (r *udpReporter) WritePacket(buf []byte) (int, error) { return r.conn.Write(buf) }
 
 var reporterAddr = "127.0.0.1:7831"
-var reporter Reporter = &nullReporter{}
+var globalReporter reporter = &nullReporter{}
 var reportingDisabled bool
 var usingTestReporter bool
 var cachedHostname string
+var debugLog bool
 
 type hostnamer interface {
 	Hostname() (name string, err error)
@@ -58,13 +61,16 @@ type osHostnamer struct{}
 func (h osHostnamer) Hostname() (string, error) { return os.Hostname() }
 
 func init() {
+	debugLog = (os.Getenv("TRACEVIEW_DEBUG") != "")
 	cacheHostname(osHostnamer{})
 }
 func cacheHostname(hn hostnamer) {
 	h, err := hn.Hostname()
 	if err != nil {
-		log.Printf("Unable to get hostname, TraceView tracing disabled: %v", err)
-		reporter = &nullReporter{} // disable reporting
+		if debugLog {
+			log.Printf("Unable to get hostname, TraceView tracing disabled: %v", err)
+		}
+		globalReporter = &nullReporter{} // disable reporting
 		reportingDisabled = true
 	}
 	cachedHostname = h
@@ -72,7 +78,7 @@ func cacheHostname(hn hostnamer) {
 
 var cachedPid = os.Getpid()
 
-func reportEvent(r Reporter, ctx *Context, e *Event) error {
+func reportEvent(r reporter, ctx *context, e *event) error {
 	if !r.IsOpen() {
 		// Reporter didn't initialize, nothing to do...
 		return nil
@@ -82,12 +88,12 @@ func reportEvent(r Reporter, ctx *Context, e *Event) error {
 	}
 
 	// The context metadata must have the same task_id as the event.
-	if bytes.Compare(ctx.metadata.ids.task_id, e.metadata.ids.task_id) != 0 {
+	if !bytes.Equal(ctx.metadata.ids.taskID, e.metadata.ids.taskID) {
 		return errors.New("Invalid event, different task_id from context")
 	}
 
 	// The context metadata must have a different op_id than the event.
-	if bytes.Compare(ctx.metadata.ids.op_id, e.metadata.ids.op_id) == 0 {
+	if bytes.Equal(ctx.metadata.ids.opID, e.metadata.ids.opID) {
 		return errors.New("Invalid event, same as context")
 	}
 
@@ -99,10 +105,10 @@ func reportEvent(r Reporter, ctx *Context, e *Event) error {
 	e.AddInt("PID", cachedPid)
 
 	// Update the context's op_id to that of the event
-	oboe_ids_set_op_id(&ctx.metadata.ids, e.metadata.ids.op_id)
+	ctx.metadata.ids.setOpID(e.metadata.ids.opID)
 
 	// Send BSON:
-	bson_buffer_finish(&e.bbuf)
+	bsonBufferFinish(&e.bbuf)
 	_, err := r.WritePacket(e.bbuf.buf)
 	return err
 }
@@ -114,21 +120,33 @@ func shouldTraceRequest(layer, xtraceHeader string) (sampled bool, sampleRate, s
 }
 
 // SetTestReporter sets and returns a test reporter that captures raw event bytes
-func SetTestReporter() *testReporter {
-	r := &testReporter{ShouldTrace: true}
-	reporter = r
+func SetTestReporter() *TestReporter {
+	r := &TestReporter{ShouldTrace: true}
+	globalReporter = r
 	usingTestReporter = true
 	return r
 }
 
-type testReporter struct {
+// TestReporter appends reported events to Bufs if ShouldTrace is true.
+type TestReporter struct {
 	Bufs        [][]byte
 	ShouldTrace bool
+	ShouldError bool
+	ErrorEvents []bool // whether to drop an event
+	eventCount  int
 }
 
-func (r *testReporter) WritePacket(buf []byte) (int, error) {
+// WritePacket appends buf to Bufs.
+func (r *TestReporter) WritePacket(buf []byte) (int, error) {
+	r.eventCount++
+	if r.ShouldError || // error all events
+		(len(r.ErrorEvents) != 0 && // error certain specified events
+			(r.eventCount-1) < len(r.ErrorEvents) && r.ErrorEvents[(r.eventCount-1)]) {
+		return 0, errors.New("TestReporter error")
+	}
 	r.Bufs = append(r.Bufs, buf)
 	return len(buf), nil
 }
 
-func (r *testReporter) IsOpen() bool { return true }
+// IsOpen is always true.
+func (r *TestReporter) IsOpen() bool { return true }

@@ -43,7 +43,7 @@ func (t *tvTrace) tvContext() traceview.SampledContext { return t.tvCtx }
 // the beginning of the layer layerName. If this trace is sampled, it may report
 // event data to AppNeta; otherwise event reporting will be a no-op.
 func NewTrace(layerName string) Trace {
-	ctx := traceview.NewSampledContext(layerName, "", true, nil)
+	ctx := traceview.NewContext(layerName, "", true, nil)
 	lbl := layerLabeler{layerName}
 	return &tvTrace{layerSpan{span: span{tvCtx: ctx, labeler: lbl}}, nil}
 }
@@ -52,7 +52,7 @@ func NewTrace(layerName string) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(layerName, mdstr string, cb func() KVMap) Trace {
-	ctx := traceview.NewSampledContext(layerName, mdstr, true, func() map[string]interface{} {
+	ctx := traceview.NewContext(layerName, mdstr, true, func() map[string]interface{} {
 		if cb != nil {
 			return cb()
 		}
@@ -70,9 +70,9 @@ func (t *tvTrace) End(args ...interface{}) {
 			args = append(args, "Edge", edge)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
-			t.exitEvent.ReportContext(t.tvCtx, true, args...)
+			_ = t.exitEvent.ReportContext(t.tvCtx, true, args...)
 		} else {
-			t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), args...)
+			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), args...)
 		}
 		t.childEdges = nil // clear child edge list
 		t.ended = true
@@ -92,9 +92,9 @@ func (t *tvTrace) EndCallback(cb func() KVMap) {
 			args = append(args, v)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
-			t.exitEvent.ReportContext(t.tvCtx, true, args...)
+			_ = t.exitEvent.ReportContext(t.tvCtx, true, args...)
 		} else {
-			t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), args...)
+			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), args...)
 		}
 		t.ended = true
 	}

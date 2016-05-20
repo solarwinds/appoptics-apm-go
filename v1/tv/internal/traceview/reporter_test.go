@@ -16,7 +16,7 @@ func TestSampleRequest(t *testing.T) {
 	sampled := 0
 	total := 1000
 	for i := 0; i < total; i++ {
-		if ok, _, _ := shouldTraceRequest(test_layer, ""); ok {
+		if ok, _, _ := shouldTraceRequest(testLayer, ""); ok {
 			sampled++
 		}
 	}
@@ -28,27 +28,27 @@ func TestSampleRequest(t *testing.T) {
 }
 
 func TestNullReporter(t *testing.T) {
-	reporter = &nullReporter{}
-	assert.False(t, reporter.IsOpen())
+	globalReporter = &nullReporter{}
+	assert.False(t, globalReporter.IsOpen())
 
 	// The nullReporter should seem like a regular reporter and not break
 	assert.NotPanics(t, func() {
-		ctx := NewContext()
-		err := ctx.ReportEvent("info", test_layer, "Controller", "test_controller", "Action", "test_action")
+		ctx := newContext()
+		err := ctx.ReportEvent("info", testLayer, "Controller", "test_controller", "Action", "test_action")
 		assert.NoError(t, err)
 	})
 
 	buf := []byte("xxx")
-	cnt, err := reporter.WritePacket(buf)
+	cnt, err := globalReporter.WritePacket(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, len(buf), cnt)
 }
 
 func TestNewReporter(t *testing.T) {
-	assert.IsType(t, &udpReporter{}, NewReporter())
+	assert.IsType(t, &udpReporter{}, newReporter())
 
 	reporterAddr = "127.0.0.1:777831"
-	assert.IsType(t, &nullReporter{}, NewReporter())
+	assert.IsType(t, &nullReporter{}, newReporter())
 	reporterAddr = "127.0.0.1:7831"
 }
 
@@ -59,30 +59,30 @@ func (h failHostnamer) Hostname() (string, error) {
 	return "", errors.New("couldn't resolve hostname")
 }
 func TestCacheHostname(t *testing.T) {
-	assert.IsType(t, &udpReporter{}, NewReporter())
+	assert.IsType(t, &udpReporter{}, newReporter())
 
 	cacheHostname(failHostnamer{})
-	assert.IsType(t, &nullReporter{}, NewReporter())
+	assert.IsType(t, &nullReporter{}, newReporter())
 }
 
 func TestReportEvent(t *testing.T) {
 	r := SetTestReporter()
-	ctx := NewContext()
+	ctx := newContext()
 	assert.Error(t, reportEvent(r, ctx, nil))
 	assert.Len(t, r.Bufs, 0) // no reporting
 
 	// mismatched task IDs
-	ev := ctx.NewEvent(LabelExit, test_layer)
+	ev := ctx.NewEvent(LabelExit, testLayer)
 	assert.Error(t, reportEvent(r, nil, ev))
 	assert.Len(t, r.Bufs, 0) // no reporting
 
-	ctx2 := NewContext()
+	ctx2 := newContext()
 	e2 := ctx2.NewEvent(LabelEntry, "layer2")
 	assert.Error(t, reportEvent(r, ctx2, ev))
 	assert.Error(t, reportEvent(r, ctx, e2))
 
 	// successful event
-	reportEvent(r, ctx, ev)
+	assert.NoError(t, reportEvent(r, ctx, ev))
 	assert.Len(t, r.Bufs, 1)
 	// re-report: shouldn't work (op IDs the same)
 	assert.Error(t, reportEvent(r, ctx, ev))

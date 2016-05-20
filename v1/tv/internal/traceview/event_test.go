@@ -9,24 +9,24 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var test_layer = "go_test"
+var testLayer = "go_test"
 
 func TestSendEvent(t *testing.T) {
 	r := SetTestReporter()
 
-	ctx := NewContext()
-	e := ctx.NewEvent(LabelEntry, test_layer)
+	ctx := newContext()
+	e := ctx.NewEvent(LabelEntry, testLayer)
 	e.AddInt("IntTest", 123)
 
 	err := e.Report(ctx)
 	assert.NoError(t, err)
 
-	err = ctx.ReportEvent("info", test_layer,
+	err = ctx.ReportEvent("info", testLayer,
 		"Controller", "test_controller",
 		"Action", "test_action")
 	assert.NoError(t, err)
 
-	e = ctx.NewEvent(LabelExit, test_layer)
+	e = ctx.NewEvent(LabelExit, testLayer)
 	e.AddEdge(ctx)
 	err = e.Report(ctx)
 	assert.NoError(t, err)
@@ -45,29 +45,29 @@ func TestSendEvent(t *testing.T) {
 
 func TestEvent(t *testing.T) {
 	// oboe_event_init
-	evt := &Event{}
-	var md oboe_metadata_t
-	assert.Equal(t, -1, oboe_event_init(nil, nil))            // init nil evt, md
-	assert.Equal(t, -1, oboe_event_init(evt, nil))            // init evt, nil md
-	assert.Equal(t, 0, oboe_metadata_init(&md))               // init valid md
-	assert.NotPanics(t, func() { oboe_metadata_random(&md) }) // make random md
-	t.Logf("TestEvent md: %v", MetadataString(&md))
-	assert.Equal(t, 0, oboe_event_init(evt, &md))             // init valid evt, md
-	assert.Equal(t, evt.metadata.ids.task_id, md.ids.task_id) // task IDs should match
-	assert.NotEqual(t, evt.metadata.ids.op_id, md.ids.op_id)  // op IDs should not match
-	assert.Len(t, evt.MetadataString(), 58)                   // event md string correct length
+	evt := &event{}
+	var md oboeMetadata
+	assert.Equal(t, -1, oboeEventInit(nil, nil))            // init nil evt, md
+	assert.Equal(t, -1, oboeEventInit(evt, nil))            // init evt, nil md
+	assert.Equal(t, 0, oboeMetadataInit(&md))               // init valid md
+	assert.NotPanics(t, func() { oboeMetadataRandom(&md) }) // make random md
+	t.Logf("TestEvent md: %v", md.String())
+	assert.Equal(t, 0, oboeEventInit(evt, &md))                // init valid evt, md
+	assert.Equal(t, evt.metadata.ids.taskID, md.ids.taskID)    // task IDs should match
+	assert.NotEqual(t, evt.metadata.ids.opID, md.ids.opID)     // op IDs should not match
+	assert.Len(t, evt.MetadataString(), oboeMetadataStringLen) // event md string correct length
 }
 
 func TestEventMetadata(t *testing.T) {
 	r := SetTestReporter()
 
-	ctx := NewContext()
+	ctx := newContext()
 	e := ctx.NewEvent(LabelExit, "alice")
 	e2 := ctx.NewEvent(LabelEntry, "bob")
 
-	ctx2 := NewContext() // context for unassociated trace
-	assert.Len(t, ctx.String(), 58)
-	assert.Len(t, ctx2.String(), 58)
+	ctx2 := newContext() // context for unassociated trace
+	assert.Len(t, ctx.String(), oboeMetadataStringLen)
+	assert.Len(t, ctx2.String(), oboeMetadataStringLen)
 	assert.NotEqual(t, ctx.String()[2:42], ctx2.String()[2:42])
 	// try to add ctx2 to to this event -- no effect
 	e.AddEdgeFromMetadataString(ctx2.String())
@@ -75,7 +75,7 @@ func TestEventMetadata(t *testing.T) {
 	assert.NoError(t, err)
 	// try to add e to e2 -- should work
 	e2.AddEdgeFromMetadataString(e.MetadataString())
-	e2.Report(ctx)
+	assert.NoError(t, e2.Report(ctx))
 	// test event pair
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		{"alice", "exit"}: {},
@@ -85,13 +85,13 @@ func TestEventMetadata(t *testing.T) {
 
 func TestSampledEvent(t *testing.T) {
 	r := SetTestReporter()
-	ctx := NewContext()
-	e := ctx.NewEvent(LabelEntry, test_layer)
+	ctx := newContext()
+	e := ctx.NewEvent(LabelEntry, testLayer)
 	err := e.Report(ctx)
 	assert.NoError(t, err)
 	// create SampledEvent with edge to entry
-	se := ctx.NewSampledEvent(LabelExit, test_layer, true)
-	se.ReportContext(ctx, false)
+	se := ctx.NewSampledEvent(LabelExit, testLayer, true)
+	assert.NoError(t, se.ReportContext(ctx, false))
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		{"go_test", "entry"}: {},
@@ -100,12 +100,12 @@ func TestSampledEvent(t *testing.T) {
 }
 func TestSampledEventNoEdge(t *testing.T) {
 	r := SetTestReporter()
-	ctx := NewContext()
-	e := ctx.NewEvent(LabelEntry, test_layer)
+	ctx := newContext()
+	e := ctx.NewEvent(LabelEntry, testLayer)
 	err := e.Report(ctx)
 	assert.NoError(t, err)
-	se := ctx.NewSampledEvent(LabelExit, test_layer, false) // create event without edge
-	se.ReportContext(ctx, false)                            // report event without edge
+	se := ctx.NewSampledEvent(LabelExit, testLayer, false) // create event without edge
+	assert.NoError(t, se.ReportContext(ctx, false))        // report event without edge
 	// exit event is unconnected
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		{"go_test", "entry"}: {},
