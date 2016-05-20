@@ -43,7 +43,7 @@ func (t *tvTrace) tvContext() traceview.SampledContext { return t.tvCtx }
 // the beginning of the layer layerName. If this trace is sampled, it may report
 // event data to AppNeta; otherwise event reporting will be a no-op.
 func NewTrace(layerName string) Trace {
-	ctx := traceview.NewSampledContext(layerName, "", true, nil)
+	ctx := traceview.NewContext(layerName, "", true, nil)
 	lbl := layerLabeler{layerName}
 	return &tvTrace{layerSpan{span: span{tvCtx: ctx, labeler: lbl}}, nil}
 }
@@ -52,7 +52,7 @@ func NewTrace(layerName string) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(layerName, mdstr string, cb func() KVMap) Trace {
-	ctx := traceview.NewSampledContext(layerName, mdstr, true, func() map[string]interface{} {
+	ctx := traceview.NewContext(layerName, mdstr, true, func() map[string]interface{} {
 		if cb != nil {
 			return cb()
 		}

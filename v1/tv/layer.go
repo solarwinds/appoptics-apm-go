@@ -107,7 +107,7 @@ func (s *nullSpan) Info(args ...interface{})                               {}
 func (s *nullSpan) addChildEdge(traceview.SampledContext)                  {}
 func (s *nullSpan) addProfile(Profile)                                     {}
 func (s *nullSpan) ok() bool                                               { return false }
-func (s *nullSpan) tvContext() traceview.SampledContext                    { return &traceview.NullContext{} }
+func (s *nullSpan) tvContext() traceview.SampledContext                    { return traceview.NewNullContext() }
 
 // is this layer still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool                            { return s != nil && !s.ended }

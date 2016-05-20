@@ -3,9 +3,9 @@
 package tv
 
 import (
+	"reflect"
 	"testing"
 
-	"github.com/appneta/go-appneta/v1/tv/internal/traceview"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )
@@ -46,6 +46,6 @@ func TestNullSpan(t *testing.T) {
 	c1.addProfile(p1)
 
 	nctx := c1.tvContext()
-	assert.IsType(t, nctx, &traceview.NullContext{})
-	assert.IsType(t, nctx.Copy(), &traceview.NullContext{})
+	assert.Equal(t, reflect.TypeOf(nctx).Elem().Name(), "nullContext")
+	assert.IsType(t, reflect.TypeOf(nctx.Copy()).Elem().Name(), "nullContext")
 }

@@ -17,43 +17,43 @@ import (
 	"sync"
 )
 
-var settings Settings
+var globalSettings settings
 var emptyCString, inXTraceCString *C.char
 var oboeVersion string
-var layerCache *CStringCache
+var layerCache *cStringCache
 var initMessageSent = false
 
 // Global configuration settings (sample rate, tracing mode.)
-type Settings struct {
+type settings struct {
 	settings_cfg C.oboe_settings_cfg_t
 }
 
 // Initialize Traceview C instrumentation library ("oboe"):
 func init() {
 	C.oboe_init()
-	reporter = NewReporter()
+	globalReporter = newReporter()
 	readEnvSettings()
 
 	// To save on malloc/free, preallocate empty & "non-empty" CStrings
 	emptyCString = C.CString("")
 	inXTraceCString = C.CString("in_xtrace")
 	oboeVersion = C.GoString(C.oboe_config_get_version_string())
-	layerCache = NewCStringCache()
+	layerCache = newCStringCache()
 }
 
 func readEnvSettings() {
 	// Configure tracing mode setting using environment variable
-	C.oboe_settings_cfg_init(&settings.settings_cfg)
+	C.oboe_settings_cfg_init(&globalSettings.settings_cfg)
 	mode := strings.ToLower(os.Getenv("GO_TRACEVIEW_TRACING_MODE"))
 	switch mode {
 	case "always":
 		fallthrough
 	default:
-		settings.settings_cfg.tracing_mode = C.OBOE_TRACE_ALWAYS
+		globalSettings.settings_cfg.tracing_mode = C.OBOE_TRACE_ALWAYS
 	case "through":
-		settings.settings_cfg.tracing_mode = C.OBOE_TRACE_THROUGH
+		globalSettings.settings_cfg.tracing_mode = C.OBOE_TRACE_THROUGH
 	case "never":
-		settings.settings_cfg.tracing_mode = C.OBOE_TRACE_NEVER
+		globalSettings.settings_cfg.tracing_mode = C.OBOE_TRACE_NEVER
 	}
 }
 
@@ -62,7 +62,7 @@ var initLayer = "go"
 var initOnce sync.Once
 
 func sendInitMessage() {
-	ctx := NewContext()
+	ctx := newContext()
 	ctx.reportEvent(LabelEntry, initLayer, false,
 		"__Init", 1,
 		"Go.Version", runtime.Version(),
@@ -74,7 +74,7 @@ func sendInitMessage() {
 
 func oboeSampleRequest(layer, xtrace_header string) (bool, int, int) {
 	if usingTestReporter {
-		if r, ok := reporter.(*testReporter); ok {
+		if r, ok := globalReporter.(*TestReporter); ok {
 			return r.ShouldTrace, 1000000, 2 // trace tests
 		}
 	}
@@ -91,7 +91,7 @@ func oboeSampleRequest(layer, xtrace_header string) (bool, int, int) {
 		cxt = inXTraceCString
 	}
 
-	sample := int(C.oboe_sample_request(clayer, cxt, &settings.settings_cfg, &sample_rate, &sample_source))
+	sample := int(C.oboe_sample_request(clayer, cxt, &globalSettings.settings_cfg, &sample_rate, &sample_source))
 
 	return sample != 0, int(sample_rate), int(sample_source)
 }
