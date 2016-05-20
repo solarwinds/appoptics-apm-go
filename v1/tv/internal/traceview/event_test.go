@@ -13,8 +13,7 @@ var testLayer = "go_test"
 
 func TestSendEvent(t *testing.T) {
 	r := SetTestReporter()
-
-	ctx := newContext()
+	ctx := newTestContext(t)
 	e := ctx.NewEvent(LabelEntry, testLayer)
 	e.AddInt("IntTest", 123)
 
@@ -47,10 +46,10 @@ func TestEvent(t *testing.T) {
 	// oboe_event_init
 	evt := &event{}
 	var md oboeMetadata
-	assert.Equal(t, -1, oboeEventInit(nil, nil))            // init nil evt, md
-	assert.Equal(t, -1, oboeEventInit(evt, nil))            // init evt, nil md
-	assert.Equal(t, 0, oboeMetadataInit(&md))               // init valid md
-	assert.NotPanics(t, func() { oboeMetadataRandom(&md) }) // make random md
+	assert.Equal(t, -1, oboeEventInit(nil, nil)) // init nil evt, md
+	assert.Equal(t, -1, oboeEventInit(evt, nil)) // init evt, nil md
+	assert.Equal(t, 0, oboeMetadataInit(&md))    // init valid md
+	assert.NoError(t, md.SetRandom())            // make random md
 	t.Logf("TestEvent md: %v", md.String())
 	assert.Equal(t, 0, oboeEventInit(evt, &md))                // init valid evt, md
 	assert.Equal(t, evt.metadata.ids.taskID, md.ids.taskID)    // task IDs should match
@@ -61,7 +60,7 @@ func TestEvent(t *testing.T) {
 func TestEventMetadata(t *testing.T) {
 	r := SetTestReporter()
 
-	ctx := newContext()
+	ctx := newTestContext(t)
 	e := ctx.NewEvent(LabelExit, "alice")
 	e2 := ctx.NewEvent(LabelEntry, "bob")
 
@@ -85,7 +84,7 @@ func TestEventMetadata(t *testing.T) {
 
 func TestSampledEvent(t *testing.T) {
 	r := SetTestReporter()
-	ctx := newContext()
+	ctx := newTestContext(t)
 	e := ctx.NewEvent(LabelEntry, testLayer)
 	err := e.Report(ctx)
 	assert.NoError(t, err)
@@ -100,7 +99,7 @@ func TestSampledEvent(t *testing.T) {
 }
 func TestSampledEventNoEdge(t *testing.T) {
 	r := SetTestReporter()
-	ctx := newContext()
+	ctx := newTestContext(t)
 	e := ctx.NewEvent(LabelEntry, testLayer)
 	err := e.Report(ctx)
 	assert.NoError(t, err)

@@ -43,7 +43,9 @@ func oboeEventInit(evt *event, md *oboeMetadata) int {
 	evt.metadata.opLen = md.opLen
 
 	copy(evt.metadata.ids.taskID, md.ids.taskID)
-	oboeRandomOpID(&evt.metadata)
+	if err := evt.metadata.SetRandomOpID(); err != nil {
+		return -1
+	}
 
 	// Buffer initialization
 

@@ -46,7 +46,7 @@ func TestNullReporter(t *testing.T) {
 
 func TestNewReporter(t *testing.T) {
 	assert.IsType(t, &udpReporter{}, newReporter())
-
+	t.Logf("Forcing UDP listen error for invalid port 7777831")
 	reporterAddr = "127.0.0.1:777831"
 	assert.IsType(t, &nullReporter{}, newReporter())
 	reporterAddr = "127.0.0.1:7831"
@@ -60,14 +60,14 @@ func (h failHostnamer) Hostname() (string, error) {
 }
 func TestCacheHostname(t *testing.T) {
 	assert.IsType(t, &udpReporter{}, newReporter())
-
+	t.Logf("Forcing hostname error: 'Unable to get hostname' log message expected")
 	cacheHostname(failHostnamer{})
 	assert.IsType(t, &nullReporter{}, newReporter())
 }
 
 func TestReportEvent(t *testing.T) {
 	r := SetTestReporter()
-	ctx := newContext()
+	ctx := newTestContext(t)
 	assert.Error(t, reportEvent(r, ctx, nil))
 	assert.Len(t, r.Bufs, 0) // no reporting
 
@@ -76,7 +76,7 @@ func TestReportEvent(t *testing.T) {
 	assert.Error(t, reportEvent(r, nil, ev))
 	assert.Len(t, r.Bufs, 0) // no reporting
 
-	ctx2 := newContext()
+	ctx2 := newTestContext(t)
 	e2 := ctx2.NewEvent(LabelEntry, "layer2")
 	assert.Error(t, reportEvent(r, ctx2, ev))
 	assert.Error(t, reportEvent(r, ctx, e2))

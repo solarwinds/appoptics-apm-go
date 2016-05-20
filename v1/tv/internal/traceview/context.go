@@ -50,26 +50,27 @@ func oboeMetadataInit(md *oboeMetadata) int {
 	return 0
 }
 
-func oboeMetadataRandom(md *oboeMetadata) {
+func (md *oboeMetadata) SetRandom() error {
 	if md == nil {
-		return
+		return errors.New("SetRandom on nil oboeMetadata")
 	}
-
 	_, err := rand.Read(md.ids.taskID)
 	if err != nil {
-		return
+		return err
 	}
 	_, err = rand.Read(md.ids.opID)
 	if err != nil {
-		return
+		return err
 	}
+	return nil
 }
 
-func oboeRandomOpID(md *oboeMetadata) {
+func (md *oboeMetadata) SetRandomOpID() error {
 	_, err := rand.Read(md.ids.opID)
 	if err != nil {
-		return
+		return err
 	}
+	return nil
 }
 
 func (ids *oboeIDs) setOpID(opID []byte) {
@@ -251,10 +252,12 @@ func (e *nullEvent) MetadataString() string                                     
 func NewNullContext() SampledContext { return &nullContext{} }
 
 // newContext allocates a context with random metadata (for a new trace).
-func newContext() *context {
+func newContext() SampledContext {
 	ctx := &context{}
 	oboeMetadataInit(&ctx.metadata)
-	oboeMetadataRandom(&ctx.metadata)
+	if err := ctx.metadata.SetRandom(); err != nil {
+		return &nullContext{}
+	}
 	return ctx
 }
 

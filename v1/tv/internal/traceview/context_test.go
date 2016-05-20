@@ -15,13 +15,14 @@ func TestMetadata(t *testing.T) {
 	// oboe_metadata_init
 	// oboe_metadata_random
 	var md1 oboeMetadata
-	assert.Equal(t, -1, oboeMetadataInit(nil))               // init nil md
-	assert.NotPanics(t, func() { oboeMetadataRandom(nil) })  // random nil md
-	assert.Equal(t, 0, oboeMetadataInit(&md1))               // init valid md
-	assert.NotPanics(t, func() { oboeMetadataRandom(&md1) }) // make random md
-	md1Str := md1.String()                                   // get string repr of md
-	t.Logf("md1: %s", md1Str)                                // log md string
-	assert.Len(t, md1Str, oboeMetadataStringLen)             // check metadata str len
+	var mdNil *oboeMetadata
+	assert.Equal(t, -1, oboeMetadataInit(nil))   // init nil md
+	assert.Error(t, mdNil.SetRandom())           // random nil md
+	assert.Equal(t, 0, oboeMetadataInit(&md1))   // init valid md
+	assert.NoError(t, md1.SetRandom())           // make random md
+	md1Str := md1.String()                       // get string repr of md
+	t.Logf("md1: %s", md1Str)                    // log md string
+	assert.Len(t, md1Str, oboeMetadataStringLen) // check metadata str len
 
 	// oboe_metadata_pack
 	buf := make([]byte, 64)
@@ -49,7 +50,7 @@ func TestMetadata(t *testing.T) {
 	var mdS, mdSU oboeMetadata
 	assert.Equal(t, 0, oboeMetadataInit(&mdS)) // init regular metadata
 	mdS.taskLen = shortTaskLen                 // override task ID len
-	oboeMetadataRandom(&mdS)                   // generate random task & op IDs
+	assert.NoError(t, mdS.SetRandom())         // generate random task & op IDs
 	bufS := make([]byte, 128)                  // buffer to pack
 	assert.Equal(t, (1 + shortTaskLen + 8),
 		oboeMetadataPack(&mdS, bufS)) // pack buf
@@ -99,9 +100,15 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, "", nctx.String())
 }
 
+func newTestContext(t *testing.T) *context {
+	ctx := newContext()
+	assert.IsType(t, ctx, &context{})
+	return ctx.(*context)
+}
+
 func TestReportEventMap(t *testing.T) {
 	r := SetTestReporter()
-	ctx := newContext()
+	ctx := newTestContext(t)
 	e := ctx.NewEvent(LabelEntry, "myLayer")
 	err := e.Report(ctx)
 	assert.NoError(t, err)
@@ -138,7 +145,7 @@ func TestNullContext(t *testing.T) {
 	assert.Len(t, r.Bufs, 0) // no reporting
 
 	// try and report a real unrelated event on a null context
-	e2 := newContext().NewEvent(LabelEntry, "e2")
+	e2 := newTestContext(t).NewEvent(LabelEntry, "e2")
 	assert.NoError(t, e2.ReportContext(ctx, false))
 	assert.Len(t, r.Bufs, 0) // no reporting
 
