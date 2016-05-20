@@ -83,9 +83,9 @@ func TestMetadata(t *testing.T) {
 
 	// oboe_metadata_tostr
 	assert.NotPanics(t, func() {
-		str, err := oboeMetadataToString(nil) // convert nil to md str
-		assert.Equal(t, str, "")              // shoud produce empty str
-		assert.Error(t, err)                  // should raise error
+		str, e := oboeMetadataToString(nil) // convert nil to md str
+		assert.Equal(t, str, "")            // shoud produce empty str
+		assert.Error(t, e)                  // should raise error
 	})
 	s, err := oboeMetadataToString(&md2) // convert md2 to str
 	assert.Equal(t, s, md1Str)           // assert matches md1 str
@@ -105,10 +105,10 @@ func TestReportEventMap(t *testing.T) {
 	err := e.Report(ctx)
 	assert.NoError(t, err)
 
-	ctx.ReportEventMap(LabelInfo, "myLayer", map[string]interface{}{
+	assert.NoError(t, ctx.ReportEventMap(LabelInfo, "myLayer", map[string]interface{}{
 		"testK":  "testV",
 		"intval": 333,
-	})
+	}))
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		{"myLayer", "entry"}: {},
 		{"myLayer", "info"}: {g.OutEdges{{"myLayer", "entry"}}, func(n g.Node) {
@@ -127,12 +127,12 @@ func TestNullContext(t *testing.T) {
 	assert.Empty(t, ctx.String())
 	assert.False(t, ctx.Copy().IsTracing())
 	// reporting shouldn't work
-	ctx.ReportEvent(LabelEntry, "testLayer")
-	ctx.ReportEventMap(LabelInfo, "testLayer", map[string]interface{}{"K": "V"})
+	assert.NoError(t, ctx.ReportEvent(LabelEntry, "testLayer"))
+	assert.NoError(t, ctx.ReportEventMap(LabelInfo, "testLayer", map[string]interface{}{"K": "V"}))
 	// try and make an event
 	e := ctx.NewSampledEvent(LabelExit, "testLayer", false)
 	assert.Empty(t, e.MetadataString())
-	e.ReportContext(ctx, false)
+	assert.NoError(t, e.ReportContext(ctx, false))
 
 	assert.Len(t, r.Bufs, 0) // no reporting
 }

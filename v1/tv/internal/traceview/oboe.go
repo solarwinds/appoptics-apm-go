@@ -21,7 +21,6 @@ var globalSettings settings
 var emptyCString, inXTraceCString *C.char
 var oboeVersion string
 var layerCache *cStringCache
-var initMessageSent = false
 
 // Global configuration settings (sample rate, tracing mode.)
 type settings struct {
@@ -59,7 +58,7 @@ func readEnvSettings() {
 
 var initVersion = 1
 var initLayer = "go"
-var initOnce sync.Once
+var initMessageOnce sync.Once
 
 func sendInitMessage() {
 	ctx := newContext()
@@ -78,7 +77,7 @@ func oboeSampleRequest(layer, xtrace_header string) (bool, int, int) {
 			return r.ShouldTrace, 1000000, 2 // trace tests
 		}
 	}
-	initOnce.Do(sendInitMessage)
+	initMessageOnce.Do(sendInitMessage)
 
 	var sample_rate, sample_source C.int
 	var clayer *C.char = layerCache.Get(layer)

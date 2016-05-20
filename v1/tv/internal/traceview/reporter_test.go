@@ -82,7 +82,7 @@ func TestReportEvent(t *testing.T) {
 	assert.Error(t, reportEvent(r, ctx, e2))
 
 	// successful event
-	reportEvent(r, ctx, ev)
+	assert.NoError(t, reportEvent(r, ctx, ev))
 	assert.Len(t, r.Bufs, 1)
 	// re-report: shouldn't work (op IDs the same)
 	assert.Error(t, reportEvent(r, ctx, ev))

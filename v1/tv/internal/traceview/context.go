@@ -229,7 +229,7 @@ type SampledContext interface {
 
 // A SampledEvent is an event that may or may not be tracing, created by a SampledContext.
 type SampledEvent interface {
-	ReportContext(c SampledContext, addCtxEdge bool, args ...interface{})
+	ReportContext(c SampledContext, addCtxEdge bool, args ...interface{}) error
 	MetadataString() string
 }
 
@@ -243,15 +243,12 @@ func (e *nullContext) ReportEvent(label Label, layer string, args ...interface{}
 func (e *nullContext) ReportEventMap(label Label, layer string, keys map[string]interface{}) error {
 	return nil
 }
-func (e *nullContext) Copy() SampledContext { return &nullContext{} }
-func (e *nullContext) IsTracing() bool      { return false }
-func (e *nullContext) String() string       { return "" }
-func (e *nullContext) NewSampledEvent(label Label, layer string, addCtxEdge bool) SampledEvent {
-	return &nullEvent{}
-}
-
-func (e *nullEvent) ReportContext(c SampledContext, addCtxEdge bool, args ...interface{}) {}
-func (e *nullEvent) MetadataString() string                                               { return "" }
+func (e *nullContext) Copy() SampledContext                                         { return &nullContext{} }
+func (e *nullContext) IsTracing() bool                                              { return false }
+func (e *nullContext) String() string                                               { return "" }
+func (e *nullContext) NewSampledEvent(l Label, y string, g bool) SampledEvent       { return &nullEvent{} }
+func (e *nullEvent) ReportContext(c SampledContext, g bool, a ...interface{}) error { return nil }
+func (e *nullEvent) MetadataString() string                                         { return "" }
 
 // NewNullContext returns a context that is not tracing.
 func NewNullContext() SampledContext { return &nullContext{} }
@@ -290,7 +287,9 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 			}
 			kvs["SampleRate"] = rate
 			kvs["SampleSource"] = source
-			ctx.(*context).reportEventMap(LabelEntry, layer, false, kvs)
+			if err := ctx.(*context).reportEventMap(LabelEntry, layer, false, kvs); err != nil {
+				ctx = &nullContext{}
+			}
 		}
 	} else {
 		ctx = &nullContext{}

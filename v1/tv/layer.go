@@ -136,16 +136,19 @@ type profileLabeler struct{ name string }
 func (l layerLabeler) entryLabel() traceview.Label { return traceview.LabelEntry }
 func (l layerLabeler) exitLabel() traceview.Label  { return traceview.LabelExit }
 func (l layerLabeler) layerName() string           { return l.name }
-func newLayer(tvCtx traceview.SampledContext, layerName string, parent Layer, args ...interface{}) *layerSpan {
+func newLayer(tvCtx traceview.SampledContext, layerName string, parent Layer, args ...interface{}) Layer {
 	ll := layerLabeler{layerName}
-	tvCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...)
+	if err := tvCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
+		return &nullSpan{}
+	}
 	return &layerSpan{span: span{tvCtx: tvCtx.Copy(), labeler: ll, parent: parent}}
+
 }
 
 func (l profileLabeler) entryLabel() traceview.Label { return traceview.LabelProfileEntry }
 func (l profileLabeler) exitLabel() traceview.Label  { return traceview.LabelProfileExit }
 func (l profileLabeler) layerName() string           { return "" }
-func newProfile(tvCtx traceview.SampledContext, profileName string, parent Layer, args ...interface{}) *profileSpan {
+func newProfile(tvCtx traceview.SampledContext, profileName string, parent Layer, args ...interface{}) Profile {
 	var fname string
 	pc, file, line, ok := runtime.Caller(2) // Caller(1) is BeginProfile
 	if ok {
@@ -153,10 +156,12 @@ func newProfile(tvCtx traceview.SampledContext, profileName string, parent Layer
 		fname = f.Name()
 	}
 	pl := profileLabeler{profileName}
-	tvCtx.ReportEvent(pl.entryLabel(), pl.layerName(), // report profile entry
+	if err := tvCtx.ReportEvent(pl.entryLabel(), pl.layerName(), // report profile entry
 		"Language", "go", "ProfileName", profileName,
 		"FunctionName", fname, "File", file, "LineNumber", line,
-	)
+	); err != nil {
+		return &nullSpan{}
+	}
 	p := &profileSpan{span{tvCtx: tvCtx.Copy(), labeler: pl, parent: parent}}
 	if parent != nil && parent.ok() {
 		parent.addProfile(p)
@@ -173,7 +178,7 @@ func (s *span) End(args ...interface{}) {
 		for _, edge := range s.childEdges { // add Edge KV for each joined child
 			args = append(args, "Edge", edge)
 		}
-		s.tvCtx.ReportEvent(s.exitLabel(), s.layerName(), args...)
+		_ = s.tvCtx.ReportEvent(s.exitLabel(), s.layerName(), args...)
 		s.childEdges = nil // clear child edge list
 		s.ended = true
 		// add this span's context to list to be used as Edge by parent exit
@@ -186,20 +191,22 @@ func (s *span) End(args ...interface{}) {
 // Info reports KV pairs provided by args.
 func (s *layerSpan) Info(args ...interface{}) {
 	if s.ok() {
-		s.tvCtx.ReportEvent(traceview.LabelInfo, s.layerName(), args...)
+		_ = s.tvCtx.ReportEvent(traceview.LabelInfo, s.layerName(), args...)
 	}
 }
 
 // Error reports an error, distinguished by its class and message
 func (s *span) Error(class, msg string) {
 	if s.ok() {
-		s.tvCtx.ReportEvent(traceview.LabelError, s.layerName(), "ErrorClass", class, "ErrorMsg", msg, "Backtrace", debug.Stack())
+		_ = s.tvCtx.ReportEvent(traceview.LabelError, s.layerName(),
+			"ErrorClass", class, "ErrorMsg", msg, "Backtrace", debug.Stack())
 	}
 }
 
 // Err reports the provided error type
 func (s *span) Err(err error) {
 	if s.ok() && err != nil {
-		s.tvCtx.ReportEvent(traceview.LabelError, s.layerName(), "ErrorClass", "error", "ErrorMsg", err.Error(), "Backtrace", debug.Stack())
+		_ = s.tvCtx.ReportEvent(traceview.LabelError, s.layerName(),
+			"ErrorClass", "error", "ErrorMsg", err.Error(), "Backtrace", debug.Stack())
 	}
 }

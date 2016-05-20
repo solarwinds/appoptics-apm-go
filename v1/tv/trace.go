@@ -70,9 +70,9 @@ func (t *tvTrace) End(args ...interface{}) {
 			args = append(args, "Edge", edge)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
-			t.exitEvent.ReportContext(t.tvCtx, true, args...)
+			_ = t.exitEvent.ReportContext(t.tvCtx, true, args...)
 		} else {
-			t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), args...)
+			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), args...)
 		}
 		t.childEdges = nil // clear child edge list
 		t.ended = true
@@ -92,9 +92,9 @@ func (t *tvTrace) EndCallback(cb func() KVMap) {
 			args = append(args, v)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
-			t.exitEvent.ReportContext(t.tvCtx, true, args...)
+			_ = t.exitEvent.ReportContext(t.tvCtx, true, args...)
 		} else {
-			t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), args...)
+			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), args...)
 		}
 		t.ended = true
 	}

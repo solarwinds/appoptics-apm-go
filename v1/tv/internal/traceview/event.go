@@ -106,7 +106,7 @@ func (e *event) AddEdgeFromMetadataString(mdstr string) {
 	oboeMetadataInit(&md)
 	oboeMetadataFromString(&md, mdstr)
 	// only add Edge if metadata references same trace as ours
-	if bytes.Compare(e.metadata.ids.taskID, md.ids.taskID) == 0 {
+	if bytes.Equal(e.metadata.ids.taskID, md.ids.taskID) {
 		bsonAppendString(&e.bbuf, "Edge", md.opString())
 	}
 }
@@ -118,10 +118,11 @@ func (e *event) ReportUsing(c *context, r reporter) error { return reportEvent(r
 func (e *event) Report(c *context) error { return e.ReportUsing(c, globalReporter) }
 
 // Report event using SampledContext interface
-func (e *event) ReportContext(c SampledContext, addCtxEdge bool, args ...interface{}) {
+func (e *event) ReportContext(c SampledContext, addCtxEdge bool, args ...interface{}) error {
 	if ctx, ok := c.(*context); ok {
-		ctx.report(e, addCtxEdge, args...)
+		return ctx.report(e, addCtxEdge, args...)
 	}
+	return nil
 }
 
 // Returns Metadata string (X-Trace header)

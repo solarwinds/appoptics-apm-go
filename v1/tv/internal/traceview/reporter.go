@@ -82,12 +82,12 @@ func reportEvent(r reporter, ctx *context, e *event) error {
 	}
 
 	// The context metadata must have the same task_id as the event.
-	if bytes.Compare(ctx.metadata.ids.taskID, e.metadata.ids.taskID) != 0 {
+	if !bytes.Equal(ctx.metadata.ids.taskID, e.metadata.ids.taskID) {
 		return errors.New("Invalid event, different task_id from context")
 	}
 
 	// The context metadata must have a different op_id than the event.
-	if bytes.Compare(ctx.metadata.ids.opID, e.metadata.ids.opID) == 0 {
+	if bytes.Equal(ctx.metadata.ids.opID, e.metadata.ids.opID) {
 		return errors.New("Invalid event, same as context")
 	}
 

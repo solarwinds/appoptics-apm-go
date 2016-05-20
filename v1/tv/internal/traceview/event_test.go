@@ -75,7 +75,7 @@ func TestEventMetadata(t *testing.T) {
 	assert.NoError(t, err)
 	// try to add e to e2 -- should work
 	e2.AddEdgeFromMetadataString(e.MetadataString())
-	e2.Report(ctx)
+	assert.NoError(t, e2.Report(ctx))
 	// test event pair
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		{"alice", "exit"}: {},
@@ -91,7 +91,7 @@ func TestSampledEvent(t *testing.T) {
 	assert.NoError(t, err)
 	// create SampledEvent with edge to entry
 	se := ctx.NewSampledEvent(LabelExit, testLayer, true)
-	se.ReportContext(ctx, false)
+	assert.NoError(t, se.ReportContext(ctx, false))
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		{"go_test", "entry"}: {},
@@ -105,7 +105,7 @@ func TestSampledEventNoEdge(t *testing.T) {
 	err := e.Report(ctx)
 	assert.NoError(t, err)
 	se := ctx.NewSampledEvent(LabelExit, testLayer, false) // create event without edge
-	se.ReportContext(ctx, false)                           // report event without edge
+	assert.NoError(t, se.ReportContext(ctx, false))        // report event without edge
 	// exit event is unconnected
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		{"go_test", "entry"}: {},

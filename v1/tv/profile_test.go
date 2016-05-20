@@ -34,7 +34,7 @@ func TestBeginProfile(t *testing.T) {
 
 func testLayerProf(ctx context.Context) {
 	l1, _ := tv.BeginLayer(ctx, "L1")
-	p := l1.BeginProfile("testProf")
+	p := l1.BeginProfile("testLayerProf")
 	p.End()
 	l1.End()
 	tv.EndTrace(ctx)
@@ -50,7 +50,7 @@ func TestBeginLayerProfile(t *testing.T) {
 		{"L1", "entry"}:        {g.OutEdges{{"testLayer", "entry"}}, nil},
 		{"", "profile_entry"}: {g.OutEdges{{"L1", "entry"}}, func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
-			assert.Equal(t, n.Map["ProfileName"], "testProf")
+			assert.Equal(t, n.Map["ProfileName"], "testLayerProf")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test.testLayerProf")
 			assert.Contains(t, n.Map["File"], "/go-appneta/v1/tv/profile_test.go")
 		}},
