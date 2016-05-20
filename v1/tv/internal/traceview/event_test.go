@@ -52,10 +52,10 @@ func TestEvent(t *testing.T) {
 	assert.Equal(t, 0, oboeMetadataInit(&md))               // init valid md
 	assert.NotPanics(t, func() { oboeMetadataRandom(&md) }) // make random md
 	t.Logf("TestEvent md: %v", md.String())
-	assert.Equal(t, 0, oboeEventInit(evt, &md))             // init valid evt, md
-	assert.Equal(t, evt.metadata.ids.taskID, md.ids.taskID) // task IDs should match
-	assert.NotEqual(t, evt.metadata.ids.opID, md.ids.opID)  // op IDs should not match
-	assert.Len(t, evt.MetadataString(), 58)                 // event md string correct length
+	assert.Equal(t, 0, oboeEventInit(evt, &md))                // init valid evt, md
+	assert.Equal(t, evt.metadata.ids.taskID, md.ids.taskID)    // task IDs should match
+	assert.NotEqual(t, evt.metadata.ids.opID, md.ids.opID)     // op IDs should not match
+	assert.Len(t, evt.MetadataString(), oboeMetadataStringLen) // event md string correct length
 }
 
 func TestEventMetadata(t *testing.T) {
@@ -66,8 +66,8 @@ func TestEventMetadata(t *testing.T) {
 	e2 := ctx.NewEvent(LabelEntry, "bob")
 
 	ctx2 := newContext() // context for unassociated trace
-	assert.Len(t, ctx.String(), 58)
-	assert.Len(t, ctx2.String(), 58)
+	assert.Len(t, ctx.String(), oboeMetadataStringLen)
+	assert.Len(t, ctx2.String(), oboeMetadataStringLen)
 	assert.NotEqual(t, ctx.String()[2:42], ctx2.String()[2:42])
 	// try to add ctx2 to to this event -- no effect
 	e.AddEdgeFromMetadataString(ctx2.String())

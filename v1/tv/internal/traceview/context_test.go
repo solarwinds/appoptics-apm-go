@@ -20,7 +20,7 @@ func TestMetadata(t *testing.T) {
 	assert.NotPanics(t, func() { oboeMetadataRandom(&md1) }) // make random md
 	md1Str := md1.String()                                   // get string repr of md
 	t.Logf("md1: %s", md1Str)                                // log md string
-	assert.Len(t, md1Str, 58)                                // check metadata str len
+	assert.Len(t, md1Str, oboeMetadataStringLen)             // check metadata str len
 
 	// oboe_metadata_pack
 	buf := make([]byte, 64)

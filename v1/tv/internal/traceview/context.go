@@ -145,7 +145,7 @@ func oboeMetadataUnpack(md *oboeMetadata, data []byte) int {
 		return -1
 	}
 
-	flag := uint8(data[0])
+	flag := data[0]
 	var taskLen, opLen int
 
 	/* don't recognize this? */
