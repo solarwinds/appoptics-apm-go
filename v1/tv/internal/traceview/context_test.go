@@ -3,6 +3,7 @@
 package traceview
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -123,6 +124,7 @@ func TestNullContext(t *testing.T) {
 	r.ShouldTrace = false
 
 	ctx := NewContext("testLayer", "", false, nil) // nullContext{}
+	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
 	assert.False(t, ctx.IsTracing())
 	assert.Empty(t, ctx.String())
 	assert.False(t, ctx.Copy().IsTracing())
@@ -133,6 +135,18 @@ func TestNullContext(t *testing.T) {
 	e := ctx.NewSampledEvent(LabelExit, "testLayer", false)
 	assert.Empty(t, e.MetadataString())
 	assert.NoError(t, e.ReportContext(ctx, false))
+	assert.Len(t, r.Bufs, 0) // no reporting
+
+	// try and report a real unrelated event on a null context
+	e2 := newContext().NewEvent(LabelEntry, "e2")
+	assert.NoError(t, e2.ReportContext(ctx, false))
+	assert.Len(t, r.Bufs, 0) // no reporting
+
+	// shouldn't be able to create a trace if the entry event fails
+	r.ShouldTrace = true
+	r.ShouldError = true
+	ctxBad := NewContext("testBadEntry", "", true, nil)
+	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
 
 	assert.Len(t, r.Bufs, 0) // no reporting
 }

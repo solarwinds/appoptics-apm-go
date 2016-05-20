@@ -68,10 +68,29 @@ func TestNoTraceBeginProfile(t *testing.T) {
 	testProf(ctx)
 	assert.Len(t, r.Bufs, 0)
 }
+func TestTraceErrorBeginProfile(t *testing.T) {
+	// simulate reporter error on second event: prevents Layer from being reported
+	r := traceview.SetTestReporter()
+	r.ErrorEvents = []bool{false, true}
+	testProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
+	g.AssertGraph(t, r.Bufs, 1, map[g.MatchNode]g.AssertNode{
+		{"testLayer", "entry"}: {},
+	})
+}
 
 func TestNoTraceBeginLayerProfile(t *testing.T) {
 	r := traceview.SetTestReporter()
 	ctx := context.Background()
 	testLayerProf(ctx)
 	assert.Len(t, r.Bufs, 0)
+}
+func TestTraceErrorBeginLayerProfile(t *testing.T) {
+	// simulate reporter error on second event: prevents nested Layer & Profile spans
+	r := traceview.SetTestReporter()
+	r.ErrorEvents = []bool{false, true}
+	testLayerProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
+	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+		{"testLayer", "entry"}: {},
+		{"testLayer", "exit"}:  {g.OutEdges{{"testLayer", "entry"}}, nil},
+	})
 }

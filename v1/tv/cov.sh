@@ -2,6 +2,7 @@
 set -e
 
 COVERPKG="github.com/appneta/go-appneta/v1/tv/internal/traceview,github.com/appneta/go-appneta/v1/tv"
+export TRACEVIEW_DEBUG=1
 go test -v -covermode=count -coverprofile=cov.out -coverpkg $COVERPKG
 go test -v -tags traceview -covermode=count -coverprofile=covtv.out -coverpkg $COVERPKG
 

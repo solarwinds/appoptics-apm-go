@@ -6,9 +6,8 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"golang.org/x/net/context"
-
 	"github.com/appneta/go-appneta/v1/tv/internal/traceview"
+	"golang.org/x/net/context"
 )
 
 // Layer is used to measure a span of time associated with an actvity
@@ -144,7 +143,6 @@ func newLayer(tvCtx traceview.SampledContext, layerName string, parent Layer, ar
 	return &layerSpan{span: span{tvCtx: tvCtx.Copy(), labeler: ll, parent: parent}}
 
 }
-
 func (l profileLabeler) entryLabel() traceview.Label { return traceview.LabelProfileEntry }
 func (l profileLabeler) exitLabel() traceview.Label  { return traceview.LabelProfileExit }
 func (l profileLabeler) layerName() string           { return "" }

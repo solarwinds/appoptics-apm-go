@@ -1,7 +1,5 @@
 // Copyright (C) 2016 AppNeta, Inc. All rights reserved.
 
-// Package traceview provides a low-level API for creating and reporting events for
-// distributed tracing with AppNeta's TraceView.
 package traceview
 
 import (
@@ -9,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -25,10 +24,8 @@ const (
 	oboeMaxMetadataPackLen = 512
 )
 
-type oboeIDs struct {
-	taskID []byte
-	opID   []byte
-}
+// orchestras tune to the oboe
+type oboeIDs struct{ taskID, opID []byte }
 
 type oboeMetadata struct {
 	ids     oboeIDs
@@ -376,8 +373,9 @@ func (ctx *context) report(e *event, addCtxEdge bool, args ...interface{}) error
 			}
 		default:
 			// silently skip unsupported value type
-			// TODO log error message? return err?
-			//fmt.Fprintf(os.Stderr, "Unrecognized Event key %v val %v\n", key, val)
+			if debugLog {
+				log.Printf("Unrecognized Event key %v val %v", key, val)
+			}
 		}
 	}
 

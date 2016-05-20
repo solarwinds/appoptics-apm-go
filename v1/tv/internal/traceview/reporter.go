@@ -26,7 +26,9 @@ func newReporter() reporter {
 		conn, err = net.DialUDP("udp4", nil, serverAddr)
 	}
 	if err != nil {
-		log.Printf("TraceView failed to initialize UDP reporter: %v", err)
+		if os.Getenv("TRACEVIEW_DEBUG") != "" {
+			log.Printf("TraceView failed to initialize UDP reporter: %v", err)
+		}
 		return &nullReporter{}
 	}
 	return &udpReporter{conn: conn}
@@ -49,6 +51,7 @@ var globalReporter reporter = &nullReporter{}
 var reportingDisabled bool
 var usingTestReporter bool
 var cachedHostname string
+var debugLog bool
 
 type hostnamer interface {
 	Hostname() (name string, err error)
@@ -58,12 +61,15 @@ type osHostnamer struct{}
 func (h osHostnamer) Hostname() (string, error) { return os.Hostname() }
 
 func init() {
+	debugLog = (os.Getenv("TRACEVIEW_DEBUG") != "")
 	cacheHostname(osHostnamer{})
 }
 func cacheHostname(hn hostnamer) {
 	h, err := hn.Hostname()
 	if err != nil {
-		log.Printf("Unable to get hostname, TraceView tracing disabled: %v", err)
+		if debugLog {
+			log.Printf("Unable to get hostname, TraceView tracing disabled: %v", err)
+		}
 		globalReporter = &nullReporter{} // disable reporting
 		reportingDisabled = true
 	}
@@ -125,10 +131,19 @@ func SetTestReporter() *TestReporter {
 type TestReporter struct {
 	Bufs        [][]byte
 	ShouldTrace bool
+	ShouldError bool
+	ErrorEvents []bool // whether to drop an event
+	eventCount  int
 }
 
 // WritePacket appends buf to Bufs.
 func (r *TestReporter) WritePacket(buf []byte) (int, error) {
+	r.eventCount++
+	if r.ShouldError || // error all events
+		(len(r.ErrorEvents) != 0 && // error certain specified events
+			(r.eventCount-1) < len(r.ErrorEvents) && r.ErrorEvents[(r.eventCount-1)]) {
+		return 0, errors.New("TestReporter error")
+	}
 	r.Bufs = append(r.Bufs, buf)
 	return len(buf), nil
 }
