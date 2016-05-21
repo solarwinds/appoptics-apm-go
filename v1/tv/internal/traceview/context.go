@@ -37,39 +37,32 @@ type context struct {
 	metadata oboeMetadata
 }
 
-func oboeMetadataInit(md *oboeMetadata) int {
-	if md == nil {
-		return -1
-	}
-
+func (md *oboeMetadata) Init() {
 	md.taskLen = oboeMaxTaskIDLen
 	md.opLen = oboeMaxOpIDLen
 	md.ids.taskID = make([]byte, oboeMaxTaskIDLen)
-	md.ids.opID = make([]byte, oboeMaxTaskIDLen)
-
-	return 0
+	md.ids.opID = make([]byte, oboeMaxOpIDLen)
 }
 
-func oboeMetadataRandom(md *oboeMetadata) {
+// randReader provides random IDs, and can be overridden for testing.
+// set by default to read from the crypto/rand Reader.
+var randReader = rand.Reader
+
+func (md *oboeMetadata) SetRandom() error {
 	if md == nil {
-		return
+		return errors.New("SetRandom on nil oboeMetadata")
 	}
-
-	_, err := rand.Read(md.ids.taskID)
+	_, err := randReader.Read(md.ids.taskID)
 	if err != nil {
-		return
+		return err
 	}
-	_, err = rand.Read(md.ids.opID)
-	if err != nil {
-		return
-	}
+	_, err = randReader.Read(md.ids.opID)
+	return err
 }
 
-func oboeRandomOpID(md *oboeMetadata) {
-	_, err := rand.Read(md.ids.opID)
-	if err != nil {
-		return
-	}
+func (md *oboeMetadata) SetRandomOpID() error {
+	_, err := randReader.Read(md.ids.opID)
+	return err
 }
 
 func (ids *oboeIDs) setOpID(opID []byte) {
@@ -251,16 +244,18 @@ func (e *nullEvent) MetadataString() string                                     
 func NewNullContext() SampledContext { return &nullContext{} }
 
 // newContext allocates a context with random metadata (for a new trace).
-func newContext() *context {
+func newContext() SampledContext {
 	ctx := &context{}
-	oboeMetadataInit(&ctx.metadata)
-	oboeMetadataRandom(&ctx.metadata)
+	ctx.metadata.Init()
+	if err := ctx.metadata.SetRandom(); err != nil {
+		return &nullContext{}
+	}
 	return ctx
 }
 
 func newContextFromMetadataString(mdstr string) *context {
 	ctx := &context{}
-	oboeMetadataInit(&ctx.metadata)
+	ctx.metadata.Init()
 	oboeMetadataFromString(&ctx.metadata, mdstr)
 	return ctx
 }
@@ -296,19 +291,22 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 
 func (ctx *context) Copy() SampledContext {
 	md := oboeMetadata{}
-	oboeMetadataInit(&md)
+	md.Init()
 	copy(md.ids.taskID, ctx.metadata.ids.taskID)
 	copy(md.ids.opID, ctx.metadata.ids.opID)
 	return &context{metadata: md}
 }
 func (ctx *context) IsTracing() bool { return true }
 
-func (ctx *context) NewEvent(label Label, layer string) *event {
+func (ctx *context) NewEvent(label Label, layer string) (*event, error) {
 	return newEvent(&ctx.metadata, label, layer)
 }
 
 func (ctx *context) NewSampledEvent(label Label, layer string, addCtxEdge bool) SampledEvent {
-	e := newEvent(&ctx.metadata, label, layer)
+	e, err := newEvent(&ctx.metadata, label, layer)
+	if err != nil {
+		return &nullEvent{}
+	}
 	if addCtxEdge {
 		e.AddEdge(ctx)
 	}
@@ -337,7 +335,10 @@ func (ctx *context) ReportEvent(label Label, layer string, args ...interface{}) 
 // Create and report an event using KVs from variadic args
 func (ctx *context) reportEvent(label Label, layer string, addCtxEdge bool, args ...interface{}) error {
 	// create new event from context
-	e := ctx.NewEvent(label, layer)
+	e, err := ctx.NewEvent(label, layer)
+	if err != nil { // error creating event (e.g. couldn't init random IDs)
+		return err
+	}
 	return ctx.report(e, addCtxEdge, args...)
 }
 

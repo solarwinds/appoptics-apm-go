@@ -132,7 +132,7 @@ type TestReporter struct {
 	Bufs        [][]byte
 	ShouldTrace bool
 	ShouldError bool
-	ErrorEvents []bool // whether to drop an event
+	ErrorEvents map[int]bool // whether to drop an event
 	eventCount  int
 }
 
@@ -140,8 +140,7 @@ type TestReporter struct {
 func (r *TestReporter) WritePacket(buf []byte) (int, error) {
 	r.eventCount++
 	if r.ShouldError || // error all events
-		(len(r.ErrorEvents) != 0 && // error certain specified events
-			(r.eventCount-1) < len(r.ErrorEvents) && r.ErrorEvents[(r.eventCount-1)]) {
+		(r.ErrorEvents != nil && r.ErrorEvents[(r.eventCount-1)]) { // error certain specified events
 		return 0, errors.New("TestReporter error")
 	}
 	r.Bufs = append(r.Bufs, buf)

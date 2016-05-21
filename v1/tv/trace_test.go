@@ -133,6 +133,7 @@ func TestTraceExample(t *testing.T) {
 	r := traceview.SetTestReporter() // enable test reporter
 	// create a new trace, and a context to carry it around
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
+	t.Logf("Reporting unrecognized event KV type")
 	traceExample(ctx) // generate events
 	assertTraceExample(t, r.Bufs)
 }
@@ -141,6 +142,7 @@ func TestTraceExampleCtx(t *testing.T) {
 	r := traceview.SetTestReporter() // enable test reporter
 	// create a new trace, and a context to carry it around
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
+	t.Logf("Reporting unrecognized event KV type")
 	traceExampleCtx(ctx) // generate events
 	assertTraceExample(t, r.Bufs)
 }

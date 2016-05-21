@@ -3,6 +3,9 @@
 package traceview
 
 import (
+	"bytes"
+	"crypto/rand"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,13 +18,14 @@ func TestMetadata(t *testing.T) {
 	// oboe_metadata_init
 	// oboe_metadata_random
 	var md1 oboeMetadata
-	assert.Equal(t, -1, oboeMetadataInit(nil))               // init nil md
-	assert.NotPanics(t, func() { oboeMetadataRandom(nil) })  // random nil md
-	assert.Equal(t, 0, oboeMetadataInit(&md1))               // init valid md
-	assert.NotPanics(t, func() { oboeMetadataRandom(&md1) }) // make random md
-	md1Str := md1.String()                                   // get string repr of md
-	t.Logf("md1: %s", md1Str)                                // log md string
-	assert.Len(t, md1Str, oboeMetadataStringLen)             // check metadata str len
+	var mdNil *oboeMetadata
+	assert.Panics(t, func() { mdNil.Init() })    // init nil md
+	assert.Error(t, mdNil.SetRandom())           // random nil md
+	md1.Init()                                   // init valid md
+	assert.NoError(t, md1.SetRandom())           // make random md
+	md1Str := md1.String()                       // get string repr of md
+	t.Logf("md1: %s", md1Str)                    // log md string
+	assert.Len(t, md1Str, oboeMetadataStringLen) // check metadata str len
 
 	// oboe_metadata_pack
 	buf := make([]byte, 64)
@@ -36,7 +40,7 @@ func TestMetadata(t *testing.T) {
 
 	// oboe_metadata_unpack
 	var mdUnpack oboeMetadata
-	assert.Equal(t, 0, oboeMetadataInit(&mdUnpack))              // init new md
+	mdUnpack.Init()                                              // init new md
 	assert.Equal(t, -1, oboeMetadataUnpack(nil, buf))            // unpack valid buf into nil md
 	assert.Equal(t, -1, oboeMetadataUnpack(&mdUnpack, []byte{})) // unpack empty buf into md
 	assert.Equal(t, -1, oboeMetadataUnpack(&mdUnpack, buf[:8]))  // unpack truncated buf into md
@@ -47,10 +51,10 @@ func TestMetadata(t *testing.T) {
 	// oboe_metadata_pack for 12-byte shorter trace/task ID (default is 20 + 8-byte op ID)
 	shortTaskLen := 12
 	var mdS, mdSU oboeMetadata
-	assert.Equal(t, 0, oboeMetadataInit(&mdS)) // init regular metadata
-	mdS.taskLen = shortTaskLen                 // override task ID len
-	oboeMetadataRandom(&mdS)                   // generate random task & op IDs
-	bufS := make([]byte, 128)                  // buffer to pack
+	mdS.Init()                         // init regular metadata
+	mdS.taskLen = shortTaskLen         // override task ID len
+	assert.NoError(t, mdS.SetRandom()) // generate random task & op IDs
+	bufS := make([]byte, 128)          // buffer to pack
 	assert.Equal(t, (1 + shortTaskLen + 8),
 		oboeMetadataPack(&mdS, bufS)) // pack buf
 	mdSStr, err := oboeMetadataToString(&mdS) // encode as string
@@ -66,7 +70,7 @@ func TestMetadata(t *testing.T) {
 	var md2 oboeMetadata
 	nullMd := "1B00000000000000000000000000000000000000000000000000000000"
 	assert.NotEqual(t, md1Str, nullMd)                                // ensure md1 string is not null
-	assert.Equal(t, 0, oboeMetadataInit(&md2))                        // init empty md2
+	md2.Init()                                                        // init empty md2
 	assert.Equal(t, nullMd, md2.String())                             // empty md produceds null md string
 	assert.Equal(t, -1, oboeMetadataFromString(nil, md1Str))          // unpack str to nil md
 	assert.Equal(t, -1, oboeMetadataFromString(&md2, "1BA70"))        // load md2 from invalid str
@@ -92,18 +96,87 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, s, md1Str)           // assert matches md1 str
 	assert.NoError(t, err)               // no error
 
-	// Context.String()
+	// context.String()
 	ctx := &context{md2}
 	assert.Equal(t, md1Str, ctx.String())
 	nctx := &nullContext{}
 	assert.Equal(t, "", nctx.String())
+
+	// context.Copy()
+	cctx := ctx.Copy().(*context)
+	t.Logf("mdCopy: %v", cctx.String())
+	assert.Equal(t, cctx.String(), ctx.String())
+	assert.True(t, bytes.Equal(cctx.metadata.ids.taskID, ctx.metadata.ids.taskID))
+	t.Logf("cctx opID %v", cctx.metadata.ids.opID)
+	t.Logf(" ctx opID %v", ctx.metadata.ids.opID)
+	assert.True(t, bytes.Equal(cctx.metadata.ids.opID, ctx.metadata.ids.opID))
+	assert.Equal(t, ctx.metadata.taskLen, cctx.metadata.taskLen)
+	assert.Equal(t, ctx.metadata.opLen, cctx.metadata.opLen)
+	assert.Equal(t, len(cctx.metadata.ids.taskID), cctx.metadata.taskLen)
+	assert.Equal(t, len(cctx.metadata.ids.opID), cctx.metadata.opLen)
+	assert.Equal(t, len(ctx.metadata.ids.taskID), ctx.metadata.taskLen)
+	assert.Equal(t, len(ctx.metadata.ids.opID), ctx.metadata.opLen)
+	assert.Equal(t, oboeMetadataStringLen, len(cctx.String()))
+}
+
+type errorReader struct {
+	failOn    map[int]bool
+	callCount int
+}
+
+func (r *errorReader) Read(p []byte) (n int, err error) {
+	// fail always, or on specified calls
+	r.callCount++
+	if r.failOn == nil || r.failOn[r.callCount-1] {
+		return 0, errors.New("rand error")
+	}
+	return rand.Read(p)
+}
+
+func TestMetadataRandom(t *testing.T) {
+	r := SetTestReporter()
+	// if RNG fails, don't report events/spans associated with RNG failures.
+	randReader = &errorReader{failOn: map[int]bool{0: true}}
+	ctx := newContext()
+	assert.IsType(t, &nullContext{}, ctx)
+	assert.Empty(t, r.Bufs) // no events reported
+
+	// RNG failure on second call (for metadata op ID)
+	randReader = &errorReader{failOn: map[int]bool{1: true}}
+	ctx2 := newContext()
+	assert.IsType(t, &nullContext{}, ctx2)
+	assert.Empty(t, r.Bufs) // no events reported
+
+	// RNG failure on third call (for event op ID)
+	randReader = &errorReader{failOn: map[int]bool{2: true}}
+	ctx3 := newContext()
+	assert.IsType(t, ctx3, &context{}) // context created successfully
+	e3 := ctx3.NewSampledEvent(LabelEntry, "randErrLayer", false)
+	assert.IsType(t, &nullEvent{}, e3)
+	assert.Empty(t, r.Bufs) // no events reported
+
+	// RNG failure on valid context while trying to report an event
+	randReader = &errorReader{failOn: map[int]bool{0: true}}
+	assert.Error(t, ctx3.(*context).reportEvent(LabelEntry, "randErrLayer", false))
+	assert.Empty(t, r.Bufs) // no events reported
+
+	randReader = rand.Reader // set back to normal
+}
+
+// newTestContext returns a fresh random *context with no events reported for use in unit tests.
+func newTestContext(t *testing.T) *context {
+	ctx := newContext()
+	assert.True(t, ctx.IsTracing())
+	assert.IsType(t, ctx, &context{})
+	return ctx.(*context)
 }
 
 func TestReportEventMap(t *testing.T) {
 	r := SetTestReporter()
-	ctx := newContext()
-	e := ctx.NewEvent(LabelEntry, "myLayer")
-	err := e.Report(ctx)
+	ctx := newTestContext(t)
+	e, err := ctx.NewEvent(LabelEntry, "myLayer")
+	assert.NoError(t, err)
+	err = e.Report(ctx)
 	assert.NoError(t, err)
 
 	assert.NoError(t, ctx.ReportEventMap(LabelInfo, "myLayer", map[string]interface{}{
@@ -138,7 +211,8 @@ func TestNullContext(t *testing.T) {
 	assert.Len(t, r.Bufs, 0) // no reporting
 
 	// try and report a real unrelated event on a null context
-	e2 := newContext().NewEvent(LabelEntry, "e2")
+	e2, err := newTestContext(t).NewEvent(LabelEntry, "e2")
+	assert.NoError(t, err)
 	assert.NoError(t, e2.ReportContext(ctx, false))
 	assert.Len(t, r.Bufs, 0) // no reporting
 

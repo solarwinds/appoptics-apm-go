@@ -62,13 +62,15 @@ var initMessageOnce sync.Once
 
 func sendInitMessage() {
 	ctx := newContext()
-	ctx.reportEvent(LabelEntry, initLayer, false,
-		"__Init", 1,
-		"Go.Version", runtime.Version(),
-		"Go.Oboe.Version", initVersion,
-		"Oboe.Version", oboeVersion,
-	)
-	ctx.ReportEvent(LabelExit, initLayer)
+	if c, ok := ctx.(*context); ok {
+		c.reportEvent(LabelEntry, initLayer, false,
+			"__Init", 1,
+			"Go.Version", runtime.Version(),
+			"Go.Oboe.Version", initVersion,
+			"Oboe.Version", oboeVersion,
+		)
+		c.ReportEvent(LabelExit, initLayer)
+	}
 }
 
 func oboeSampleRequest(layer, xtrace_header string) (bool, int, int) {
