@@ -4,7 +4,10 @@
 // distributed tracing with AppNeta's TraceView.
 package traceview
 
-import "bytes"
+import (
+	"bytes"
+	"errors"
+)
 
 type event struct {
 	metadata oboeMetadata
@@ -28,23 +31,20 @@ const (
 	eventHeader = "1"
 )
 
-func oboeEventInit(evt *event, md *oboeMetadata) int {
+func oboeEventInit(evt *event, md *oboeMetadata) error {
 	if evt == nil || md == nil {
-		return -1
+		return errors.New("oboeEventInit got nil args")
 	}
 
 	// Metadata initialization
-	result := oboeMetadataInit(&evt.metadata)
-	if result < 0 {
-		return result
-	}
+	evt.metadata.Init()
 
 	evt.metadata.taskLen = md.taskLen
 	evt.metadata.opLen = md.opLen
 
 	copy(evt.metadata.ids.taskID, md.ids.taskID)
 	if err := evt.metadata.SetRandomOpID(); err != nil {
-		return -1
+		return err
 	}
 
 	// Buffer initialization
@@ -61,14 +61,16 @@ func oboeEventInit(evt *event, md *oboeMetadata) int {
 		bsonAppendString(&evt.bbuf, "X-Trace", mdStr)
 	}
 
-	return 0
+	return nil
 }
 
-func newEvent(md *oboeMetadata, label Label, layer string) *event {
+func newEvent(md *oboeMetadata, label Label, layer string) (*event, error) {
 	e := &event{}
-	oboeEventInit(e, md)
+	if err := oboeEventInit(e, md); err != nil {
+		return nil, err
+	}
 	e.addLabelLayer(label, layer)
-	return e
+	return e, nil
 }
 
 func (e *event) addLabelLayer(label Label, layer string) {
@@ -107,7 +109,7 @@ func (e *event) AddEdge(ctx *context) { bsonAppendString(&e.bbuf, "Edge", ctx.me
 
 func (e *event) AddEdgeFromMetadataString(mdstr string) {
 	var md oboeMetadata
-	oboeMetadataInit(&md)
+	md.Init()
 	oboeMetadataFromString(&md, mdstr)
 	// only add Edge if metadata references same trace as ours
 	if bytes.Equal(e.metadata.ids.taskID, md.ids.taskID) {
