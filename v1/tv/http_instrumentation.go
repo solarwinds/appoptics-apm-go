@@ -47,11 +47,8 @@ func NewResponseWriter(w http.ResponseWriter) (http.ResponseWriter, *int) {
 	return httpResponseWriter{w, ret}, ret
 }
 
-// LayerFromHTTPRequest continues a trace given an http.Request, if one is desribed in the request
-// headers, and returns a layer. If no trace is active, a non-reporting layer is returned.
-func LayerFromHTTPRequest(r *http.Request) Layer { return TraceFromHTTPRequest(r) }
-
-// TraceFromHTTPRequest continues a trace given an http.Request, returning a trace.
+// TraceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
+// in the "X-Trace" header, this context will be continued.
 func TraceFromHTTPRequest(r *http.Request) Trace {
 	t := NewTraceFromID(httpLayerName, r.Header.Get("X-Trace"), func() KVMap {
 		return KVMap{

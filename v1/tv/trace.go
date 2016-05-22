@@ -20,10 +20,9 @@ type Trace interface {
 	// End a trace, and include KV pairs returned by func f
 	EndCallback(f func() KVMap)
 
-	// ExitMetadata returns a hex string that propagates this Layer's exit context back to a remote
-	// client. It is typically used in a response header called "X-Trace". You can call this method
-	// at any time after the Layer has begun, but still need to call End() to benchmark and report
-	// this Layer.  , e.g. for putting in a response header named "X-Trace".
+	// ExitMetadata returns a hex string that propagates the end of this span back to a remote
+	// client. It is typically used in an response header (e.g. the HTTP Header "X-Trace"). Call
+	// this method to set a response header in advance of calling End().
 	ExitMetadata() string
 }
 
@@ -105,7 +104,7 @@ func (t *tvTrace) EndCallback(cb func() KVMap) {
 func (t *tvTrace) IsTracing() bool { return t.tvCtx.IsTracing() }
 
 // ExitMetadata reports the X-Trace metadata string that will be used by the exit event.
-// This is useful for retrieving response headers in advance of reporting exit.
+// This is useful for setting response headers before reporting the end of the span.
 func (t *tvTrace) ExitMetadata() string {
 	if t.IsTracing() {
 		t.exitEvent = t.tvCtx.NewEvent(traceview.LabelExit, t.layerName(), false)
