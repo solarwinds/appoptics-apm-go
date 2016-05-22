@@ -69,9 +69,7 @@ func buildGraph(t *testing.T, bufs [][]byte) eventGraph {
 	return g
 }
 
-type MatchNode struct {
-	Layer, Label string
-}
+type MatchNode struct{ Layer, Label string }
 type OutEdges []MatchNode
 type AssertNode struct { // run to assert each Node
 	OutEdges OutEdges
@@ -122,8 +120,8 @@ func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, nodeMap map[MatchNod
 		}
 		fname := fmt.Sprintf("graph_%s-%d_%d.dot", caller, line, os.Getpid())
 		output, _ := os.Create(fname)
-		t.Logf("Saving DOT graph %s", fname)
 		defer output.Close()
+		t.Logf("Saving DOT graph %s", fname)
 		dotGraph(g, output)
 	}
 }
@@ -134,16 +132,25 @@ func assertOutEdges(t *testing.T, g eventGraph, n Node, edges ...MatchNode) {
 	foundEdges := 0
 	if len(edges) <= len(n.Edges) {
 		for i, edge := range edges {
-			_, ok := g[n.Edges[i]] // check if node for this edge exists
+			checkedEdges++
+			// assert edge to op ID of unreported event
+			if edge.Layer == "Edge" {
+				assert.Equal(t, n.Edges[i], edge.Label)
+				if n.Edges[i] == edge.Label {
+					foundEdges++
+					continue
+				}
+			}
+			// check if node for this edge exists and assert Label, Layer
+			_, ok := g[n.Edges[i]]
 			assert.True(t, ok, "Edge from {%s, %s} missing to {%s, %s} no node %d", n.Layer, n.Label, edge.Layer, edge.Label, i)
 			assert.Equal(t, edge.Layer, g[n.Edges[i]].Layer,
-				"Edge from {%s, %s} missing to {%s, %s} actual %d {%s, %s}", n.Layer, n.Label, edge.Layer, edge.Label, i, g[n.Edges[i]].Layer, g[n.Edges[i]].Label)
+				"[layer %s label %s] missing edge to {%s, %s} actual %d {%s, %s}", n.Layer, n.Label, edge.Layer, edge.Label, i, g[n.Edges[i]].Layer, g[n.Edges[i]].Label)
 			assert.Equal(t, edge.Label, g[n.Edges[i]].Label,
-				"Edge from {%s, %s} missing to {%s, %s} actual %d {%s, %s}", n.Layer, n.Label, edge.Layer, edge.Label, i, g[n.Edges[i]].Layer, g[n.Edges[i]].Label)
+				"[layer %s label %s] missing edge to {%s, %s} actual %d {%s, %s}", n.Layer, n.Label, edge.Layer, edge.Label, i, g[n.Edges[i]].Layer, g[n.Edges[i]].Label)
 			if edge.Layer == g[n.Edges[i]].Layer && edge.Label == g[n.Edges[i]].Label {
 				foundEdges++
 			}
-			checkedEdges++
 		}
 		assert.Equal(t, foundEdges, len(edges))
 	}
@@ -164,19 +171,35 @@ func dotGraph(g eventGraph, output io.Writer) {
 		}
 	}
 
-	for op_id, n := range g {
+	for opID, n := range g {
 		var ts int64
 		if tval, ok := n.Map["Timestamp_u"]; ok {
 			if t, ok := tval.(int64); ok {
 				ts = t
 			}
 		}
+		var suffix string
+
+		blocked := make(map[string]bool)
+		for _, k := range []string{"X-Trace", "Backtrace", "Timestamp_u", "Hostname", "_V", "PID"} {
+			blocked[k] = true
+		}
+		for k, v := range n.Map {
+			if !blocked[k] {
+				switch v.(type) {
+				case []byte:
+					suffix += fmt.Sprintf("\\n%s: %s", k, v)
+				default:
+					suffix += fmt.Sprintf("\\n%s: %v", k, v)
+				}
+			}
+		}
 		fmt.Fprintf(output, "\top%s[shape=%s,label=\"%s\"];\n",
-			op_id, "box",
-			fmt.Sprintf("%s: %s\\n%0.3fms", n.Layer, n.Label, float64(ts-minT)/1000.0))
+			opID, "box",
+			fmt.Sprintf("%s: %s\\n%s\\n%0.3fms%s", n.Layer, n.Label, opID, float64(ts-minT)/1000.0, suffix))
 
 		for _, target := range n.Edges {
-			fmt.Fprintf(output, "\top%s -> op%s;\n", op_id, target)
+			fmt.Fprintf(output, "\top%s -> op%s;\n", opID, target)
 		}
 	}
 

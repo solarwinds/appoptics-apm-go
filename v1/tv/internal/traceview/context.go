@@ -248,6 +248,9 @@ func newContext() SampledContext {
 	ctx := &context{}
 	ctx.metadata.Init()
 	if err := ctx.metadata.SetRandom(); err != nil {
+		if debugLog {
+			log.Printf("TraceView rand.Read error: %v", err)
+		}
 		return &nullContext{}
 	}
 	return ctx
@@ -264,10 +267,12 @@ func newContextFromMetadataString(mdstr string) *context {
 func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]interface{}) (ctx SampledContext) {
 	sampled, rate, source := shouldTraceRequest(layer, mdStr)
 	if sampled {
+		var addCtxEdge bool
 		if mdStr == "" {
 			ctx = newContext()
 		} else {
 			ctx = newContextFromMetadataString(mdStr)
+			addCtxEdge = true
 		}
 		if reportEntry {
 			var kvs map[string]interface{}
@@ -279,7 +284,7 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 			}
 			kvs["SampleRate"] = rate
 			kvs["SampleSource"] = source
-			if err := ctx.(*context).reportEventMap(LabelEntry, layer, false, kvs); err != nil {
+			if err := ctx.(*context).reportEventMap(LabelEntry, layer, addCtxEdge, kvs); err != nil {
 				ctx = &nullContext{}
 			}
 		}
@@ -353,7 +358,11 @@ func (ctx *context) report(e *event, addCtxEdge bool, args ...interface{}) error
 		// load value and add KV to event
 		switch val := args[i+1].(type) {
 		case string:
-			e.AddString(key, val)
+			if key == EdgeKey {
+				e.AddEdgeFromMetadataString(val)
+			} else {
+				e.AddString(key, val)
+			}
 		case []byte:
 			e.AddBinary(key, val)
 		case int:
@@ -369,8 +378,18 @@ func (ctx *context) report(e *event, addCtxEdge bool, args ...interface{}) error
 		case bool:
 			e.AddBool(key, val)
 		case *context:
-			if key == "Edge" {
+			if key == EdgeKey {
 				e.AddEdge(val)
+			}
+		case *int:
+			if val != nil {
+				e.AddInt(key, *val)
+			}
+		case []string:
+			if key == EdgeKey {
+				for _, edge := range val {
+					e.AddEdgeFromMetadataString(edge)
+				}
 			}
 		default:
 			// silently skip unsupported value type

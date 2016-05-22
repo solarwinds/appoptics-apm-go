@@ -25,6 +25,7 @@ const (
 	LabelError        = "error"
 	LabelProfileEntry = "profile_entry"
 	LabelProfileExit  = "profile_exit"
+	EdgeKey           = "Edge"
 )
 
 const (
@@ -105,15 +106,15 @@ func (e *event) AddFloat64(key string, value float64) { bsonAppendFloat64(&e.bbu
 func (e *event) AddBool(key string, value bool) { bsonAppendBool(&e.bbuf, key, value) }
 
 // Adds edge (reference to previous event) to event
-func (e *event) AddEdge(ctx *context) { bsonAppendString(&e.bbuf, "Edge", ctx.metadata.opString()) }
+func (e *event) AddEdge(ctx *context) { bsonAppendString(&e.bbuf, EdgeKey, ctx.metadata.opString()) }
 
 func (e *event) AddEdgeFromMetadataString(mdstr string) {
 	var md oboeMetadata
 	md.Init()
-	oboeMetadataFromString(&md, mdstr)
+	ret := oboeMetadataFromString(&md, mdstr)
 	// only add Edge if metadata references same trace as ours
-	if bytes.Equal(e.metadata.ids.taskID, md.ids.taskID) {
-		bsonAppendString(&e.bbuf, "Edge", md.opString())
+	if ret < 0 || bytes.Equal(e.metadata.ids.taskID, md.ids.taskID) {
+		bsonAppendString(&e.bbuf, EdgeKey, md.opString())
 	}
 }
 

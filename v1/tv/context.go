@@ -57,3 +57,12 @@ func Error(ctx context.Context, class, msg string) { runCtx(ctx, func(l Layer) {
 
 // Err reports details error err (along with a stack trace) on the span associated with the context ctx.
 func Err(ctx context.Context, err error) { runCtx(ctx, func(l Layer) { l.Err(err) }) }
+
+// MetadataString returns a representation of the Layer span's context for use with distributed
+// tracing (to create a remote child span). If the Layer has ended, an empty string is returned.
+func MetadataString(ctx context.Context) string {
+	if l, ok := FromContext(ctx); ok {
+		return l.MetadataString()
+	}
+	return ""
+}

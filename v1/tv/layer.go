@@ -27,6 +27,11 @@ type Layer interface {
 	// Err reports details about error err (along with a stack trace) for this Layer.
 	Err(error)
 
+	// MetadataString returns a string representing this Layer for use in distributed tracing,
+	// e.g. to provide as an "X-Trace" header in an outgoing HTTP request.
+	MetadataString() string
+
+	IsTracing() bool
 	addChildEdge(traceview.SampledContext)
 	addProfile(Profile)
 	tvContext() traceview.SampledContext
@@ -103,13 +108,16 @@ func (s *nullSpan) End(args ...interface{})                                {}
 func (s *nullSpan) Error(class, msg string)                                {}
 func (s *nullSpan) Err(err error)                                          {}
 func (s *nullSpan) Info(args ...interface{})                               {}
+func (s *nullSpan) IsTracing() bool                                        { return false }
 func (s *nullSpan) addChildEdge(traceview.SampledContext)                  {}
 func (s *nullSpan) addProfile(Profile)                                     {}
 func (s *nullSpan) ok() bool                                               { return false }
 func (s *nullSpan) tvContext() traceview.SampledContext                    { return traceview.NewNullContext() }
+func (s *nullSpan) MetadataString() string                                 { return "" }
 
 // is this layer still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool                            { return s != nil && !s.ended }
+func (s *span) IsTracing() bool                     { return s.ok() }
 func (s *span) tvContext() traceview.SampledContext { return s.tvCtx }
 
 // addChildEdge keep track of edges closed child spans
@@ -191,6 +199,15 @@ func (s *layerSpan) Info(args ...interface{}) {
 	if s.ok() {
 		_ = s.tvCtx.ReportEvent(traceview.LabelInfo, s.layerName(), args...)
 	}
+}
+
+// MetadataString returns a representation of the Layer span's context for use with distributed
+// tracing (to create a remote child span). If the Layer has ended, an empty string is returned.
+func (s *layerSpan) MetadataString() string {
+	if s.ok() {
+		return s.tvCtx.String()
+	}
+	return ""
 }
 
 // Error reports an error, distinguished by its class and message

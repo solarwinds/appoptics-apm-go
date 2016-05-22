@@ -224,8 +224,8 @@ func TestTraceFromMetadata(t *testing.T) {
 	tr.End()
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
-		// entry event should have no edges
-		{"test", "entry"}: {g.OutEdges{}, func(n g.Node) {
+		// entry event should have edge to incoming opID
+		{"test", "entry"}: {g.OutEdges{{"Edge", incomingID[42:]}}, func(n g.Node) {
 			// trace ID should match incoming ID
 			assert.Equal(t, incomingID[2:42], n.Map["X-Trace"].(string)[2:42])
 		}},

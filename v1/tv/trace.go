@@ -7,8 +7,6 @@ import "github.com/appneta/go-appneta/v1/tv/internal/traceview"
 // Trace represents a distributed trace for this request that reports
 // events to AppNeta TraceView.
 type Trace interface {
-	IsTracing() bool
-
 	// Inherited from the Layer interface
 	//  BeginLayer(layerName string, args ...interface{}) Layer
 	//  BeginProfile(profileName string, args ...interface{}) Profile
@@ -16,12 +14,16 @@ type Trace interface {
 	//	Info(args ...interface{})
 	//  Error(class, msg string)
 	//  Err(error)
+	//  IsTracing() bool
 	Layer
 
 	// End a trace, and include KV pairs returned by func f
 	EndCallback(f func() KVMap)
 
-	// Return metadata string for use e.g. in a HTTP header named "X-Trace"
+	// ExitMetadata returns a hex string that propagates this Layer's exit context back to a remote
+	// client. It is typically used in a response header called "X-Trace". You can call this method
+	// at any time after the Layer has begun, but still need to call End() to benchmark and report
+	// this Layer.  , e.g. for putting in a response header named "X-Trace".
 	ExitMetadata() string
 }
 
