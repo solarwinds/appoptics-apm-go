@@ -14,7 +14,7 @@ var testLayer = "go_test"
 func TestSendEvent(t *testing.T) {
 	r := SetTestReporter()
 	ctx := newTestContext(t)
-	e, err := ctx.NewEvent(LabelEntry, testLayer)
+	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
 	e.AddInt("IntTest", 123)
 
@@ -26,7 +26,7 @@ func TestSendEvent(t *testing.T) {
 		"Action", "test_action")
 	assert.NoError(t, err)
 
-	e, err = ctx.NewEvent(LabelExit, testLayer)
+	e, err = ctx.newEvent(LabelExit, testLayer)
 	assert.NoError(t, err)
 	e.AddEdge(ctx)
 	err = e.Report(ctx)
@@ -63,9 +63,9 @@ func TestEventMetadata(t *testing.T) {
 	r := SetTestReporter()
 
 	ctx := newTestContext(t)
-	e, err := ctx.NewEvent(LabelExit, "alice")
+	e, err := ctx.newEvent(LabelExit, "alice")
 	assert.NoError(t, err)
-	e2, err := ctx.NewEvent(LabelEntry, "bob")
+	e2, err := ctx.newEvent(LabelEntry, "bob")
 	assert.NoError(t, err)
 
 	ctx2 := newContext() // context for unassociated trace
@@ -89,12 +89,12 @@ func TestEventMetadata(t *testing.T) {
 func TestSampledEvent(t *testing.T) {
 	r := SetTestReporter()
 	ctx := newTestContext(t)
-	e, err := ctx.NewEvent(LabelEntry, testLayer)
+	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
 	err = e.Report(ctx)
 	assert.NoError(t, err)
 	// create SampledEvent with edge to entry
-	se := ctx.NewSampledEvent(LabelExit, testLayer, true)
+	se := ctx.NewEvent(LabelExit, testLayer, true)
 	assert.NoError(t, se.ReportContext(ctx, false))
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
@@ -105,12 +105,12 @@ func TestSampledEvent(t *testing.T) {
 func TestSampledEventNoEdge(t *testing.T) {
 	r := SetTestReporter()
 	ctx := newTestContext(t)
-	e, err := ctx.NewEvent(LabelEntry, testLayer)
+	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
 	err = e.Report(ctx)
 	assert.NoError(t, err)
-	se := ctx.NewSampledEvent(LabelExit, testLayer, false) // create event without edge
-	assert.NoError(t, se.ReportContext(ctx, false))        // report event without edge
+	se := ctx.NewEvent(LabelExit, testLayer, false) // create event without edge
+	assert.NoError(t, se.ReportContext(ctx, false)) // report event without edge
 	// exit event is unconnected
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		{"go_test", "entry"}: {},

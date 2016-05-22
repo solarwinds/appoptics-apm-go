@@ -57,11 +57,11 @@ func oboeEventInit(evt *event, md *oboeMetadata) error {
 	bsonAppendString(&evt.bbuf, "_V", eventHeader)
 
 	// Pack metadata
-	mdStr, err := oboeMetadataToString(&evt.metadata)
-	if err == nil {
-		bsonAppendString(&evt.bbuf, "X-Trace", mdStr)
+	mdStr, err := evt.metadata.ToString()
+	if err != nil {
+		return err
 	}
-
+	bsonAppendString(&evt.bbuf, "X-Trace", mdStr)
 	return nil
 }
 
@@ -106,27 +106,27 @@ func (e *event) AddFloat64(key string, value float64) { bsonAppendFloat64(&e.bbu
 func (e *event) AddBool(key string, value bool) { bsonAppendBool(&e.bbuf, key, value) }
 
 // Adds edge (reference to previous event) to event
-func (e *event) AddEdge(ctx *context) { bsonAppendString(&e.bbuf, EdgeKey, ctx.metadata.opString()) }
+func (e *event) AddEdge(ctx *oboeContext) { bsonAppendString(&e.bbuf, EdgeKey, ctx.metadata.opString()) }
 
 func (e *event) AddEdgeFromMetadataString(mdstr string) {
 	var md oboeMetadata
 	md.Init()
-	ret := oboeMetadataFromString(&md, mdstr)
+	err := md.FromString(mdstr)
 	// only add Edge if metadata references same trace as ours
-	if ret < 0 || bytes.Equal(e.metadata.ids.taskID, md.ids.taskID) {
+	if err == nil && bytes.Equal(e.metadata.ids.taskID, md.ids.taskID) {
 		bsonAppendString(&e.bbuf, EdgeKey, md.opString())
 	}
 }
 
 // Reports event using specified Reporter
-func (e *event) ReportUsing(c *context, r reporter) error { return reportEvent(r, c, e) }
+func (e *event) ReportUsing(c *oboeContext, r reporter) error { return reportEvent(r, c, e) }
 
 // Reports event using default (UDP) Reporter
-func (e *event) Report(c *context) error { return e.ReportUsing(c, globalReporter) }
+func (e *event) Report(c *oboeContext) error { return e.ReportUsing(c, globalReporter) }
 
 // Report event using SampledContext interface
-func (e *event) ReportContext(c SampledContext, addCtxEdge bool, args ...interface{}) error {
-	if ctx, ok := c.(*context); ok {
+func (e *event) ReportContext(c Context, addCtxEdge bool, args ...interface{}) error {
+	if ctx, ok := c.(*oboeContext); ok {
 		return ctx.report(e, addCtxEdge, args...)
 	}
 	return nil

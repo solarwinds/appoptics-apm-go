@@ -27,6 +27,7 @@ func assertOnce(t *testing.T) {
 
 var seenStacks = make(map[string]bool)
 
+// Node is a decoded event report used for testing assertions.
 type Node struct {
 	Layer, Label string
 	OpID         string
@@ -69,8 +70,13 @@ func buildGraph(t *testing.T, bufs [][]byte) eventGraph {
 	return g
 }
 
+// MatchNode describes an outedge's destination node.
 type MatchNode struct{ Layer, Label string }
+
+// OutEdges is a list of outedges to assert on.
 type OutEdges []MatchNode
+
+// AssertNode checks a list of outedges and calls cb to run more asserts for this node.
 type AssertNode struct { // run to assert each Node
 	OutEdges OutEdges
 	Callback func(n Node)
@@ -78,7 +84,7 @@ type AssertNode struct { // run to assert each Node
 
 var checkedEdges = 0
 
-// assertGraph builds a graph from encoded events and asserts out-edges for each node in nodeMap.
+// AssertGraph builds a graph from encoded events and asserts out-edges for each node in nodeMap.
 func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, nodeMap map[MatchNode]AssertNode) {
 	assert.Equal(t, len(bufs), numNodes, "bufs len expected %d, actual %d", numNodes, len(bufs))
 	g := buildGraph(t, bufs)

@@ -36,10 +36,10 @@ type KVMap map[string]interface{}
 
 type tvTrace struct {
 	layerSpan
-	exitEvent traceview.SampledEvent
+	exitEvent traceview.Event
 }
 
-func (t *tvTrace) tvContext() traceview.SampledContext { return t.tvCtx }
+func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
 
 // NewTrace creates a new trace for reporting to TraceView and immediately records
 // the beginning of the layer layerName. If this trace is sampled, it may report
@@ -108,7 +108,7 @@ func (t *tvTrace) IsTracing() bool { return t.tvCtx.IsTracing() }
 // This is useful for retrieving response headers in advance of reporting exit.
 func (t *tvTrace) ExitMetadata() string {
 	if t.IsTracing() {
-		t.exitEvent = t.tvCtx.NewSampledEvent(traceview.LabelExit, t.layerName(), false)
+		t.exitEvent = t.tvCtx.NewEvent(traceview.LabelExit, t.layerName(), false)
 		if t.exitEvent != nil {
 			return t.exitEvent.MetadataString()
 		}
