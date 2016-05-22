@@ -16,11 +16,11 @@ func TestContext(t *testing.T) {
 	ctx := context.Background()
 	assert.Empty(t, MetadataString(ctx))
 	tr := NewTrace("test").(*tvTrace)
-	xt := tr.tvCtx.String()
+	xt := tr.tvCtx.MetadataString()
 
 	ctx2 := context.WithValue(ctx, "t", tr)
 	assert.Equal(t, ctx2.Value("t"), tr)
-	assert.Equal(t, ctx2.Value("t").(*tvTrace).tvCtx.String(), xt)
+	assert.Equal(t, ctx2.Value("t").(*tvTrace).tvCtx.MetadataString(), xt)
 
 	ctxx := tr.tvCtx.Copy()
 	lbl := layerLabeler{"L1"}

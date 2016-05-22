@@ -74,6 +74,11 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, shortTaskLen, mdSU.taskLen) // verify target MD task len
 	assert.Equal(t, mdSStr, mdSU.String())      // verify unpacked value
 
+	var mdPE oboeMetadata           // pack error
+	mdPEStr, err := mdPE.ToString() // encode uninit md
+	assert.Error(t, err)
+	assert.Empty(t, mdPEStr)
+
 	// oboe_metadata_fromstr
 	var md2 oboeMetadata
 	nullMd := "1B00000000000000000000000000000000000000000000000000000000"
@@ -95,9 +100,9 @@ func TestMetadata(t *testing.T) {
 
 	// oboe_metadata_tostr
 	assert.NotPanics(t, func() {
-		str, e := mdNil.ToString() // convert nil to md str
-		assert.Equal(t, str, "")   // shoud produce empty str
-		assert.Error(t, e)         // should raise error
+		s, e := mdNil.ToString() // convert nil to md str
+		assert.Equal(t, s, "")   // shoud produce empty str
+		assert.Error(t, e)       // should raise error
 	})
 	s, err := md2.ToString()   // convert md2 to str
 	assert.Equal(t, s, md1Str) // assert matches md1 str
@@ -105,14 +110,14 @@ func TestMetadata(t *testing.T) {
 
 	// context.String()
 	ctx := &oboeContext{md2}
-	assert.Equal(t, md1Str, ctx.String())
+	assert.Equal(t, md1Str, ctx.MetadataString())
 	nctx := &nullContext{}
-	assert.Equal(t, "", nctx.String())
+	assert.Equal(t, "", nctx.MetadataString())
 
 	// context.Copy()
 	cctx := ctx.Copy().(*oboeContext)
-	t.Logf("mdCopy: %v", cctx.String())
-	assert.Equal(t, cctx.String(), ctx.String())
+	t.Logf("mdCopy: %v", cctx.MetadataString())
+	assert.Equal(t, cctx.MetadataString(), ctx.MetadataString())
 	assert.True(t, bytes.Equal(cctx.metadata.ids.taskID, ctx.metadata.ids.taskID))
 	t.Logf("cctx opID %v", cctx.metadata.ids.opID)
 	t.Logf(" ctx opID %v", ctx.metadata.ids.opID)
@@ -123,7 +128,7 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, len(cctx.metadata.ids.opID), cctx.metadata.opLen)
 	assert.Equal(t, len(ctx.metadata.ids.taskID), ctx.metadata.taskLen)
 	assert.Equal(t, len(ctx.metadata.ids.opID), ctx.metadata.opLen)
-	assert.Equal(t, oboeMetadataStringLen, len(cctx.String()))
+	assert.Equal(t, oboeMetadataStringLen, len(cctx.MetadataString()))
 }
 
 type errorReader struct {
@@ -199,6 +204,14 @@ func TestReportEventMap(t *testing.T) {
 	})
 }
 
+func TestNewContext(t *testing.T) {
+	r := SetTestReporter()
+	r.ShouldTrace = true
+	ctx := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
+	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
+	assert.Len(t, r.Bufs, 0) // no reporting
+}
+
 func TestNullContext(t *testing.T) {
 	r := SetTestReporter()
 	r.ShouldTrace = false
@@ -206,7 +219,7 @@ func TestNullContext(t *testing.T) {
 	ctx := NewContext("testLayer", "", false, nil) // nullContext{}
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
 	assert.False(t, ctx.IsTracing())
-	assert.Empty(t, ctx.String())
+	assert.Empty(t, ctx.MetadataString())
 	assert.False(t, ctx.Copy().IsTracing())
 	// reporting shouldn't work
 	assert.NoError(t, ctx.ReportEvent(LabelEntry, "testLayer"))

@@ -205,7 +205,7 @@ func (s *layerSpan) Info(args ...interface{}) {
 // tracing (to create a remote child span). If the Layer has ended, an empty string is returned.
 func (s *layerSpan) MetadataString() string {
 	if s.ok() {
-		return s.tvCtx.String()
+		return s.tvCtx.MetadataString()
 	}
 	return ""
 }

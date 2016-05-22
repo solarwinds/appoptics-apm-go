@@ -21,7 +21,7 @@ func TestTraceMetadata(t *testing.T) {
 
 	tr := tv.NewTrace("test")
 	md := tr.ExitMetadata()
-	tr.End()
+	tr.End("Edge", "872453") // bad Edge KV, should be ignored
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
@@ -243,6 +243,17 @@ func TestNoTraceFromMetadata(t *testing.T) {
 	md := tr.ExitMetadata()
 	tr.End()
 
+	assert.Equal(t, md, "")
+	assert.Len(t, r.Bufs, 0)
+}
+func TestTraceFromBadMetadata(t *testing.T) {
+	r := traceview.SetTestReporter()
+
+	// emulate incoming request with invalad X-Trace header
+	incomingID := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2A2203"
+	tr := tv.NewTraceFromID("test", incomingID, nil)
+	md := tr.ExitMetadata()
+	tr.End("Edge", "823723875") // should not report
 	assert.Equal(t, md, "")
 	assert.Len(t, r.Bufs, 0)
 }

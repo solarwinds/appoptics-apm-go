@@ -47,11 +47,12 @@ func TestSendEvent(t *testing.T) {
 func TestEvent(t *testing.T) {
 	// oboe_event_init
 	evt := &event{}
-	var md oboeMetadata
-	assert.Error(t, oboeEventInit(nil, nil)) // init nil evt, md
-	assert.Error(t, oboeEventInit(evt, nil)) // init evt, nil md
-	md.Init()                                // init valid md
-	assert.NoError(t, md.SetRandom())        // make random md
+	var md, emptyMd oboeMetadata
+	assert.Error(t, oboeEventInit(nil, nil))      // init nil evt, md
+	assert.Error(t, oboeEventInit(evt, nil))      // init evt, nil md
+	assert.Error(t, oboeEventInit(evt, &emptyMd)) // init evt, uninit'd md
+	md.Init()                                     // init valid md
+	assert.NoError(t, md.SetRandom())             // make random md
 	t.Logf("TestEvent md: %v", md.String())
 	assert.NoError(t, oboeEventInit(evt, &md))                 // init valid evt, md
 	assert.Equal(t, evt.metadata.ids.taskID, md.ids.taskID)    // task IDs should match
@@ -69,11 +70,11 @@ func TestEventMetadata(t *testing.T) {
 	assert.NoError(t, err)
 
 	ctx2 := newContext() // context for unassociated trace
-	assert.Len(t, ctx.String(), oboeMetadataStringLen)
-	assert.Len(t, ctx2.String(), oboeMetadataStringLen)
-	assert.NotEqual(t, ctx.String()[2:42], ctx2.String()[2:42])
+	assert.Len(t, ctx.MetadataString(), oboeMetadataStringLen)
+	assert.Len(t, ctx2.MetadataString(), oboeMetadataStringLen)
+	assert.NotEqual(t, ctx.MetadataString()[2:42], ctx2.MetadataString()[2:42])
 	// try to add ctx2 to to this event -- no effect
-	e.AddEdgeFromMetadataString(ctx2.String())
+	e.AddEdgeFromMetadataString(ctx2.MetadataString())
 	err = e.Report(ctx)
 	assert.NoError(t, err)
 	// try to add e to e2 -- should work

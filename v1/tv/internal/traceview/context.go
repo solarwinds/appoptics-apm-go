@@ -87,6 +87,9 @@ func (md *oboeMetadata) Pack(buf []byte) (int, error) {
 	if md == nil {
 		return 0, errors.New("md.Pack: nil md")
 	}
+	if md.taskLen == 0 || md.opLen == 0 {
+		return 0, errors.New("md.Pack: invalid md (0 len)")
+	}
 
 	reqLen := md.taskLen + md.opLen + 1
 
@@ -219,7 +222,7 @@ type Context interface {
 	ReportEventMap(label Label, layer string, keys map[string]interface{}) error
 	Copy() Context
 	IsTracing() bool
-	String() string
+	MetadataString() string
 	NewEvent(label Label, layer string, addCtxEdge bool) Event
 }
 
@@ -241,7 +244,7 @@ func (e *nullContext) ReportEventMap(label Label, layer string, keys map[string]
 }
 func (e *nullContext) Copy() Context                                         { return &nullContext{} }
 func (e *nullContext) IsTracing() bool                                       { return false }
-func (e *nullContext) String() string                                        { return "" }
+func (e *nullContext) MetadataString() string                                { return "" }
 func (e *nullContext) NewEvent(l Label, y string, g bool) Event              { return &nullEvent{} }
 func (e *nullEvent) ReportContext(c Context, g bool, a ...interface{}) error { return nil }
 func (e *nullEvent) MetadataString() string                                  { return "" }
@@ -276,10 +279,8 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 		var addCtxEdge bool
 		if mdStr != "" {
 			var err error
-			ctx, err = newContextFromMetadataString(mdStr)
-			if err != nil {
-				log.Printf("NewContext err: %v", err)
-				return &nullContext{}
+			if ctx, err = newContextFromMetadataString(mdStr); err != nil {
+				return &nullContext{} // bad incoming MD: no trace
 			}
 			addCtxEdge = true
 		} else {
@@ -418,7 +419,7 @@ func (ctx *oboeContext) report(e *event, addCtxEdge bool, args ...interface{}) e
 	return e.Report(ctx)
 }
 
-func (ctx *oboeContext) String() string { return ctx.metadata.String() }
+func (ctx *oboeContext) MetadataString() string { return ctx.metadata.String() }
 
 // String returns a hex string representation
 func (md *oboeMetadata) String() string {
