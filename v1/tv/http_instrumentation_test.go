@@ -81,7 +81,7 @@ func TestHTTPHandlerNoTrace(t *testing.T) {
 	assert.Len(t, r.Bufs, 0)
 }
 
-func server(t *testing.T, list net.Listener) {
+func testServer(t *testing.T, list net.Listener) {
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) { // tv.HTTPHandler(
 		// create layer from incoming HTTP Request headers, if trace exists
 		tr := tv.TraceFromHTTPRequest(req)
@@ -100,7 +100,7 @@ func server(t *testing.T, list net.Listener) {
 }
 
 // create an HTTP client span, make an HTTP request, and propagate the trace context
-func client(ctx context.Context, url string) (*http.Response, error) {
+func testClient(ctx context.Context, url string) (*http.Response, error) {
 	l, _ := tv.BeginLayer(ctx, "http.Client", "IsService", true, "RemoteURL", url)
 
 	httpClient := &http.Client{}
@@ -120,12 +120,12 @@ func TestHTTPRequest(t *testing.T) {
 	list, err := net.Listen("tcp", ":0") // pick an unallocated port
 	assert.NoError(t, err)
 	port := list.Addr().(*net.TCPAddr).Port
-	go server(t, list) // start test server
+	go testServer(t, list) // start test server
 
 	r := traceview.SetTestReporter() // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	url := fmt.Sprintf("http://127.0.0.1:%d/test?qs=1", port)
-	resp, err := client(ctx, url)
+	resp, err := testClient(ctx, url)
 	tv.EndTrace(ctx)
 
 	assert.NoError(t, err)

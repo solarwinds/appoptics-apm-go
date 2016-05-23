@@ -3,13 +3,27 @@
 
 package tv
 
-import "net/http"
+import (
+	"net/http"
+	"reflect"
+	"runtime"
+	"strings"
+)
 
 var httpLayerName = "net/http"
 
 // HTTPHandler wraps an http handler function with entry / exit events,
 // returning a new function that can be used in its place.
 func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	var controller, action string
+	// At wrap time (only once, when initializing), get name of wrapped handler
+	if f := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()); f != nil {
+		// e.g. "main.slowHandler"
+		if s := strings.Split(f.Name(), "."); len(s) == 2 {
+			controller = s[0]
+			action = s[1]
+		}
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		t := TraceFromHTTPRequest(r)
 		// add exit event's X-Trace header:
@@ -23,7 +37,9 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 		w = httpResponseWriter{w, &status}
 
 		// Add status code and report exit event
-		defer t.EndCallback(func() KVMap { return KVMap{"Status": status} })
+		defer t.EndCallback(func() KVMap {
+			return KVMap{"Status": status, "Controller": controller, "Action": action}
+		})
 
 		// Call original HTTP handler:
 		handler(w, r)
@@ -42,6 +58,8 @@ func (w httpResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
+// NewResponseWriter observes the HTTP Status code of an HTTP response, returning a
+// wrapped http.ResponseWriter and a pointer to an int containing the status.
 func NewResponseWriter(w http.ResponseWriter) (http.ResponseWriter, *int) {
 	ret := new(int)
 	return httpResponseWriter{w, ret}, ret
