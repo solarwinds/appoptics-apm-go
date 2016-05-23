@@ -3,20 +3,42 @@
 package tv_test
 
 import (
+	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/appneta/go-appneta/v1/tv"
 	"golang.org/x/net/context"
 )
 
+// measure a DB query
+func dbQuery(ctx context.Context, host, query string, args ...interface{}) *sql.Rows {
+	// Begin a TraceView layer for this DB query
+	l, _ := tv.BeginLayer(ctx, "dbQuery", "Query", query, "RemoteHost", host)
+	defer l.End()
+
+	db, err := sql.Open("mysql", fmt.Sprintf("user:password@tcp(%s:3306)/db", host))
+	if err != nil {
+		l.Err(err) // Report error & stack trace on Layer span
+		return nil
+	}
+	defer db.Close()
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		l.Err(err)
+	}
+	return rows
+}
+
+// measure a slow function
 func slowFunc(ctx context.Context) {
 	defer tv.BeginProfile(ctx, "slowFunc").End()
-	// ... do something else ...
 	time.Sleep(1 * time.Second)
 }
 
 func Example() {
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myLayer"))
+	_ = dbQuery(ctx, "dbhost.net", "SELECT * from tbl LIMIT 1")
 	slowFunc(ctx)
 	tv.EndTrace(ctx)
 }
