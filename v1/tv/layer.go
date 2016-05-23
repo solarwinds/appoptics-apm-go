@@ -27,9 +27,14 @@ type Layer interface {
 	// Err reports details about error err (along with a stack trace) for this Layer.
 	Err(error)
 
-	addChildEdge(traceview.SampledContext)
+	// MetadataString returns a string representing this Layer for use in distributed tracing,
+	// e.g. to provide as an "X-Trace" header in an outgoing HTTP request.
+	MetadataString() string
+
+	IsTracing() bool
+	addChildEdge(traceview.Context)
 	addProfile(Profile)
-	tvContext() traceview.SampledContext
+	tvContext() traceview.Context
 	ok() bool
 }
 
@@ -87,9 +92,9 @@ func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profil
 // both Layer and Profile interfaces.
 type span struct {
 	labeler
-	tvCtx         traceview.SampledContext
+	tvCtx         traceview.Context
 	parent        Layer
-	childEdges    []traceview.SampledContext // for reporting in exit event
+	childEdges    []traceview.Context // for reporting in exit event
 	childProfiles []Profile
 	ended         bool // has exit event been reported?
 }
@@ -103,17 +108,20 @@ func (s *nullSpan) End(args ...interface{})                                {}
 func (s *nullSpan) Error(class, msg string)                                {}
 func (s *nullSpan) Err(err error)                                          {}
 func (s *nullSpan) Info(args ...interface{})                               {}
-func (s *nullSpan) addChildEdge(traceview.SampledContext)                  {}
+func (s *nullSpan) IsTracing() bool                                        { return false }
+func (s *nullSpan) addChildEdge(traceview.Context)                         {}
 func (s *nullSpan) addProfile(Profile)                                     {}
 func (s *nullSpan) ok() bool                                               { return false }
-func (s *nullSpan) tvContext() traceview.SampledContext                    { return traceview.NewNullContext() }
+func (s *nullSpan) tvContext() traceview.Context                           { return traceview.NewNullContext() }
+func (s *nullSpan) MetadataString() string                                 { return "" }
 
 // is this layer still valid (has it timed out, expired, not sampled)
-func (s *span) ok() bool                            { return s != nil && !s.ended }
-func (s *span) tvContext() traceview.SampledContext { return s.tvCtx }
+func (s *span) ok() bool                     { return s != nil && !s.ended }
+func (s *span) IsTracing() bool              { return s.ok() }
+func (s *span) tvContext() traceview.Context { return s.tvCtx }
 
 // addChildEdge keep track of edges closed child spans
-func (s *span) addChildEdge(ctx traceview.SampledContext) {
+func (s *span) addChildEdge(ctx traceview.Context) {
 	if s.ok() {
 		s.childEdges = append(s.childEdges, ctx)
 	}
@@ -135,7 +143,7 @@ type profileLabeler struct{ name string }
 func (l layerLabeler) entryLabel() traceview.Label { return traceview.LabelEntry }
 func (l layerLabeler) exitLabel() traceview.Label  { return traceview.LabelExit }
 func (l layerLabeler) layerName() string           { return l.name }
-func newLayer(tvCtx traceview.SampledContext, layerName string, parent Layer, args ...interface{}) Layer {
+func newLayer(tvCtx traceview.Context, layerName string, parent Layer, args ...interface{}) Layer {
 	ll := layerLabeler{layerName}
 	if err := tvCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
 		return &nullSpan{}
@@ -146,7 +154,7 @@ func newLayer(tvCtx traceview.SampledContext, layerName string, parent Layer, ar
 func (l profileLabeler) entryLabel() traceview.Label { return traceview.LabelProfileEntry }
 func (l profileLabeler) exitLabel() traceview.Label  { return traceview.LabelProfileExit }
 func (l profileLabeler) layerName() string           { return "" }
-func newProfile(tvCtx traceview.SampledContext, profileName string, parent Layer, args ...interface{}) Profile {
+func newProfile(tvCtx traceview.Context, profileName string, parent Layer, args ...interface{}) Profile {
 	var fname string
 	pc, file, line, ok := runtime.Caller(2) // Caller(1) is BeginProfile
 	if ok {
@@ -191,6 +199,15 @@ func (s *layerSpan) Info(args ...interface{}) {
 	if s.ok() {
 		_ = s.tvCtx.ReportEvent(traceview.LabelInfo, s.layerName(), args...)
 	}
+}
+
+// MetadataString returns a representation of the Layer span's context for use with distributed
+// tracing (to create a remote child span). If the Layer has ended, an empty string is returned.
+func (s *layerSpan) MetadataString() string {
+	if s.ok() {
+		return s.tvCtx.MetadataString()
+	}
+	return ""
 }
 
 // Error reports an error, distinguished by its class and message

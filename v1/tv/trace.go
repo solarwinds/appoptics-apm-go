@@ -7,8 +7,6 @@ import "github.com/appneta/go-appneta/v1/tv/internal/traceview"
 // Trace represents a distributed trace for this request that reports
 // events to AppNeta TraceView.
 type Trace interface {
-	IsTracing() bool
-
 	// Inherited from the Layer interface
 	//  BeginLayer(layerName string, args ...interface{}) Layer
 	//  BeginProfile(profileName string, args ...interface{}) Profile
@@ -16,12 +14,15 @@ type Trace interface {
 	//	Info(args ...interface{})
 	//  Error(class, msg string)
 	//  Err(error)
+	//  IsTracing() bool
 	Layer
 
 	// End a trace, and include KV pairs returned by func f
 	EndCallback(f func() KVMap)
 
-	// Return metadata string for use e.g. in a HTTP header named "X-Trace"
+	// ExitMetadata returns a hex string that propagates the end of this span back to a remote
+	// client. It is typically used in an response header (e.g. the HTTP Header "X-Trace"). Call
+	// this method to set a response header in advance of calling End().
 	ExitMetadata() string
 }
 
@@ -34,10 +35,10 @@ type KVMap map[string]interface{}
 
 type tvTrace struct {
 	layerSpan
-	exitEvent traceview.SampledEvent
+	exitEvent traceview.Event
 }
 
-func (t *tvTrace) tvContext() traceview.SampledContext { return t.tvCtx }
+func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
 
 // NewTrace creates a new trace for reporting to TraceView and immediately records
 // the beginning of the layer layerName. If this trace is sampled, it may report
@@ -103,10 +104,10 @@ func (t *tvTrace) EndCallback(cb func() KVMap) {
 func (t *tvTrace) IsTracing() bool { return t.tvCtx.IsTracing() }
 
 // ExitMetadata reports the X-Trace metadata string that will be used by the exit event.
-// This is useful for retrieving response headers in advance of reporting exit.
+// This is useful for setting response headers before reporting the end of the span.
 func (t *tvTrace) ExitMetadata() string {
 	if t.IsTracing() {
-		t.exitEvent = t.tvCtx.NewSampledEvent(traceview.LabelExit, t.layerName(), false)
+		t.exitEvent = t.tvCtx.NewEvent(traceview.LabelExit, t.layerName(), false)
 		if t.exitEvent != nil {
 			return t.exitEvent.MetadataString()
 		}

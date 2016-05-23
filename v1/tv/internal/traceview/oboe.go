@@ -62,7 +62,7 @@ var initMessageOnce sync.Once
 
 func sendInitMessage() {
 	ctx := newContext()
-	if c, ok := ctx.(*context); ok {
+	if c, ok := ctx.(*oboeContext); ok {
 		c.reportEvent(LabelEntry, initLayer, false,
 			"__Init", 1,
 			"Go.Version", runtime.Version(),

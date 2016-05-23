@@ -78,7 +78,7 @@ func cacheHostname(hn hostnamer) {
 
 var cachedPid = os.Getpid()
 
-func reportEvent(r reporter, ctx *context, e *event) error {
+func reportEvent(r reporter, ctx *oboeContext, e *event) error {
 	if !r.IsOpen() {
 		// Reporter didn't initialize, nothing to do...
 		return nil

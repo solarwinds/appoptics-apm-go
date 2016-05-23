@@ -14,7 +14,7 @@ var testLayer = "go_test"
 func TestSendEvent(t *testing.T) {
 	r := SetTestReporter()
 	ctx := newTestContext(t)
-	e, err := ctx.NewEvent(LabelEntry, testLayer)
+	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
 	e.AddInt("IntTest", 123)
 
@@ -26,7 +26,7 @@ func TestSendEvent(t *testing.T) {
 		"Action", "test_action")
 	assert.NoError(t, err)
 
-	e, err = ctx.NewEvent(LabelExit, testLayer)
+	e, err = ctx.newEvent(LabelExit, testLayer)
 	assert.NoError(t, err)
 	e.AddEdge(ctx)
 	err = e.Report(ctx)
@@ -47,11 +47,12 @@ func TestSendEvent(t *testing.T) {
 func TestEvent(t *testing.T) {
 	// oboe_event_init
 	evt := &event{}
-	var md oboeMetadata
-	assert.Error(t, oboeEventInit(nil, nil)) // init nil evt, md
-	assert.Error(t, oboeEventInit(evt, nil)) // init evt, nil md
-	md.Init()                                // init valid md
-	assert.NoError(t, md.SetRandom())        // make random md
+	var md, emptyMd oboeMetadata
+	assert.Error(t, oboeEventInit(nil, nil))      // init nil evt, md
+	assert.Error(t, oboeEventInit(evt, nil))      // init evt, nil md
+	assert.Error(t, oboeEventInit(evt, &emptyMd)) // init evt, uninit'd md
+	md.Init()                                     // init valid md
+	assert.NoError(t, md.SetRandom())             // make random md
 	t.Logf("TestEvent md: %v", md.String())
 	assert.NoError(t, oboeEventInit(evt, &md))                 // init valid evt, md
 	assert.Equal(t, evt.metadata.ids.taskID, md.ids.taskID)    // task IDs should match
@@ -63,17 +64,17 @@ func TestEventMetadata(t *testing.T) {
 	r := SetTestReporter()
 
 	ctx := newTestContext(t)
-	e, err := ctx.NewEvent(LabelExit, "alice")
+	e, err := ctx.newEvent(LabelExit, "alice")
 	assert.NoError(t, err)
-	e2, err := ctx.NewEvent(LabelEntry, "bob")
+	e2, err := ctx.newEvent(LabelEntry, "bob")
 	assert.NoError(t, err)
 
 	ctx2 := newContext() // context for unassociated trace
-	assert.Len(t, ctx.String(), oboeMetadataStringLen)
-	assert.Len(t, ctx2.String(), oboeMetadataStringLen)
-	assert.NotEqual(t, ctx.String()[2:42], ctx2.String()[2:42])
+	assert.Len(t, ctx.MetadataString(), oboeMetadataStringLen)
+	assert.Len(t, ctx2.MetadataString(), oboeMetadataStringLen)
+	assert.NotEqual(t, ctx.MetadataString()[2:42], ctx2.MetadataString()[2:42])
 	// try to add ctx2 to to this event -- no effect
-	e.AddEdgeFromMetadataString(ctx2.String())
+	e.AddEdgeFromMetadataString(ctx2.MetadataString())
 	err = e.Report(ctx)
 	assert.NoError(t, err)
 	// try to add e to e2 -- should work
@@ -89,12 +90,12 @@ func TestEventMetadata(t *testing.T) {
 func TestSampledEvent(t *testing.T) {
 	r := SetTestReporter()
 	ctx := newTestContext(t)
-	e, err := ctx.NewEvent(LabelEntry, testLayer)
+	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
 	err = e.Report(ctx)
 	assert.NoError(t, err)
 	// create SampledEvent with edge to entry
-	se := ctx.NewSampledEvent(LabelExit, testLayer, true)
+	se := ctx.NewEvent(LabelExit, testLayer, true)
 	assert.NoError(t, se.ReportContext(ctx, false))
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
@@ -105,12 +106,12 @@ func TestSampledEvent(t *testing.T) {
 func TestSampledEventNoEdge(t *testing.T) {
 	r := SetTestReporter()
 	ctx := newTestContext(t)
-	e, err := ctx.NewEvent(LabelEntry, testLayer)
+	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
 	err = e.Report(ctx)
 	assert.NoError(t, err)
-	se := ctx.NewSampledEvent(LabelExit, testLayer, false) // create event without edge
-	assert.NoError(t, se.ReportContext(ctx, false))        // report event without edge
+	se := ctx.NewEvent(LabelExit, testLayer, false) // create event without edge
+	assert.NoError(t, se.ReportContext(ctx, false)) // report event without edge
 	// exit event is unconnected
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		{"go_test", "entry"}: {},

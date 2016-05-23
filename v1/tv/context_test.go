@@ -6,18 +6,21 @@ import (
 	"reflect"
 	"testing"
 
+	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
+	"github.com/appneta/go-appneta/v1/tv/internal/traceview"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )
 
 func TestContext(t *testing.T) {
 	ctx := context.Background()
+	assert.Empty(t, MetadataString(ctx))
 	tr := NewTrace("test").(*tvTrace)
-	xt := tr.tvCtx.String()
+	xt := tr.tvCtx.MetadataString()
 
 	ctx2 := context.WithValue(ctx, "t", tr)
 	assert.Equal(t, ctx2.Value("t"), tr)
-	assert.Equal(t, ctx2.Value("t").(*tvTrace).tvCtx.String(), xt)
+	assert.Equal(t, ctx2.Value("t").(*tvTrace).tvCtx.MetadataString(), xt)
 
 	ctxx := tr.tvCtx.Copy()
 	lbl := layerLabeler{"L1"}
@@ -32,20 +35,37 @@ func TestContext(t *testing.T) {
 }
 
 func TestNullSpan(t *testing.T) {
-	ctx := NewContext(context.Background(), NewTrace("TestNullSpan"))
-	l1, _ := BeginLayer(ctx, "L1")
-	l1.End()
+	// enable reporting to test reporter
+	r := traceview.SetTestReporter()
+
+	ctx := NewContext(context.Background(), NewTrace("TestNullSpan")) // reports event
+	l1, ctxL := BeginLayer(ctx, "L1")                                 // reports event
+	assert.True(t, l1.IsTracing())
+	assert.Equal(t, l1.MetadataString(), MetadataString(ctxL))
+	assert.Len(t, l1.MetadataString(), 58)
+
+	l1.End() // reports event
+	assert.False(t, l1.IsTracing())
+	assert.Empty(t, l1.MetadataString())
 
 	p1 := l1.BeginProfile("P2") // try to start profile after end: no effect
 	p1.End()
 
 	c1 := l1.BeginLayer("C1") // child after parent ended
 	assert.IsType(t, c1, &nullSpan{})
+	assert.False(t, c1.IsTracing())
 	assert.False(t, c1.ok())
+	assert.Empty(t, c1.MetadataString())
 	c1.addChildEdge(l1.tvContext())
 	c1.addProfile(p1)
 
 	nctx := c1.tvContext()
 	assert.Equal(t, reflect.TypeOf(nctx).Elem().Name(), "nullContext")
 	assert.IsType(t, reflect.TypeOf(nctx.Copy()).Elem().Name(), "nullContext")
+
+	g.AssertGraph(t, r.Bufs, 3, map[g.MatchNode]g.AssertNode{
+		{"TestNullSpan", "entry"}: {},
+		{"L1", "entry"}:           {g.OutEdges{{"TestNullSpan", "entry"}}, nil},
+		{"L1", "exit"}:            {g.OutEdges{{"L1", "entry"}}, nil},
+	})
 }

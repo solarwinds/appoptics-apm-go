@@ -72,13 +72,13 @@ func TestReportEvent(t *testing.T) {
 	assert.Len(t, r.Bufs, 0) // no reporting
 
 	// mismatched task IDs
-	ev, err := ctx.NewEvent(LabelExit, testLayer)
+	ev, err := ctx.newEvent(LabelExit, testLayer)
 	assert.NoError(t, err)
 	assert.Error(t, reportEvent(r, nil, ev))
 	assert.Len(t, r.Bufs, 0) // no reporting
 
 	ctx2 := newTestContext(t)
-	e2, err := ctx2.NewEvent(LabelEntry, "layer2")
+	e2, err := ctx2.newEvent(LabelEntry, "layer2")
 	assert.NoError(t, err)
 	assert.Error(t, reportEvent(r, ctx2, ev))
 	assert.Error(t, reportEvent(r, ctx, e2))
