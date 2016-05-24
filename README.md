@@ -5,6 +5,72 @@
 [![Coverage Status](https://coveralls.io/repos/github/appneta/go-appneta/badge.svg?branch=master)](https://coveralls.io/github/appneta/go-appneta?branch=master)
 [![codecov](https://codecov.io/gh/appneta/go-appneta/branch/master/graph/badge.svg)](https://codecov.io/gh/appneta/go-appneta)
 
+* [Introduction](#introduction)
+* [Getting started](#getting-started)
+* [Building your app with tracing](#building-your-app-with-tracing)
+* [Demo](#demo)
+* [Usage examples](#usage-examples)
+* [Distributed tracing and context propagation](#distributed-tracing-and-context-propagation)
+* [Configuration](#configuration)
+* [Support](#support)
+* [License](#license)
+
+### Introduction
+
+[AppNeta TraceView](http://appneta.com/products/traceview) provides distributed
+tracing and code-level application performance monitoring.  This repository
+provides instrumentation for Go, which allows Go-based applications to be
+monitored using TraceView.
+
+Go support is currently in beta (though we run the instrumentation to process
+data in our production environment!) so please share any feedback you have; PRs welcome.
+
+
+### Getting started
+
+To get tracing, you'll need a [a (free) TraceView account](http://www.appneta.com/products/traceview/).
+
+In the product install flow, **choose to skip the webserver and select any language.**  (You'll notice the absense of Go because we're currently in beta.)
+
+Follow the instructions during signup to install the Host Agent (“tracelyzer”). This will also
+install the liboboe and liboboe-dev packages on your platform.
+
+Then, install the following:
+
+* [Go >= 1.5](https://golang.org/dl/)
+* This package: go get github.com/appneta/go-appneta/v1/tv
+
+The install flow will wait for 5 traces to come in from your app.  You can
+check out the [demo](#demo) app below to get a quick start.  One you have 5,
+you can progress to [your account's overview
+page](https://login.tv.appneta.com/overview).
+
+### Building your app with tracing
+
+By default, no tracing occurs unless you build your app with the build tag "traceview". Without it,
+calls to this API are no-ops, allowing for precise control over which deployments are traced. To
+build and run with tracing enabled, you must do so on a host with TraceView's packages installed.
+Once the liboboe-dev (or liboboe-devel) package is installed you can build your service as follows:
+
+```
+ $ go build -tags traceview
+```
+
+### Demo
+
+If you have installed TraceView and the this package, you can run the sample “web app” included with go-appneta:
+
+    cd $GOPATH/src/github.com/appneta/go-appneta/examples/sample_app
+    go run -tags traceview main.go
+
+A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:
+
+    $ curl http://localhost:8899/hello
+    Slow request... Path: /hello
+
+You should see these requests appear on your TraceView dashboard.
+
+
 ### Usage examples
 
 To profile the performance of basic web service, you can use our
@@ -135,28 +201,6 @@ func main() {
 }
 ```
 
-### Installing
-
-To install, you should first [sign up for a TraceView account](http://www.appneta.com/products/traceview/).
-
-Follow the instructions during signup to install the Host Agent (“tracelyzer”). This will also
-install the liboboe and liboboe-dev packages on your platform.
-
-Then, install the following:
-
-* [Go >= 1.5](https://golang.org/dl/)
-* This package: go get github.com/appneta/go-appneta/v1/tv
-
-### Building your app with tracing
-
-By default, no tracing occurs unless you build your app with the build tag "traceview". Without it,
-calls to this API are no-ops, allowing for precise control over which deployments are traced. To
-build and run with tracing enabled, you must do so on a host with TraceView's packages installed.
-Once the liboboe-dev (or liboboe-devel) package is installed you can build your service as follows:
-
-```
- $ go build -tags traceview
-```
 
 ### Configuration
 
@@ -169,20 +213,6 @@ The `GO_TRACEVIEW_TRACING_MODE` environment variable may be set to "always", "th
 
 While we use TraceView to trace our own production Go services, this version of our Go instrumentation is currently in beta
 and under active development. We welcome your feedback, issues and feature requests, and please contact us at go@appneta.com!
-
-### Demo
-
-If you have installed TraceView and the this package, you can run the sample “web app” included with go-appneta:
-
-    cd $GOPATH/src/github.com/appneta/go-appneta/examples/sample_app
-    go run -tags traceview main.go
-
-A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:
-
-    $ curl http://localhost:8899/hello
-    Slow request... Path: /hello
-
-You should see these requests appear on your TraceView dashboard.  
 
 ## License
 
