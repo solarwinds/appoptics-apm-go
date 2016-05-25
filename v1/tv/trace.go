@@ -17,7 +17,10 @@ type Trace interface {
 	//  IsTracing() bool
 	Layer
 
-	// End a trace, and include KV pairs returned by func f
+	// End a trace, and include KV pairs returned by func f. Useful alternative to End() when used
+	// with defer to delay evaluation of KVs until the end of the trace (since a deferred function's
+	// arguments are evaluated when the defer statement is evaluated). Func f will not be called at
+	// all if this span is not tracing.
 	EndCallback(f func() KVMap)
 
 	// ExitMetadata returns a hex string that propagates the end of this span back to a remote
@@ -91,6 +94,9 @@ func (t *tvTrace) EndCallback(cb func() KVMap) {
 		for k, v := range kvs {
 			args = append(args, k)
 			args = append(args, v)
+		}
+		for _, edge := range t.childEdges { // add Edge KV for each joined child
+			args = append(args, "Edge", edge)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
 			_ = t.exitEvent.ReportContext(t.tvCtx, true, args...)

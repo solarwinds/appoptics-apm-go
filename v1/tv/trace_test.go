@@ -233,7 +233,7 @@ func TestTraceFromMetadata(t *testing.T) {
 	// emulate incoming request with X-Trace header
 	incomingID := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2198D447EA2203"
 	tr := tv.NewTraceFromID("test", incomingID, nil)
-	tr.End()
+	tr.EndCallback(nil)
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have edge to incoming opID

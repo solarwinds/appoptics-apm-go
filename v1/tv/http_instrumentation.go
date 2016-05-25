@@ -4,7 +4,6 @@
 package tv
 
 import (
-	"log"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -17,13 +16,12 @@ var httpLayerName = "http.HandlerFunc"
 // returning a new function that can be used in its place.
 func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	// At wrap time (when binding handler to router): get name of wrapped handler func
-	var controller, action string
+	var endArgs []interface{}
 	if f := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()); f != nil {
 		// e.g. "main.slowHandler", "github.com/appneta/go-appneta/v1/tv_test.handler404"
 		fname := f.Name()
-		if s := strings.Split(fname[strings.LastIndex(fname, "/")+1:], "."); len(s) == 2 {
-			controller = s[0]
-			action = s[1]
+		if s := strings.SplitN(fname[strings.LastIndex(fname, "/")+1:], ".", 2); len(s) == 2 {
+			endArgs = append(endArgs, "Controller", s[0], "Action", s[1])
 		}
 	}
 	// return wrapped HTTP request handler
@@ -33,37 +31,29 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 		writer := &httpResponseWriter{w, t, http.StatusOK, ""}
 		w = writer
 
-		// add exit event's X-Trace header:
-		var endArgs []interface{}
+		// add exit event metadata to X-Trace header
 		if t.IsTracing() {
-			// add/replace metadata header with this trace's exit
+			// add/replace response header metadata with this trace's
 			w.Header().Set("X-Trace", t.ExitMetadata())
 		}
 
-		// Call original HTTP handler:
+		// Call original HTTP handler
 		handler(w, r)
-		// _, wrapper := TraceFromHTTPRequestResponse(httpLayerName, w, r,
-		// "Controller", controller, "Action", action)
-		// handler(wrapper, r) // call original HTTP handler
 
-		// check response headers for downstream metadata
-		//		if md := w.Header().Get("X-Trace"); w.md != "" {
-		if writer.metadata != "" {
+		// if downstream response headers mention a different layer/trace, add edge to it
+		if writer.metadata != "" && writer.metadata != t.ExitMetadata() {
 			endArgs = append(endArgs, "Edge", writer.metadata)
 		}
 		// Add status code and report exit event
-		endArgs = append(endArgs, "Status", writer.Status, "Controller", controller, "Action", action)
-		log.Printf("endArgs %v\n", endArgs)
+		endArgs = append(endArgs, "Status", writer.Status)
 		t.End(endArgs...)
 
 	}
 }
 
-func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *http.Request, args ...interface{}) (Trace, http.ResponseWriter) {
+func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *http.Request, args ...interface{}) (Trace, *httpResponseWriter) {
 	t := TraceFromHTTPRequest(layerName, r)
-	wrapper := NewResponseWriter(w, t)            // wrap writer with response-observing writer
-	args = append(args, "Status", wrapper.Status) // add status code and report exit event
-	defer t.End(args...)                          // report exit event
+	wrapper := NewResponseWriter(w, t) // wrap writer with response-observing writer
 	return t, wrapper
 }
 
@@ -76,28 +66,15 @@ type httpResponseWriter struct {
 	metadata string
 }
 
-func (w *httpResponseWriter) Write(buf []byte) (int, error) {
-	log.Printf("Write len(buf) %v", len(buf))
-	return w.ResponseWriter.Write(buf)
-}
-
 func (w *httpResponseWriter) WriteHeader(status int) {
-	log.Printf("WriteHeader status %v", status)
 	// observe HTTP status code
 	w.Status = status
-	var endArgs []interface{}
 	// check response for downstream metadata
 	w.metadata = w.Header().Get("X-Trace")
-	//	if md := w.Header().Get("X-Trace"); md != "" {
-	//		endArgs = append(endArgs, "Edge", md)
-	//	}
-	endArgs = append(endArgs, "Status", w.Status) // add status code and report exit event
+	// set trace exit metadata in X-Trace header
 	if w.t.IsTracing() {
-		// set trace exit metadata in X-Trace header
 		w.Header().Set("X-Trace", w.t.ExitMetadata())
 	}
-	// report exit event
-	//w.t.End(endArgs...)
 	w.ResponseWriter.WriteHeader(status)
 }
 
@@ -110,7 +87,6 @@ func NewResponseWriter(w http.ResponseWriter, t Trace) *httpResponseWriter {
 // TraceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
 func TraceFromHTTPRequest(layerName string, r *http.Request) Trace {
-	log.Printf("got Trace %v r %v\n", layerName, r)
 	// start trace, passing in metadata header
 	t := NewTraceFromID(layerName, r.Header.Get("X-Trace"), func() KVMap {
 		return KVMap{
@@ -122,7 +98,6 @@ func TraceFromHTTPRequest(layerName string, r *http.Request) Trace {
 		}
 	})
 	// update metadata header for any downstream readers
-	log.Printf("Setting X-Trace %v\n", t.MetadataString())
 	r.Header.Set("X-Trace", t.MetadataString())
 	return t
 }

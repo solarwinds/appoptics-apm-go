@@ -393,10 +393,6 @@ func (ctx *oboeContext) report(e *event, addCtxEdge bool, args ...interface{}) e
 			if key == EdgeKey {
 				e.AddEdge(val)
 			}
-		case *int:
-			if val != nil {
-				e.AddInt(key, *val)
-			}
 		case []string:
 			if key == EdgeKey {
 				for _, edge := range val {

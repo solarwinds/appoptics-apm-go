@@ -35,17 +35,19 @@ func TestHTTPHandler404(t *testing.T) {
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
-		{"net/http", "entry"}: {g.OutEdges{}, func(n g.Node) {
+		{"http.HandlerFunc", "entry"}: {g.OutEdges{}, func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
 			assert.Equal(t, "GET", n.Map["Method"])
 			assert.Equal(t, "testq", n.Map["Query-String"])
 		}},
-		{"net/http", "exit"}: {g.OutEdges{{"net/http", "entry"}}, func(n g.Node) {
+		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
 			// assert that response X-Trace header matches trace exit event
 			assert.Equal(t, response.HeaderMap.Get("X-Trace"), n.Map["X-Trace"])
 			assert.EqualValues(t, response.Code, n.Map["Status"])
 			assert.EqualValues(t, 404, n.Map["Status"])
+			assert.Equal(t, "tv_test", n.Map["Controller"])
+			assert.Equal(t, "handler404", n.Map["Action"])
 		}},
 	})
 }
@@ -56,18 +58,20 @@ func TestHTTPHandler200(t *testing.T) {
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
-		{"net/http", "entry"}: {g.OutEdges{}, func(n g.Node) {
+		{"http.HandlerFunc", "entry"}: {g.OutEdges{}, func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
 			assert.Equal(t, "GET", n.Map["Method"])
 			assert.Equal(t, "testq", n.Map["Query-String"])
 		}},
-		{"net/http", "exit"}: {g.OutEdges{{"net/http", "entry"}}, func(n g.Node) {
+		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
 			// assert that response X-Trace header matches trace exit event
 			assert.Len(t, response.HeaderMap["X-Trace"], 1)
 			assert.Equal(t, response.HeaderMap["X-Trace"][0], n.Map["X-Trace"])
 			assert.EqualValues(t, response.Code, n.Map["Status"])
 			assert.EqualValues(t, 200, n.Map["Status"])
+			assert.Equal(t, "tv_test", n.Map["Controller"])
+			assert.Equal(t, "handler200", n.Map["Action"])
 		}},
 	})
 }
@@ -87,7 +91,7 @@ func testServer(t *testing.T, list net.Listener) {
 		// create layer from incoming HTTP Request headers, if trace exists
 		tr := tv.TraceFromHTTPRequest("myHandler", req)
 		w := tv.NewResponseWriter(writer, tr)
-		defer tr.End("Status", w.Status)
+		defer tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Status": w.Status} })
 		w.Header().Set("X-Trace", tr.ExitMetadata()) // set exit header
 
 		t.Logf("server: got request %v", req)
@@ -100,13 +104,13 @@ func testServer(t *testing.T, list net.Listener) {
 	assert.NoError(t, s.Serve(list))
 }
 
-// same as testServer, except tv.HTTPHandler is additionally wrapping request
+// same as testServer, except tv.HTTPHandler is additionally wrapping request handler externally
 func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(func(writer http.ResponseWriter, req *http.Request) {
 		// create layer from incoming HTTP Request headers, if trace exists
-		tr := tv.TraceFromHTTPRequest("myHandler", req)
-		w := tv.NewResponseWriter(writer, tr)
-		defer tr.End("Status", w.Status)
+		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
+		//w := tv.NewResponseWriter(writer, tr)
+		defer tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Status": w.Status} })
 		w.Header().Set("X-Trace", tr.ExitMetadata()) // set exit header
 
 		t.Logf("server: got request %v", req)
@@ -114,6 +118,7 @@ func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 		// Run a query ...
 		l2.End()
 
+		// XXX important to test with and without header set in handler
 		w.WriteHeader(403) // return Forbidden
 	}))}
 	assert.NoError(t, s.Serve(list))
@@ -194,6 +199,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	url := fmt.Sprintf("http://127.0.0.1:%d/test?qs=1", port)
 	resp, err := testClient(ctx, url)
+	t.Logf("response: %v", resp)
 	tv.EndTrace(ctx)
 
 	assert.NoError(t, err)
@@ -206,17 +212,19 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 			assert.Equal(t, true, n.Map["IsService"])
 			assert.Equal(t, url, n.Map["RemoteURL"])
 		}},
-		{"http.Client", "exit"}: {g.OutEdges{{"net/http", "exit"}, {"http.Client", "entry"}}, nil},
-		{"net/http", "entry"}: {g.OutEdges{{"http.Client", "entry"}}, func(n g.Node) {
+		{"http.Client", "exit"}: {g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}, nil},
+		{"http.HandlerFunc", "entry"}: {g.OutEdges{{"http.Client", "entry"}}, func(n g.Node) {
 			assert.Equal(t, "/test", n.Map["URL"])
 			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
 			assert.Equal(t, "qs=1", n.Map["Query-String"])
 			assert.Equal(t, "GET", n.Map["Method"])
 		}},
-		{"net/http", "exit"}: {g.OutEdges{{"myHandler", "exit"}, {"net/http", "entry"}}, func(n g.Node) {
+		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"myHandler", "exit"}, {"http.HandlerFunc", "entry"}}, func(n g.Node) {
 			assert.Equal(t, 403, n.Map["Status"])
+			assert.Equal(t, "tv_test", n.Map["Controller"])
+			assert.Equal(t, "testDoubleWrappedServer.func1", n.Map["Action"])
 		}},
-		{"myHandler", "entry"}: {g.OutEdges{{"net/http", "entry"}}, func(n g.Node) {
+		{"myHandler", "entry"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
 			assert.Equal(t, "/test", n.Map["URL"])
 			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
 			assert.Equal(t, "qs=1", n.Map["Query-String"])
@@ -225,7 +233,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 		{"myHandler", "exit"}: {g.OutEdges{{"DBx", "exit"}, {"myHandler", "entry"}}, func(n g.Node) {
 			assert.Equal(t, 403, n.Map["Status"])
 		}},
-		{"DBx", "entry"}: {g.OutEdges{{"net/http", "entry"}}, func(n g.Node) {
+		{"DBx", "entry"}: {g.OutEdges{{"myHandler", "entry"}}, func(n g.Node) {
 			assert.Equal(t, "SELECT *", n.Map["Query"])
 			assert.Equal(t, "db.net", n.Map["RemoteHost"])
 		}},
