@@ -7,15 +7,19 @@
 
 * [Introduction](#introduction)
 * [Getting started](#getting-started)
-* [Building your app with tracing](#building-your-app-with-tracing)
-* [Demo](#demo)
-* [Usage examples](#usage-examples)
-* [Distributed tracing and context propagation](#distributed-tracing-and-context-propagation)
-* [Configuration](#configuration)
-* [Support](#support)
+    - [Installing](#installing)
+    - [Building your app with tracing](#building-your-app-with-tracing)
+* [Instrumenting your application](#instrumenting-your-application)
+    - [Usage examples](#usage-examples)
+    - [Distributed tracing and context propagation](#distributed-tracing-and-context-propagation)
+    - [Configuration](#configuration)
+* [Help and examples](#help-and-examples)
+    - [Support](#support)
+    - [Demo app](#demo-app)
 * [License](#license)
 
-### Introduction
+
+## Introduction
 
 [AppNeta TraceView](http://appneta.com/products/traceview) provides distributed
 tracing and code-level application performance monitoring.  This repository
@@ -26,7 +30,9 @@ Go support is currently in beta (though we run the instrumentation to process
 data in our production environment!) so please share any feedback you have; PRs welcome.
 
 
-### Getting started
+## Getting started
+
+### Installing
 
 To get tracing, you'll need a [a (free) TraceView account](http://www.appneta.com/products/traceview/).
 
@@ -56,20 +62,8 @@ Once the liboboe-dev (or liboboe-devel) package is installed you can build your 
  $ go build -tags traceview
 ```
 
-### Demo
 
-If you have installed TraceView and the this package, you can run the sample “web app” included with go-appneta:
-
-    cd $GOPATH/src/github.com/appneta/go-appneta/examples/sample_app
-    go run -tags traceview main.go
-
-A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:
-
-    $ curl http://localhost:8899/hello
-    Slow request... Path: /hello
-
-You should see these requests appear on your TraceView dashboard.
-
+## Instrumenting your application
 
 ### Usage examples
 
@@ -209,10 +203,27 @@ The `GO_TRACEVIEW_TRACING_MODE` environment variable may be set to "always", "th
 - Mode "through" will only continue traces started upstream by inbound requests, when a trace ID is available in the request metadata (e.g. an "X-Trace" HTTP header).
 - Mode "never" will disable tracing, and will neither start nor continue traces.
 
+
+## Help and examples
+
 ### Support
 
 While we use TraceView to trace our own production Go services, this version of our Go instrumentation is currently in beta
 and under active development. We welcome your feedback, issues and feature requests, and please contact us at go@appneta.com!
+
+### Demo app
+
+If you have installed TraceView and the this package, you can run the sample “web app” included with go-appneta:
+
+    cd $GOPATH/src/github.com/appneta/go-appneta/examples/sample_app
+    go run -tags traceview main.go
+
+A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:
+
+    $ curl http://localhost:8899/hello
+    Slow request... Path: /hello
+
+You should see these requests appear on your TraceView dashboard.
 
 ## License
 
