@@ -107,7 +107,9 @@ func (t *tvTrace) IsTracing() bool { return t.tvCtx.IsTracing() }
 // This is useful for setting response headers before reporting the end of the span.
 func (t *tvTrace) ExitMetadata() string {
 	if t.IsTracing() {
-		t.exitEvent = t.tvCtx.NewEvent(traceview.LabelExit, t.layerName(), false)
+		if t.exitEvent == nil {
+			t.exitEvent = t.tvCtx.NewEvent(traceview.LabelExit, t.layerName(), false)
+		}
 		if t.exitEvent != nil {
 			return t.exitEvent.MetadataString()
 		}

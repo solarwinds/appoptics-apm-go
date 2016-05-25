@@ -58,11 +58,23 @@ func TestTraceMetadataDiff(t *testing.T) {
 	t2 := tv.NewTrace("test1")
 	md2 := t2.ExitMetadata()
 	assert.Len(t, md2, 58)
+	md2b := t2.ExitMetadata()
+	md2c := t2.ExitMetadata()
 	t2.End()
 	assert.Len(t, r.Bufs, 4)
 
 	assert.NotEqual(t, md1, md2)
 	assert.NotEqual(t, md1[2:42], md2[2:42])
+
+	// ensure that additional calls to ExitMetadata produce the same result
+	assert.Len(t, md2b, 58)
+	assert.Len(t, md2c, 58)
+	assert.Equal(t, md2, md2b)
+	assert.Equal(t, md2b, md2c)
+
+	// OK to get exit metadata after trace ends, but should also be same
+	md2d := t2.ExitMetadata()
+	assert.Equal(t, md2d, md2c)
 }
 
 // example trace
