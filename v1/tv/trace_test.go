@@ -101,7 +101,7 @@ func traceExample(ctx context.Context) {
 // example trace
 func traceExampleCtx(ctx context.Context) {
 	// do some work
-	f0(ctx)
+	f0Ctx(ctx)
 
 	// instrument a DB query
 	q := []byte("SELECT * FROM tbl")
@@ -141,13 +141,35 @@ func f0(ctx context.Context) {
 	l.End()
 }
 
+// example work function
+func f0Ctx(ctx context.Context) {
+	defer tv.BeginProfile(ctx, "f0").End()
+
+	_, ctx = tv.BeginLayer(ctx, "http.Get", "URL", "http://a.b")
+	time.Sleep(5 * time.Millisecond)
+	// _, _ = http.Get("http://a.b")
+
+	// test reporting a variety of value types
+	tv.Info(ctx, "floatV", 3.5, "boolT", true, "boolF", false, "bigV", 5000000000,
+		"int64V", int64(5000000001), "int32V", int32(100), "float32V", float32(0.1),
+		// test reporting an unsupported type -- currently will be silently ignored
+		"weirdType", func() {},
+	)
+	// test reporting a non-string key: should not work, won't report any events
+	tv.Info(ctx, 3, "3")
+
+	time.Sleep(5 * time.Millisecond)
+	tv.Err(ctx, errors.New("test error!"))
+	tv.End(ctx)
+}
+
 func TestTraceExample(t *testing.T) {
 	r := traceview.SetTestReporter() // enable test reporter
 	// create a new trace, and a context to carry it around
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
 	t.Logf("Reporting unrecognized event KV type")
 	traceExample(ctx) // generate events
-	assertTraceExample(t, r.Bufs)
+	assertTraceExample(t, "f0", r.Bufs)
 }
 
 func TestTraceExampleCtx(t *testing.T) {
@@ -156,10 +178,10 @@ func TestTraceExampleCtx(t *testing.T) {
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
 	t.Logf("Reporting unrecognized event KV type")
 	traceExampleCtx(ctx) // generate events
-	assertTraceExample(t, r.Bufs)
+	assertTraceExample(t, "f0Ctx", r.Bufs)
 }
 
-func assertTraceExample(t *testing.T, bufs [][]byte) {
+func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 	g.AssertGraph(t, bufs, 13, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
 		{"myExample", "entry"}: {nil, func(n g.Node) {
@@ -171,7 +193,7 @@ func assertTraceExample(t *testing.T, bufs [][]byte) {
 		{"", "profile_entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "f0")
-			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test.f0")
+			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test."+f0name)
 		}},
 		{"", "profile_exit"}: {g.OutEdges{{"", "profile_entry"}}, nil},
 		// nested layer in http.Get profile points to trace entry
