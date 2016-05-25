@@ -57,25 +57,38 @@ func childExampleCtx(ctx context.Context) {
 	tv.EndTrace(ctx)
 }
 
+// validate events reported
+var childExampleGraph = map[g.MatchNode]g.AssertNode{
+	{"childExample", "entry"}: {},
+	{"L1", "entry"}:           {g.OutEdges{{"childExample", "entry"}}, nil},
+	{"DBx", "entry"}:          {g.OutEdges{{"L1", "entry"}}, nil},
+	{"DBx", "exit"}:           {g.OutEdges{{"DBx", "entry"}}, nil},
+	{"L1", "exit"}:            {g.OutEdges{{"DBx", "exit"}, {"L1", "entry"}}, nil},
+	{"childExample", "exit"}:  {g.OutEdges{{"L1", "exit"}, {"childExample", "entry"}}, nil},
+}
+
 func TestTraceChild(t *testing.T) {
 	r := traceview.SetTestReporter() // enable test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("childExample"))
 	childExample(ctx) // generate events
+	g.AssertGraph(t, r.Bufs, 6, childExampleGraph)
+}
 
-	// validate events reported
-	g.AssertGraph(t, r.Bufs, 6, map[g.MatchNode]g.AssertNode{
-		{"childExample", "entry"}: {},
-		{"L1", "entry"}:           {g.OutEdges{{"childExample", "entry"}}, nil},
-		{"DBx", "entry"}:          {g.OutEdges{{"L1", "entry"}}, nil},
-		{"DBx", "exit"}:           {g.OutEdges{{"DBx", "entry"}}, nil},
-		{"L1", "exit"}:            {g.OutEdges{{"DBx", "exit"}, {"L1", "entry"}}, nil},
-		{"childExample", "exit"}:  {g.OutEdges{{"L1", "exit"}, {"childExample", "entry"}}, nil},
-	})
+func TestTraceChildCtx(t *testing.T) {
+	r := traceview.SetTestReporter() // enable test reporter
+	ctx := tv.NewContext(context.Background(), tv.NewTrace("childExample"))
+	childExampleCtx(ctx) // generate events
+	g.AssertGraph(t, r.Bufs, 6, childExampleGraph)
 }
 
 func TestNoTraceChild(t *testing.T) {
 	r := traceview.SetTestReporter()
 	ctx := context.Background()
 	childExample(ctx)
+	assert.Len(t, r.Bufs, 0)
+
+	r = traceview.SetTestReporter()
+	ctx = context.Background()
+	childExampleCtx(ctx)
 	assert.Len(t, r.Bufs, 0)
 }

@@ -84,7 +84,7 @@ func TestMetadata(t *testing.T) {
 	nullMd := "1B00000000000000000000000000000000000000000000000000000000"
 	assert.NotEqual(t, md1Str, nullMd)                          // ensure md1 string is not null
 	md2.Init()                                                  // init empty md2
-	assert.Equal(t, nullMd, md2.String())                       // empty md produceds null md string
+	assert.Equal(t, nullMd, md2.String())                       // empty md produces null md string
 	assert.Error(t, mdNil.FromString(md1Str))                   // unpack str to nil md
 	assert.Error(t, md2.FromString("1BA70"))                    // load md2 from invalid str
 	assert.Equal(t, nullMd, md2.String())                       // no change to md2 from previous

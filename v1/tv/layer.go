@@ -51,7 +51,7 @@ type Profile interface {
 // BeginLayer starts a new layer span, provided a parent context and name. It returns a Layer
 // and context bound to the new child Layer.
 func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Layer, context.Context) {
-	if parent, ok := FromContext(ctx); ok { // report layer entry from parent context
+	if parent, ok := FromContext(ctx); ok && parent.ok() { // report layer entry from parent context
 		l := newLayer(parent.tvContext().Copy(), layerName, parent, args...)
 		return l, newLayerContext(ctx, l)
 	}
@@ -73,7 +73,7 @@ func (s *layerSpan) BeginLayer(layerName string, args ...interface{}) Layer {
 //       // ... do something ...
 //    }
 func BeginProfile(ctx context.Context, profileName string, args ...interface{}) Profile {
-	if parent, ok := FromContext(ctx); ok { // report profile entry from parent context
+	if parent, ok := FromContext(ctx); ok && parent.ok() { // report profile entry from parent context
 		return newProfile(parent.tvContext().Copy(), profileName, parent, args...)
 	}
 	return &nullSpan{}
