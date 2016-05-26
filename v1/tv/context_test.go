@@ -24,12 +24,12 @@ func TestContext(t *testing.T) {
 
 	ctxx := tr.tvCtx.Copy()
 	lbl := layerLabeler{"L1"}
-	tr2 := &tvTrace{layerSpan{span: span{tvCtx: ctxx, labeler: lbl}}, nil}
+	tr2 := &tvTrace{layerSpan: layerSpan{span: span{tvCtx: ctxx, labeler: lbl}}}
 	ctx3 := context.WithValue(ctx2, "t", tr2)
 	assert.Equal(t, ctx3.Value("t"), tr2)
 
 	ctxx2 := tr2.tvCtx.Copy()
-	tr3 := &tvTrace{layerSpan{span: span{tvCtx: ctxx2}}, nil}
+	tr3 := &tvTrace{layerSpan: layerSpan{span: span{tvCtx: ctxx2}}}
 	ctx4 := context.WithValue(ctx3, "t", tr3)
 	assert.Equal(t, ctx4.Value("t"), tr3)
 }

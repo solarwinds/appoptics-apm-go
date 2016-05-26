@@ -21,7 +21,8 @@ func TestTraceMetadata(t *testing.T) {
 
 	tr := tv.NewTrace("test")
 	md := tr.ExitMetadata()
-	tr.End("Edge", "872453") // bad Edge KV, should be ignored
+	tr.End("Edge", "872453", // bad Edge KV, should be ignored
+		"NotReported") // odd-length arg, should be ignored
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
@@ -39,7 +40,7 @@ func TestNoTraceMetadata(t *testing.T) {
 	// if trace is not sampled, metadata should be empty
 	tr := tv.NewTrace("test")
 	md := tr.ExitMetadata()
-	tr.End()
+	tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Not": "reported"} })
 
 	assert.Equal(t, md, "")
 	assert.Len(t, r.Bufs, 0)
@@ -82,6 +83,7 @@ func traceExample(ctx context.Context) {
 	// do some work
 	f0(ctx)
 
+	//t, _ := tv.FromContext(ctx)
 	// instrument a DB query
 	q := []byte("SELECT * FROM tbl")
 	l, _ := tv.BeginLayer(ctx, "DBx", "Query", q)

@@ -23,6 +23,10 @@ type Trace interface {
 	// all if this span is not tracing.
 	EndCallback(f func() KVMap)
 
+	// Add additional KV pairs that will be serialized (and dereferenced, for pointer
+	// values) at the end of this trace's span.
+	AddEndArgs(args ...interface{})
+
 	// ExitMetadata returns a hex string that propagates the end of this span back to a remote
 	// client. It is typically used in an response header (e.g. the HTTP Header "X-Trace"). Call
 	// this method to set a response header in advance of calling End().
@@ -39,6 +43,7 @@ type KVMap map[string]interface{}
 type tvTrace struct {
 	layerSpan
 	exitEvent traceview.Event
+	endArgs   []interface{}
 }
 
 func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
@@ -48,8 +53,9 @@ func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
 // event data to AppNeta; otherwise event reporting will be a no-op.
 func NewTrace(layerName string) Trace {
 	ctx := traceview.NewContext(layerName, "", true, nil)
-	lbl := layerLabeler{layerName}
-	return &tvTrace{layerSpan{span: span{tvCtx: ctx, labeler: lbl}}, nil}
+	return &tvTrace{
+		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: layerLabeler{layerName}}},
+	}
 }
 
 // NewTraceFromID creates a new trace for reporting to TraceView, provided an
@@ -62,47 +68,56 @@ func NewTraceFromID(layerName, mdstr string, cb func() KVMap) Trace {
 		}
 		return nil
 	})
-	lbl := layerLabeler{layerName}
-	return &tvTrace{layerSpan{span: span{tvCtx: ctx, labeler: lbl}}, nil}
+	return &tvTrace{
+		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: layerLabeler{layerName}}},
+	}
 }
 
 // EndTrace reports the exit event for the layer name that was used when calling NewTrace().
 // No more events should be reported from this trace.
 func (t *tvTrace) End(args ...interface{}) {
-	if t != nil && !t.ended {
-		for _, edge := range t.childEdges { // add Edge KV for each joined child
-			args = append(args, "Edge", edge)
+	if t.ok() {
+		t.endArgs = append(t.endArgs, args...)
+		t.reportExit()
+	}
+}
+
+// Add KV pairs as variadic args that will be serialized (and dereferenced, for pointer
+// values) at the end of this trace's span.
+func (t *tvTrace) AddEndArgs(args ...interface{}) {
+	if t.ok() {
+		// ensure even number of args added
+		if len(args)%2 == 1 {
+			args = args[0 : len(args)-1]
 		}
-		if t.exitEvent != nil { // use exit event, if one was provided
-			_ = t.exitEvent.ReportContext(t.tvCtx, true, args...)
-		} else {
-			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), args...)
-		}
-		t.childEdges = nil // clear child edge list
-		t.ended = true
+		t.endArgs = append(t.endArgs, args...)
 	}
 }
 
 // EndCallback ends a trace, reporting additional KV pairs returned by calling cb
 func (t *tvTrace) EndCallback(cb func() KVMap) {
-	if t != nil && !t.ended {
-		var kvs map[string]interface{}
+	if t.ok() {
 		if cb != nil {
-			kvs = cb()
+			for k, v := range cb() {
+				t.endArgs = append(t.endArgs, k, v)
+			}
 		}
-		var args []interface{}
-		for k, v := range kvs {
-			args = append(args, k)
-			args = append(args, v)
-		}
+		t.reportExit()
+	}
+}
+
+func (t *tvTrace) reportExit() {
+	if t.ok() {
 		for _, edge := range t.childEdges { // add Edge KV for each joined child
-			args = append(args, "Edge", edge)
+			t.endArgs = append(t.endArgs, "Edge", edge)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
-			_ = t.exitEvent.ReportContext(t.tvCtx, true, args...)
+			_ = t.exitEvent.ReportContext(t.tvCtx, true, t.endArgs...)
 		} else {
-			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), args...)
+			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), t.endArgs...)
 		}
+		t.childEdges = nil // clear child edge list
+		t.endArgs = nil
 		t.ended = true
 	}
 }

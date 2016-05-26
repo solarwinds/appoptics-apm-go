@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-var httpLayerName = "http.HandlerFunc"
+var httpHandlerLayerName = "http.HandlerFunc"
 
 // HTTPHandler wraps an http handler function with entry / exit events,
 // returning a new function that can be used in its place.
@@ -26,32 +26,14 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 	}
 	// return wrapped HTTP request handler
 	return func(w http.ResponseWriter, r *http.Request) {
-		t := TraceFromHTTPRequest(httpLayerName, r)
-		// wrap writer with status-observing writer
-		writer := &httpResponseWriter{w, t, http.StatusOK, ""}
-		w = writer
-
-		// add exit event metadata to X-Trace header
-		if t.IsTracing() {
-			// add/replace response header metadata with this trace's
-			w.Header().Set("X-Trace", t.ExitMetadata())
-		}
-
+		t, w := TraceFromHTTPRequestResponse(httpHandlerLayerName, w, r)
+		defer t.End(endArgs...)
 		// Call original HTTP handler
 		handler(w, r)
-
-		// if downstream response headers mention a different layer/trace, add edge to it
-		if writer.metadata != "" && writer.metadata != t.ExitMetadata() {
-			endArgs = append(endArgs, "Edge", writer.metadata)
-		}
-		// Add status code and report exit event
-		endArgs = append(endArgs, "Status", writer.Status)
-		t.End(endArgs...)
-
 	}
 }
 
-func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *http.Request, args ...interface{}) (Trace, *httpResponseWriter) {
+func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *http.Request) (Trace, *httpResponseWriter) {
 	t := TraceFromHTTPRequest(layerName, r)
 	wrapper := NewResponseWriter(w, t) // wrap writer with response-observing writer
 	return t, wrapper
@@ -61,27 +43,34 @@ func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *ht
 // the status code and response headers.
 type httpResponseWriter struct {
 	http.ResponseWriter
-	t        Trace
-	Status   int
-	metadata string
+	t      Trace
+	Status int
 }
 
 func (w *httpResponseWriter) WriteHeader(status int) {
-	// observe HTTP status code
-	w.Status = status
-	// check response for downstream metadata
-	w.metadata = w.Header().Get("X-Trace")
-	// set trace exit metadata in X-Trace header
-	if w.t.IsTracing() {
-		w.Header().Set("X-Trace", w.t.ExitMetadata())
+	w.Status = status               // observe HTTP status code
+	md := w.Header().Get("X-Trace") // check response for downstream metadata
+	if w.t.IsTracing() {            // set trace exit metadata in X-Trace header
+		// if downstream response headers mention a different layer, add edge to it
+		if md != "" && md != w.t.ExitMetadata() {
+			w.t.AddEndArgs("Edge", md)
+		}
+		w.Header().Set("X-Trace", w.t.ExitMetadata()) // replace downstream MD with ours
 	}
 	w.ResponseWriter.WriteHeader(status)
 }
 
 // NewResponseWriter observes the HTTP Status code of an HTTP response, returning a
 // wrapped http.ResponseWriter and a pointer to an int containing the status.
-func NewResponseWriter(w http.ResponseWriter, t Trace) *httpResponseWriter {
-	return &httpResponseWriter{w, t, http.StatusOK, ""}
+func NewResponseWriter(writer http.ResponseWriter, t Trace) *httpResponseWriter {
+	w := &httpResponseWriter{writer, t, http.StatusOK}
+	t.AddEndArgs("Status", &w.Status)
+	// add exit event metadata to X-Trace header
+	if t.IsTracing() {
+		// add/replace response header metadata with this trace's
+		w.Header().Set("X-Trace", t.ExitMetadata())
+	}
+	return w
 }
 
 // TraceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
@@ -97,7 +86,7 @@ func TraceFromHTTPRequest(layerName string, r *http.Request) Trace {
 			"Query-String": r.URL.RawQuery,
 		}
 	})
-	// update metadata header for any downstream readers
+	// update incoming metadata in request headers for any downstream readers
 	r.Header.Set("X-Trace", t.MetadataString())
 	return t
 }

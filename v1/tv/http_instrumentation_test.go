@@ -91,8 +91,9 @@ func testServer(t *testing.T, list net.Listener) {
 		// create layer from incoming HTTP Request headers, if trace exists
 		tr := tv.TraceFromHTTPRequest("myHandler", req)
 		w := tv.NewResponseWriter(writer, tr)
-		defer tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Status": w.Status} })
-		w.Header().Set("X-Trace", tr.ExitMetadata()) // set exit header
+		defer tr.End()
+
+		tr.AddEndArgs("NotReported") // odd-length args, should have no effect
 
 		t.Logf("server: got request %v", req)
 		l2 := tr.BeginLayer("DBx", "Query", "SELECT *", "RemoteHost", "db.net")
@@ -104,14 +105,12 @@ func testServer(t *testing.T, list net.Listener) {
 	assert.NoError(t, s.Serve(list))
 }
 
-// same as testServer, except tv.HTTPHandler is additionally wrapping request handler externally
+// same as testServer, but with external tv.HTTPHandler() handler wrapping
 func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(func(writer http.ResponseWriter, req *http.Request) {
 		// create layer from incoming HTTP Request headers, if trace exists
 		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
-		//w := tv.NewResponseWriter(writer, tr)
-		defer tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Status": w.Status} })
-		w.Header().Set("X-Trace", tr.ExitMetadata()) // set exit header
+		defer tr.End()
 
 		t.Logf("server: got request %v", req)
 		l2 := tr.BeginLayer("DBx", "Query", "SELECT *", "RemoteHost", "db.net")

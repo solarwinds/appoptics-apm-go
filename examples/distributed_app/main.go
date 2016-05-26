@@ -11,9 +11,8 @@ import (
 )
 
 func aliceHandler(w http.ResponseWriter, r *http.Request) {
-	t, writer := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
-	defer t.EndCallback(func() tv.KVMap { return tv.KVMap{"Status": writer.Status} })
-	w.Header().Set("X-Trace", t.ExitMetadata())
+	// trace this request, overwriting w with wrapped ResponseWriter
+	t, w := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
 
 	// call an HTTP endpoint and propagate the distributed trace context
 	url := "http://127.0.0.1:8891/bob"
@@ -35,16 +34,12 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		l.Err(err)
 		w.Write([]byte(`{"error":true}`))
+	} else {
+		w.Write(buf) // return API response to caller
 	}
-	// use API response
-	w.Write(buf)
 
 	// TODO also test when no X-Trace header in response, or req fails
-	var endArgs []interface{}
-	if resp != nil {
-		endArgs = append(endArgs, "Edge", resp.Header.Get("X-Trace"))
-	}
-	l.End(endArgs...)
+	l.End("Edge", resp.Header.Get("X-Trace"))
 }
 
 func main() {
