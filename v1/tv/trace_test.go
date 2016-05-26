@@ -83,21 +83,21 @@ func traceExample(ctx context.Context) {
 	// do some work
 	f0(ctx)
 
-	//t, _ := tv.FromContext(ctx)
+	t := tv.FromContext(ctx)
 	// instrument a DB query
 	q := []byte("SELECT * FROM tbl")
-	l, _ := tv.BeginLayer(ctx, "DBx", "Query", q)
+	l := t.BeginLayer("DBx", "Query", q)
 	// db.Query(q)
 	time.Sleep(20 * time.Millisecond)
 	l.Error("QueryError", "Error running query!")
 	l.End()
 
 	// tv.Info and tv.Error report on the root span
-	tv.Info(ctx, "HTTP-Status", 500)
-	tv.Error(ctx, "TimeoutError", "response timeout")
+	t.Info("HTTP-Status", 500)
+	t.Error("TimeoutError", "response timeout")
 
 	// end the trace
-	tv.EndTrace(ctx)
+	t.End()
 }
 
 // example trace

@@ -273,13 +273,13 @@ func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
 
 // NewContext starts a trace, possibly continuing one, if mdStr is provided. Setting reportEntry will
 // report an entry event before this function returns, calling cb if provided for additional KV pairs.
-func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]interface{}) (ctx Context) {
+func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]interface{}) (ctx Context, ok bool) {
 	if ok, rate, source := shouldTraceRequest(layer, mdStr); ok {
 		var addCtxEdge bool
 		if mdStr != "" {
 			var err error
 			if ctx, err = newContextFromMetadataString(mdStr); err != nil {
-				return &nullContext{} // bad incoming MD: no trace
+				return &nullContext{}, false // bad incoming MD: no trace
 			}
 			addCtxEdge = true
 		} else {
@@ -296,13 +296,13 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 			kvs["SampleRate"] = rate
 			kvs["SampleSource"] = source
 			if err := ctx.(*oboeContext).reportEventMap(LabelEntry, layer, addCtxEdge, kvs); err != nil {
-				ctx = &nullContext{}
+				return &nullContext{}, false
 			}
 		}
 	} else {
-		ctx = &nullContext{}
+		return &nullContext{}, false
 	}
-	return
+	return ctx, true
 }
 
 func (ctx *oboeContext) Copy() Context {

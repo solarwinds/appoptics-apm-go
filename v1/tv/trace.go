@@ -52,7 +52,10 @@ func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
 // the beginning of the layer layerName. If this trace is sampled, it may report
 // event data to AppNeta; otherwise event reporting will be a no-op.
 func NewTrace(layerName string) Trace {
-	ctx := traceview.NewContext(layerName, "", true, nil)
+	ctx, ok := traceview.NewContext(layerName, "", true, nil)
+	if !ok {
+		return &nullTrace{}
+	}
 	return &tvTrace{
 		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: layerLabeler{layerName}}},
 	}
@@ -62,12 +65,15 @@ func NewTrace(layerName string) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(layerName, mdstr string, cb func() KVMap) Trace {
-	ctx := traceview.NewContext(layerName, mdstr, true, func() map[string]interface{} {
+	ctx, ok := traceview.NewContext(layerName, mdstr, true, func() map[string]interface{} {
 		if cb != nil {
 			return cb()
 		}
 		return nil
 	})
+	if !ok {
+		return &nullTrace{}
+	}
 	return &tvTrace{
 		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: layerLabeler{layerName}}},
 	}
@@ -137,3 +143,10 @@ func (t *tvTrace) ExitMetadata() string {
 	}
 	return ""
 }
+
+// A nullTrace is not tracing.
+type nullTrace struct{ nullSpan }
+
+func (t *nullTrace) EndCallback(f func() KVMap)     {}
+func (t *nullTrace) AddEndArgs(args ...interface{}) {}
+func (t *nullTrace) ExitMetadata() string           { return "" }

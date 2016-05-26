@@ -207,7 +207,8 @@ func TestReportEventMap(t *testing.T) {
 func TestNewContext(t *testing.T) {
 	r := SetTestReporter()
 	r.ShouldTrace = true
-	ctx := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
+	ctx, ok := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
+	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
 	assert.Len(t, r.Bufs, 0) // no reporting
 }
@@ -216,7 +217,8 @@ func TestNullContext(t *testing.T) {
 	r := SetTestReporter()
 	r.ShouldTrace = false
 
-	ctx := NewContext("testLayer", "", false, nil) // nullContext{}
+	ctx, ok := NewContext("testLayer", "", false, nil) // nullContext{}
+	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
 	assert.False(t, ctx.IsTracing())
 	assert.Empty(t, ctx.MetadataString())
@@ -239,7 +241,8 @@ func TestNullContext(t *testing.T) {
 	// shouldn't be able to create a trace if the entry event fails
 	r.ShouldTrace = true
 	r.ShouldError = true
-	ctxBad := NewContext("testBadEntry", "", true, nil)
+	ctxBad, ok := NewContext("testBadEntry", "", true, nil)
+	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
 
 	assert.Len(t, r.Bufs, 0) // no reporting

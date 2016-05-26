@@ -13,6 +13,8 @@ import (
 )
 
 func TestContext(t *testing.T) {
+	r := traceview.SetTestReporter()
+
 	ctx := context.Background()
 	assert.Empty(t, MetadataString(ctx))
 	tr := NewTrace("test").(*tvTrace)
@@ -32,6 +34,8 @@ func TestContext(t *testing.T) {
 	tr3 := &tvTrace{layerSpan: layerSpan{span: span{tvCtx: ctxx2}}}
 	ctx4 := context.WithValue(ctx3, "t", tr3)
 	assert.Equal(t, ctx4.Value("t"), tr3)
+
+	assert.Len(t, r.Bufs, 1) // XXX assert entry event
 }
 
 func TestNullSpan(t *testing.T) {
