@@ -165,12 +165,6 @@ func (e *event) AddKV(key, value interface{}) error {
 		if k == EdgeKey {
 			e.AddEdge(v)
 		}
-	case []string:
-		if k == EdgeKey {
-			for _, edge := range v {
-				e.AddEdgeFromMetadataString(edge)
-			}
-		}
 
 	// allow reporting of pointers to basic types as well (for delayed evaluation)
 	case *string:

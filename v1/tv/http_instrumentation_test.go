@@ -139,11 +139,7 @@ func testClient(ctx context.Context, url string) (*http.Response, error) {
 	defer resp.Body.Close()
 
 	// TODO also test when no X-Trace header in response, or req fails
-	var endArgs []interface{}
-	if resp != nil {
-		endArgs = append(endArgs, "Edge", resp.Header["X-Trace"])
-	}
-	l.End(endArgs...)
+	l.End("Edge", resp.Header.Get("X-Trace"))
 
 	return resp, err
 }
