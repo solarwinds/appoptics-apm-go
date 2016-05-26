@@ -10,7 +10,7 @@ import (
 	"github.com/appneta/go-appneta/v1/tv"
 )
 
-func aliceHandler(w http.ResponseWriter, r *http.Request) {
+func bobHandler(w http.ResponseWriter, r *http.Request) {
 	t, writer := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
 	defer t.EndCallback(func() tv.KVMap { return tv.KVMap{"Status": writer.Status} })
 	w.Header().Set("X-Trace", t.ExitMetadata())
@@ -48,6 +48,6 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/alice", tv.HTTPHandler(aliceHandler))
+	http.HandleFunc("/bob", tv.HTTPHandler(bobHandler))
 	http.ListenAndServe(":8890", nil)
 }
