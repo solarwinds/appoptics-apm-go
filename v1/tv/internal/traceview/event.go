@@ -7,6 +7,9 @@ package traceview
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"log"
+	"math"
 )
 
 type event struct {
@@ -116,6 +119,113 @@ func (e *event) AddEdgeFromMetadataString(mdstr string) {
 	if err == nil && bytes.Equal(e.metadata.ids.taskID, md.ids.taskID) {
 		bsonAppendString(&e.bbuf, EdgeKey, md.opString())
 	}
+}
+
+// Add any key/value to event. May not add KV if key or value is invalid. Used to facilitate
+// reporting variadic args.
+func (e *event) AddKV(key, value interface{}) error {
+	// load key name
+	k, isStr := key.(string)
+	if !isStr {
+		return fmt.Errorf("Key %v (type %T) not a string", k, k)
+	}
+	// load value and add KV to event
+	switch v := value.(type) {
+	case string:
+		if k == EdgeKey {
+			e.AddEdgeFromMetadataString(v)
+		} else {
+			e.AddString(k, v)
+		}
+	case []byte:
+		e.AddBinary(k, v)
+	case int:
+		e.AddInt(k, v)
+	case int64:
+		e.AddInt64(k, v)
+	case int32:
+		e.AddInt32(k, v)
+	case uint:
+		if v <= math.MaxInt64 {
+			e.AddInt64(k, int64(v))
+		}
+	case uint64:
+		if v <= math.MaxInt64 {
+			e.AddInt64(k, int64(v))
+		}
+	case uint32:
+		e.AddInt64(k, int64(v))
+	case float32:
+		e.AddFloat32(k, v)
+	case float64:
+		e.AddFloat64(k, v)
+	case bool:
+		e.AddBool(k, v)
+	case *oboeContext:
+		if k == EdgeKey {
+			e.AddEdge(v)
+		}
+
+	// allow reporting of pointers to basic types as well (for delayed evaluation)
+	case *string:
+		if v != nil {
+			if k == EdgeKey {
+				e.AddEdgeFromMetadataString(*v)
+			} else {
+				e.AddString(k, *v)
+			}
+		}
+	case *[]byte:
+		if v != nil {
+			e.AddBinary(k, *v)
+		}
+	case *int:
+		if v != nil {
+			e.AddInt(k, *v)
+		}
+	case *int64:
+		if v != nil {
+			e.AddInt64(k, *v)
+		}
+	case *int32:
+		if v != nil {
+			e.AddInt32(k, *v)
+		}
+	case *uint:
+		if v != nil {
+			if *v <= math.MaxInt64 {
+				e.AddInt64(k, int64(*v))
+			}
+		}
+	case *uint64:
+		if v != nil {
+			if *v <= math.MaxInt64 {
+				e.AddInt64(k, int64(*v))
+			}
+		}
+	case *uint32:
+		if v != nil {
+			e.AddInt64(k, int64(*v))
+		}
+	case *float32:
+		if v != nil {
+			e.AddFloat32(k, *v)
+		}
+	case *float64:
+		if v != nil {
+			e.AddFloat64(k, *v)
+		}
+	case *bool:
+		if v != nil {
+			e.AddBool(k, *v)
+		}
+	default:
+		// silently skip unsupported value type
+		if debugLog {
+			log.Printf("Unrecognized Event key %v val %v", k, v)
+		}
+	}
+	return nil
 }
 
 // Reports event using specified Reporter

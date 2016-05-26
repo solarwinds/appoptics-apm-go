@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"log"
 	"strings"
 )
@@ -274,13 +273,13 @@ func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
 
 // NewContext starts a trace, possibly continuing one, if mdStr is provided. Setting reportEntry will
 // report an entry event before this function returns, calling cb if provided for additional KV pairs.
-func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]interface{}) (ctx Context) {
+func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]interface{}) (ctx Context, ok bool) {
 	if ok, rate, source := shouldTraceRequest(layer, mdStr); ok {
 		var addCtxEdge bool
 		if mdStr != "" {
 			var err error
 			if ctx, err = newContextFromMetadataString(mdStr); err != nil {
-				return &nullContext{} // bad incoming MD: no trace
+				return &nullContext{}, false // bad incoming MD: no trace
 			}
 			addCtxEdge = true
 		} else {
@@ -297,13 +296,13 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 			kvs["SampleRate"] = rate
 			kvs["SampleSource"] = source
 			if err := ctx.(*oboeContext).reportEventMap(LabelEntry, layer, addCtxEdge, kvs); err != nil {
-				ctx = &nullContext{}
+				return &nullContext{}, false
 			}
 		}
 	} else {
-		ctx = &nullContext{}
+		return &nullContext{}, false
 	}
-	return
+	return ctx, true
 }
 
 func (ctx *oboeContext) Copy() Context {
@@ -361,56 +360,11 @@ func (ctx *oboeContext) reportEvent(label Label, layer string, addCtxEdge bool, 
 
 // report an event using KVs from variadic args
 func (ctx *oboeContext) report(e *event, addCtxEdge bool, args ...interface{}) error {
-	for i := 0; i < len(args); i += 2 {
-		// load key name
-		key, isStr := args[i].(string)
-		if !isStr {
-			return fmt.Errorf("Key %v (type %T) not a string", key, key)
-		}
-		// load value and add KV to event
-		switch val := args[i+1].(type) {
-		case string:
-			if key == EdgeKey {
-				e.AddEdgeFromMetadataString(val)
-			} else {
-				e.AddString(key, val)
-			}
-		case []byte:
-			e.AddBinary(key, val)
-		case int:
-			e.AddInt(key, val)
-		case int64:
-			e.AddInt64(key, val)
-		case int32:
-			e.AddInt32(key, val)
-		case float32:
-			e.AddFloat32(key, val)
-		case float64:
-			e.AddFloat64(key, val)
-		case bool:
-			e.AddBool(key, val)
-		case *oboeContext:
-			if key == EdgeKey {
-				e.AddEdge(val)
-			}
-		case *int:
-			if val != nil {
-				e.AddInt(key, *val)
-			}
-		case []string:
-			if key == EdgeKey {
-				for _, edge := range val {
-					e.AddEdgeFromMetadataString(edge)
-				}
-			}
-		default:
-			// silently skip unsupported value type
-			if debugLog {
-				log.Printf("Unrecognized Event key %v val %v", key, val)
-			}
+	for i := 0; i+1 < len(args); i += 2 {
+		if err := e.AddKV(args[i], args[i+1]); err != nil {
+			return err
 		}
 	}
-
 	if addCtxEdge {
 		e.AddEdge(ctx)
 	}

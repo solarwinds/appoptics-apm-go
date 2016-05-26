@@ -3,54 +3,85 @@
 
 package tv
 
-import "net/http"
+import (
+	"net/http"
+	"reflect"
+	"runtime"
+	"strings"
+)
 
-var httpLayerName = "net/http"
+var httpHandlerLayerName = "http.HandlerFunc"
 
 // HTTPHandler wraps an http handler function with entry / exit events,
 // returning a new function that can be used in its place.
 func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		t := TraceFromHTTPRequest(r)
-		// add exit event's X-Trace header:
-		if t.IsTracing() {
-			md := t.ExitMetadata()
-			w.Header().Set("X-Trace", md)
+	// At wrap time (when binding handler to router): get name of wrapped handler func
+	var endArgs []interface{}
+	if f := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()); f != nil {
+		// e.g. "main.slowHandler", "github.com/appneta/go-appneta/v1/tv_test.handler404"
+		fname := f.Name()
+		if s := strings.SplitN(fname[strings.LastIndex(fname, "/")+1:], ".", 2); len(s) == 2 {
+			endArgs = append(endArgs, "Controller", s[0], "Action", s[1])
 		}
-
-		// wrap writer with status-observing writer
-		status := http.StatusOK
-		w = httpResponseWriter{w, &status}
-
-		// Add status code and report exit event
-		defer t.EndCallback(func() KVMap { return KVMap{"Status": status} })
-
-		// Call original HTTP handler:
+	}
+	// return wrapped HTTP request handler
+	return func(w http.ResponseWriter, r *http.Request) {
+		t, w := TraceFromHTTPRequestResponse(httpHandlerLayerName, w, r)
+		defer t.End(endArgs...)
+		// Call original HTTP handler
 		handler(w, r)
 	}
 }
 
-// httpResponseWriter observes calls to another http.ResponseWriter that change
-// the HTTP status code.
-type httpResponseWriter struct {
-	http.ResponseWriter
-	status *int
+// TraceFromHTTPRequestResponse returns a Trace and a wrapped http.ResponseWriter, given a
+// http.ResponseWriter and http.Request. If a distributed trace is described in the "X-Trace"
+// header, this context will be continued. The returned http.ResponseWriter should be used in place
+// of the one passed into this function in order to observe the response's headers and status code.
+func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter) {
+	t := traceFromHTTPRequest(layerName, r)
+	wrapper := newResponseWriter(w, t) // wrap writer with response-observing writer
+	return t, wrapper
 }
 
-func (w httpResponseWriter) WriteHeader(status int) {
-	*w.status = status
+// httpResponseWriter observes an http.ResponseWriter when WriteHeader is called to check
+// the status code and response headers.
+type httpResponseWriter struct {
+	http.ResponseWriter
+	t      Trace
+	Status int
+}
+
+func (w *httpResponseWriter) WriteHeader(status int) {
+	w.Status = status               // observe HTTP status code
+	md := w.Header().Get("X-Trace") // check response for downstream metadata
+	if w.t.IsTracing() {            // set trace exit metadata in X-Trace header
+		// if downstream response headers mention a different layer, add edge to it
+		if md != "" && md != w.t.ExitMetadata() {
+			w.t.AddEndArgs("Edge", md)
+		}
+		w.Header().Set("X-Trace", w.t.ExitMetadata()) // replace downstream MD with ours
+	}
 	w.ResponseWriter.WriteHeader(status)
 }
 
-func NewResponseWriter(w http.ResponseWriter) (http.ResponseWriter, *int) {
-	ret := new(int)
-	return httpResponseWriter{w, ret}, ret
+// newResponseWriter observes the HTTP Status code of an HTTP response, returning a
+// wrapped http.ResponseWriter and a pointer to an int containing the status.
+func newResponseWriter(writer http.ResponseWriter, t Trace) *httpResponseWriter {
+	w := &httpResponseWriter{writer, t, http.StatusOK}
+	t.AddEndArgs("Status", &w.Status)
+	// add exit event metadata to X-Trace header
+	if t.IsTracing() {
+		// add/replace response header metadata with this trace's
+		w.Header().Set("X-Trace", t.ExitMetadata())
+	}
+	return w
 }
 
-// TraceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
+// traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
-func TraceFromHTTPRequest(r *http.Request) Trace {
-	t := NewTraceFromID(httpLayerName, r.Header.Get("X-Trace"), func() KVMap {
+func traceFromHTTPRequest(layerName string, r *http.Request) Trace {
+	// start trace, passing in metadata header
+	t := NewTraceFromID(layerName, r.Header.Get("X-Trace"), func() KVMap {
 		return KVMap{
 			"Method":       r.Method,
 			"HTTP-Host":    r.Host,
@@ -59,5 +90,7 @@ func TraceFromHTTPRequest(r *http.Request) Trace {
 			"Query-String": r.URL.RawQuery,
 		}
 	})
+	// update incoming metadata in request headers for any downstream readers
+	r.Header.Set("X-Trace", t.MetadataString())
 	return t
 }

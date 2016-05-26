@@ -57,13 +57,9 @@ func childExampleCtx(ctx context.Context) {
 	tv.EndTrace(ctx)
 }
 
-func TestTraceChild(t *testing.T) {
-	r := traceview.SetTestReporter() // enable test reporter
-	ctx := tv.NewContext(context.Background(), tv.NewTrace("childExample"))
-	childExample(ctx) // generate events
-
+func assertTraceChild(t *testing.T, bufs [][]byte) {
 	// validate events reported
-	g.AssertGraph(t, r.Bufs, 6, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 6, map[g.MatchNode]g.AssertNode{
 		{"childExample", "entry"}: {},
 		{"L1", "entry"}:           {g.OutEdges{{"childExample", "entry"}}, nil},
 		{"DBx", "entry"}:          {g.OutEdges{{"L1", "entry"}}, nil},
@@ -73,9 +69,28 @@ func TestTraceChild(t *testing.T) {
 	})
 }
 
+func TestTraceChild(t *testing.T) {
+	r := traceview.SetTestReporter() // enable test reporter
+	ctx := tv.NewContext(context.Background(), tv.NewTrace("childExample"))
+	childExample(ctx) // generate events
+	assertTraceChild(t, r.Bufs)
+}
+
+func TestTraceChildCtx(t *testing.T) {
+	r := traceview.SetTestReporter() // enable test reporter
+	ctx := tv.NewContext(context.Background(), tv.NewTrace("childExample"))
+	childExampleCtx(ctx) // generate events
+	assertTraceChild(t, r.Bufs)
+}
+
 func TestNoTraceChild(t *testing.T) {
 	r := traceview.SetTestReporter()
 	ctx := context.Background()
 	childExample(ctx)
+	assert.Len(t, r.Bufs, 0)
+
+	r = traceview.SetTestReporter()
+	ctx = context.Background()
+	childExampleCtx(ctx)
 	assert.Len(t, r.Bufs, 0)
 }

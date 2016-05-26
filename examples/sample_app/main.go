@@ -4,7 +4,10 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -12,13 +15,55 @@ import (
 	"github.com/appneta/go-appneta/v1/tv"
 )
 
-// Our "app" doesn't do much:
+var startTime = time.Now()
+
+func normalAround(ts, stdDev time.Duration) time.Duration {
+	return time.Duration(rand.NormFloat64()*float64(stdDev)) + ts
+}
+
 func slowHandler(w http.ResponseWriter, r *http.Request) {
-	time.Sleep(time.Duration(rand.Intn(2)+1) * time.Second)
+	time.Sleep(normalAround(2*time.Second, 100*time.Millisecond))
+	w.WriteHeader(404)
 	fmt.Fprintf(w, "Slow request... Path: %s", r.URL.Path)
 }
 
+func increasinglySlowHandler(w http.ResponseWriter, r *http.Request) {
+	// getting slower at a rate of 1ms per second
+	offset := time.Duration(float64(time.Millisecond) * time.Now().Sub(startTime).Seconds())
+	time.Sleep(normalAround(time.Second+offset, 100*time.Millisecond))
+	fmt.Fprintf(w, "Slowly request... Path: %s", r.URL.Path)
+}
+
 func main() {
-	http.HandleFunc("/", tv.HTTPHandler(slowHandler))
-	http.ListenAndServe(":8899", nil)
+	http.HandleFunc("/slow", tv.HTTPHandler(slowHandler))
+	http.HandleFunc("/slowly", tv.HTTPHandler(increasinglySlowHandler))
+	http.ListenAndServe(addr, nil)
+}
+
+var addr string
+
+func init() {
+	var testClients bool
+	flag.StringVar(&addr, "addr", ":8899", "listen address")
+	flag.BoolVar(&testClients, "testClients", false, "run test clients")
+	flag.Parse()
+	if testClients {
+		go doForever("GET", "http://localhost:8899/slow")
+		go doForever("POST", "http://localhost:8899/slowly")
+	}
+}
+
+func doForever(method, url string) {
+	for {
+		httpClient := &http.Client{}
+		httpReq, _ := http.NewRequest(method, url, nil)
+		log.Printf("httpClient.Do req: %s %s", method, url)
+		resp, err := httpClient.Do(httpReq)
+		if err != nil {
+			log.Printf("httpClient.Do err: %v", err)
+		}
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		log.Printf("httpClient.Do body: %v, err: %v", string(body), err)
+	}
 }

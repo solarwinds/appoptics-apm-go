@@ -21,7 +21,8 @@ func TestTraceMetadata(t *testing.T) {
 
 	tr := tv.NewTrace("test")
 	md := tr.ExitMetadata()
-	tr.End("Edge", "872453") // bad Edge KV, should be ignored
+	tr.End("Edge", "872453", // bad Edge KV, should be ignored
+		"NotReported") // odd-length arg, should be ignored
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
@@ -39,7 +40,7 @@ func TestNoTraceMetadata(t *testing.T) {
 	// if trace is not sampled, metadata should be empty
 	tr := tv.NewTrace("test")
 	md := tr.ExitMetadata()
-	tr.End()
+	tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Not": "reported"} })
 
 	assert.Equal(t, md, "")
 	assert.Len(t, r.Bufs, 0)
@@ -58,11 +59,23 @@ func TestTraceMetadataDiff(t *testing.T) {
 	t2 := tv.NewTrace("test1")
 	md2 := t2.ExitMetadata()
 	assert.Len(t, md2, 58)
+	md2b := t2.ExitMetadata()
+	md2c := t2.ExitMetadata()
 	t2.End()
 	assert.Len(t, r.Bufs, 4)
 
 	assert.NotEqual(t, md1, md2)
 	assert.NotEqual(t, md1[2:42], md2[2:42])
+
+	// ensure that additional calls to ExitMetadata produce the same result
+	assert.Len(t, md2b, 58)
+	assert.Len(t, md2c, 58)
+	assert.Equal(t, md2, md2b)
+	assert.Equal(t, md2b, md2c)
+
+	// OK to get exit metadata after trace ends, but should also be same
+	md2d := t2.ExitMetadata()
+	assert.Equal(t, md2d, md2c)
 }
 
 // example trace
@@ -70,26 +83,27 @@ func traceExample(ctx context.Context) {
 	// do some work
 	f0(ctx)
 
+	t := tv.FromContext(ctx)
 	// instrument a DB query
 	q := []byte("SELECT * FROM tbl")
-	l, _ := tv.BeginLayer(ctx, "DBx", "Query", q)
+	l := t.BeginLayer("DBx", "Query", q)
 	// db.Query(q)
 	time.Sleep(20 * time.Millisecond)
 	l.Error("QueryError", "Error running query!")
 	l.End()
 
 	// tv.Info and tv.Error report on the root span
-	tv.Info(ctx, "HTTP-Status", 500)
-	tv.Error(ctx, "TimeoutError", "response timeout")
+	t.Info("HTTP-Status", 500)
+	t.Error("TimeoutError", "response timeout")
 
 	// end the trace
-	tv.EndTrace(ctx)
+	t.End()
 }
 
 // example trace
 func traceExampleCtx(ctx context.Context) {
 	// do some work
-	f0(ctx)
+	f0Ctx(ctx)
 
 	// instrument a DB query
 	q := []byte("SELECT * FROM tbl")
@@ -129,13 +143,35 @@ func f0(ctx context.Context) {
 	l.End()
 }
 
+// example work function
+func f0Ctx(ctx context.Context) {
+	defer tv.BeginProfile(ctx, "f0").End()
+
+	_, ctx = tv.BeginLayer(ctx, "http.Get", "URL", "http://a.b")
+	time.Sleep(5 * time.Millisecond)
+	// _, _ = http.Get("http://a.b")
+
+	// test reporting a variety of value types
+	tv.Info(ctx, "floatV", 3.5, "boolT", true, "boolF", false, "bigV", 5000000000,
+		"int64V", int64(5000000001), "int32V", int32(100), "float32V", float32(0.1),
+		// test reporting an unsupported type -- currently will be silently ignored
+		"weirdType", func() {},
+	)
+	// test reporting a non-string key: should not work, won't report any events
+	tv.Info(ctx, 3, "3")
+
+	time.Sleep(5 * time.Millisecond)
+	tv.Err(ctx, errors.New("test error!"))
+	tv.End(ctx)
+}
+
 func TestTraceExample(t *testing.T) {
 	r := traceview.SetTestReporter() // enable test reporter
 	// create a new trace, and a context to carry it around
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
 	t.Logf("Reporting unrecognized event KV type")
 	traceExample(ctx) // generate events
-	assertTraceExample(t, r.Bufs)
+	assertTraceExample(t, "f0", r.Bufs)
 }
 
 func TestTraceExampleCtx(t *testing.T) {
@@ -144,10 +180,10 @@ func TestTraceExampleCtx(t *testing.T) {
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
 	t.Logf("Reporting unrecognized event KV type")
 	traceExampleCtx(ctx) // generate events
-	assertTraceExample(t, r.Bufs)
+	assertTraceExample(t, "f0Ctx", r.Bufs)
 }
 
-func assertTraceExample(t *testing.T, bufs [][]byte) {
+func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 	g.AssertGraph(t, bufs, 13, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
 		{"myExample", "entry"}: {nil, func(n g.Node) {
@@ -159,7 +195,7 @@ func assertTraceExample(t *testing.T, bufs [][]byte) {
 		{"", "profile_entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "f0")
-			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test.f0")
+			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test."+f0name)
 		}},
 		{"", "profile_exit"}: {g.OutEdges{{"", "profile_entry"}}, nil},
 		// nested layer in http.Get profile points to trace entry
@@ -221,7 +257,7 @@ func TestTraceFromMetadata(t *testing.T) {
 	// emulate incoming request with X-Trace header
 	incomingID := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2198D447EA2203"
 	tr := tv.NewTraceFromID("test", incomingID, nil)
-	tr.End()
+	tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Extra": "Arg"} })
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have edge to incoming opID
@@ -233,6 +269,7 @@ func TestTraceFromMetadata(t *testing.T) {
 		{"test", "exit"}: {g.OutEdges{{"test", "entry"}}, func(n g.Node) {
 			// trace ID should match incoming ID
 			assert.Equal(t, incomingID[2:42], n.Map["X-Trace"].(string)[2:42])
+			assert.Equal(t, "Arg", n.Map["Extra"])
 		}},
 	})
 }

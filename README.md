@@ -53,7 +53,7 @@ page](https://login.tv.appneta.com/overview).
 
 ### Building your app with tracing
 
-By default, no tracing occurs unless you build your app with the build tag "traceview". Without it,
+By default, no tracing occurs unless you build your app with the build tag “traceview”. Without it,
 calls to this API are no-ops, allowing for precise control over which deployments are traced. To
 build and run with tracing enabled, you must do so on a host with TraceView's packages installed.
 Once the liboboe-dev (or liboboe-devel) package is installed you can build your service as follows:
@@ -67,42 +67,70 @@ Once the liboboe-dev (or liboboe-devel) package is installed you can build your 
 
 ### Usage examples
 
-To profile the performance of basic web service, you can use our
+The simplest integration option is this package's
 [tv.HTTPHandler](https://godoc.org/github.com/appneta/go-appneta/v1/tv#HTTPHandler) wrapper.  This
-will automatically propagate any distributed trace described in the request headers (e.g. from
-TraceView's Java, Node.js Python, Ruby, C# or Scala instrumentation) through to the response
-headers, if one exists.
+will monitor the performance of the provided
+[http.HandlerFunc](https://golang.org/pkg/net/http/#HandlerFunc), visualized with latency
+distribution heatmaps filterable by dimensions such as URL host & path, HTTP status & method, server
+hostname, etc.  [tv.HTTPHandler](https://godoc.org/github.com/appneta/go-appneta/v1/tv#HTTPHandler)
+will also continue a distributed trace described in the incoming HTTP request headers (from
+TraceView's automatic C#/.NET, Java, Node.js, PHP, Python, Ruby, and Scala instrumentation) through
+to the HTTP response, if one exists.
 
 ```go
 package main
 
 import (
-    "github.com/appneta/go-appneta/v1/tv"
-    "math/rand"
-    "net/http"
-    "time"
+	"fmt"
+	"math/rand"
+	"net/http"
+	"time"
+
+	"github.com/appneta/go-appneta/v1/tv"
 )
 
+var startTime = time.Now()
+
+func normalAround(ts, stdDev time.Duration) time.Duration {
+	return time.Duration(rand.NormFloat64()*float64(stdDev)) + ts
+}
+
 func slowHandler(w http.ResponseWriter, r *http.Request) {
-    time.Sleep(time.Duration(rand.Intn(2)+1) * time.Second)
+	time.Sleep(normalAround(2*time.Second, 100*time.Millisecond))
+	w.WriteHeader(404)
+	fmt.Fprintf(w, "Slow request, path: %s", r.URL.Path)
+}
+
+func increasinglySlowHandler(w http.ResponseWriter, r *http.Request) {
+	// getting slower at a rate of 1ms per second
+	offset := time.Duration(float64(time.Millisecond) * time.Now().Sub(startTime).Seconds())
+	time.Sleep(normalAround(time.Second+offset, 100*time.Millisecond))
+	fmt.Fprintf(w, "Slowing request, path: %s", r.URL.Path)
 }
 
 func main() {
-    http.HandleFunc("/", tv.HTTPHandler(slowHandler))
-    http.ListenAndServe(":8899", nil)
+	http.HandleFunc("/slow", tv.HTTPHandler(slowHandler))
+	http.HandleFunc("/slowly", tv.HTTPHandler(increasinglySlowHandler))
+	http.ListenAndServe(":8899", nil)
 }
 ```
+![sample_app screenshot](https://github.com/appneta/go-appneta/raw/master/img/readme-screenshot1.png)
 
-For other use cases, you may need to begin or continue traces yourself. To do so, first start a
-trace, and then create a series of Layer spans or Profile regions to capture the timings of
-different parts of your app.
+To monitor more than just the overall latency of each request to your Go service, you will need to
+break a request's processing time down by placing small benchmarks into your code.
+
+To do so, first start or continue a trace (the root Layer), then create a series of "Layer" spans
+(or "Profile" timings) to capture the time used by different parts of the app's stack as it is
+processed.
 
 TraceView provides two ways of measuring time spent by your code: a "Layer" span can measure e.g. a
 single DB query or cache request, an outgoing HTTP or RPC request, or the entire time spent within a
-controller method. A "Profile" provides a named measurement of time spent inside a Layer, and is
-typically used to measure a single function call or code block, e.g. to represent the time of
-expensive computation(s) occurring in a Layer. Layer spans can be created as children of other
-Layers, but a Profile cannot have children.
+controller method.
+
+A "Profile" provides a named measurement of time spent inside a Layer, and is typically used to
+measure a single function call or code block, e.g. to represent the time used by expensive
+computation(s) occurring in a Layer. Layer spans can be created as children of other Layers, but a
+Profile cannot have children.
 
 TraceView's backend identifies a Layer's type by examining the key-value pairs associated with it;
 for example, if keys named "Query" and "RemoteHost" are used, the span is assumed to represent a DB

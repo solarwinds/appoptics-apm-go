@@ -18,27 +18,41 @@ func newLayerContext(ctx context.Context, l Layer) context.Context {
 }
 
 // FromContext returns the Layer bound to the context, if any.
-func FromContext(ctx context.Context) (l Layer, ok bool) {
+func FromContext(ctx context.Context) Layer {
+	l, ok := fromContext(ctx)
+	if !ok {
+		return &nullSpan{}
+	}
+	return l
+}
+func fromContext(ctx context.Context) (l Layer, ok bool) {
 	l, ok = ctx.Value(contextLayerKey).(Layer)
 	return
 }
 
 // TraceFromContext returns the Trace bound to the context, if any.
-func TraceFromContext(ctx context.Context) (t Trace, ok bool) {
+func TraceFromContext(ctx context.Context) Trace {
+	t, ok := traceFromContext(ctx)
+	if !ok {
+		return &nullTrace{}
+	}
+	return t
+}
+func traceFromContext(ctx context.Context) (t Trace, ok bool) {
 	t, ok = ctx.Value(contextKey).(Trace)
 	return
 }
 
 // if context contains a valid Layer, run f
 func runCtx(ctx context.Context, f func(l Layer)) {
-	if l, ok := FromContext(ctx); ok {
+	if l, ok := fromContext(ctx); ok {
 		f(l)
 	}
 }
 
 // if context contains a valid Trace, run f
 func runTraceCtx(ctx context.Context, f func(t Trace)) {
-	if t, ok := TraceFromContext(ctx); ok {
+	if t, ok := traceFromContext(ctx); ok {
 		f(t)
 	}
 }
@@ -61,7 +75,7 @@ func Err(ctx context.Context, err error) { runCtx(ctx, func(l Layer) { l.Err(err
 // MetadataString returns a representation of the Layer span's context for use with distributed
 // tracing (to create a remote child span). If the Layer has ended, an empty string is returned.
 func MetadataString(ctx context.Context) string {
-	if l, ok := FromContext(ctx); ok {
+	if l, ok := fromContext(ctx); ok {
 		return l.MetadataString()
 	}
 	return ""

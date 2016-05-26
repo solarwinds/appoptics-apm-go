@@ -3,6 +3,7 @@
 package traceview
 
 import (
+	"math"
 	"testing"
 
 	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
@@ -21,9 +22,45 @@ func TestSendEvent(t *testing.T) {
 	err = e.Report(ctx)
 	assert.NoError(t, err)
 
+	intTest := int(57)
+	int32Test := int32(59)
+	int64Test := int64(60)
+	uintTest := uint(61)
+	uintBigTest := uint(math.MaxInt64 + 1)
+	uint32Test := uint32(62)
+	uint64Test := uint64(63)
+	uint64BigTest := uint64(math.MaxInt64 + 1)
+	float32Test := float32(0.1)
+	float64Test := float64(3.5)
+	stringTest := "testStr"
+	boolTest := true
+	bufTest := []byte("testBuf")
+	badMD := "1DSF*&)DS&F#"
+
 	err = ctx.ReportEvent("info", testLayer,
 		"Controller", "test_controller",
-		"Action", "test_action")
+		"Action", "test_action",
+		"TestInt", &intTest,
+		"TestInt32", &int32Test,
+		"TestInt64", &int64Test,
+		"TestUint", &uintTest,
+		"TestUint32", &uint32Test,
+		"TestUint64", &uint64Test,
+		"TestUintBig", &uintBigTest,
+		"TestUint64Big", &uint64BigTest,
+		"TestUintV", uintTest,
+		"TestUint32V", uint32Test,
+		"TestUint64V", uint64Test,
+		"TestUintBigV", uintBigTest,
+		"TestUint64BigV", uint64BigTest,
+		"TestFloat32", &float32Test,
+		"TestFloat64", &float64Test,
+		"TestString", &stringTest,
+		"TestBool", &boolTest,
+		"TestBuf", &bufTest,
+		"Edge", &badMD, // should not be reported
+		"Key", // key with no value -- should be skipped/ignored
+	)
 	assert.NoError(t, err)
 
 	e, err = ctx.newEvent(LabelExit, testLayer)
@@ -39,6 +76,24 @@ func TestSendEvent(t *testing.T) {
 		{"go_test", "info"}: {g.OutEdges{{"go_test", "entry"}}, func(n g.Node) {
 			assert.Equal(t, n.Map["Controller"], "test_controller")
 			assert.Equal(t, n.Map["Action"], "test_action")
+			assert.EqualValues(t, n.Map["TestInt"], intTest)
+			assert.EqualValues(t, n.Map["TestInt32"], int32Test)
+			assert.EqualValues(t, n.Map["TestInt64"], int64Test)
+			assert.EqualValues(t, n.Map["TestUint"], uintTest)
+			assert.EqualValues(t, n.Map["TestUint32"], uint32Test)
+			assert.EqualValues(t, n.Map["TestUint64"], uint64Test)
+			assert.NotContains(t, "TestUintBig", n.Map)
+			assert.NotContains(t, "TestUint64Big", n.Map)
+			assert.EqualValues(t, n.Map["TestUintV"], uintTest)
+			assert.EqualValues(t, n.Map["TestUint32V"], uint32Test)
+			assert.EqualValues(t, n.Map["TestUint64V"], uint64Test)
+			assert.NotContains(t, "TestUintBigV", n.Map)
+			assert.NotContains(t, "TestUint64BigV", n.Map)
+			assert.Equal(t, n.Map["TestFloat32"], float64(float32Test))
+			assert.Equal(t, n.Map["TestFloat64"], float64Test)
+			assert.Equal(t, n.Map["TestString"], stringTest)
+			assert.Equal(t, n.Map["TestBool"], boolTest)
+			assert.Equal(t, n.Map["TestBuf"], bufTest)
 		}},
 		{"go_test", "exit"}: {g.OutEdges{{"go_test", "info"}}, nil},
 	})

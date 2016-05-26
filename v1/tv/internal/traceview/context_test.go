@@ -84,7 +84,7 @@ func TestMetadata(t *testing.T) {
 	nullMd := "1B00000000000000000000000000000000000000000000000000000000"
 	assert.NotEqual(t, md1Str, nullMd)                          // ensure md1 string is not null
 	md2.Init()                                                  // init empty md2
-	assert.Equal(t, nullMd, md2.String())                       // empty md produceds null md string
+	assert.Equal(t, nullMd, md2.String())                       // empty md produces null md string
 	assert.Error(t, mdNil.FromString(md1Str))                   // unpack str to nil md
 	assert.Error(t, md2.FromString("1BA70"))                    // load md2 from invalid str
 	assert.Equal(t, nullMd, md2.String())                       // no change to md2 from previous
@@ -207,7 +207,8 @@ func TestReportEventMap(t *testing.T) {
 func TestNewContext(t *testing.T) {
 	r := SetTestReporter()
 	r.ShouldTrace = true
-	ctx := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
+	ctx, ok := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
+	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
 	assert.Len(t, r.Bufs, 0) // no reporting
 }
@@ -216,7 +217,8 @@ func TestNullContext(t *testing.T) {
 	r := SetTestReporter()
 	r.ShouldTrace = false
 
-	ctx := NewContext("testLayer", "", false, nil) // nullContext{}
+	ctx, ok := NewContext("testLayer", "", false, nil) // nullContext{}
+	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
 	assert.False(t, ctx.IsTracing())
 	assert.Empty(t, ctx.MetadataString())
@@ -239,7 +241,8 @@ func TestNullContext(t *testing.T) {
 	// shouldn't be able to create a trace if the entry event fails
 	r.ShouldTrace = true
 	r.ShouldError = true
-	ctxBad := NewContext("testBadEntry", "", true, nil)
+	ctxBad, ok := NewContext("testBadEntry", "", true, nil)
+	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
 
 	assert.Len(t, r.Bufs, 0) // no reporting

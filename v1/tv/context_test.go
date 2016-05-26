@@ -13,6 +13,8 @@ import (
 )
 
 func TestContext(t *testing.T) {
+	r := traceview.SetTestReporter()
+
 	ctx := context.Background()
 	assert.Empty(t, MetadataString(ctx))
 	tr := NewTrace("test").(*tvTrace)
@@ -24,14 +26,30 @@ func TestContext(t *testing.T) {
 
 	ctxx := tr.tvCtx.Copy()
 	lbl := layerLabeler{"L1"}
-	tr2 := &tvTrace{layerSpan{span: span{tvCtx: ctxx, labeler: lbl}}, nil}
+	tr2 := &tvTrace{layerSpan: layerSpan{span: span{tvCtx: ctxx, labeler: lbl}}}
 	ctx3 := context.WithValue(ctx2, "t", tr2)
 	assert.Equal(t, ctx3.Value("t"), tr2)
 
 	ctxx2 := tr2.tvCtx.Copy()
-	tr3 := &tvTrace{layerSpan{span: span{tvCtx: ctxx2}}, nil}
+	tr3 := &tvTrace{layerSpan: layerSpan{span: span{tvCtx: ctxx2}}}
 	ctx4 := context.WithValue(ctx3, "t", tr3)
 	assert.Equal(t, ctx4.Value("t"), tr3)
+
+	assert.Len(t, r.Bufs, 1) // XXX assert entry event
+}
+
+func TestTraceFromContext(t *testing.T) {
+	r := traceview.SetTestReporter()
+	tr := NewTrace("TestTFC")
+	ctx := NewContext(context.Background(), tr)
+	trFC := TraceFromContext(ctx)
+	assert.Equal(t, tr.ExitMetadata(), trFC.ExitMetadata())
+	assert.Len(t, tr.ExitMetadata(), 58)
+
+	trN := TraceFromContext(context.Background()) // no trace bound to this ctx
+	assert.Len(t, trN.ExitMetadata(), 0)
+
+	assert.Len(t, r.Bufs, 1) // XXX assert entry event
 }
 
 func TestNullSpan(t *testing.T) {
