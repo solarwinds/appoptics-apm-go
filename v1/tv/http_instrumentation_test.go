@@ -89,8 +89,7 @@ func TestHTTPHandlerNoTrace(t *testing.T) {
 func testServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 		// create layer from incoming HTTP Request headers, if trace exists
-		tr := tv.TraceFromHTTPRequest("myHandler", req)
-		w := tv.NewResponseWriter(writer, tr)
+		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
 		defer tr.End()
 
 		tr.AddEndArgs("NotReported") // odd-length args, should have no effect

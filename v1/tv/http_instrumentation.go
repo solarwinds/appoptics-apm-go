@@ -33,9 +33,13 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 	}
 }
 
-func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *http.Request) (Trace, *httpResponseWriter) {
-	t := TraceFromHTTPRequest(layerName, r)
-	wrapper := NewResponseWriter(w, t) // wrap writer with response-observing writer
+// TraceFromHTTPRequestResponse returns a Trace and a wrapped http.ResponseWriter, given a
+// http.ResponseWriter and http.Request. If a distributed trace is described in the "X-Trace"
+// header, this context will be continued. The returned http.ResponseWriter should be used in place
+// of the one passed into this function in order to observe the response's headers and status code.
+func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter) {
+	t := traceFromHTTPRequest(layerName, r)
+	wrapper := newResponseWriter(w, t) // wrap writer with response-observing writer
 	return t, wrapper
 }
 
@@ -60,9 +64,9 @@ func (w *httpResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-// NewResponseWriter observes the HTTP Status code of an HTTP response, returning a
+// newResponseWriter observes the HTTP Status code of an HTTP response, returning a
 // wrapped http.ResponseWriter and a pointer to an int containing the status.
-func NewResponseWriter(writer http.ResponseWriter, t Trace) *httpResponseWriter {
+func newResponseWriter(writer http.ResponseWriter, t Trace) *httpResponseWriter {
 	w := &httpResponseWriter{writer, t, http.StatusOK}
 	t.AddEndArgs("Status", &w.Status)
 	// add exit event metadata to X-Trace header
@@ -73,9 +77,9 @@ func NewResponseWriter(writer http.ResponseWriter, t Trace) *httpResponseWriter 
 	return w
 }
 
-// TraceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
+// traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
-func TraceFromHTTPRequest(layerName string, r *http.Request) Trace {
+func traceFromHTTPRequest(layerName string, r *http.Request) Trace {
 	// start trace, passing in metadata header
 	t := NewTraceFromID(layerName, r.Header.Get("X-Trace"), func() KVMap {
 		return KVMap{
