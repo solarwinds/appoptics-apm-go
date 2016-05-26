@@ -132,16 +132,16 @@ func (t *tvTrace) IsTracing() bool { return t.tvCtx.IsTracing() }
 
 // ExitMetadata reports the X-Trace metadata string that will be used by the exit event.
 // This is useful for setting response headers before reporting the end of the span.
-func (t *tvTrace) ExitMetadata() string {
+func (t *tvTrace) ExitMetadata() (mdHex string) {
 	if t.IsTracing() {
 		if t.exitEvent == nil {
 			t.exitEvent = t.tvCtx.NewEvent(traceview.LabelExit, t.layerName(), false)
 		}
 		if t.exitEvent != nil {
-			return t.exitEvent.MetadataString()
+			mdHex = t.exitEvent.MetadataString()
 		}
 	}
-	return ""
+	return
 }
 
 // A nullTrace is not tracing.

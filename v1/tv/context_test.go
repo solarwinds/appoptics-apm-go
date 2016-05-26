@@ -38,6 +38,20 @@ func TestContext(t *testing.T) {
 	assert.Len(t, r.Bufs, 1) // XXX assert entry event
 }
 
+func TestTraceFromContext(t *testing.T) {
+	r := traceview.SetTestReporter()
+	tr := NewTrace("TestTFC")
+	ctx := NewContext(context.Background(), tr)
+	trFC := TraceFromContext(ctx)
+	assert.Equal(t, tr.ExitMetadata(), trFC.ExitMetadata())
+	assert.Len(t, tr.ExitMetadata(), 58)
+
+	trN := TraceFromContext(context.Background()) // no trace bound to this ctx
+	assert.Len(t, trN.ExitMetadata(), 0)
+
+	assert.Len(t, r.Bufs, 1) // XXX assert entry event
+}
+
 func TestNullSpan(t *testing.T) {
 	// enable reporting to test reporter
 	r := traceview.SetTestReporter()

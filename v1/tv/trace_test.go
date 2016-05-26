@@ -257,7 +257,7 @@ func TestTraceFromMetadata(t *testing.T) {
 	// emulate incoming request with X-Trace header
 	incomingID := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2198D447EA2203"
 	tr := tv.NewTraceFromID("test", incomingID, nil)
-	tr.EndCallback(nil)
+	tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Extra": "Arg"} })
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have edge to incoming opID
@@ -269,6 +269,7 @@ func TestTraceFromMetadata(t *testing.T) {
 		{"test", "exit"}: {g.OutEdges{{"test", "entry"}}, func(n g.Node) {
 			// trace ID should match incoming ID
 			assert.Equal(t, incomingID[2:42], n.Map["X-Trace"].(string)[2:42])
+			assert.Equal(t, "Arg", n.Map["Extra"])
 		}},
 	})
 }

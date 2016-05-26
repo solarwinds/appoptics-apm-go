@@ -5,8 +5,11 @@
 package traceview
 
 import (
+	"log"
+	"net"
 	"os"
 	"testing"
+	"time"
 
 	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
@@ -16,8 +19,10 @@ func TestInitMessage(t *testing.T) {
 	r := SetTestReporter()
 
 	sendInitMessage()
-
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	assertInitMessage(t, r.Bufs)
+}
+func assertInitMessage(t *testing.T, bufs [][]byte) {
+	g.AssertGraph(t, bufs, 2, map[g.MatchNode]g.AssertNode{
 		{"go", "entry"}: {g.OutEdges{}, func(n g.Node) {
 			assert.Equal(t, 1, n.Map["__Init"])
 			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
@@ -26,6 +31,36 @@ func TestInitMessage(t *testing.T) {
 		}},
 		{"go", "exit"}: {g.OutEdges{{"go", "entry"}}, nil},
 	})
+}
+
+func TestInitMessageUDP(t *testing.T) {
+	reporterAddr = "127.0.0.1:7832"
+	globalReporter = newReporter()
+	assert.IsType(t, &udpReporter{}, globalReporter)
+
+	addr, err := net.ResolveUDPAddr("udp4", reporterAddr)
+	assert.NoError(t, err)
+	conn, err := net.ListenUDP("udp4", addr)
+	assert.NoError(t, err)
+	defer conn.Close()
+	var bufs [][]byte
+	go func(numBufs int) {
+		for ; numBufs > 0; numBufs-- {
+			buf := make([]byte, 128*1024)
+			n, _, err := conn.ReadFromUDP(buf)
+			t.Logf("Got UDP buf len %v err %v", n, err)
+			if err != nil {
+				log.Printf("UDP listener got err, quitting %v", err)
+				break
+			}
+			bufs = append(bufs, buf[0:n])
+		}
+	}(2)
+
+	sendInitMessage()
+	time.Sleep(50 * time.Millisecond)
+
+	assertInitMessage(t, bufs)
 }
 
 func TestOboeTracingMode(t *testing.T) {
