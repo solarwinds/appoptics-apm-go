@@ -114,7 +114,7 @@ func main() {
 	http.ListenAndServe(":8899", nil)
 }
 ```
-![sample_app screenshot](https://github.com/appneta/go-appneta/raw/master/readme-screenshot1.png)
+![sample_app screenshot](https://github.com/appneta/go-appneta/raw/master/img/readme-screenshot1.png)
 
 To monitor more than just the overall latency of each request to your Go service, you will need to
 break a request's processing time down by placing small benchmarks into your code.
