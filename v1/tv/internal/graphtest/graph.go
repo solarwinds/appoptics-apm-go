@@ -192,9 +192,11 @@ func dotGraph(g eventGraph, output io.Writer) {
 		}
 		for k, v := range n.Map {
 			if !blocked[k] {
-				switch v.(type) {
+				switch vv := v.(type) {
 				case []byte:
 					suffix += fmt.Sprintf("\\n%s: %s", k, v)
+				case string:
+					suffix += fmt.Sprintf("\\n%s: %s", k, strings.Replace(vv, `"`, `\"`, -1))
 				default:
 					suffix += fmt.Sprintf("\\n%s: %v", k, v)
 				}

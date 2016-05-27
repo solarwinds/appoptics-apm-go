@@ -127,7 +127,7 @@ func testClient(t *testing.T, ctx context.Context, method, url string) (*http.Re
 	httpClient := &http.Client{}
 	httpReq, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, err // TODO could also have test client report error event
 	}
 	l, _ := tv.BeginLayer(ctx, "http.Client", "IsService", true, "RemoteURL", url)
 	defer l.End()
@@ -150,6 +150,9 @@ func testClient(t *testing.T, ctx context.Context, method, url string) (*http.Re
 func testClientHelper(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
 	httpClient := &http.Client{}
 	httpReq, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	l := tv.BeginHTTPClientLayer(ctx, httpReq)
 	defer l.End()
@@ -171,27 +174,27 @@ func testClientHelper(t *testing.T, ctx context.Context, method, url string) (*h
 
 type testClientFn func(t *testing.T, ctx context.Context, method, url string) (*http.Response, error)
 
-var badHTTPMethod = "NOTA/*#METHOD"
+var badURL = "%gh&%ij" // url.Parse will return error
 
 func TestTraceFromHTTPRequest(t *testing.T) {
-	testTraceFromHTTPRequest(t, "GET", testClient)
+	testTraceFromHTTPRequest(t, "GET", false, testClient)
 }
 func TestTraceFromHTTPRequestHelper(t *testing.T) {
-	testTraceFromHTTPRequest(t, "GET", testClientHelper)
+	testTraceFromHTTPRequest(t, "GET", false, testClientHelper)
 }
 func TestTraceFromHTTPRequestPost(t *testing.T) {
-	testTraceFromHTTPRequest(t, "POST", testClient)
+	testTraceFromHTTPRequest(t, "POST", false, testClient)
 }
 func TestTraceFromHTTPRequestHelperPost(t *testing.T) {
-	testTraceFromHTTPRequest(t, "POST", testClientHelper)
+	testTraceFromHTTPRequest(t, "POST", false, testClientHelper)
 }
 func TestTraceFromHTTPRequestBadMethod(t *testing.T) {
-	testTraceFromHTTPRequest(t, badHTTPMethod, testClient)
+	testTraceFromHTTPRequest(t, "GET", true, testClient)
 }
 func TestTraceFromHTTPRequestHelperBadMethod(t *testing.T) {
-	testTraceFromHTTPRequest(t, badHTTPMethod, testClientHelper)
+	testTraceFromHTTPRequest(t, "GET", true, testClientHelper)
 }
-func testTraceFromHTTPRequest(t *testing.T, method string, clientFn testClientFn) {
+func testTraceFromHTTPRequest(t *testing.T, method string, badReq bool, clientFn testClientFn) {
 	ln, err := net.Listen("tcp", ":0") // pick an unallocated port
 	assert.NoError(t, err)
 	port := ln.Addr().(*net.TCPAddr).Port
@@ -200,10 +203,13 @@ func testTraceFromHTTPRequest(t *testing.T, method string, clientFn testClientFn
 	r := traceview.SetTestReporter() // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	url := fmt.Sprintf("http://127.0.0.1:%d/test?qs=1", port)
+	if badReq {
+		url = badURL
+	}
 	resp, err := clientFn(t, ctx, method, url)
 	tv.EndTrace(ctx)
 
-	if method == badHTTPMethod {
+	if badReq {
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
@@ -242,29 +248,32 @@ func testTraceFromHTTPRequest(t *testing.T, method string, clientFn testClientFn
 }
 
 func TestTraceFromHTTPRequestError(t *testing.T) {
-	testFromHTTPRequestError(t, "GET", testClient)
+	testFromHTTPRequestError(t, "GET", false, testClient)
 }
 func TestTraceFromHTTPRequestErrorHelper(t *testing.T) {
-	testFromHTTPRequestError(t, "GET", testClientHelper)
+	testFromHTTPRequestError(t, "GET", false, testClientHelper)
 }
 func TestTraceFromHTTPRequestErrorBadMethod(t *testing.T) {
-	testFromHTTPRequestError(t, badHTTPMethod, testClient)
+	testFromHTTPRequestError(t, "GET", true, testClient)
 }
 func TestTraceFromHTTPRequestErrorHelperBadMethod(t *testing.T) {
-	testFromHTTPRequestError(t, badHTTPMethod, testClientHelper)
+	testFromHTTPRequestError(t, "GET", true, testClientHelper)
 }
-func testFromHTTPRequestError(t *testing.T, method string, clientFn testClientFn) {
+func testFromHTTPRequestError(t *testing.T, method string, badReq bool, clientFn testClientFn) {
 	r := traceview.SetTestReporter() // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	// make HTTP req to invalid port
 	url := "http://0.0.0.0:888888"
+	if badReq {
+		url = badURL
+	}
 	resp, err := clientFn(t, ctx, method, url)
 	tv.EndTrace(ctx)
 
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 
-	if method == badHTTPMethod {
+	if badReq {
 		g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {g.OutEdges{{"httpTest", "entry"}}, nil},
