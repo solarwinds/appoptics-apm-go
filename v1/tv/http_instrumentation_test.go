@@ -150,10 +150,6 @@ func testClient(t *testing.T, ctx context.Context, method, url string) (*http.Re
 func testClientHelper(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
 	httpClient := &http.Client{}
 	httpReq, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
 	l := tv.BeginHTTPClientLayer(ctx, httpReq)
 	defer l.End()
 
