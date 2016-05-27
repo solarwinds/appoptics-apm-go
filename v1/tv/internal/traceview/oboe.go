@@ -11,10 +11,13 @@ package traceview
 */
 import "C"
 import (
+	"math"
 	"os"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 var globalSettings settings
@@ -73,7 +76,56 @@ func sendInitMessage() {
 	}
 }
 
-func oboeSampleRequest(layer, xtrace_header string) (bool, int, int) {
+type rateCounter struct {
+	ratePerSec                  float64
+	capacity, available         float64
+	last                        time.Time
+	lock                        sync.Mutex
+	requested, sampled, limited int64
+	through                     int64
+}
+
+func newRateCounter(ratePerSec, size float64) *rateCounter {
+	return &rateCounter{ratePerSec: ratePerSec, capacity: size, available: size, last: time.Now()}
+}
+func (b *rateCounter) Count(sampled, hasMetadata bool) bool {
+	atomic.AddInt64(&b.requested, 1)
+	if hasMetadata {
+		atomic.AddInt64(&b.through, 1)
+	}
+	if !sampled {
+		return sampled
+	}
+	atomic.AddInt64(&b.sampled, 1)
+	if ok := b.consume(1); !ok {
+		atomic.AddInt64(&b.limited, 1)
+		return false
+	}
+	return sampled
+}
+func (b *rateCounter) consume(size float64) bool {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	b.update(time.Now())
+	if b.available >= size {
+		b.available -= size
+		return true
+	}
+	return false
+}
+func (b *rateCounter) update(now time.Time) {
+	if b.available < b.capacity { // room for more tokens?
+		delta := now.Sub(b.last) // calculate duration since last check
+		b.last = now             // update time of last check
+		if delta <= 0 {          // return if no delta or time went "backwards"
+			return
+		}
+		newTokens := b.ratePerSec * delta.Seconds()               // # tokens generated since last check
+		b.available = math.Min(b.capacity, b.available+newTokens) // add new tokens to bucket, but don't overfill
+	}
+}
+
+func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {
 			return r.ShouldTrace, 1000000, 2 // trace tests
@@ -81,10 +133,10 @@ func oboeSampleRequest(layer, xtrace_header string) (bool, int, int) {
 	}
 	initMessageOnce.Do(sendInitMessage)
 
-	var sample_rate, sample_source C.int
+	var sampleRate, sampleSource C.int
 	var clayer *C.char = layerCache.Get(layer)
 	var cxt *C.char
-	if xtrace_header == "" {
+	if xtraceHeader == "" {
 		// common case, where we are the entry layer
 		cxt = emptyCString
 	} else {
@@ -92,7 +144,7 @@ func oboeSampleRequest(layer, xtrace_header string) (bool, int, int) {
 		cxt = inXTraceCString
 	}
 
-	sample := int(C.oboe_sample_request(clayer, cxt, &globalSettings.settings_cfg, &sample_rate, &sample_source))
+	sample := int(C.oboe_sample_request(clayer, cxt, &globalSettings.settings_cfg, &sampleRate, &sampleSource))
 
-	return sample != 0, int(sample_rate), int(sample_source)
+	return sample != 0, int(sampleRate), int(sampleSource)
 }
