@@ -57,7 +57,7 @@ func runTraceCtx(ctx context.Context, f func(t Trace)) {
 	}
 }
 
-// EndTrace ends an active trace, given a context that was associated with trace.
+// EndTrace ends an active trace, given a context that was associated with the trace.
 func EndTrace(ctx context.Context) { runTraceCtx(ctx, func(t Trace) { t.End() }) }
 
 // End ends an active span, given a context ctx that was associated with it.
