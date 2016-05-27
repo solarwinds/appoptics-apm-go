@@ -29,7 +29,7 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 
 	// make HTTP request to external API
 	resp, err := httpClient.Do(httpReq)
-	l.JoinHTTPResponse(resp, err)
+	l.AddHTTPResponse(resp, err)
 	if err != nil {
 		l.Err(err)
 	}

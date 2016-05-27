@@ -9,13 +9,20 @@ import (
 	"golang.org/x/net/context"
 )
 
-type HTTPClientLayer struct {
-	Layer
-	// XXX prevent child spans?
-}
+// HTTPClientLayer is a Layer that aids in reporting HTTP client requests.
+//  req, err := http.NewRequest("GET", "http://example.com", nil)
+//  l := tv.BeginHTTPClientLayer(ctx, httpReq)
+//  defer l.End()
+//  // ...
+//  resp, err := client.Do(req)
+//  l.AddHTTPResponse(resp, err)
+//  // ...
+type HTTPClientLayer struct{ Layer }
 
-// BeginHTTPClientLayer stores trace metadata in the headers of an HTTP
-// client request, allowing the trace to be continued on the other end.
+// BeginHTTPClientLayer stores trace metadata in the headers of an HTTP client request, allowing the
+// trace to be continued on the other end. It returns a Layer that must have End() called to
+// benchmark the client request, and should have AddHTTPResponse(r, err) called to process response
+// metadata.
 func BeginHTTPClientLayer(ctx context.Context, r *http.Request) HTTPClientLayer {
 	if r != nil {
 		l, _ := BeginLayer(ctx, "http.Client", "IsService", true, "RemoteURL", r.URL.String())
@@ -25,16 +32,20 @@ func BeginHTTPClientLayer(ctx context.Context, r *http.Request) HTTPClientLayer 
 	return HTTPClientLayer{Layer: &nullSpan{}}
 }
 
-// JoinHTTPResponse propagates the distributing tracing context
-// from the end of a remote HTTP layer to this layer.
-func (l HTTPClientLayer) JoinHTTPResponse(r *http.Response, err error) {
-	if err != nil {
-		l.Err(err)
-	}
-	if r != nil {
-		// TODO also test when no X-Trace header in response, or req fails
-		if md := r.Header.Get("X-Trace"); md != "" {
-			l.AddEndArgs("Edge", md)
+// AddHTTPResponse adds information from http.Response to this layer. It will also check the HTTP
+// response headers and propagate any valid distributed trace context from the end of the HTTP
+// server's layer to this one.
+func (l HTTPClientLayer) AddHTTPResponse(r *http.Response, err error) {
+	if l.ok() {
+		if err != nil {
+			l.Err(err)
+		}
+		if r != nil {
+			l.AddEndArgs("RemoteStatus", r.StatusCode, "ContentLength", r.ContentLength)
+			// TODO also test when no X-Trace header in response, or req fails
+			if md := r.Header.Get("X-Trace"); md != "" {
+				l.AddEndArgs("Edge", md)
+			}
 		}
 	}
 }

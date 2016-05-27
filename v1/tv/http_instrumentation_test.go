@@ -158,7 +158,7 @@ func testClientHelper(t *testing.T, ctx context.Context, method, url string) (*h
 	}
 
 	resp, err := httpClient.Do(httpReq)
-	l.JoinHTTPResponse(resp, err)
+	l.AddHTTPResponse(resp, err)
 	if err != nil {
 		t.Logf("JoinResponse err: %v", err)
 		return resp, err
