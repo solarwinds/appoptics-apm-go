@@ -186,11 +186,13 @@ func (s *span) End(args ...interface{}) {
 		for _, prof := range s.childProfiles {
 			prof.End()
 		}
+		args = append(args, s.endArgs...)
 		for _, edge := range s.childEdges { // add Edge KV for each joined child
 			args = append(args, "Edge", edge)
 		}
 		_ = s.tvCtx.ReportEvent(s.exitLabel(), s.layerName(), args...)
 		s.childEdges = nil // clear child edge list
+		s.endArgs = nil
 		s.ended = true
 		// add this span's context to list to be used as Edge by parent exit
 		if s.parent != nil && s.parent.ok() {
