@@ -123,7 +123,7 @@ func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 }
 
 // begin an HTTP client span, make an HTTP request, and propagate the trace context manually
-func testClient(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
+func testHTTPClient(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
 	httpClient := &http.Client{}
 	httpReq, err := http.NewRequest(method, url, nil)
 	if err != nil {
@@ -147,7 +147,30 @@ func testClient(t *testing.T, ctx context.Context, method, url string) (*http.Re
 }
 
 // create an HTTP client span, make an HTTP request, and propagate the trace using HTTPClientLayer
-func testClientHelper(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
+func testHTTPClientA(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
+	httpClient := &http.Client{}
+	httpReq, err := http.NewRequest(method, url, nil)
+	l := tv.BeginHTTPClientLayer(ctx, httpReq)
+	defer l.End()
+	if err != nil {
+		l.Err(err)
+		return nil, err
+	}
+
+	resp, err := httpClient.Do(httpReq)
+	l.AddHTTPResponse(resp, err)
+	if err != nil {
+		t.Logf("JoinResponse err: %v", err)
+		return resp, err
+	}
+	defer resp.Body.Close()
+
+	return resp, err
+}
+
+// create an HTTP client span, make an HTTP request, and propagate the trace using HTTPClientLayer
+// and a different exception-handling flow
+func testHTTPClientB(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
 	httpClient := &http.Client{}
 	httpReq, err := http.NewRequest(method, url, nil)
 	l := tv.BeginHTTPClientLayer(ctx, httpReq)
@@ -172,26 +195,19 @@ func testClientHelper(t *testing.T, ctx context.Context, method, url string) (*h
 type testClientFn func(t *testing.T, ctx context.Context, method, url string) (*http.Response, error)
 
 var badURL = "%gh&%ij" // url.Parse will return error
+var invalidPortURL = "http://0.0.0.0:888888"
 
-func TestTraceFromHTTPRequest(t *testing.T) {
-	testTraceFromHTTPRequest(t, "GET", false, testClient)
-}
-func TestTraceFromHTTPRequestHelper(t *testing.T) {
-	testTraceFromHTTPRequest(t, "GET", false, testClientHelper)
-}
-func TestTraceFromHTTPRequestPost(t *testing.T) {
-	testTraceFromHTTPRequest(t, "POST", false, testClient)
-}
-func TestTraceFromHTTPRequestHelperPost(t *testing.T) {
-	testTraceFromHTTPRequest(t, "POST", false, testClientHelper)
-}
-func TestTraceFromHTTPRequestBadMethod(t *testing.T) {
-	testTraceFromHTTPRequest(t, "GET", true, testClient)
-}
-func TestTraceFromHTTPRequestHelperBadMethod(t *testing.T) {
-	testTraceFromHTTPRequest(t, "GET", true, testClientHelper)
-}
-func testTraceFromHTTPRequest(t *testing.T, method string, badReq bool, clientFn testClientFn) {
+func TestTraceHTTP(t *testing.T)                 { testTraceRequest(t, "GET", false, testHTTPClient) }
+func TestTraceHTTPHelperA(t *testing.T)          { testTraceRequest(t, "GET", false, testHTTPClientA) }
+func TestTraceHTTPHelperB(t *testing.T)          { testTraceRequest(t, "GET", false, testHTTPClientB) }
+func TestTraceHTTPPost(t *testing.T)             { testTraceRequest(t, "POST", false, testHTTPClient) }
+func TestTraceHTTPHelperPostA(t *testing.T)      { testTraceRequest(t, "POST", false, testHTTPClientA) }
+func TestTraceHTTPHelperPostB(t *testing.T)      { testTraceRequest(t, "POST", false, testHTTPClientB) }
+func TestTraceHTTPBadMethod(t *testing.T)        { testTraceRequest(t, "GET", true, testHTTPClient) }
+func TestTraceHTTPHelperBadMethodA(t *testing.T) { testTraceRequest(t, "GET", true, testHTTPClientA) }
+func TestTraceHTTPHelperBadMethodB(t *testing.T) { testTraceRequest(t, "GET", true, testHTTPClientB) }
+
+func testTraceRequest(t *testing.T, method string, badReq bool, clientFn testClientFn) {
 	ln, err := net.Listen("tcp", ":0") // pick an unallocated port
 	assert.NoError(t, err)
 	port := ln.Addr().(*net.TCPAddr).Port
@@ -244,23 +260,18 @@ func testTraceFromHTTPRequest(t *testing.T, method string, badReq bool, clientFn
 	}
 }
 
-func TestTraceFromHTTPRequestError(t *testing.T) {
-	testFromHTTPRequestError(t, "GET", false, testClient)
-}
-func TestTraceFromHTTPRequestErrorHelper(t *testing.T) {
-	testFromHTTPRequestError(t, "GET", false, testClientHelper)
-}
-func TestTraceFromHTTPRequestErrorBadMethod(t *testing.T) {
-	testFromHTTPRequestError(t, "GET", true, testClient)
-}
-func TestTraceFromHTTPRequestErrorHelperBadMethod(t *testing.T) {
-	testFromHTTPRequestError(t, "GET", true, testClientHelper)
-}
-func testFromHTTPRequestError(t *testing.T, method string, badReq bool, clientFn testClientFn) {
+func TestTraceHTTPError(t *testing.T)           { testTraceHTTPError(t, "GET", false, testHTTPClient) }
+func TestTraceHTTPErrorA(t *testing.T)          { testTraceHTTPError(t, "GET", false, testHTTPClientA) }
+func TestTraceHTTPErrorB(t *testing.T)          { testTraceHTTPError(t, "GET", false, testHTTPClientB) }
+func TestTraceHTTPErrorBadMethod(t *testing.T)  { testTraceHTTPError(t, "GET", true, testHTTPClient) }
+func TestTraceHTTPErrorABadMethod(t *testing.T) { testTraceHTTPError(t, "GET", true, testHTTPClientA) }
+func TestTraceHTTPErrorBBadMethod(t *testing.T) { testTraceHTTPError(t, "GET", true, testHTTPClientB) }
+
+func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testClientFn) {
 	r := traceview.SetTestReporter() // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	// make HTTP req to invalid port
-	url := "http://0.0.0.0:888888"
+	url := invalidPortURL
 	if badReq {
 		url = badURL
 	}
@@ -302,7 +313,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	url := fmt.Sprintf("http://127.0.0.1:%d/test?qs=1", port)
-	resp, err := testClient(t, ctx, "GET", url)
+	resp, err := testHTTPClient(t, ctx, "GET", url)
 	t.Logf("response: %v", resp)
 	tv.EndTrace(ctx)
 
