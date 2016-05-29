@@ -42,7 +42,6 @@ func (l HTTPClientLayer) AddHTTPResponse(r *http.Response, err error) {
 		}
 		if r != nil {
 			l.AddEndArgs("RemoteStatus", r.StatusCode, "ContentLength", r.ContentLength)
-			// TODO also test when no X-Trace header in response, or req fails
 			if md := r.Header.Get("X-Trace"); md != "" {
 				l.AddEndArgs("Edge", md)
 			}

@@ -116,9 +116,22 @@ func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 		// Run a query ...
 		l2.End()
 
-		// XXX important to test with and without header set in handler
 		w.WriteHeader(403) // return Forbidden
 	}))}
+	assert.NoError(t, s.Serve(list))
+}
+
+// testServer200 does not trace and returns a 200.
+func testServer200(t *testing.T, list net.Listener) {
+	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})}
+	assert.NoError(t, s.Serve(list))
+}
+
+// testServer403 does not trace and returns a 403.
+func testServer403(t *testing.T, list net.Listener) {
+	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403) // return Forbidden
+	})}
 	assert.NoError(t, s.Serve(list))
 }
 
@@ -127,7 +140,7 @@ func testHTTPClient(t *testing.T, ctx context.Context, method, url string) (*htt
 	httpClient := &http.Client{}
 	httpReq, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return nil, err // TODO could also have test client report error event
+		return nil, err
 	}
 	l, _ := tv.BeginLayer(ctx, "http.Client", "IsService", true, "RemoteURL", url)
 	defer l.End()
@@ -140,9 +153,7 @@ func testHTTPClient(t *testing.T, ctx context.Context, method, url string) (*htt
 	}
 	defer resp.Body.Close()
 
-	// TODO also test when no X-Trace header in response, or req fails
 	l.AddEndArgs("Edge", resp.Header.Get("X-Trace"))
-
 	return resp, err
 }
 
@@ -193,26 +204,41 @@ func testHTTPClientB(t *testing.T, ctx context.Context, method, url string) (*ht
 }
 
 type testClientFn func(t *testing.T, ctx context.Context, method, url string) (*http.Response, error)
+type testServerFn struct {
+	serverFn func(t *testing.T, list net.Listener)
+	assertFn func(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int)
+	status   int
+}
+
+var testHTTPSvr = testServerFn{testServer, assertHTTPRequestGraph, 403}
+var testHTTPSvr200 = testServerFn{testServer200, assertHTTPRequestUntracedGraph, 200}
+var testHTTPSvr403 = testServerFn{testServer403, assertHTTPRequestUntracedGraph, 403}
 
 var badURL = "%gh&%ij" // url.Parse() will return error
 var invalidPortURL = "http://0.0.0.0:888888"
 
-func TestTraceHTTP(t *testing.T)                  { testTraceRequest(t, "GET", false, testHTTPClient) }
-func TestTraceHTTPHelperA(t *testing.T)           { testTraceRequest(t, "GET", false, testHTTPClientA) }
-func TestTraceHTTPHelperB(t *testing.T)           { testTraceRequest(t, "GET", false, testHTTPClientB) }
-func TestTraceHTTPPost(t *testing.T)              { testTraceRequest(t, "POST", false, testHTTPClient) }
-func TestTraceHTTPHelperPostA(t *testing.T)       { testTraceRequest(t, "POST", false, testHTTPClientA) }
-func TestTraceHTTPHelperPostB(t *testing.T)       { testTraceRequest(t, "POST", false, testHTTPClientB) }
-func TestTraceHTTPBadRequest(t *testing.T)        { testTraceRequest(t, "GET", true, testHTTPClient) }
-func TestTraceHTTPHelperBadRequestA(t *testing.T) { testTraceRequest(t, "GET", true, testHTTPClientA) }
-func TestTraceHTTPHelperBadRequestB(t *testing.T) { testTraceRequest(t, "GET", true, testHTTPClientB) }
+func TestTraceHTTP(t *testing.T)              { testHTTP(t, "GET", false, testHTTPClient, testHTTPSvr) }
+func TestTraceHTTPHelperA(t *testing.T)       { testHTTP(t, "GET", false, testHTTPClientA, testHTTPSvr) }
+func TestTraceHTTPHelperB(t *testing.T)       { testHTTP(t, "GET", false, testHTTPClientB, testHTTPSvr) }
+func TestTraceHTTP200(t *testing.T)           { testHTTP(t, "GET", false, testHTTPClient, testHTTPSvr200) }
+func TestTraceHTTPHelperA200(t *testing.T)    { testHTTP(t, "GET", false, testHTTPClientA, testHTTPSvr200) }
+func TestTraceHTTPHelperB200(t *testing.T)    { testHTTP(t, "GET", false, testHTTPClientB, testHTTPSvr200) }
+func TestTraceHTTP403(t *testing.T)           { testHTTP(t, "GET", false, testHTTPClient, testHTTPSvr403) }
+func TestTraceHTTPHelperA403(t *testing.T)    { testHTTP(t, "GET", false, testHTTPClientA, testHTTPSvr403) }
+func TestTraceHTTPHelperB403(t *testing.T)    { testHTTP(t, "GET", false, testHTTPClientB, testHTTPSvr403) }
+func TestTraceHTTPPost(t *testing.T)          { testHTTP(t, "POST", false, testHTTPClient, testHTTPSvr) }
+func TestTraceHTTPHelperPostA(t *testing.T)   { testHTTP(t, "POST", false, testHTTPClientA, testHTTPSvr) }
+func TestTraceHTTPHelperPostB(t *testing.T)   { testHTTP(t, "POST", false, testHTTPClientB, testHTTPSvr) }
+func TestTraceHTTPBadRequest(t *testing.T)    { testHTTP(t, "GET", true, testHTTPClient, testHTTPSvr) }
+func TestTraceHTTPHelperBadReqA(t *testing.T) { testHTTP(t, "GET", true, testHTTPClientA, testHTTPSvr) }
+func TestTraceHTTPHelperBadReqB(t *testing.T) { testHTTP(t, "GET", true, testHTTPClientB, testHTTPSvr) }
 
 // launch a test HTTP server and trace an HTTP request to it
-func testTraceRequest(t *testing.T, method string, badReq bool, clientFn testClientFn) {
+func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, server testServerFn) {
 	ln, err := net.Listen("tcp", ":0") // pick an unallocated port
 	assert.NoError(t, err)
 	port := ln.Addr().(*net.TCPAddr).Port
-	go testServer(t, ln) // start test server
+	go server.serverFn(t, ln) // start test server
 
 	r := traceview.SetTestReporter() // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
@@ -233,12 +259,19 @@ func testTraceRequest(t *testing.T, method string, badReq bool, clientFn testCli
 		})
 		return
 	}
-	// handle case where http.Client.Do() did not return an error
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
+
+	server.assertFn(t, r.Bufs, resp, url, method, port, server.status)
+}
+
+// assert traces that hit testServer, which uses the HTTP server instrumentation.
+func assertHTTPRequestGraph(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
+	// handle case where http.Client.Do() did not return an error
 	assert.Len(t, resp.Header["X-Trace"], 1)
-	assert.Equal(t, 403, resp.StatusCode)
-	g.AssertGraph(t, r.Bufs, 8, map[g.MatchNode]g.AssertNode{
+	assert.Equal(t, status, resp.StatusCode)
+
+	g.AssertGraph(t, bufs, 8, map[g.MatchNode]g.AssertNode{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
@@ -252,7 +285,7 @@ func testTraceRequest(t *testing.T, method string, badReq bool, clientFn testCli
 			assert.Equal(t, method, n.Map["Method"])
 		}},
 		{"myHandler", "exit"}: {g.OutEdges{{"DBx", "exit"}, {"myHandler", "entry"}}, func(n g.Node) {
-			assert.Equal(t, 403, n.Map["Status"])
+			assert.Equal(t, status, n.Map["Status"])
 		}},
 		{"DBx", "entry"}: {g.OutEdges{{"myHandler", "entry"}}, func(n g.Node) {
 			assert.Equal(t, "SELECT *", n.Map["Query"])
@@ -260,6 +293,22 @@ func testTraceRequest(t *testing.T, method string, badReq bool, clientFn testCli
 		}},
 		{"DBx", "exit"}:      {g.OutEdges{{"DBx", "entry"}}, nil},
 		{"httpTest", "exit"}: {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
+	})
+}
+
+// assert traces of an HTTP client to untraced servers testServer200 and testServer403.
+func assertHTTPRequestUntracedGraph(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
+	assert.NotContains(t, resp.Header["X-Trace"], "Header")
+	assert.Equal(t, status, resp.StatusCode)
+
+	g.AssertGraph(t, bufs, 4, map[g.MatchNode]g.AssertNode{
+		{"httpTest", "entry"}: {},
+		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
+			assert.Equal(t, true, n.Map["IsService"])
+			assert.Equal(t, url, n.Map["RemoteURL"])
+		}},
+		{"http.Client", "exit"}: {g.OutEdges{{"http.Client", "entry"}}, nil},
+		{"httpTest", "exit"}:    {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
 	})
 }
 

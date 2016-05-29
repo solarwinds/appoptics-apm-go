@@ -35,7 +35,7 @@ func TestContext(t *testing.T) {
 	ctx4 := context.WithValue(ctx3, "t", tr3)
 	assert.Equal(t, ctx4.Value("t"), tr3)
 
-	assert.Len(t, r.Bufs, 1) // XXX assert entry event
+	g.AssertGraph(t, r.Bufs, 1, map[g.MatchNode]g.AssertNode{{"test", "entry"}: {}})
 }
 
 func TestTraceFromContext(t *testing.T) {
@@ -49,7 +49,7 @@ func TestTraceFromContext(t *testing.T) {
 	trN := TraceFromContext(context.Background()) // no trace bound to this ctx
 	assert.Len(t, trN.ExitMetadata(), 0)
 
-	assert.Len(t, r.Bufs, 1) // XXX assert entry event
+	g.AssertGraph(t, r.Bufs, 1, map[g.MatchNode]g.AssertNode{{"TestTFC", "entry"}: {}})
 }
 
 func TestNullSpan(t *testing.T) {

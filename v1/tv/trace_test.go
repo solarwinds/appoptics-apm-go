@@ -199,7 +199,6 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 		}},
 		{"", "profile_exit"}: {g.OutEdges{{"", "profile_entry"}}, nil},
 		// nested layer in http.Get profile points to trace entry
-		// XXX should it point to f0 entry?
 		{"http.Get", "entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
 			assert.Equal(t, n.Map["URL"], "http://a.b")
 		}},
