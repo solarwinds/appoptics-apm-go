@@ -122,7 +122,7 @@ func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 	assert.NoError(t, s.Serve(list))
 }
 
-// create an HTTP client span, make an HTTP request, and propagate the trace context
+// begin an HTTP client span, make an HTTP request, and propagate the trace context manually
 func testClient(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
 	httpClient := &http.Client{}
 	httpReq, err := http.NewRequest(method, url, nil)
@@ -146,19 +146,20 @@ func testClient(t *testing.T, ctx context.Context, method, url string) (*http.Re
 	return resp, err
 }
 
-// create an HTTP client span, make an HTTP request, and propagate the trace context
+// create an HTTP client span, make an HTTP request, and propagate the trace using HTTPClientLayer
 func testClientHelper(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
 	httpClient := &http.Client{}
 	httpReq, err := http.NewRequest(method, url, nil)
 	l := tv.BeginHTTPClientLayer(ctx, httpReq)
-	defer l.End()
-
 	if err != nil {
+		l.Err(err)
+		l.End()
 		return nil, err
 	}
 
 	resp, err := httpClient.Do(httpReq)
 	l.AddHTTPResponse(resp, err)
+	l.End()
 	if err != nil {
 		t.Logf("JoinResponse err: %v", err)
 		return resp, err
