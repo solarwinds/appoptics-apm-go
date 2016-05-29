@@ -10,13 +10,13 @@ import (
 )
 
 // HTTPClientLayer is a Layer that aids in reporting HTTP client requests.
-//  req, err := http.NewRequest("GET", "http://example.com", nil)
-//  l := tv.BeginHTTPClientLayer(ctx, httpReq)
-//  defer l.End()
-//  // ...
-//  resp, err := client.Do(req)
-//  l.AddHTTPResponse(resp, err)
-//  // ...
+//   req, err := http.NewRequest("GET", "http://example.com", nil)
+//   l := tv.BeginHTTPClientLayer(ctx, httpReq)
+//   defer l.End()
+//   // ...
+//   resp, err := client.Do(req)
+//   l.AddHTTPResponse(resp, err)
+//   // ...
 type HTTPClientLayer struct{ Layer }
 
 // BeginHTTPClientLayer stores trace metadata in the headers of an HTTP client request, allowing the

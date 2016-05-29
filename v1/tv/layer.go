@@ -109,7 +109,7 @@ type nullSpan struct{}          // a span that is not tracing; satisfies Layer &
 func (s *nullSpan) BeginLayer(layerName string, args ...interface{}) Layer { return &nullSpan{} }
 func (s *nullSpan) BeginProfile(name string, args ...interface{}) Profile  { return &nullSpan{} }
 func (s *nullSpan) End(args ...interface{})                                {}
-func (t *nullSpan) AddEndArgs(args ...interface{})                         {}
+func (s *nullSpan) AddEndArgs(args ...interface{})                         {}
 func (s *nullSpan) Error(class, msg string)                                {}
 func (s *nullSpan) Err(err error)                                          {}
 func (s *nullSpan) Info(args ...interface{})                               {}
@@ -203,13 +203,13 @@ func (s *span) End(args ...interface{}) {
 
 // Add KV pairs as variadic args that will be serialized (and dereferenced, for pointer
 // values) at the end of this trace's span.
-func (l *layerSpan) AddEndArgs(args ...interface{}) {
-	if l.ok() {
+func (s *layerSpan) AddEndArgs(args ...interface{}) {
+	if s.ok() {
 		// ensure even number of args added
 		if len(args)%2 == 1 {
 			args = args[0 : len(args)-1]
 		}
-		l.endArgs = append(l.endArgs, args...)
+		s.endArgs = append(s.endArgs, args...)
 	}
 }
 

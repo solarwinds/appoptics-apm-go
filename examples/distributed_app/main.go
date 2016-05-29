@@ -21,7 +21,6 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	url := "http://127.0.0.1:8891/bob"
 	// begin layer for the client side of the HTTP service request
 	l := tv.BeginHTTPClientLayer(ctx, r)
-	defer l.End()
 
 	// create HTTP client and set trace metadata header
 	httpClient := &http.Client{}
@@ -31,13 +30,15 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	resp, err := httpClient.Do(httpReq)
 	l.AddHTTPResponse(resp, err)
 	if err != nil {
-		l.Err(err)
+		w.WriteHeader(500)
+		l.End() // end HTTP client timing
+		return
 	}
 	// read response body
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
+	l.End() // end HTTP client timing
 	if err != nil {
-		l.Err(err)
 		w.Write([]byte(`{"error":true}`))
 	} else {
 		w.Write(buf) // return API response to caller
