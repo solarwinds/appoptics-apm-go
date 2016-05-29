@@ -75,7 +75,7 @@ func TestOboeTracingMode(t *testing.T) {
 	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "tHRoUgh")
 	readEnvSettings()
 	assert.EqualValues(t, globalSettings.settings_cfg.tracing_mode, 2) // C.OBOE_TRACE_THROUGH
-	ok, _, _ := oboeSampleRequest("myLayer", "1BXXX")
+	ok, _, _ := oboeSampleRequest("myLayer", "1BJKL")
 	assert.True(t, ok)
 	ok, _, _ = oboeSampleRequest("myLayer", "")
 	assert.False(t, ok)
@@ -83,7 +83,7 @@ func TestOboeTracingMode(t *testing.T) {
 	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "never")
 	readEnvSettings()
 	assert.EqualValues(t, globalSettings.settings_cfg.tracing_mode, 0) // C.OBOE_TRACE_NEVER
-	ok, _, _ = oboeSampleRequest("myLayer", "1BXXX")
+	ok, _, _ = oboeSampleRequest("myLayer", "1BJKL")
 	assert.False(t, ok)
 	ok, _, _ = oboeSampleRequest("myLayer", "")
 	assert.False(t, ok)
