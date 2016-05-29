@@ -17,7 +17,7 @@ type Trace interface {
 	//  IsTracing() bool
 	Layer
 
-	// End a trace, and include KV pairs returned by func f. Useful alternative to End() when used
+	// End a Trace, and include KV pairs returned by func f. Useful alternative to End() when used
 	// with defer to delay evaluation of KVs until the end of the trace (since a deferred function's
 	// arguments are evaluated when the defer statement is evaluated). Func f will not be called at
 	// all if this span is not tracing.
@@ -43,7 +43,7 @@ type tvTrace struct {
 
 func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
 
-// NewTrace creates a new trace for reporting to TraceView and immediately records
+// NewTrace creates a new Trace for reporting to TraceView and immediately records
 // the beginning of the layer layerName. If this trace is sampled, it may report
 // event data to AppNeta; otherwise event reporting will be a no-op.
 func NewTrace(layerName string) Trace {
@@ -56,7 +56,7 @@ func NewTrace(layerName string) Trace {
 	}
 }
 
-// NewTraceFromID creates a new trace for reporting to TraceView, provided an
+// NewTraceFromID creates a new Trace for reporting to TraceView, provided an
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(layerName, mdstr string, cb func() KVMap) Trace {
@@ -83,7 +83,7 @@ func (t *tvTrace) End(args ...interface{}) {
 	}
 }
 
-// EndCallback ends a trace, reporting additional KV pairs returned by calling cb
+// EndCallback ends a Trace, reporting additional KV pairs returned by calling cb
 func (t *tvTrace) EndCallback(cb func() KVMap) {
 	if t.ok() {
 		if cb != nil {

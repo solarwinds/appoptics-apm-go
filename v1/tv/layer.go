@@ -13,11 +13,11 @@ import (
 // Layer is used to measure a span of time associated with an actvity
 // such as an RPC call, DB query, or method invocation.
 type Layer interface {
-	// BeginLayer starts a new layer span, returning a child of this Layer.
+	// BeginLayer starts a new Layer span, returning a child of this Layer.
 	BeginLayer(layerName string, args ...interface{}) Layer
-	// BeginProfile starts a new profile, used to measure a named span of time spent in this Layer.
+	// BeginProfile starts a new Profile, used to measure a named span of time spent in this Layer.
 	BeginProfile(profileName string, args ...interface{}) Profile
-	// End ends a layer, optionally reporting KV pairs provided by args.
+	// End ends a Layer, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
 	// Add additional KV pairs that will be serialized (and dereferenced, for pointer
 	// values) at the end of this trace's span.
@@ -41,9 +41,9 @@ type Layer interface {
 	ok() bool
 }
 
-// Profile is used to provide micro-benchmarks of named timings inside a layer.
+// Profile is used to provide micro-benchmarks of named timings inside a Layer.
 type Profile interface {
-	// End ends a profile, optionally reporting KV pairs provided by args.
+	// End ends a Profile, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
 	// Error reports details about an error (along with a stack trace) for this Profile.
 	Error(class, msg string)
@@ -51,7 +51,7 @@ type Profile interface {
 	Err(error)
 }
 
-// BeginLayer starts a new layer span, provided a parent context and name. It returns a Layer
+// BeginLayer starts a new Layer span, provided a parent context and name. It returns a Layer
 // and context bound to the new child Layer.
 func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Layer, context.Context) {
 	if parent, ok := fromContext(ctx); ok && parent.ok() { // report layer entry from parent context
@@ -61,7 +61,7 @@ func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Lay
 	return &nullSpan{}, ctx
 }
 
-// BeginLayer starts a new layer span, returning a child of this Layer.
+// BeginLayer starts a new Layer span, returning a child of this Layer.
 func (s *layerSpan) BeginLayer(layerName string, args ...interface{}) Layer {
 	if s.ok() { // copy parent context and report entry from child
 		return newLayer(s.tvCtx.Copy(), layerName, s, args...)
@@ -82,7 +82,7 @@ func BeginProfile(ctx context.Context, profileName string, args ...interface{}) 
 	return &nullSpan{}
 }
 
-// BeginProfile starts a new profile, used to measure a named span of time spent in this Layer.
+// BeginProfile starts a new Profile, used to measure a named span of time spent in this Layer.
 // The returned Profile should be closed with End().
 func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profile {
 	if s.ok() { // copy parent context and report entry from child
@@ -120,7 +120,7 @@ func (s *nullSpan) ok() bool                                               { ret
 func (s *nullSpan) tvContext() traceview.Context                           { return traceview.NewNullContext() }
 func (s *nullSpan) MetadataString() string                                 { return "" }
 
-// is this layer still valid (has it timed out, expired, not sampled)
+// is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool                     { return s != nil && !s.ended }
 func (s *span) IsTracing() bool              { return s.ok() }
 func (s *span) tvContext() traceview.Context { return s.tvCtx }
@@ -144,7 +144,7 @@ type labeler interface {
 type layerLabeler struct{ name string }
 type profileLabeler struct{ name string }
 
-// TV's "layer" and "profile" spans report their layer and label names slightly differently
+// TV's Layer and Profile spans report their layer and label names slightly differently
 func (l layerLabeler) entryLabel() traceview.Label { return traceview.LabelEntry }
 func (l layerLabeler) exitLabel() traceview.Label  { return traceview.LabelExit }
 func (l layerLabeler) layerName() string           { return l.name }
