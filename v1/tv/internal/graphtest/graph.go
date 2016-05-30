@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -121,10 +122,15 @@ func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, nodeMap map[MatchNod
 			return f[strings.LastIndex(f, "/")+1:]
 		}
 		caller := funcDepth(1)
-		for i := 2; strings.HasPrefix(strings.ToLower(caller), "tv_test.assert") || strings.HasPrefix(caller, "graphtest.") || strings.HasPrefix(caller, "tv_test.test"); i++ {
+		for i := 2; strings.HasPrefix(strings.ToLower(caller), "tv_test.assert") ||
+			strings.HasPrefix(caller, "graphtest.") ||
+			strings.HasPrefix(caller, "tv_test.test"); i++ {
 			caller = funcDepth(i)
 		}
 		fname := fmt.Sprintf("graph_%s-%d_%d.dot", caller, line, os.Getpid())
+		if dir := os.Getenv("DOT_GRAPHDIR"); dir != "" {
+			fname = filepath.Join(dir, fname)
+		}
 		output, _ := os.Create(fname)
 		defer output.Close()
 		t.Logf("Saving DOT graph %s", fname)
