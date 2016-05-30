@@ -12,8 +12,9 @@ import (
 
 var httpHandlerLayerName = "http.HandlerFunc"
 
-// HTTPHandler wraps an http handler function with entry / exit events,
-// returning a new function that can be used in its place.
+// HTTPHandler wraps an http.HandlerFunc with entry / exit events,
+// returning a new handler that can be used in its place.
+//   http.HandleFunc("/path", tv.HTTPHandler(myHandler))
 func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	// At wrap time (when binding handler to router): get name of wrapped handler func
 	var endArgs []interface{}
@@ -34,9 +35,15 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 }
 
 // TraceFromHTTPRequestResponse returns a Trace and a wrapped http.ResponseWriter, given a
-// http.ResponseWriter and http.Request. If a distributed trace is described in the "X-Trace"
-// header, this context will be continued. The returned http.ResponseWriter should be used in place
-// of the one passed into this function in order to observe the response's headers and status code.
+// http.ResponseWriter and http.Request. If a distributed trace is described in the HTTP request
+// headers, the trace's context will be continued. The returned http.ResponseWriter should be used
+// in place of the one passed into this function in order to observe the response's headers and
+// status code.
+//   func myHandler(w http.ResponseWriter, r *http.Request) {
+//       tr, w := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
+//       defer tr.End()
+//       // ...
+//   }
 func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter) {
 	t := traceFromHTTPRequest(layerName, r)
 	wrapper := newResponseWriter(w, t) // wrap writer with response-observing writer

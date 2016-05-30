@@ -112,7 +112,7 @@ func TestMetadata(t *testing.T) {
 	// context.String()
 	ctx := &oboeContext{md2}
 	assert.Equal(t, md1Str, ctx.MetadataString())
-	nctx := &nullContext{}
+	nctx := nullContext{}
 	assert.Equal(t, "", nctx.MetadataString())
 
 	// context.Copy()
@@ -151,13 +151,13 @@ func TestMetadataRandom(t *testing.T) {
 	// if RNG fails, don't report events/spans associated with RNG failures.
 	randReader = &errorReader{failOn: map[int]bool{0: true}}
 	ctx := newContext()
-	assert.IsType(t, &nullContext{}, ctx)
+	assert.IsType(t, nullContext{}, ctx)
 	assert.Empty(t, r.Bufs) // no events reported
 
 	// RNG failure on second call (for metadata op ID)
 	randReader = &errorReader{failOn: map[int]bool{1: true}}
 	ctx2 := newContext()
-	assert.IsType(t, &nullContext{}, ctx2)
+	assert.IsType(t, nullContext{}, ctx2)
 	assert.Empty(t, r.Bufs) // no events reported
 
 	// RNG failure on third call (for event op ID)
@@ -165,7 +165,7 @@ func TestMetadataRandom(t *testing.T) {
 	ctx3 := newContext()
 	assert.IsType(t, ctx3, &oboeContext{}) // context created successfully
 	e3 := ctx3.NewEvent(LabelEntry, "randErrLayer", false)
-	assert.IsType(t, &nullEvent{}, e3)
+	assert.IsType(t, nullEvent{}, e3)
 	assert.Empty(t, r.Bufs) // no events reported
 
 	// RNG failure on valid context while trying to report an event
@@ -210,7 +210,7 @@ func TestNewContext(t *testing.T) {
 	r.ShouldTrace = true
 	ctx, ok := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
 	assert.False(t, ok)
-	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
+	assert.Equal(t, reflect.TypeOf(ctx).Name(), "nullContext")
 	assert.Len(t, r.Bufs, 0) // no reporting
 }
 
@@ -220,7 +220,7 @@ func TestNullContext(t *testing.T) {
 
 	ctx, ok := NewContext("testLayer", "", false, nil) // nullContext{}
 	assert.False(t, ok)
-	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
+	assert.Equal(t, reflect.TypeOf(ctx).Name(), "nullContext")
 	assert.False(t, ctx.IsTracing())
 	assert.Empty(t, ctx.MetadataString())
 	assert.False(t, ctx.Copy().IsTracing())
@@ -244,7 +244,7 @@ func TestNullContext(t *testing.T) {
 	r.ShouldError = true
 	ctxBad, ok := NewContext("testBadEntry", "", true, nil)
 	assert.False(t, ok)
-	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
+	assert.Equal(t, reflect.TypeOf(ctxBad).Name(), "nullContext")
 
 	assert.Len(t, r.Bufs, 0) // no reporting
 }

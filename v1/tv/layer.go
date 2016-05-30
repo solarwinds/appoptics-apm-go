@@ -58,7 +58,7 @@ func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Lay
 		l := newLayer(parent.tvContext().Copy(), layerName, parent, args...)
 		return l, newLayerContext(ctx, l)
 	}
-	return &nullSpan{}, ctx
+	return nullSpan{}, ctx
 }
 
 // BeginLayer starts a new Layer span, returning a child of this Layer.
@@ -66,7 +66,7 @@ func (s *layerSpan) BeginLayer(layerName string, args ...interface{}) Layer {
 	if s.ok() { // copy parent context and report entry from child
 		return newLayer(s.tvCtx.Copy(), layerName, s, args...)
 	}
-	return &nullSpan{}
+	return nullSpan{}
 }
 
 // BeginProfile begins a profiled block or method and return a context that should be closed with End().
@@ -79,7 +79,7 @@ func BeginProfile(ctx context.Context, profileName string, args ...interface{}) 
 	if parent, ok := fromContext(ctx); ok && parent.ok() { // report profile entry from parent context
 		return newProfile(parent.tvContext().Copy(), profileName, parent, args...)
 	}
-	return &nullSpan{}
+	return nullSpan{}
 }
 
 // BeginProfile starts a new Profile, used to measure a named span of time spent in this Layer.
@@ -88,96 +88,7 @@ func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profil
 	if s.ok() { // copy parent context and report entry from child
 		return newProfile(s.tvCtx.Copy(), profileName, s, args...)
 	}
-	return &nullSpan{}
-}
-
-// span satisfies the Extent interface and consolidates common reporting routines used by
-// both Layer and Profile interfaces.
-type span struct {
-	labeler
-	tvCtx         traceview.Context
-	parent        Layer
-	childEdges    []traceview.Context // for reporting in exit event
-	childProfiles []Profile
-	endArgs       []interface{}
-	ended         bool // has exit event been reported?
-}
-type layerSpan struct{ span }   // satisfies Layer
-type profileSpan struct{ span } // satisfies Profile
-type nullSpan struct{}          // a span that is not tracing; satisfies Layer & Profile
-
-func (s *nullSpan) BeginLayer(layerName string, args ...interface{}) Layer { return &nullSpan{} }
-func (s *nullSpan) BeginProfile(name string, args ...interface{}) Profile  { return &nullSpan{} }
-func (s *nullSpan) End(args ...interface{})                                {}
-func (s *nullSpan) AddEndArgs(args ...interface{})                         {}
-func (s *nullSpan) Error(class, msg string)                                {}
-func (s *nullSpan) Err(err error)                                          {}
-func (s *nullSpan) Info(args ...interface{})                               {}
-func (s *nullSpan) IsTracing() bool                                        { return false }
-func (s *nullSpan) addChildEdge(traceview.Context)                         {}
-func (s *nullSpan) addProfile(Profile)                                     {}
-func (s *nullSpan) ok() bool                                               { return false }
-func (s *nullSpan) tvContext() traceview.Context                           { return traceview.NewNullContext() }
-func (s *nullSpan) MetadataString() string                                 { return "" }
-
-// is this span still valid (has it timed out, expired, not sampled)
-func (s *span) ok() bool                     { return s != nil && !s.ended }
-func (s *span) IsTracing() bool              { return s.ok() }
-func (s *span) tvContext() traceview.Context { return s.tvCtx }
-
-// addChildEdge keep track of edges closed child spans
-func (s *span) addChildEdge(ctx traceview.Context) {
-	if s.ok() {
-		s.childEdges = append(s.childEdges, ctx)
-	}
-}
-func (s *layerSpan) addProfile(p Profile) {
-	s.childProfiles = append([]Profile{p}, s.childProfiles...)
-}
-
-// labelers help spans choose label and layer names.
-type labeler interface {
-	entryLabel() traceview.Label
-	exitLabel() traceview.Label
-	layerName() string
-}
-type layerLabeler struct{ name string }
-type profileLabeler struct{ name string }
-
-// TV's Layer and Profile spans report their layer and label names slightly differently
-func (l layerLabeler) entryLabel() traceview.Label { return traceview.LabelEntry }
-func (l layerLabeler) exitLabel() traceview.Label  { return traceview.LabelExit }
-func (l layerLabeler) layerName() string           { return l.name }
-func newLayer(tvCtx traceview.Context, layerName string, parent Layer, args ...interface{}) Layer {
-	ll := layerLabeler{layerName}
-	if err := tvCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
-		return &nullSpan{}
-	}
-	return &layerSpan{span: span{tvCtx: tvCtx.Copy(), labeler: ll, parent: parent}}
-
-}
-func (l profileLabeler) entryLabel() traceview.Label { return traceview.LabelProfileEntry }
-func (l profileLabeler) exitLabel() traceview.Label  { return traceview.LabelProfileExit }
-func (l profileLabeler) layerName() string           { return "" }
-func newProfile(tvCtx traceview.Context, profileName string, parent Layer, args ...interface{}) Profile {
-	var fname string
-	pc, file, line, ok := runtime.Caller(2) // Caller(1) is BeginProfile
-	if ok {
-		f := runtime.FuncForPC(pc)
-		fname = f.Name()
-	}
-	pl := profileLabeler{profileName}
-	if err := tvCtx.ReportEvent(pl.entryLabel(), pl.layerName(), // report profile entry
-		"Language", "go", "ProfileName", profileName,
-		"FunctionName", fname, "File", file, "LineNumber", line,
-	); err != nil {
-		return &nullSpan{}
-	}
-	p := &profileSpan{span{tvCtx: tvCtx.Copy(), labeler: pl, parent: parent}}
-	if parent != nil && parent.ok() {
-		parent.addProfile(p)
-	}
-	return p
+	return nullSpan{}
 }
 
 // End a profiled block or method.
@@ -243,4 +154,89 @@ func (s *span) Err(err error) {
 		_ = s.tvCtx.ReportEvent(traceview.LabelError, s.layerName(),
 			"ErrorClass", "error", "ErrorMsg", err.Error(), "Backtrace", debug.Stack())
 	}
+}
+
+// span satisfies the Extent interface and consolidates common reporting routines used by
+// both Layer and Profile interfaces.
+type span struct {
+	labeler
+	tvCtx         traceview.Context
+	parent        Layer
+	childEdges    []traceview.Context // for reporting in exit event
+	childProfiles []Profile
+	endArgs       []interface{}
+	ended         bool // has exit event been reported?
+}
+type layerSpan struct{ span }   // satisfies Layer
+type profileSpan struct{ span } // satisfies Profile
+type nullSpan struct{}          // a span that is not tracing; satisfies Layer & Profile
+
+func (s nullSpan) BeginLayer(layerName string, args ...interface{}) Layer { return nullSpan{} }
+func (s nullSpan) BeginProfile(name string, args ...interface{}) Profile  { return nullSpan{} }
+func (s nullSpan) End(args ...interface{})                                {}
+func (s nullSpan) AddEndArgs(args ...interface{})                         {}
+func (s nullSpan) Error(class, msg string)                                {}
+func (s nullSpan) Err(err error)                                          {}
+func (s nullSpan) Info(args ...interface{})                               {}
+func (s nullSpan) IsTracing() bool                                        { return false }
+func (s nullSpan) addChildEdge(traceview.Context)                         {}
+func (s nullSpan) addProfile(Profile)                                     {}
+func (s nullSpan) ok() bool                                               { return false }
+func (s nullSpan) tvContext() traceview.Context                           { return traceview.NewNullContext() }
+func (s nullSpan) MetadataString() string                                 { return "" }
+
+// is this span still valid (has it timed out, expired, not sampled)
+func (s *span) ok() bool                     { return s != nil && !s.ended }
+func (s *span) IsTracing() bool              { return s.ok() }
+func (s *span) tvContext() traceview.Context { return s.tvCtx }
+
+// addChildEdge keeps track of edges to closed child spans
+func (s *span) addChildEdge(ctx traceview.Context) { s.childEdges = append(s.childEdges, ctx) }
+func (s *span) addProfile(p Profile)               { s.childProfiles = append([]Profile{p}, s.childProfiles...) }
+
+// labelers help spans choose label and layer names.
+type labeler interface {
+	entryLabel() traceview.Label
+	exitLabel() traceview.Label
+	layerName() string
+}
+type layerLabeler struct{ name string }
+type profileLabeler struct{ name string }
+
+// TV's Layer and Profile spans report their layer and label names slightly differently
+func (l layerLabeler) entryLabel() traceview.Label   { return traceview.LabelEntry }
+func (l layerLabeler) exitLabel() traceview.Label    { return traceview.LabelExit }
+func (l layerLabeler) layerName() string             { return l.name }
+func (l profileLabeler) entryLabel() traceview.Label { return traceview.LabelProfileEntry }
+func (l profileLabeler) exitLabel() traceview.Label  { return traceview.LabelProfileExit }
+func (l profileLabeler) layerName() string           { return "" }
+
+func newLayer(tvCtx traceview.Context, layerName string, parent Layer, args ...interface{}) Layer {
+	ll := layerLabeler{layerName}
+	if err := tvCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
+		return nullSpan{}
+	}
+	return &layerSpan{span: span{tvCtx: tvCtx.Copy(), labeler: ll, parent: parent}}
+
+}
+
+func newProfile(tvCtx traceview.Context, profileName string, parent Layer, args ...interface{}) Profile {
+	var fname string
+	pc, file, line, ok := runtime.Caller(2) // Caller(1) is BeginProfile
+	if ok {
+		f := runtime.FuncForPC(pc)
+		fname = f.Name()
+	}
+	pl := profileLabeler{profileName}
+	if err := tvCtx.ReportEvent(pl.entryLabel(), pl.layerName(), // report profile entry
+		"Language", "go", "ProfileName", profileName,
+		"FunctionName", fname, "File", file, "LineNumber", line,
+	); err != nil {
+		return nullSpan{}
+	}
+	p := &profileSpan{span{tvCtx: tvCtx.Copy(), labeler: pl, parent: parent}}
+	if parent != nil && parent.ok() {
+		parent.addProfile(p)
+	}
+	return p
 }

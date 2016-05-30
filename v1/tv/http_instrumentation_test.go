@@ -87,9 +87,9 @@ func TestHTTPHandlerNoTrace(t *testing.T) {
 
 // testServer tests creating a layer/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
 func testServer(t *testing.T, list net.Listener) {
-	s := &http.Server{Handler: http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// create layer from incoming HTTP Request headers, if trace exists
-		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
+		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", w, req)
 		defer tr.End()
 
 		tr.AddEndArgs("NotReported") // odd-length args, should have no effect

@@ -49,7 +49,7 @@ func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
 func NewTrace(layerName string) Trace {
 	ctx, ok := traceview.NewContext(layerName, "", true, nil)
 	if !ok {
-		return &nullTrace{}
+		return nullTrace{}
 	}
 	return &tvTrace{
 		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: layerLabeler{layerName}}},
@@ -67,7 +67,7 @@ func NewTraceFromID(layerName, mdstr string, cb func() KVMap) Trace {
 		return nil
 	})
 	if !ok {
-		return &nullTrace{}
+		return nullTrace{}
 	}
 	return &tvTrace{
 		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: layerLabeler{layerName}}},
@@ -130,5 +130,5 @@ func (t *tvTrace) ExitMetadata() (mdHex string) {
 // A nullTrace is not tracing.
 type nullTrace struct{ nullSpan }
 
-func (t *nullTrace) EndCallback(f func() KVMap) {}
-func (t *nullTrace) ExitMetadata() string       { return "" }
+func (t nullTrace) EndCallback(f func() KVMap) {}
+func (t nullTrace) ExitMetadata() string       { return "" }

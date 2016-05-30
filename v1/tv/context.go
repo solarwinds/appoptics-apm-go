@@ -21,7 +21,7 @@ func newLayerContext(ctx context.Context, l Layer) context.Context {
 func FromContext(ctx context.Context) Layer {
 	l, ok := fromContext(ctx)
 	if !ok {
-		return &nullSpan{}
+		return nullSpan{}
 	}
 	return l
 }
@@ -34,7 +34,7 @@ func fromContext(ctx context.Context) (l Layer, ok bool) {
 func TraceFromContext(ctx context.Context) Trace {
 	t, ok := traceFromContext(ctx)
 	if !ok {
-		return &nullTrace{}
+		return nullTrace{}
 	}
 	return t
 }
