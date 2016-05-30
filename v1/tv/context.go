@@ -57,19 +57,20 @@ func runTraceCtx(ctx context.Context, f func(t Trace)) {
 	}
 }
 
-// EndTrace ends an active trace, given a context that was associated with trace.
+// EndTrace ends a Trace, given a context that was associated with the trace.
 func EndTrace(ctx context.Context) { runTraceCtx(ctx, func(t Trace) { t.End() }) }
 
-// End ends an active span, given a context ctx that was associated with it.
+// End ends a Layer, given a context ctx that was associated with it, optionally reporting KV pairs
+// provided by args.
 func End(ctx context.Context, args ...interface{}) { runCtx(ctx, func(l Layer) { l.End(args...) }) }
 
-// Info reports KV pairs provided by args on the span associated with the context ctx.
+// Info reports KV pairs provided by args for the Layer associated with the context ctx.
 func Info(ctx context.Context, args ...interface{}) { runCtx(ctx, func(l Layer) { l.Info(args...) }) }
 
-// Error reports details about an error (along with a stack trace) on the span associated with the context ctx.
+// Error reports details about an error (along with a stack trace) on the Layer associated with the context ctx.
 func Error(ctx context.Context, class, msg string) { runCtx(ctx, func(l Layer) { l.Error(class, msg) }) }
 
-// Err reports details error err (along with a stack trace) on the span associated with the context ctx.
+// Err reports details error err (along with a stack trace) on the Layer associated with the context ctx.
 func Err(ctx context.Context, err error) { runCtx(ctx, func(l Layer) { l.Err(err) }) }
 
 // MetadataString returns a representation of the Layer span's context for use with distributed

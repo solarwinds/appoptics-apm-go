@@ -17,15 +17,11 @@ type Trace interface {
 	//  IsTracing() bool
 	Layer
 
-	// End a trace, and include KV pairs returned by func f. Useful alternative to End() when used
+	// End a Trace, and include KV pairs returned by func f. Useful alternative to End() when used
 	// with defer to delay evaluation of KVs until the end of the trace (since a deferred function's
 	// arguments are evaluated when the defer statement is evaluated). Func f will not be called at
 	// all if this span is not tracing.
 	EndCallback(f func() KVMap)
-
-	// Add additional KV pairs that will be serialized (and dereferenced, for pointer
-	// values) at the end of this trace's span.
-	AddEndArgs(args ...interface{})
 
 	// ExitMetadata returns a hex string that propagates the end of this span back to a remote
 	// client. It is typically used in an response header (e.g. the HTTP Header "X-Trace"). Call
@@ -43,12 +39,11 @@ type KVMap map[string]interface{}
 type tvTrace struct {
 	layerSpan
 	exitEvent traceview.Event
-	endArgs   []interface{}
 }
 
 func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
 
-// NewTrace creates a new trace for reporting to TraceView and immediately records
+// NewTrace creates a new Trace for reporting to TraceView and immediately records
 // the beginning of the layer layerName. If this trace is sampled, it may report
 // event data to AppNeta; otherwise event reporting will be a no-op.
 func NewTrace(layerName string) Trace {
@@ -61,7 +56,7 @@ func NewTrace(layerName string) Trace {
 	}
 }
 
-// NewTraceFromID creates a new trace for reporting to TraceView, provided an
+// NewTraceFromID creates a new Trace for reporting to TraceView, provided an
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(layerName, mdstr string, cb func() KVMap) Trace {
@@ -88,19 +83,7 @@ func (t *tvTrace) End(args ...interface{}) {
 	}
 }
 
-// Add KV pairs as variadic args that will be serialized (and dereferenced, for pointer
-// values) at the end of this trace's span.
-func (t *tvTrace) AddEndArgs(args ...interface{}) {
-	if t.ok() {
-		// ensure even number of args added
-		if len(args)%2 == 1 {
-			args = args[0 : len(args)-1]
-		}
-		t.endArgs = append(t.endArgs, args...)
-	}
-}
-
-// EndCallback ends a trace, reporting additional KV pairs returned by calling cb
+// EndCallback ends a Trace, reporting additional KV pairs returned by calling cb
 func (t *tvTrace) EndCallback(cb func() KVMap) {
 	if t.ok() {
 		if cb != nil {
@@ -147,6 +130,5 @@ func (t *tvTrace) ExitMetadata() (mdHex string) {
 // A nullTrace is not tracing.
 type nullTrace struct{ nullSpan }
 
-func (t *nullTrace) EndCallback(f func() KVMap)     {}
-func (t *nullTrace) AddEndArgs(args ...interface{}) {}
-func (t *nullTrace) ExitMetadata() string           { return "" }
+func (t *nullTrace) EndCallback(f func() KVMap) {}
+func (t *nullTrace) ExitMetadata() string       { return "" }

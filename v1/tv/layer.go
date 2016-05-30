@@ -13,12 +13,15 @@ import (
 // Layer is used to measure a span of time associated with an actvity
 // such as an RPC call, DB query, or method invocation.
 type Layer interface {
-	// BeginLayer starts a new layer span, returning a child of this Layer.
+	// BeginLayer starts a new Layer span, returning a child of this Layer.
 	BeginLayer(layerName string, args ...interface{}) Layer
-	// BeginProfile starts a new profile, used to measure a named span of time spent in this Layer.
+	// BeginProfile starts a new Profile, used to measure a named span of time spent in this Layer.
 	BeginProfile(profileName string, args ...interface{}) Profile
-	// End ends a layer, optionally reporting KV pairs provided by args.
+	// End ends a Layer, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
+	// Add additional KV pairs that will be serialized (and dereferenced, for pointer
+	// values) at the end of this trace's span.
+	AddEndArgs(args ...interface{})
 
 	// Info reports KV pairs provided by args for this Layer.
 	Info(args ...interface{})
@@ -38,9 +41,9 @@ type Layer interface {
 	ok() bool
 }
 
-// Profile is used to provide micro-benchmarks of named timings inside a layer.
+// Profile is used to provide micro-benchmarks of named timings inside a Layer.
 type Profile interface {
-	// End ends a profile, optionally reporting KV pairs provided by args.
+	// End ends a Profile, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
 	// Error reports details about an error (along with a stack trace) for this Profile.
 	Error(class, msg string)
@@ -48,7 +51,7 @@ type Profile interface {
 	Err(error)
 }
 
-// BeginLayer starts a new layer span, provided a parent context and name. It returns a Layer
+// BeginLayer starts a new Layer span, provided a parent context and name. It returns a Layer
 // and context bound to the new child Layer.
 func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Layer, context.Context) {
 	if parent, ok := fromContext(ctx); ok && parent.ok() { // report layer entry from parent context
@@ -58,7 +61,7 @@ func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Lay
 	return &nullSpan{}, ctx
 }
 
-// BeginLayer starts a new layer span, returning a child of this Layer.
+// BeginLayer starts a new Layer span, returning a child of this Layer.
 func (s *layerSpan) BeginLayer(layerName string, args ...interface{}) Layer {
 	if s.ok() { // copy parent context and report entry from child
 		return newLayer(s.tvCtx.Copy(), layerName, s, args...)
@@ -79,7 +82,7 @@ func BeginProfile(ctx context.Context, profileName string, args ...interface{}) 
 	return &nullSpan{}
 }
 
-// BeginProfile starts a new profile, used to measure a named span of time spent in this Layer.
+// BeginProfile starts a new Profile, used to measure a named span of time spent in this Layer.
 // The returned Profile should be closed with End().
 func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profile {
 	if s.ok() { // copy parent context and report entry from child
@@ -96,6 +99,7 @@ type span struct {
 	parent        Layer
 	childEdges    []traceview.Context // for reporting in exit event
 	childProfiles []Profile
+	endArgs       []interface{}
 	ended         bool // has exit event been reported?
 }
 type layerSpan struct{ span }   // satisfies Layer
@@ -105,6 +109,7 @@ type nullSpan struct{}          // a span that is not tracing; satisfies Layer &
 func (s *nullSpan) BeginLayer(layerName string, args ...interface{}) Layer { return &nullSpan{} }
 func (s *nullSpan) BeginProfile(name string, args ...interface{}) Profile  { return &nullSpan{} }
 func (s *nullSpan) End(args ...interface{})                                {}
+func (s *nullSpan) AddEndArgs(args ...interface{})                         {}
 func (s *nullSpan) Error(class, msg string)                                {}
 func (s *nullSpan) Err(err error)                                          {}
 func (s *nullSpan) Info(args ...interface{})                               {}
@@ -115,7 +120,7 @@ func (s *nullSpan) ok() bool                                               { ret
 func (s *nullSpan) tvContext() traceview.Context                           { return traceview.NewNullContext() }
 func (s *nullSpan) MetadataString() string                                 { return "" }
 
-// is this layer still valid (has it timed out, expired, not sampled)
+// is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool                     { return s != nil && !s.ended }
 func (s *span) IsTracing() bool              { return s.ok() }
 func (s *span) tvContext() traceview.Context { return s.tvCtx }
@@ -139,7 +144,7 @@ type labeler interface {
 type layerLabeler struct{ name string }
 type profileLabeler struct{ name string }
 
-// TV's "layer" and "profile" spans report their layer and label names slightly differently
+// TV's Layer and Profile spans report their layer and label names slightly differently
 func (l layerLabeler) entryLabel() traceview.Label { return traceview.LabelEntry }
 func (l layerLabeler) exitLabel() traceview.Label  { return traceview.LabelExit }
 func (l layerLabeler) layerName() string           { return l.name }
@@ -181,16 +186,30 @@ func (s *span) End(args ...interface{}) {
 		for _, prof := range s.childProfiles {
 			prof.End()
 		}
+		args = append(args, s.endArgs...)
 		for _, edge := range s.childEdges { // add Edge KV for each joined child
 			args = append(args, "Edge", edge)
 		}
 		_ = s.tvCtx.ReportEvent(s.exitLabel(), s.layerName(), args...)
 		s.childEdges = nil // clear child edge list
+		s.endArgs = nil
 		s.ended = true
 		// add this span's context to list to be used as Edge by parent exit
 		if s.parent != nil && s.parent.ok() {
 			s.parent.addChildEdge(s.tvCtx)
 		}
+	}
+}
+
+// Add KV pairs as variadic args that will be serialized (and dereferenced, for pointer
+// values) at the end of this trace's span.
+func (s *layerSpan) AddEndArgs(args ...interface{}) {
+	if s.ok() {
+		// ensure even number of args added
+		if len(args)%2 == 1 {
+			args = args[0 : len(args)-1]
+		}
+		s.endArgs = append(s.endArgs, args...)
 	}
 }
 

@@ -29,10 +29,11 @@ func TestMetadata(t *testing.T) {
 
 	// oboe_metadata_pack
 	buf := make([]byte, 64)
+	smallBuf := make([]byte, 3)
 	pkcnt, pkerr := mdNil.Pack(buf) // pack nil md
 	assert.Equal(t, 0, pkcnt)
 	assert.Error(t, pkerr)
-	pkcnt, pkerr = md1.Pack([]byte("XXX")) // pack valid md into too-small buf
+	pkcnt, pkerr = md1.Pack(smallBuf) // pack valid md into too-small buf
 	assert.Equal(t, 0, pkcnt)
 	assert.Error(t, pkerr)
 	pkcnt, pkerr = md1.Pack(buf) // pack valid md into valid buf
