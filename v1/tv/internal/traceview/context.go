@@ -241,12 +241,12 @@ func (e *nullContext) ReportEvent(label Label, layer string, args ...interface{}
 func (e *nullContext) ReportEventMap(label Label, layer string, keys map[string]interface{}) error {
 	return nil
 }
-func (e *nullContext) Copy() Context                                        { return &nullContext{} }
-func (e *nullContext) IsTracing() bool                                      { return false }
-func (e *nullContext) MetadataString() string                               { return "" }
-func (e *nullContext) NewEvent(l Label, y string, g bool) Event             { return nullEvent{} }
-func (e nullEvent) ReportContext(c Context, g bool, a ...interface{}) error { return nil }
-func (e nullEvent) MetadataString() string                                  { return "" }
+func (e *nullContext) Copy() Context                                         { return &nullContext{} }
+func (e *nullContext) IsTracing() bool                                       { return false }
+func (e *nullContext) MetadataString() string                                { return "" }
+func (e *nullContext) NewEvent(l Label, y string, g bool) Event              { return &nullEvent{} }
+func (e *nullEvent) ReportContext(c Context, g bool, a ...interface{}) error { return nil }
+func (e *nullEvent) MetadataString() string                                  { return "" }
 
 // NewNullContext returns a context that is not tracing.
 func NewNullContext() Context { return &nullContext{} }
@@ -321,7 +321,7 @@ func (ctx *oboeContext) newEvent(label Label, layer string) (*event, error) {
 func (ctx *oboeContext) NewEvent(label Label, layer string, addCtxEdge bool) Event {
 	e, err := newEvent(&ctx.metadata, label, layer)
 	if err != nil {
-		return nullEvent{}
+		return &nullEvent{}
 	}
 	if addCtxEdge {
 		e.AddEdge(ctx)

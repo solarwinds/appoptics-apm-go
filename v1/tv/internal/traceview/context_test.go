@@ -165,7 +165,7 @@ func TestMetadataRandom(t *testing.T) {
 	ctx3 := newContext()
 	assert.IsType(t, ctx3, &oboeContext{}) // context created successfully
 	e3 := ctx3.NewEvent(LabelEntry, "randErrLayer", false)
-	assert.IsType(t, nullEvent{}, e3)
+	assert.IsType(t, &nullEvent{}, e3)
 	assert.Empty(t, r.Bufs) // no events reported
 
 	// RNG failure on valid context while trying to report an event
