@@ -24,6 +24,11 @@ var globalSettings settings
 var emptyCString, inXTraceCString *C.char
 var oboeVersion string
 var layerCache *cStringCache
+var initVersion = 1
+var initLayer = "go"
+var initMessageOnce sync.Once
+var rateCounterDefaultRate = 5.0
+var rateCounterDefaultSize = 10.0
 
 // Global configuration settings (sample rate, tracing mode.)
 type settings struct {
@@ -59,10 +64,6 @@ func readEnvSettings() {
 	}
 }
 
-var initVersion = 1
-var initLayer = "go"
-var initMessageOnce sync.Once
-
 func sendInitMessage() {
 	ctx := newContext()
 	if c, ok := ctx.(*oboeContext); ok {
@@ -82,12 +83,13 @@ type rateCounter struct {
 	last                        time.Time
 	lock                        sync.Mutex
 	requested, sampled, limited int64
-	through                     int64
+	traced, through             int64
 }
 
 func newRateCounter(ratePerSec, size float64) *rateCounter {
 	return &rateCounter{ratePerSec: ratePerSec, capacity: size, available: size, last: time.Now()}
 }
+
 func (b *rateCounter) Count(sampled, hasMetadata bool) bool {
 	atomic.AddInt64(&b.requested, 1)
 	if hasMetadata {
@@ -101,8 +103,10 @@ func (b *rateCounter) Count(sampled, hasMetadata bool) bool {
 		atomic.AddInt64(&b.limited, 1)
 		return false
 	}
+	atomic.AddInt64(&b.traced, 1)
 	return sampled
 }
+
 func (b *rateCounter) consume(size float64) bool {
 	b.lock.Lock()
 	defer b.lock.Unlock()
@@ -113,6 +117,7 @@ func (b *rateCounter) consume(size float64) bool {
 	}
 	return false
 }
+
 func (b *rateCounter) update(now time.Time) {
 	if b.available < b.capacity { // room for more tokens?
 		delta := now.Sub(b.last) // calculate duration since last check
@@ -134,7 +139,7 @@ func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
 	initMessageOnce.Do(sendInitMessage)
 
 	var sampleRate, sampleSource C.int
-	var clayer *C.char = layerCache.Get(layer)
+	cachedLayer := layerCache.Get(layer)
 	var cxt *C.char
 	if xtraceHeader == "" {
 		// common case, where we are the entry layer
@@ -144,7 +149,7 @@ func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
 		cxt = inXTraceCString
 	}
 
-	sample := int(C.oboe_sample_request(clayer, cxt, &globalSettings.settings_cfg, &sampleRate, &sampleSource))
-
-	return sample != 0, int(sampleRate), int(sampleSource)
+	sample := int(C.oboe_sample_request(cachedLayer.name, cxt, &globalSettings.settings_cfg, &sampleRate, &sampleSource))
+	sampled := cachedLayer.counter.Count(sample != 0, xtraceHeader != "")
+	return sampled, int(sampleRate), int(sampleSource)
 }

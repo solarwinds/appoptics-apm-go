@@ -84,6 +84,7 @@ type AssertNode struct { // run to assert each Node
 }
 
 var checkedEdges = 0
+var checkedNodes = 0
 
 // AssertGraph builds a graph from encoded events and asserts out-edges for each node in nodeMap.
 func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, nodeMap map[MatchNode]AssertNode) {
@@ -106,12 +107,13 @@ func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, nodeMap map[MatchNod
 		// assert each node seen once
 		assert.False(t, seen[m])
 		seen[m] = true
+		checkedNodes++
 	}
 	for m, a := range nodeMap {
 		assert.True(t, seen[m], "Didn't see node %v edges %v", m, a)
 	}
 
-	t.Logf("Total %d edges checked", checkedEdges)
+	t.Logf("Total %d nodes, %d edges checked", checkedNodes, checkedEdges)
 
 	if os.Getenv("DOT_GRAPHS") != "" { // save graph to file named for caller
 		var pc uintptr

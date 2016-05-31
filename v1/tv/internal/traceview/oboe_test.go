@@ -81,7 +81,7 @@ func TestOboeRateCounter(t *testing.T) {
 				sampled := perConsumerRate.consume(1)
 				ok := b.Count(sampled, true)
 				if ok {
-					t.Logf("### OK   id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
+					//t.Logf("### OK   id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
 					atomic.AddInt64(&allowed, 1)
 				} else {
 					//t.Logf("--- DROP id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
@@ -96,12 +96,14 @@ func TestOboeRateCounter(t *testing.T) {
 	wg.Wait()
 	t.Logf("TB iters %d allowed %v dropped %v limited %v", iters, allowed, dropped, b.limited)
 	assert.True(t, (iters == 100 && consumers == 5))
-	assert.True(t, (allowed == 20 && dropped == 480 && b.limited == 230) ||
-		(allowed == 19 && dropped == 481 && b.limited == 231))
+	assert.True(t, (allowed == 20 && dropped == 480 && b.limited == 230 && b.traced == 20) ||
+		(allowed == 19 && dropped == 481 && b.limited == 231 && b.traced == 19) ||
+		(allowed == 18 && dropped == 482 && b.limited == 232 && b.traced == 18))
 	assert.Equal(t, int64(500), b.requested)
 	assert.Equal(t, int64(250), b.sampled)
 	assert.Equal(t, int64(500), b.through)
 }
+
 func TestOboeRateCounterTime(t *testing.T) {
 	b := newRateCounter(5, 2)
 	b.consume(1)
@@ -114,6 +116,23 @@ func TestOboeRateCounterTime(t *testing.T) {
 	assert.True(t, time.Now().After(b.last))
 	time.Sleep(200 * time.Millisecond)
 	assert.True(t, b.consume(1)) // another token available
+}
+
+func TestRateSampleRequest(t *testing.T) {
+	sampled := 0
+	total := 1000
+	for i := 0; i < total; i++ {
+		if ok, _, _ := shouldTraceRequest(testLayer, ""); ok {
+			sampled++
+		}
+	}
+	assert.Equal(t, sampled, 10)
+	cl := layerCache.Get(testLayer)
+	assert.EqualValues(t, 1000, cl.counter.requested)
+	assert.EqualValues(t, 0, cl.counter.through)
+	assert.EqualValues(t, sampled, cl.counter.traced)
+	assert.True(t, cl.counter.sampled > 0)
+	assert.True(t, cl.counter.limited > 0)
 }
 
 func TestOboeTracingMode(t *testing.T) {
