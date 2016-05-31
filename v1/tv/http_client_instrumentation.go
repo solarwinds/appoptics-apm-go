@@ -25,7 +25,7 @@ type HTTPClientLayer struct{ Layer }
 // metadata.
 func BeginHTTPClientLayer(ctx context.Context, r *http.Request) HTTPClientLayer {
 	if r != nil {
-		l, _ := BeginLayer(ctx, "http.Client", "IsService", true, "RemoteURL", r.URL.String())
+		l := BeginRemoteURLLayer(ctx, "http.Client", r.URL.String())
 		r.Header.Set("X-Trace", l.MetadataString())
 		return HTTPClientLayer{Layer: l}
 	}

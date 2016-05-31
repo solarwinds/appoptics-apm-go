@@ -9,7 +9,7 @@ graphdir="${DOT_GRAPHDIR:=$(pwd)}"
 DOT_GRAPHS=1 DOT_GRAPHDIR="$graphdir" go test "$@"
 OPEN="echo"
 if [ "$(uname)" == "Darwin" ] && [ -t 1 ]; then # open if interactive mac shell
-    OPEN="sleep 1; open" # seems to avoid Preview.app permission error
+    OPEN="sleep 2; open" # seems to avoid Preview.app permission error
 fi
 all=""
 for i in $graphdir/*.dot; do
