@@ -19,12 +19,12 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 
 	// call an HTTP endpoint and propagate the distributed trace context
 	url := "http://127.0.0.1:8891/bob"
-	// begin layer for the client side of the HTTP service request
-	l := tv.BeginHTTPClientLayer(ctx, r)
 
 	// create HTTP client and set trace metadata header
 	httpClient := &http.Client{}
 	httpReq, _ := http.NewRequest("GET", url, nil)
+	// begin layer for the client side of the HTTP service request
+	l := tv.BeginHTTPClientLayer(ctx, httpReq)
 
 	// make HTTP request to external API
 	resp, err := httpClient.Do(httpReq)
