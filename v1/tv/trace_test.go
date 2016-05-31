@@ -250,6 +250,15 @@ func TestNoTraceExample(t *testing.T) {
 	assert.Len(t, r.Bufs, 0)
 }
 
+func BenchmarkNewTrace(b *testing.B) {
+	r := traceview.SetTestReporter()
+	r.ShouldTrace = false
+	for i := 0; i < b.N; i++ {
+		//_ = tv.NewTraceFromID("test", "", nil)
+		_ = tv.NewTrace("test")
+	}
+}
+
 func TestTraceFromMetadata(t *testing.T) {
 	r := traceview.SetTestReporter()
 
