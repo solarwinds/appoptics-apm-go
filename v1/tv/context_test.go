@@ -70,7 +70,7 @@ func TestNullSpan(t *testing.T) {
 	p1.End()
 
 	c1 := l1.BeginLayer("C1") // child after parent ended
-	assert.IsType(t, c1, nullSpan{})
+	assert.IsType(t, c1, &nullSpan{})
 	assert.False(t, c1.IsTracing())
 	assert.False(t, c1.ok())
 	assert.Empty(t, c1.MetadataString())

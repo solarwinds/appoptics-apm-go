@@ -29,7 +29,7 @@ func BeginHTTPClientLayer(ctx context.Context, r *http.Request) HTTPClientLayer 
 		r.Header.Set("X-Trace", l.MetadataString())
 		return HTTPClientLayer{Layer: l}
 	}
-	return HTTPClientLayer{Layer: nullSpan{}}
+	return HTTPClientLayer{Layer: &nullSpan{}}
 }
 
 // AddHTTPResponse adds information from http.Response to this layer. It will also check the HTTP

@@ -58,7 +58,7 @@ func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Lay
 		l := newLayer(parent.tvContext().Copy(), layerName, parent, args...)
 		return l, newLayerContext(ctx, l)
 	}
-	return nullSpan{}, ctx
+	return &nullSpan{}, ctx
 }
 
 // BeginLayer starts a new Layer span, returning a child of this Layer.
@@ -66,7 +66,7 @@ func (s *layerSpan) BeginLayer(layerName string, args ...interface{}) Layer {
 	if s.ok() { // copy parent context and report entry from child
 		return newLayer(s.tvCtx.Copy(), layerName, s, args...)
 	}
-	return nullSpan{}
+	return &nullSpan{}
 }
 
 // BeginProfile begins a profiled block or method and return a context that should be closed with End().
@@ -79,7 +79,7 @@ func BeginProfile(ctx context.Context, profileName string, args ...interface{}) 
 	if parent, ok := fromContext(ctx); ok && parent.ok() { // report profile entry from parent context
 		return newProfile(parent.tvContext().Copy(), profileName, parent, args...)
 	}
-	return nullSpan{}
+	return &nullSpan{}
 }
 
 // BeginProfile starts a new Profile, used to measure a named span of time spent in this Layer.
@@ -88,7 +88,7 @@ func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profil
 	if s.ok() { // copy parent context and report entry from child
 		return newProfile(s.tvCtx.Copy(), profileName, s, args...)
 	}
-	return nullSpan{}
+	return &nullSpan{}
 }
 
 // End a profiled block or method.
@@ -171,19 +171,19 @@ type layerSpan struct{ span }   // satisfies Layer
 type profileSpan struct{ span } // satisfies Profile
 type nullSpan struct{}          // a span that is not tracing; satisfies Layer & Profile
 
-func (s nullSpan) BeginLayer(layerName string, args ...interface{}) Layer { return nullSpan{} }
-func (s nullSpan) BeginProfile(name string, args ...interface{}) Profile  { return nullSpan{} }
-func (s nullSpan) End(args ...interface{})                                {}
-func (s nullSpan) AddEndArgs(args ...interface{})                         {}
-func (s nullSpan) Error(class, msg string)                                {}
-func (s nullSpan) Err(err error)                                          {}
-func (s nullSpan) Info(args ...interface{})                               {}
-func (s nullSpan) IsTracing() bool                                        { return false }
-func (s nullSpan) addChildEdge(traceview.Context)                         {}
-func (s nullSpan) addProfile(Profile)                                     {}
-func (s nullSpan) ok() bool                                               { return false }
-func (s nullSpan) tvContext() traceview.Context                           { return traceview.NewNullContext() }
-func (s nullSpan) MetadataString() string                                 { return "" }
+func (s *nullSpan) BeginLayer(layerName string, args ...interface{}) Layer { return &nullSpan{} }
+func (s *nullSpan) BeginProfile(name string, args ...interface{}) Profile  { return &nullSpan{} }
+func (s *nullSpan) End(args ...interface{})                                {}
+func (s *nullSpan) AddEndArgs(args ...interface{})                         {}
+func (s *nullSpan) Error(class, msg string)                                {}
+func (s *nullSpan) Err(err error)                                          {}
+func (s *nullSpan) Info(args ...interface{})                               {}
+func (s *nullSpan) IsTracing() bool                                        { return false }
+func (s *nullSpan) addChildEdge(traceview.Context)                         {}
+func (s *nullSpan) addProfile(Profile)                                     {}
+func (s *nullSpan) ok() bool                                               { return false }
+func (s *nullSpan) tvContext() traceview.Context                           { return traceview.NewNullContext() }
+func (s *nullSpan) MetadataString() string                                 { return "" }
 
 // is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool                     { return s != nil && !s.ended }
@@ -214,7 +214,7 @@ func (l profileLabeler) layerName() string           { return "" }
 func newLayer(tvCtx traceview.Context, layerName string, parent Layer, args ...interface{}) Layer {
 	ll := layerLabeler{layerName}
 	if err := tvCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
-		return nullSpan{}
+		return &nullSpan{}
 	}
 	return &layerSpan{span: span{tvCtx: tvCtx.Copy(), labeler: ll, parent: parent}}
 
@@ -232,7 +232,7 @@ func newProfile(tvCtx traceview.Context, profileName string, parent Layer, args 
 		"Language", "go", "ProfileName", profileName,
 		"FunctionName", fname, "File", file, "LineNumber", line,
 	); err != nil {
-		return nullSpan{}
+		return &nullSpan{}
 	}
 	p := &profileSpan{span{tvCtx: tvCtx.Copy(), labeler: pl, parent: parent}}
 	if parent != nil && parent.ok() {
