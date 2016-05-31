@@ -235,21 +235,21 @@ type Event interface {
 type nullContext struct{}
 type nullEvent struct{}
 
-func (e nullContext) ReportEvent(label Label, layer string, args ...interface{}) error {
+func (e *nullContext) ReportEvent(label Label, layer string, args ...interface{}) error {
 	return nil
 }
-func (e nullContext) ReportEventMap(label Label, layer string, keys map[string]interface{}) error {
+func (e *nullContext) ReportEventMap(label Label, layer string, keys map[string]interface{}) error {
 	return nil
 }
-func (e nullContext) Copy() Context                                         { return nullContext{} }
-func (e nullContext) IsTracing() bool                                       { return false }
-func (e nullContext) MetadataString() string                                { return "" }
-func (e nullContext) NewEvent(l Label, y string, g bool) Event              { return nullEvent{} }
+func (e *nullContext) Copy() Context                                        { return &nullContext{} }
+func (e *nullContext) IsTracing() bool                                      { return false }
+func (e *nullContext) MetadataString() string                               { return "" }
+func (e *nullContext) NewEvent(l Label, y string, g bool) Event             { return nullEvent{} }
 func (e nullEvent) ReportContext(c Context, g bool, a ...interface{}) error { return nil }
 func (e nullEvent) MetadataString() string                                  { return "" }
 
 // NewNullContext returns a context that is not tracing.
-func NewNullContext() Context { return nullContext{} }
+func NewNullContext() Context { return &nullContext{} }
 
 // newContext allocates a context with random metadata (for a new trace).
 func newContext() Context {
@@ -259,7 +259,7 @@ func newContext() Context {
 		if debugLog {
 			log.Printf("TraceView rand.Read error: %v", err)
 		}
-		return nullContext{}
+		return &nullContext{}
 	}
 	return ctx
 }
@@ -279,7 +279,7 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 		if mdStr != "" {
 			var err error
 			if ctx, err = newContextFromMetadataString(mdStr); err != nil {
-				return nullContext{}, false // bad incoming MD: no trace
+				return &nullContext{}, false // bad incoming MD: no trace
 			}
 			addCtxEdge = true
 		} else {
@@ -296,11 +296,11 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 			kvs["SampleRate"] = rate
 			kvs["SampleSource"] = source
 			if err := ctx.(*oboeContext).reportEventMap(LabelEntry, layer, addCtxEdge, kvs); err != nil {
-				return nullContext{}, false
+				return &nullContext{}, false
 			}
 		}
 	} else {
-		return nullContext{}, false
+		return &nullContext{}, false
 	}
 	return ctx, true
 }

@@ -78,8 +78,8 @@ func TestNullSpan(t *testing.T) {
 	c1.addProfile(p1)
 
 	nctx := c1.tvContext()
-	assert.Equal(t, reflect.TypeOf(nctx).Name(), "nullContext")
-	assert.IsType(t, reflect.TypeOf(nctx.Copy()).Name(), "nullContext")
+	assert.Equal(t, reflect.TypeOf(nctx).Elem().Name(), "nullContext")
+	assert.IsType(t, reflect.TypeOf(nctx.Copy()).Elem().Name(), "nullContext")
 
 	g.AssertGraph(t, r.Bufs, 3, map[g.MatchNode]g.AssertNode{
 		{"TestNullSpan", "entry"}: {},
