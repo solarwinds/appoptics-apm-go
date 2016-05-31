@@ -257,9 +257,18 @@ func TestNoTraceExample(t *testing.T) {
 func BenchmarkNewTrace(b *testing.B) {
 	r := traceview.SetTestReporter()
 	r.ShouldTrace = false
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		//_ = tv.NewTraceFromID("test", "", nil)
 		_ = tv.NewTrace("test")
+	}
+}
+
+func BenchmarkNewTraceFromID(b *testing.B) {
+	r := traceview.SetTestReporter()
+	r.ShouldTrace = false
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = tv.NewTraceFromID("test", "", nil)
 	}
 }
 
