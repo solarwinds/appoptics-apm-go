@@ -29,7 +29,7 @@ func TestTraceMetadata(t *testing.T) {
 		{"test", "entry"}: {},
 		{"test", "exit"}: {g.OutEdges{{"test", "entry"}}, func(n g.Node) {
 			// exit event should match ExitMetadata
-			assert.Equal(t, md, n.Map["X-Trace"])
+			assert.Equal(t, md, n.Map[tv.HTTPHeaderName])
 		}},
 	})
 }
@@ -284,12 +284,12 @@ func TestTraceFromMetadata(t *testing.T) {
 		// entry event should have edge to incoming opID
 		{"test", "entry"}: {g.OutEdges{{"Edge", incomingID[42:]}}, func(n g.Node) {
 			// trace ID should match incoming ID
-			assert.Equal(t, incomingID[2:42], n.Map["X-Trace"].(string)[2:42])
+			assert.Equal(t, incomingID[2:42], n.Map[tv.HTTPHeaderName].(string)[2:42])
 		}},
 		// exit event links to entry
 		{"test", "exit"}: {g.OutEdges{{"test", "entry"}}, func(n g.Node) {
 			// trace ID should match incoming ID
-			assert.Equal(t, incomingID[2:42], n.Map["X-Trace"].(string)[2:42])
+			assert.Equal(t, incomingID[2:42], n.Map[tv.HTTPHeaderName].(string)[2:42])
 			assert.Equal(t, "Arg", n.Map["Extra"])
 		}},
 	})

@@ -4,8 +4,10 @@ package tv
 
 import "golang.org/x/net/context"
 
-var contextKey = "github.com/appneta/go-appneta/v1/tv.Trace"
-var contextLayerKey = "github.com/appneta/go-appneta/v1/tv.Layer"
+type contextKeyT string
+
+var contextKey = contextKeyT("github.com/appneta/go-appneta/v1/tv.Trace")
+var contextLayerKey = contextKeyT("github.com/appneta/go-appneta/v1/tv.Layer")
 
 // NewContext returns a copy of the parent context and associates it with a Trace.
 func NewContext(ctx context.Context, t Trace) context.Context {

@@ -31,7 +31,7 @@ func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
 func TestHTTPHandler404(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 	response := httpTest(handler404)
-	assert.Len(t, response.HeaderMap["X-Trace"], 1)
+	assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
@@ -43,7 +43,7 @@ func TestHTTPHandler404(t *testing.T) {
 		}},
 		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
 			// assert that response X-Trace header matches trace exit event
-			assert.Equal(t, response.HeaderMap.Get("X-Trace"), n.Map["X-Trace"])
+			assert.Equal(t, response.HeaderMap.Get(tv.HTTPHeaderName), n.Map[tv.HTTPHeaderName])
 			assert.EqualValues(t, response.Code, n.Map["Status"])
 			assert.EqualValues(t, 404, n.Map["Status"])
 			assert.Equal(t, "tv_test", n.Map["Controller"])
@@ -66,8 +66,8 @@ func TestHTTPHandler200(t *testing.T) {
 		}},
 		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
 			// assert that response X-Trace header matches trace exit event
-			assert.Len(t, response.HeaderMap["X-Trace"], 1)
-			assert.Equal(t, response.HeaderMap["X-Trace"][0], n.Map["X-Trace"])
+			assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
+			assert.Equal(t, response.HeaderMap[tv.HTTPHeaderName][0], n.Map[tv.HTTPHeaderName])
 			assert.EqualValues(t, response.Code, n.Map["Status"])
 			assert.EqualValues(t, 200, n.Map["Status"])
 			assert.Equal(t, "tv_test", n.Map["Controller"])
@@ -144,7 +144,7 @@ func testHTTPClient(t *testing.T, ctx context.Context, method, url string) (*htt
 	}
 	l, _ := tv.BeginLayer(ctx, "http.Client", "IsService", true, "RemoteURL", url)
 	defer l.End()
-	httpReq.Header.Set("X-Trace", l.MetadataString())
+	httpReq.Header.Set(tv.HTTPHeaderName, l.MetadataString())
 
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
@@ -153,7 +153,7 @@ func testHTTPClient(t *testing.T, ctx context.Context, method, url string) (*htt
 	}
 	defer resp.Body.Close()
 
-	l.AddEndArgs("Edge", resp.Header.Get("X-Trace"))
+	l.AddEndArgs("Edge", resp.Header.Get(tv.HTTPHeaderName))
 	return resp, err
 }
 
@@ -268,7 +268,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 // assert traces that hit testServer, which uses the HTTP server instrumentation.
 func assertHTTPRequestGraph(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
 	// handle case where http.Client.Do() did not return an error
-	assert.Len(t, resp.Header["X-Trace"], 1)
+	assert.Len(t, resp.Header[tv.HTTPHeaderName], 1)
 	assert.Equal(t, status, resp.StatusCode)
 
 	g.AssertGraph(t, bufs, 8, map[g.MatchNode]g.AssertNode{
@@ -298,7 +298,7 @@ func assertHTTPRequestGraph(t *testing.T, bufs [][]byte, resp *http.Response, ur
 
 // assert traces of an HTTP client to untraced servers testServer200 and testServer403.
 func assertHTTPRequestUntracedGraph(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
-	assert.NotContains(t, resp.Header["X-Trace"], "Header")
+	assert.NotContains(t, resp.Header[tv.HTTPHeaderName], "Header")
 	assert.Equal(t, status, resp.StatusCode)
 
 	g.AssertGraph(t, bufs, 4, map[g.MatchNode]g.AssertNode{
@@ -370,7 +370,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	tv.EndTrace(ctx)
 
 	assert.NoError(t, err)
-	assert.Len(t, resp.Header["X-Trace"], 1)
+	assert.Len(t, resp.Header[tv.HTTPHeaderName], 1)
 	assert.Equal(t, 403, resp.StatusCode)
 
 	g.AssertGraph(t, r.Bufs, 10, map[g.MatchNode]g.AssertNode{
