@@ -4,6 +4,7 @@
 package tv
 
 import (
+	"fmt"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -32,6 +33,13 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 	return func(w http.ResponseWriter, r *http.Request) {
 		t, w := TraceFromHTTPRequestResponse(httpHandlerLayerName, w, r)
 		defer t.End(endArgs...)
+
+		defer func() { // catch and report panic, if one occurs
+			if err := recover(); err != nil {
+				t.Error("panic", fmt.Sprintf("%v", err))
+				panic(err) // re-raise the panic
+			}
+		}()
 		// Call original HTTP handler
 		handler(w, r)
 	}

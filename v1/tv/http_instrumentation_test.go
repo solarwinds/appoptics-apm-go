@@ -16,8 +16,9 @@ import (
 	"golang.org/x/net/context"
 )
 
-func handler404(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) }
-func handler200(w http.ResponseWriter, r *http.Request) {} // do nothing (default should be 200)
+func handler404(w http.ResponseWriter, r *http.Request)   { w.WriteHeader(404) }
+func handler200(w http.ResponseWriter, r *http.Request)   {} // do nothing (default should be 200)
+func handlerPanic(w http.ResponseWriter, r *http.Request) { panic("panicking!") }
 
 func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
 	h := http.HandlerFunc(tv.HTTPHandler(f))
@@ -135,6 +136,23 @@ func testServer403(t *testing.T, list net.Listener) {
 	assert.NoError(t, s.Serve(list))
 }
 
+// testServerPanic does trace using the HandleFunc wrapper, but the traced handler panics.
+func testServerPanic(t *testing.T, list net.Listener) {
+	// simulate panic-catching middleware wrapping tv.HTTPHandler(handlerPanic)
+	panicCatcher := func(f http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if err := recover(); err != nil {
+					t.Logf("panicCatcher caught panic %v", err)
+				}
+			}()
+			f(w, r)
+		}
+	}
+	s := &http.Server{Handler: http.HandlerFunc(panicCatcher(tv.HTTPHandler(handlerPanic)))}
+	assert.NoError(t, s.Serve(list))
+}
+
 // begin an HTTP client span, make an HTTP request, and propagate the trace context manually
 func testHTTPClient(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
 	httpClient := &http.Client{}
@@ -213,6 +231,7 @@ type testServerFn struct {
 var testHTTPSvr = testServerFn{testServer, assertHTTPRequestGraph, 403}
 var testHTTPSvr200 = testServerFn{testServer200, assertHTTPRequestUntracedGraph, 200}
 var testHTTPSvr403 = testServerFn{testServer403, assertHTTPRequestUntracedGraph, 403}
+var testHTTPSvrPanic = testServerFn{testServerPanic, assertHTTPRequestPanic, 200}
 
 var badURL = "%gh&%ij" // url.Parse() will return error
 var invalidPortURL = "http://0.0.0.0:888888"
@@ -232,6 +251,9 @@ func TestTraceHTTPHelperPostB(t *testing.T)   { testHTTP(t, "POST", false, testH
 func TestTraceHTTPBadRequest(t *testing.T)    { testHTTP(t, "GET", true, testHTTPClient, testHTTPSvr) }
 func TestTraceHTTPHelperBadReqA(t *testing.T) { testHTTP(t, "GET", true, testHTTPClientA, testHTTPSvr) }
 func TestTraceHTTPHelperBadReqB(t *testing.T) { testHTTP(t, "GET", true, testHTTPClientB, testHTTPSvr) }
+func TestTraceHTTPPanic(t *testing.T)         { testHTTP(t, "GET", false, testHTTPClient, testHTTPSvrPanic) }
+func TestTraceHTTPPanicA(t *testing.T)        { testHTTP(t, "GET", false, testHTTPClientA, testHTTPSvrPanic) }
+func TestTraceHTTPPanicB(t *testing.T)        { testHTTP(t, "GET", false, testHTTPClientB, testHTTPSvrPanic) }
 
 // launch a test HTTP server and trace an HTTP request to it
 func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, server testServerFn) {
@@ -259,15 +281,14 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 		})
 		return
 	}
+	// handle case where http.Client.Do() did not return an error
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-
 	server.assertFn(t, r.Bufs, resp, url, method, port, server.status)
 }
 
 // assert traces that hit testServer, which uses the HTTP server instrumentation.
 func assertHTTPRequestGraph(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
-	// handle case where http.Client.Do() did not return an error
 	assert.Len(t, resp.Header[tv.HTTPHeaderName], 1)
 	assert.Equal(t, status, resp.StatusCode)
 
@@ -309,6 +330,35 @@ func assertHTTPRequestUntracedGraph(t *testing.T, bufs [][]byte, resp *http.Resp
 		}},
 		{"http.Client", "exit"}: {g.OutEdges{{"http.Client", "entry"}}, nil},
 		{"httpTest", "exit"}:    {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
+	})
+}
+
+// assert traces that hit a TV-wrapped, panicking http Handler.
+func assertHTTPRequestPanic(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
+
+	g.AssertGraph(t, bufs, 7, map[g.MatchNode]g.AssertNode{
+		{"httpTest", "entry"}: {},
+		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
+			assert.Equal(t, true, n.Map["IsService"])
+			assert.Equal(t, url, n.Map["RemoteURL"])
+		}},
+		{"http.Client", "exit"}: {g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}, nil},
+		{"http.HandlerFunc", "entry"}: {g.OutEdges{{"http.Client", "entry"}}, func(n g.Node) {
+			assert.Equal(t, "/test", n.Map["URL"])
+			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
+			assert.Equal(t, "qs=1", n.Map["Query-String"])
+			assert.Equal(t, method, n.Map["Method"])
+		}},
+		{"http.HandlerFunc", "error"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
+			assert.Equal(t, "panic", n.Map["ErrorClass"])
+			assert.Equal(t, "panicking!", n.Map["ErrorMsg"])
+		}},
+		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "error"}}, func(n g.Node) {
+			assert.Equal(t, "tv_test", n.Map["Controller"])
+			assert.Equal(t, "handlerPanic", n.Map["Action"])
+			assert.Equal(t, status, n.Map["Status"])
+		}},
+		{"httpTest", "exit"}: {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
 	})
 }
 
