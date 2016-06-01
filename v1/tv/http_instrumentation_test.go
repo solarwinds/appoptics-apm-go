@@ -17,6 +17,7 @@ import (
 )
 
 func handler404(w http.ResponseWriter, r *http.Request)   { w.WriteHeader(404) }
+func handler403(w http.ResponseWriter, r *http.Request)   { w.WriteHeader(403) }
 func handler200(w http.ResponseWriter, r *http.Request)   {} // do nothing (default should be 200)
 func handlerPanic(w http.ResponseWriter, r *http.Request) { panic("panicking!") }
 
@@ -124,32 +125,34 @@ func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 
 // testServer200 does not trace and returns a 200.
 func testServer200(t *testing.T, list net.Listener) {
-	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})}
+	s := &http.Server{Handler: http.HandlerFunc(handler200)}
 	assert.NoError(t, s.Serve(list))
 }
 
 // testServer403 does not trace and returns a 403.
 func testServer403(t *testing.T, list net.Listener) {
-	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(403) // return Forbidden
-	})}
+	s := &http.Server{Handler: http.HandlerFunc(handler403)}
 	assert.NoError(t, s.Serve(list))
 }
 
-// testServerPanic does trace using the HandleFunc wrapper, but the traced handler panics.
-func testServerPanic(t *testing.T, list net.Listener) {
-	// simulate panic-catching middleware wrapping tv.HTTPHandler(handlerPanic)
-	panicCatcher := func(f http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			defer func() {
-				if err := recover(); err != nil {
-					t.Logf("panicCatcher caught panic %v", err)
-				}
-			}()
-			f(w, r)
-		}
+// simulate panic-catching middleware wrapping tv.HTTPHandler(handlerPanic)
+func panicCatchingMiddleware(t *testing.T, f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				t.Logf("panicCatcher caught panic %v", err)
+				w.WriteHeader(500)
+				w.Write([]byte(fmt.Sprintf("500 Error: %v", err)))
+			}
+		}()
+		f(w, r)
 	}
-	s := &http.Server{Handler: http.HandlerFunc(panicCatcher(tv.HTTPHandler(handlerPanic)))}
+}
+
+// testServerPanic traces a wrapped http.HandlerFunc that panics
+func testServerPanic(t *testing.T, list net.Listener) {
+	s := &http.Server{Handler: http.HandlerFunc(
+		panicCatchingMiddleware(t, tv.HTTPHandler(handlerPanic)))}
 	assert.NoError(t, s.Serve(list))
 }
 
