@@ -5,6 +5,7 @@
 package traceview
 
 import (
+	"crypto/rand"
 	"log"
 	"net"
 	"os"
@@ -12,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"gopkg.in/mgo.v2/bson"
 
 	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
@@ -36,28 +39,8 @@ func assertInitMessage(t *testing.T, bufs [][]byte) {
 }
 
 func TestInitMessageUDP(t *testing.T) {
-	reporterAddr = "127.0.0.1:7832"
-	globalReporter = newReporter()
-	assert.IsType(t, &udpReporter{}, globalReporter)
-
-	addr, err := net.ResolveUDPAddr("udp4", reporterAddr)
-	assert.NoError(t, err)
-	conn, err := net.ListenUDP("udp4", addr)
-	assert.NoError(t, err)
-	defer conn.Close()
 	var bufs [][]byte
-	go func(numBufs int) {
-		for ; numBufs > 0; numBufs-- {
-			buf := make([]byte, 128*1024)
-			n, _, err := conn.ReadFromUDP(buf)
-			t.Logf("Got UDP buf len %v err %v", n, err)
-			if err != nil {
-				log.Printf("UDP listener got err, quitting %v", err)
-				break
-			}
-			bufs = append(bufs, buf[0:n])
-		}
-	}(2)
+	startTestUDPListener(t, &bufs, 2)
 
 	sendInitMessage()
 	time.Sleep(50 * time.Millisecond)
@@ -118,22 +101,136 @@ func TestOboeRateCounterTime(t *testing.T) {
 	assert.True(t, b.consume(1)) // another token available
 }
 
+func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) {
+	// set up UDP listener on alternate listen address
+	reporterAddr = "127.0.0.1:7832"
+	globalReporter = newReporter()
+	assert.IsType(t, &udpReporter{}, globalReporter)
+
+	addr, err := net.ResolveUDPAddr("udp4", reporterAddr)
+	assert.NoError(t, err)
+	conn, err := net.ListenUDP("udp4", addr)
+	assert.NoError(t, err)
+	go func(numBufs int) {
+		defer conn.Close()
+		for i := 0; i < numBufs; i++ {
+			buf := make([]byte, 128*1024)
+			n, _, err := conn.ReadFromUDP(buf)
+			t.Logf("Got UDP buf len %v err %v", n, err)
+			if err != nil {
+				log.Printf("UDP listener got err, quitting %v", err)
+				break
+			}
+			*bufs = append(*bufs, buf[0:n])
+		}
+		t.Logf("Closing UDP listener, got %d bufs", numBufs)
+	}(numbufs)
+}
+
+func testLayerCount(count int64) []interface{} {
+	return []interface{}{bson.D{bson.DocElem{Name: testLayer, Value: count}}}
+}
 func TestRateSampleRequest(t *testing.T) {
-	sampled := 0
+	var bufs [][]byte
+	startTestUDPListener(t, &bufs, 2)
+	sendMetricsMessage()
+	time.Sleep(50 * time.Millisecond)
+	g.AssertGraph(t, bufs, 2, map[g.MatchNode]g.AssertNode{
+		{"JMX", "entry"}: {g.OutEdges{}, func(n g.Node) {
+			assert.Equal(t, n.Map["ProcessName"], initLayer)
+			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
+			assert.True(t, n.Map[metricsPrefix+"type=threadcount,name=NumGoroutine"].(int64) > 0)
+			// no layer counts yet -- should be missing from message
+			assert.NotContains(t, "TraceCount", n.Map)
+			assert.NotContains(t, "RequestCount", n.Map)
+			assert.NotContains(t, "SampleCount", n.Map)
+		}},
+		{"JMX", "exit"}: {g.OutEdges{{"JMX", "entry"}}, nil},
+	})
+
+	traced := int64(0)
 	total := 1000
 	for i := 0; i < total; i++ {
 		if ok, _, _ := shouldTraceRequest(testLayer, ""); ok {
-			sampled++
+			traced++
 		}
 	}
-	assert.Equal(t, sampled, 3)
+	assert.EqualValues(t, traced, 3)
 	cl := layerCache.Get(testLayer)
 	assert.EqualValues(t, 1000, cl.counter.requested)
 	assert.EqualValues(t, 0, cl.counter.through)
-	assert.EqualValues(t, sampled, cl.counter.traced)
+	assert.EqualValues(t, traced, cl.counter.traced)
 	assert.True(t, cl.counter.sampled > 0)
 	assert.True(t, cl.counter.limited > 0)
+	sampled := cl.counter.sampled
+	limited := cl.counter.limited
 
+	// send UDP message & assert
+	bufs = nil
+	startTestUDPListener(t, &bufs, 2)
+	sendMetricsMessage()
+	time.Sleep(50 * time.Millisecond)
+	g.AssertGraph(t, bufs, 2, map[g.MatchNode]g.AssertNode{
+		{"JMX", "entry"}: {g.OutEdges{}, func(n g.Node) {
+			assert.Equal(t, n.Map["ProcessName"], initLayer)
+			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
+			assert.True(t, n.Map[metricsPrefix+"type=threadcount,name=NumGoroutine"].(int64) > 0)
+			assert.Equal(t, testLayerCount(traced), n.Map["TraceCount"])
+			assert.Equal(t, testLayerCount(1000), n.Map["RequestCount"])
+			assert.Equal(t, testLayerCount(sampled), n.Map["SampleCount"])
+			assert.Equal(t, testLayerCount(traced), n.Map["TraceCount"])
+			assert.Equal(t, testLayerCount(limited), n.Map["TokenBucketExhaustionCount"])
+		}},
+		{"JMX", "exit"}: {g.OutEdges{{"JMX", "entry"}}, nil},
+	})
+
+	bufs = nil
+	startTestUDPListener(t, &bufs, 2)
+	sendMetricsMessage()
+	time.Sleep(50 * time.Millisecond)
+	g.AssertGraph(t, bufs, 2, map[g.MatchNode]g.AssertNode{
+		{"JMX", "entry"}: {g.OutEdges{}, func(n g.Node) {
+			assert.Equal(t, n.Map["ProcessName"], initLayer)
+			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
+			assert.True(t, n.Map[metricsPrefix+"type=threadcount,name=NumGoroutine"].(int64) > 0)
+			// all 0s
+			assert.EqualValues(t, testLayerCount(0), n.Map["TraceCount"])
+			assert.EqualValues(t, testLayerCount(0), n.Map["RequestCount"])
+			assert.EqualValues(t, testLayerCount(0), n.Map["SampleCount"])
+		}},
+		{"JMX", "exit"}: {g.OutEdges{{"JMX", "entry"}}, nil},
+	})
+
+	// error sending metrics message: no reporting
+	r := SetTestReporter()
+	randReader = &errorReader{failOn: map[int]bool{0: true}}
+	sendMetricsMessage()
+	assert.Len(t, r.Bufs, 0)
+
+	randReader = &errorReader{failOn: map[int]bool{2: true}}
+	sendMetricsMessage()
+	assert.Len(t, r.Bufs, 0)
+
+	randReader = rand.Reader // set back to normal
+}
+
+func assertGetNextInterval(t *testing.T, nowTime, expectedDur string) {
+	t0, err := time.Parse(time.RFC3339Nano, nowTime)
+	assert.NoError(t, err)
+	d0 := getNextInterval(t0)
+	d0e, err := time.ParseDuration(expectedDur)
+	assert.NoError(t, err)
+	assert.Equal(t, d0e, d0)
+	assert.Equal(t, 0, t0.Add(d0).Second()%counterIntervalSecs)
+}
+
+func TestGetNextInterval(t *testing.T) {
+	assertGetNextInterval(t, "2016-01-02T15:04:05.888-04:00", "24.112s")
+	assertGetNextInterval(t, "2016-01-02T15:04:35.888-04:00", "24.112s")
+	assertGetNextInterval(t, "2016-01-02T15:04:00.00-04:00", "30s")
+	assertGetNextInterval(t, "2016-08-15T23:31:30.00-00:00", "30s")
+	assertGetNextInterval(t, "2016-01-02T15:04:59.999999999-04:00", "1ns")
+	assertGetNextInterval(t, "2016-01-07T15:04:29.999999999-00:00", "1ns")
 }
 
 func TestOboeTracingMode(t *testing.T) {

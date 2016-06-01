@@ -14,6 +14,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,7 +81,6 @@ func sendInitMessage() {
 var rateCounterDefaultRate = 5.0
 var rateCounterDefaultSize = 3.0
 var counterIntervalSecs = 30
-var metricsLayerName = "JMX"
 
 type rateCounter struct {
 	ratePerSec          float64
@@ -158,6 +158,9 @@ func sendMetrics() {
 	}
 }
 
+var metricsLayerName = "JMX"
+var metricsPrefix = metricsLayerName + "."
+
 func sendMetricsMessage() {
 	ctx, ok := newContext().(*oboeContext)
 	if !ok {
@@ -167,27 +170,52 @@ func sendMetricsMessage() {
 	if err != nil {
 		return
 	}
+	// runtime metrics
+	ev.AddString("ProcessName", initLayer)
+	ev.AddInt64(metricsPrefix+"type=threadcount,name=NumGoroutine", int64(runtime.NumGoroutine()))
 
-	counts := make(map[string]*rateCounter)
-	for _, layer := range layerCache.Keys() {
-		if i := layerCache.Has(layer); i != nil {
-			counts[layer] = i.counter
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	ev.AddInt64(metricsPrefix+"Memory:MemStats.Alloc", int64(mem.Alloc))
+	ev.AddInt64(metricsPrefix+"Memory:MemStats.TotalAlloc", int64(mem.TotalAlloc))
+	ev.AddInt64(metricsPrefix+"Memory:MemStats.Sys", int64(mem.Sys))
+	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Lookups", int64(mem.Lookups))
+	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Mallocs", int64(mem.Mallocs))
+	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Frees", int64(mem.Frees))
+	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Alloc", int64(mem.HeapAlloc))
+	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Sys", int64(mem.HeapSys))
+	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Idle", int64(mem.HeapIdle))
+	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Inuse", int64(mem.HeapInuse))
+	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Released", int64(mem.HeapReleased))
+	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Heap.Objects", int64(mem.HeapObjects))
+
+	var gc debug.GCStats
+	debug.ReadGCStats(&gc)
+	ev.AddInt64(metricsPrefix+"type=count,name=GCStats.NumGC", gc.NumGC)
+
+	// layer counts
+	counts := make(map[string]*rateCounts)
+	if layerCache != nil {
+		for _, layer := range layerCache.Keys() {
+			if i := layerCache.Has(layer); i != nil && i.counter != nil {
+				counts[layer] = i.counter.Flush()
+			}
 		}
 	}
-	if len(counts) == 0 {
-		return
-	}
-	appendCount(ev, counts, "RequestCount", func(c *rateCounter) int64 { return c.requested })
-	appendCount(ev, counts, "TraceCount", func(c *rateCounter) int64 { return c.traced })
-	appendCount(ev, counts, "TokenBucketExhaustionCount", func(c *rateCounter) int64 { return c.limited })
-	appendCount(ev, counts, "SampleCount", func(c *rateCounter) int64 { return c.sampled })
-	appendCount(ev, counts, "ThroughCount", func(c *rateCounter) int64 { return c.through })
-	ev.Report(ctx)
+	appendCount(ev, counts, "RequestCount", func(c *rateCounts) int64 { return c.requested })
+	appendCount(ev, counts, "TraceCount", func(c *rateCounts) int64 { return c.traced })
+	appendCount(ev, counts, "TokenBucketExhaustionCount", func(c *rateCounts) int64 { return c.limited })
+	appendCount(ev, counts, "SampleCount", func(c *rateCounts) int64 { return c.sampled })
+	appendCount(ev, counts, "ThroughCount", func(c *rateCounts) int64 { return c.through })
 
+	ev.Report(ctx)
 	ctx.ReportEvent(LabelExit, metricsLayerName)
 }
 
-func appendCount(e *event, counts map[string]*rateCounter, name string, f func(*rateCounter) int64) {
+func appendCount(e *event, counts map[string]*rateCounts, name string, f func(*rateCounts) int64) {
+	if len(counts) == 0 {
+		return
+	}
 	var j, startArray, startObject int
 	startArray = bsonAppendStartArray(&e.bbuf, name)
 	for layer, c := range counts {
