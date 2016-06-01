@@ -64,6 +64,21 @@ func bsonAppendBool(b *bsonBuffer, k string, v bool) {
 	}
 }
 
+func bsonAppendStartArray(b *bsonBuffer, k string) (start int) {
+	start = len(b.buf)
+	b.addElemName('\x04', k)
+	return
+}
+func bsonAppendStartObject(b *bsonBuffer, k string) (start int) {
+	start = len(b.buf)
+	b.addElemName('\x03', k)
+	return
+}
+func bsonAppendFinishObject(b *bsonBuffer, start int) {
+	b.addBytes(0)
+	b.setInt32(start, int32(len(b.buf)-start))
+}
+
 // Based on https://github.com/go-mgo/mgo/blob/v2/bson/encode.go
 // --------------------------------------------------------------------------
 // Marshaling of elements in a document.

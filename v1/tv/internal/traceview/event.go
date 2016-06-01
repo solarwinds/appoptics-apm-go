@@ -52,11 +52,9 @@ func oboeEventInit(evt *event, md *oboeMetadata) error {
 	}
 
 	// Buffer initialization
-
 	bsonBufferInit(&evt.bbuf)
 
 	// Copy header to buffer
-	// TODO errors?
 	bsonAppendString(&evt.bbuf, "_V", eventHeader)
 
 	// Pack metadata
@@ -234,7 +232,7 @@ func (e *event) ReportUsing(c *oboeContext, r reporter) error { return reportEve
 // Reports event using default (UDP) Reporter
 func (e *event) Report(c *oboeContext) error { return e.ReportUsing(c, globalReporter) }
 
-// Report event using SampledContext interface
+// Report event using Context interface
 func (e *event) ReportContext(c Context, addCtxEdge bool, args ...interface{}) error {
 	if ctx, ok := c.(*oboeContext); ok {
 		return ctx.report(e, addCtxEdge, args...)

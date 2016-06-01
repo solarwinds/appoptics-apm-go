@@ -33,6 +33,16 @@ func (c *cStringCache) Has(str string) *cachedLayer {
 	return c.m[str]
 }
 
+// Keys returns a list of this cache's keys
+func (c *cStringCache) Keys() (keys []string) {
+	c.RLock()
+	defer c.RUnlock()
+	for k := range c.m {
+		keys = append(keys, k)
+	}
+	return
+}
+
 // Gets *C.char associated with a Go string
 func (c *cStringCache) Get(str string) *cachedLayer {
 	cl := c.Has(str)
