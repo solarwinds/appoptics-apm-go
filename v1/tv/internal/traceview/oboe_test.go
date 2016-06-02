@@ -127,8 +127,8 @@ func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) {
 	}(numbufs)
 }
 
-func testLayerCount(count int64) []interface{} {
-	return []interface{}{bson.D{bson.DocElem{Name: testLayer, Value: count}}}
+func testLayerCount(count int64) interface{} {
+	return bson.D{bson.DocElem{Name: testLayer, Value: count}}
 }
 func TestRateSampleRequest(t *testing.T) {
 	var bufs [][]byte

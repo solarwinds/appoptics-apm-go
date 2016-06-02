@@ -62,16 +62,12 @@ func bsonAppendBool(b *bsonBuffer, k string, v bool) {
 	}
 }
 
-func bsonAppendStartArray(b *bsonBuffer, k string) (start int) {
-	b.addElemName('\x04', k)
-	start = b.reserveInt32()
-	return
-}
 func bsonAppendStartObject(b *bsonBuffer, k string) (start int) {
 	b.addElemName('\x03', k)
 	start = b.reserveInt32()
 	return
 }
+
 func bsonAppendFinishObject(b *bsonBuffer, start int) {
 	b.addBytes(0)
 	b.setInt32(start, int32(len(b.buf)-start))

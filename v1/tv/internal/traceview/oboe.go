@@ -15,7 +15,6 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -216,15 +215,11 @@ func appendCount(e *event, counts map[string]*rateCounts, name string, f func(*r
 	if len(counts) == 0 {
 		return
 	}
-	var j, startArray, startObject int
-	startArray = bsonAppendStartArray(&e.bbuf, name)
 	for layer, c := range counts {
-		startObject = bsonAppendStartObject(&e.bbuf, strconv.Itoa(j))
-		j++
+		startObject := bsonAppendStartObject(&e.bbuf, name)
 		e.AddInt64(layer, f(c))
 		bsonAppendFinishObject(&e.bbuf, startObject)
 	}
-	bsonAppendFinishObject(&e.bbuf, startArray)
 }
 
 func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
