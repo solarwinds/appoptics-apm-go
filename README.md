@@ -124,17 +124,14 @@ func main() {
 ![sample_app screenshot](https://github.com/appneta/go-appneta/raw/master/img/readme-screenshot1.png)
 
 To monitor more than just the overall latency of each request to your Go service, you will need to
-break a request's processing time down by placing small benchmarks into your code.
+break a request's processing time down by placing small benchmarks into your code. To do so, first
+start or continue a `Trace` (the root `Layer`), then create a series of `Layer` spans (or `Profile`
+timings) to capture the time used by different parts of the app's stack as it is processed.
 
-To do so, first start or continue a `Trace` (the root `Layer`), then create a series of `Layer`
-spans (or `Profile` timings) to capture the time used by different parts of the app's stack as it is
-processed.
-
-TraceView provides two ways of measuring time spent by your code: a "Layer" span can measure e.g. a
-single DB query or cache request, an outgoing HTTP or RPC request, or the entire time spent within a
-controller method.
-
-A `Profile` provides a named measurement of time spent inside a `Layer`, and is typically used to
+TraceView provides two ways of measuring time spent by your code: a `Layer` can measure e.g. a
+single DB query or cache request, an outgoing HTTP or RPC request, the entire time spent within a
+controller method, or the time used by a middleware method between calls to child Layers. A
+`Profile` provides a named measurement of time spent inside a `Layer`, and is typically used to
 measure a single function call or code block, e.g. to represent the time used by expensive
 computation(s) occurring in a `Layer`. Layers can be created as children of other Layers, but a
 `Profile` cannot have children.
