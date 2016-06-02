@@ -16,8 +16,10 @@ import (
 	"golang.org/x/net/context"
 )
 
-func handler404(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) }
-func handler200(w http.ResponseWriter, r *http.Request) {} // do nothing (default should be 200)
+func handler404(w http.ResponseWriter, r *http.Request)   { w.WriteHeader(404) }
+func handler403(w http.ResponseWriter, r *http.Request)   { w.WriteHeader(403) }
+func handler200(w http.ResponseWriter, r *http.Request)   {} // do nothing (default should be 200)
+func handlerPanic(w http.ResponseWriter, r *http.Request) { panic("panicking!") }
 
 func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
 	h := http.HandlerFunc(tv.HTTPHandler(f))
@@ -31,7 +33,7 @@ func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
 func TestHTTPHandler404(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 	response := httpTest(handler404)
-	assert.Len(t, response.HeaderMap["X-Trace"], 1)
+	assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
 
 	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
 		// entry event should have no edges
@@ -43,7 +45,7 @@ func TestHTTPHandler404(t *testing.T) {
 		}},
 		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
 			// assert that response X-Trace header matches trace exit event
-			assert.Equal(t, response.HeaderMap.Get("X-Trace"), n.Map["X-Trace"])
+			assert.Equal(t, response.HeaderMap.Get(tv.HTTPHeaderName), n.Map[tv.HTTPHeaderName])
 			assert.EqualValues(t, response.Code, n.Map["Status"])
 			assert.EqualValues(t, 404, n.Map["Status"])
 			assert.Equal(t, "tv_test", n.Map["Controller"])
@@ -66,8 +68,8 @@ func TestHTTPHandler200(t *testing.T) {
 		}},
 		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
 			// assert that response X-Trace header matches trace exit event
-			assert.Len(t, response.HeaderMap["X-Trace"], 1)
-			assert.Equal(t, response.HeaderMap["X-Trace"][0], n.Map["X-Trace"])
+			assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
+			assert.Equal(t, response.HeaderMap[tv.HTTPHeaderName][0], n.Map[tv.HTTPHeaderName])
 			assert.EqualValues(t, response.Code, n.Map["Status"])
 			assert.EqualValues(t, 200, n.Map["Status"])
 			assert.Equal(t, "tv_test", n.Map["Controller"])
@@ -87,9 +89,9 @@ func TestHTTPHandlerNoTrace(t *testing.T) {
 
 // testServer tests creating a layer/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
 func testServer(t *testing.T, list net.Listener) {
-	s := &http.Server{Handler: http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// create layer from incoming HTTP Request headers, if trace exists
-		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
+		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", w, req)
 		defer tr.End()
 
 		tr.AddEndArgs("NotReported") // odd-length args, should have no effect
@@ -123,15 +125,34 @@ func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 
 // testServer200 does not trace and returns a 200.
 func testServer200(t *testing.T, list net.Listener) {
-	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})}
+	s := &http.Server{Handler: http.HandlerFunc(handler200)}
 	assert.NoError(t, s.Serve(list))
 }
 
 // testServer403 does not trace and returns a 403.
 func testServer403(t *testing.T, list net.Listener) {
-	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(403) // return Forbidden
-	})}
+	s := &http.Server{Handler: http.HandlerFunc(handler403)}
+	assert.NoError(t, s.Serve(list))
+}
+
+// simulate panic-catching middleware wrapping tv.HTTPHandler(handlerPanic)
+func panicCatchingMiddleware(t *testing.T, f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				t.Logf("panicCatcher caught panic %v", err)
+				w.WriteHeader(500)
+				w.Write([]byte(fmt.Sprintf("500 Error: %v", err)))
+			}
+		}()
+		f(w, r)
+	}
+}
+
+// testServerPanic traces a wrapped http.HandlerFunc that panics
+func testServerPanic(t *testing.T, list net.Listener) {
+	s := &http.Server{Handler: http.HandlerFunc(
+		panicCatchingMiddleware(t, tv.HTTPHandler(handlerPanic)))}
 	assert.NoError(t, s.Serve(list))
 }
 
@@ -144,7 +165,7 @@ func testHTTPClient(t *testing.T, ctx context.Context, method, url string) (*htt
 	}
 	l, _ := tv.BeginLayer(ctx, "http.Client", "IsService", true, "RemoteURL", url)
 	defer l.End()
-	httpReq.Header.Set("X-Trace", l.MetadataString())
+	httpReq.Header.Set(tv.HTTPHeaderName, l.MetadataString())
 
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
@@ -153,7 +174,7 @@ func testHTTPClient(t *testing.T, ctx context.Context, method, url string) (*htt
 	}
 	defer resp.Body.Close()
 
-	l.AddEndArgs("Edge", resp.Header.Get("X-Trace"))
+	l.AddEndArgs("Edge", resp.Header.Get(tv.HTTPHeaderName))
 	return resp, err
 }
 
@@ -213,6 +234,7 @@ type testServerFn struct {
 var testHTTPSvr = testServerFn{testServer, assertHTTPRequestGraph, 403}
 var testHTTPSvr200 = testServerFn{testServer200, assertHTTPRequestUntracedGraph, 200}
 var testHTTPSvr403 = testServerFn{testServer403, assertHTTPRequestUntracedGraph, 403}
+var testHTTPSvrPanic = testServerFn{testServerPanic, assertHTTPRequestPanic, 200}
 
 var badURL = "%gh&%ij" // url.Parse() will return error
 var invalidPortURL = "http://0.0.0.0:888888"
@@ -232,6 +254,9 @@ func TestTraceHTTPHelperPostB(t *testing.T)   { testHTTP(t, "POST", false, testH
 func TestTraceHTTPBadRequest(t *testing.T)    { testHTTP(t, "GET", true, testHTTPClient, testHTTPSvr) }
 func TestTraceHTTPHelperBadReqA(t *testing.T) { testHTTP(t, "GET", true, testHTTPClientA, testHTTPSvr) }
 func TestTraceHTTPHelperBadReqB(t *testing.T) { testHTTP(t, "GET", true, testHTTPClientB, testHTTPSvr) }
+func TestTraceHTTPPanic(t *testing.T)         { testHTTP(t, "GET", false, testHTTPClient, testHTTPSvrPanic) }
+func TestTraceHTTPPanicA(t *testing.T)        { testHTTP(t, "GET", false, testHTTPClientA, testHTTPSvrPanic) }
+func TestTraceHTTPPanicB(t *testing.T)        { testHTTP(t, "GET", false, testHTTPClientB, testHTTPSvrPanic) }
 
 // launch a test HTTP server and trace an HTTP request to it
 func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, server testServerFn) {
@@ -259,16 +284,15 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 		})
 		return
 	}
+	// handle case where http.Client.Do() did not return an error
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-
 	server.assertFn(t, r.Bufs, resp, url, method, port, server.status)
 }
 
 // assert traces that hit testServer, which uses the HTTP server instrumentation.
 func assertHTTPRequestGraph(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
-	// handle case where http.Client.Do() did not return an error
-	assert.Len(t, resp.Header["X-Trace"], 1)
+	assert.Len(t, resp.Header[tv.HTTPHeaderName], 1)
 	assert.Equal(t, status, resp.StatusCode)
 
 	g.AssertGraph(t, bufs, 8, map[g.MatchNode]g.AssertNode{
@@ -298,7 +322,7 @@ func assertHTTPRequestGraph(t *testing.T, bufs [][]byte, resp *http.Response, ur
 
 // assert traces of an HTTP client to untraced servers testServer200 and testServer403.
 func assertHTTPRequestUntracedGraph(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
-	assert.NotContains(t, resp.Header["X-Trace"], "Header")
+	assert.NotContains(t, resp.Header[tv.HTTPHeaderName], "Header")
 	assert.Equal(t, status, resp.StatusCode)
 
 	g.AssertGraph(t, bufs, 4, map[g.MatchNode]g.AssertNode{
@@ -309,6 +333,35 @@ func assertHTTPRequestUntracedGraph(t *testing.T, bufs [][]byte, resp *http.Resp
 		}},
 		{"http.Client", "exit"}: {g.OutEdges{{"http.Client", "entry"}}, nil},
 		{"httpTest", "exit"}:    {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
+	})
+}
+
+// assert traces that hit a TV-wrapped, panicking http Handler.
+func assertHTTPRequestPanic(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
+
+	g.AssertGraph(t, bufs, 7, map[g.MatchNode]g.AssertNode{
+		{"httpTest", "entry"}: {},
+		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
+			assert.Equal(t, true, n.Map["IsService"])
+			assert.Equal(t, url, n.Map["RemoteURL"])
+		}},
+		{"http.Client", "exit"}: {g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}, nil},
+		{"http.HandlerFunc", "entry"}: {g.OutEdges{{"http.Client", "entry"}}, func(n g.Node) {
+			assert.Equal(t, "/test", n.Map["URL"])
+			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
+			assert.Equal(t, "qs=1", n.Map["Query-String"])
+			assert.Equal(t, method, n.Map["Method"])
+		}},
+		{"http.HandlerFunc", "error"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
+			assert.Equal(t, "panic", n.Map["ErrorClass"])
+			assert.Equal(t, "panicking!", n.Map["ErrorMsg"])
+		}},
+		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "error"}}, func(n g.Node) {
+			assert.Equal(t, "tv_test", n.Map["Controller"])
+			assert.Equal(t, "handlerPanic", n.Map["Action"])
+			assert.Equal(t, status, n.Map["Status"])
+		}},
+		{"httpTest", "exit"}: {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
 	})
 }
 
@@ -370,7 +423,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	tv.EndTrace(ctx)
 
 	assert.NoError(t, err)
-	assert.Len(t, resp.Header["X-Trace"], 1)
+	assert.Len(t, resp.Header[tv.HTTPHeaderName], 1)
 	assert.Equal(t, 403, resp.StatusCode)
 
 	g.AssertGraph(t, r.Bufs, 10, map[g.MatchNode]g.AssertNode{

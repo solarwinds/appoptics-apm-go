@@ -99,7 +99,7 @@ func TestSendEvent(t *testing.T) {
 	})
 }
 
-func TestEvent(t *testing.T) {
+func TestOboeEvent(t *testing.T) {
 	// oboe_event_init
 	evt := &event{}
 	var md, emptyMd oboeMetadata
@@ -142,14 +142,14 @@ func TestEventMetadata(t *testing.T) {
 	})
 }
 
-func TestSampledEvent(t *testing.T) {
+func TestEvent(t *testing.T) {
 	r := SetTestReporter()
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
 	err = e.Report(ctx)
 	assert.NoError(t, err)
-	// create SampledEvent with edge to entry
+	// create Event with edge to entry
 	se := ctx.NewEvent(LabelExit, testLayer, true)
 	assert.NoError(t, se.ReportContext(ctx, false))
 
@@ -158,7 +158,7 @@ func TestSampledEvent(t *testing.T) {
 		{"go_test", "exit"}:  {g.OutEdges{{"go_test", "entry"}}, nil},
 	})
 }
-func TestSampledEventNoEdge(t *testing.T) {
+func TestEventNoEdge(t *testing.T) {
 	r := SetTestReporter()
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelEntry, testLayer)

@@ -2,9 +2,7 @@
 
 package traceview
 
-import (
-	"math"
-)
+import "math"
 
 type bsonBuffer struct {
 	buf []byte
@@ -62,6 +60,17 @@ func bsonAppendBool(b *bsonBuffer, k string, v bool) {
 	} else {
 		b.addBytes(0)
 	}
+}
+
+func bsonAppendStartObject(b *bsonBuffer, k string) (start int) {
+	b.addElemName('\x03', k)
+	start = b.reserveInt32()
+	return
+}
+
+func bsonAppendFinishObject(b *bsonBuffer, start int) {
+	b.addBytes(0)
+	b.setInt32(start, int32(len(b.buf)-start))
 }
 
 // Based on https://github.com/go-mgo/mgo/blob/v2/bson/encode.go

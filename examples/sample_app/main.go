@@ -10,6 +10,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	_ "net/http/pprof"
 	"time"
 
 	"github.com/appneta/go-appneta/v1/tv"
@@ -48,8 +49,8 @@ func init() {
 	flag.BoolVar(&testClients, "testClients", false, "run test clients")
 	flag.Parse()
 	if testClients {
-		go doForever("GET", "http://localhost:8899/slow")
-		go doForever("POST", "http://localhost:8899/slowly")
+		go doForever("GET", fmt.Sprintf("http://localhost%s/slow", addr))
+		go doForever("POST", fmt.Sprintf("http://localhost%s/slowly", addr))
 	}
 }
 

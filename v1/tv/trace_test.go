@@ -29,7 +29,7 @@ func TestTraceMetadata(t *testing.T) {
 		{"test", "entry"}: {},
 		{"test", "exit"}: {g.OutEdges{{"test", "entry"}}, func(n g.Node) {
 			// exit event should match ExitMetadata
-			assert.Equal(t, md, n.Map["X-Trace"])
+			assert.Equal(t, md, n.Map[tv.HTTPHeaderName])
 		}},
 	})
 }
@@ -85,8 +85,9 @@ func traceExample(ctx context.Context) {
 
 	t := tv.FromContext(ctx)
 	// instrument a DB query
-	q := []byte("SELECT * FROM tbl")
-	l := t.BeginLayer("DBx", "Query", q)
+	q := "SELECT * FROM tbl"
+	// l, _ := tv.BeginLayer(ctx, "DBx", "Query", q, "Flavor", "postgresql", "RemoteHost", "db.com")
+	l := tv.BeginQueryLayer(ctx, "DBx", q, "postgresql", "db.com")
 	// db.Query(q)
 	time.Sleep(20 * time.Millisecond)
 	l.Error("QueryError", "Error running query!")
@@ -107,7 +108,7 @@ func traceExampleCtx(ctx context.Context) {
 
 	// instrument a DB query
 	q := []byte("SELECT * FROM tbl")
-	_, ctxQ := tv.BeginLayer(ctx, "DBx", "Query", q)
+	_, ctxQ := tv.BeginLayer(ctx, "DBx", "Query", q, "Flavor", "postgresql", "RemoteHost", "db.com")
 	// db.Query(q)
 	time.Sleep(20 * time.Millisecond)
 	tv.Error(ctxQ, "QueryError", "Error running query!")
@@ -125,7 +126,8 @@ func traceExampleCtx(ctx context.Context) {
 func f0(ctx context.Context) {
 	defer tv.BeginProfile(ctx, "f0").End()
 
-	l, _ := tv.BeginLayer(ctx, "http.Get", "URL", "http://a.b")
+	//	l, _ := tv.BeginLayer(ctx, "http.Get", "RemoteURL", "http://a.b")
+	l := tv.BeginRemoteURLLayer(ctx, "http.Get", "http://a.b")
 	time.Sleep(5 * time.Millisecond)
 	// _, _ = http.Get("http://a.b")
 
@@ -147,7 +149,7 @@ func f0(ctx context.Context) {
 func f0Ctx(ctx context.Context) {
 	defer tv.BeginProfile(ctx, "f0").End()
 
-	_, ctx = tv.BeginLayer(ctx, "http.Get", "URL", "http://a.b")
+	_, ctx = tv.BeginLayer(ctx, "http.Get", "RemoteURL", "http://a.b")
 	time.Sleep(5 * time.Millisecond)
 	// _, _ = http.Get("http://a.b")
 
@@ -200,7 +202,7 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 		{"", "profile_exit"}: {g.OutEdges{{"", "profile_entry"}}, nil},
 		// nested layer in http.Get profile points to trace entry
 		{"http.Get", "entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
-			assert.Equal(t, n.Map["URL"], "http://a.b")
+			assert.Equal(t, n.Map["RemoteURL"], "http://a.b")
 		}},
 		// http.Get info points to entry
 		{"http.Get", "info"}: {g.OutEdges{{"http.Get", "entry"}}, func(n g.Node) {
@@ -222,6 +224,8 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 		// first query after call to f0 should link to ...?
 		{"DBx", "entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
 			assert.EqualValues(t, n.Map["Query"], "SELECT * FROM tbl")
+			assert.Equal(t, n.Map["Flavor"], "postgresql")
+			assert.Equal(t, n.Map["RemoteHost"], "db.com")
 		}},
 		// error in nested layer should link to layer entry
 		{"DBx", "error"}: {g.OutEdges{{"DBx", "entry"}}, func(n g.Node) {
@@ -250,6 +254,24 @@ func TestNoTraceExample(t *testing.T) {
 	assert.Len(t, r.Bufs, 0)
 }
 
+func BenchmarkNewTrace(b *testing.B) {
+	r := traceview.SetTestReporter()
+	r.ShouldTrace = false
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = tv.NewTrace("test")
+	}
+}
+
+func BenchmarkNewTraceFromID(b *testing.B) {
+	r := traceview.SetTestReporter()
+	r.ShouldTrace = false
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = tv.NewTraceFromID("test", "", nil)
+	}
+}
+
 func TestTraceFromMetadata(t *testing.T) {
 	r := traceview.SetTestReporter()
 
@@ -262,12 +284,12 @@ func TestTraceFromMetadata(t *testing.T) {
 		// entry event should have edge to incoming opID
 		{"test", "entry"}: {g.OutEdges{{"Edge", incomingID[42:]}}, func(n g.Node) {
 			// trace ID should match incoming ID
-			assert.Equal(t, incomingID[2:42], n.Map["X-Trace"].(string)[2:42])
+			assert.Equal(t, incomingID[2:42], n.Map[tv.HTTPHeaderName].(string)[2:42])
 		}},
 		// exit event links to entry
 		{"test", "exit"}: {g.OutEdges{{"test", "entry"}}, func(n g.Node) {
 			// trace ID should match incoming ID
-			assert.Equal(t, incomingID[2:42], n.Map["X-Trace"].(string)[2:42])
+			assert.Equal(t, incomingID[2:42], n.Map[tv.HTTPHeaderName].(string)[2:42])
 			assert.Equal(t, "Arg", n.Map["Extra"])
 		}},
 	})
