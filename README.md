@@ -72,10 +72,17 @@ The simplest integration option is this package's
 will monitor the performance of the provided
 [http.HandlerFunc](https://golang.org/pkg/net/http/#HandlerFunc), visualized with latency
 distribution heatmaps filterable by dimensions such as URL host & path, HTTP status & method, server
-hostname, etc.  [tv.HTTPHandler](https://godoc.org/github.com/appneta/go-appneta/v1/tv#HTTPHandler)
+hostname, etc. [tv.HTTPHandler](https://godoc.org/github.com/appneta/go-appneta/v1/tv#HTTPHandler)
 will also continue a distributed trace described in the incoming HTTP request headers (from
-TraceView's automatic C#/.NET, Java, Node.js, PHP, Python, Ruby, and Scala instrumentation) through
-to the HTTP response, if one exists.
+TraceView's [automatic](https://docs.appneta.com/support-matrix)
+[C#/.NET](https://docs.appneta.com/support-matrix#net),
+[Java](https://docs.appneta.com/support-matrix#java-scala),
+[Node.js](https://github.com/appneta/node-traceview),
+[PHP](https://docs.appneta.com/support-matrix#php),
+[Python](https://github.com/appneta/python-traceview),
+[Ruby](https://github.com/appneta/ruby-traceview), and
+[Scala](https://docs.appneta.com/support-matrix#java-scala) instrumentation) through to the HTTP
+response.
 
 ```go
 package main
@@ -119,57 +126,66 @@ func main() {
 To monitor more than just the overall latency of each request to your Go service, you will need to
 break a request's processing time down by placing small benchmarks into your code.
 
-To do so, first start or continue a trace (the root Layer), then create a series of "Layer" spans
-(or "Profile" timings) to capture the time used by different parts of the app's stack as it is
+To do so, first start or continue a `Trace` (the root `Layer`), then create a series of `Layer`
+spans (or `Profile` timings) to capture the time used by different parts of the app's stack as it is
 processed.
 
 TraceView provides two ways of measuring time spent by your code: a "Layer" span can measure e.g. a
 single DB query or cache request, an outgoing HTTP or RPC request, or the entire time spent within a
 controller method.
 
-A "Profile" provides a named measurement of time spent inside a Layer, and is typically used to
+A `Profile` provides a named measurement of time spent inside a `Layer`, and is typically used to
 measure a single function call or code block, e.g. to represent the time used by expensive
-computation(s) occurring in a Layer. Layer spans can be created as children of other Layers, but a
-Profile cannot have children.
+computation(s) occurring in a `Layer`. Layers can be created as children of other Layers, but a
+`Profile` cannot have children.
 
-TraceView's backend identifies a Layer's type by examining the key-value pairs associated with it;
-for example, if keys named "Query" and "RemoteHost" are used, the span is assumed to represent a DB
-query. Our documentation on [custom
-instrumentation](http://docs.appneta.com/traceview-instrumentation#extending-traceview-customizing)
-describes key names that can be used to describe incoming HTTP requests, DB queries, cache/KV server
-calls, outgoing RPCs, and web framework information such as controller/action names. They can be
-provided as extra arguments when calling the
-[BeginLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginLayer),
-[Info()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer), or
-[End()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer) methods.
+TraceView identifies a reported Layer's type from its key-value pairs; if keys named "Query" and
+"RemoteHost" are used, a Layer is assumed to measure the extent of a DB query. KV pairs can be
+appended to Layer and Profile extents as optional extra variadic arguments to methods such as
+[BeginLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginLayer) or
+[BeginProfile()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginProfile),
+[Info()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer), and
+[End()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer). We also provide helper methods
+such as [BeginQueryLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginQueryLayer),
+[BeginCacheLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginCacheLayer),
+[BeginRemoteURLLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginRemoteURLLayer),
+[BeginRPCLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginRPCLayer), and
+[BeginHTTPClientLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginHTTPClientLayer)
+that match the spec in our
+[custom instrumentation docs](http://docs.appneta.com/traceview-instrumentation#special-interpretation)
+to report attributes associated with different types of service calls, used for indexing TraceView's
+filterable charts and latency heatmaps.
 
 ```go
 func slowFunc(ctx context.Context) {
-    // profile a function call (as part of a Layer)
+    // profile a slow function call
     defer tv.BeginProfile(ctx, "slowFunc").End()
     // ... do something slow
 }
 
-func main() {
-    // create trace and bind to new context
-    ctx := tv.NewContext(context.Background(), tv.NewTrace("myApp"))
-    // create new layer span for this trace
-    l, ctxL := tv.BeginLayer(ctx, "myLayer")
+func myHandler() {
+    // create new tv.Layer and context.Context for this part of the request
+    L, ctxL := tv.BeginLayer(ctx, "myHandler")
+    defer L.End()
 
-    // profile a slow part of this layer
+    // profile a slow part of this tv.Layer
     slowFunc(ctxL)
 
-    // Start a new span, given a parent layer
-    q1L := l.BeginLayer("myDB", "Query", "SELECT * FROM tbl1", "RemoteHost", "db1.com")
-    // perform a query
-    q1L.End()
+    // Start a new Layer, given a parent layer
+    mL, _ := L.BeginLayer("myMiddleware")
+    // ... do something slow ...
+    mL.End()
 
-    // Start a new span, given a context.Context
-    q2L, _ := tv.BeginLayer(ctxL, "myDB", "Query", "SELECT * FROM tbl2", "RemoteHost", "db2.com")
+    // Start a new query Layer, given a context.Context
+    q1L := tv.BeginQueryLayer(ctxL, "myDB", "SELECT * FROM tbl1", "postgresql", "db1.com")
     // perform a query
     q2L.End()
+}
 
-    l.End()
+func processRequest() {
+    // Create tv.Trace and bind to new context.Context
+    ctx := tv.NewContext(context.Background(), tv.NewTrace("myApp"))
+    myHandler(ctx) // Dispatch handler for request
     tv.EndTrace(ctx)
 }
 ```
@@ -178,7 +194,7 @@ func main() {
 
 A TraceView trace is defined by a context (a globally unique ID and metadata) that is persisted
 across the different hosts, processes, languages and methods that are used to serve a request. Thus
-to start a new Layer span you need either a Trace or another Layer to begin from. (The Trace
+to start a new Layer you need either a Trace or another Layer to begin from. (The Trace
 interface is also the root Layer, typically created when a request is first received.) Each new
 Layer is connected to its parent, so you should begin new child Layers from parents in a way that
 logically matches your application; for more information [see our custom layer
@@ -193,7 +209,7 @@ argument to every function on the call path between incoming and outgoing reques
 implementations, for example. We provide helper methods that allow a Trace to be associated with a
 [context.Context](https://godoc.org/golang.org/x/net/context) interface; for example,
 [tv.BeginLayer](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginLayer) returns both a
-new Layer span and an associated context, and
+new Layer and an associated context, and
 [tv.Info(ctx)](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Info) and
 [tv.End(ctx)](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer) both use the Layer
 defined in the provided context.
@@ -202,13 +218,13 @@ It is not required to work with context.Context to trace your app, however. You 
 the [Trace](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Trace),
 [Layer](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer), and
 [Profile](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Profile) interfaces directly, if it
-better suits your application.
+better suits your instrumentation use case.
 
 ```go
-func runQuery(ctx context.Context) {
-    l, _ := tv.BeginLayer(ctx, "DBx", "Query", "SELECT * FROM tbl", "RemoteHost", "db1.com")
+func runQuery(ctx context.Context, query string) {
+    l := tv.BeginQueryLayer(ctx, "myDB", query, "postgresql", "db1.com")
     // .. execute query ..
-    l.End(ctx)
+    l.End()
 }
 
 func main() {
