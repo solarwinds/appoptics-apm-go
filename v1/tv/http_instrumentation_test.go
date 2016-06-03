@@ -482,16 +482,16 @@ func TestDistributedApp(t *testing.T) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	t.Logf("Response: %v BUF %s", resp, buf)
 
-	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeMap{
-		{"http.HandlerFunc", "entry"}: {},
-		{"aliceHandler", "entry"}:     {OutEdges: g.OutEdges{{"http.HandlerFunc", "entry"}}},
-		{"http.Client", "entry"}:      {OutEdges: g.OutEdges{{"aliceHandler", "entry"}}, Callback: func(n g.Node) {}},
-		{"http.HandlerFunc", "entry"}: {OutEdges: g.OutEdges{{"http.Client", "entry"}}},
-		{"bobHandler", "entry"}:       {OutEdges: g.OutEdges{{"http.HandlerFunc", "entry"}}},
-		{"bobHandler", "exit"}:        {OutEdges: g.OutEdges{{"bobHandler", "entry"}}},
-		{"http.HandlerFunc", "exit"}:  {OutEdges: g.OutEdges{{"bobHandler", "exit"}, {"http.HandlerFunc", "entry"}}},
-		{"http.Client", "exit"}:       {OutEdges: g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}},
-		{"aliceHandler", "exit"}:      {OutEdges: g.OutEdges{{"http.Client", "exit"}, {"aliceHandler", "entry"}}},
-		{"http.HandlerFunc", "exit"}:  {OutEdges: g.OutEdges{{"aliceHandler", "exit"}, {"http.HandlerFunc", "entry"}}},
+	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeKVMap{
+		{"http.HandlerFunc", "entry", "URL", "/alice"}:         {},
+		{"aliceHandler", "entry", "URL", "/alice"}:             {OutEdges: g.OutEdges{{"http.HandlerFunc", "entry"}}},
+		{"http.Client", "entry", "", ""}:                       {OutEdges: g.OutEdges{{"aliceHandler", "entry"}}, Callback: func(n g.Node) {}},
+		{"http.HandlerFunc", "entry", "URL", "/bob"}:           {OutEdges: g.OutEdges{{"http.Client", "entry"}}},
+		{"bobHandler", "entry", "URL", "/bob"}:                 {OutEdges: g.OutEdges{{"http.HandlerFunc", "entry"}}},
+		{"bobHandler", "exit", "", ""}:                         {OutEdges: g.OutEdges{{"bobHandler", "entry"}}},
+		{"http.HandlerFunc", "exit", "Action", "BobHandler"}:   {OutEdges: g.OutEdges{{"bobHandler", "exit"}, {"http.HandlerFunc", "entry"}}},
+		{"http.Client", "exit", "", ""}:                        {OutEdges: g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}},
+		{"aliceHandler", "exit", "", ""}:                       {OutEdges: g.OutEdges{{"http.Client", "exit"}, {"aliceHandler", "entry"}}},
+		{"http.HandlerFunc", "exit", "Action", "AliceHandler"}: {OutEdges: g.OutEdges{{"aliceHandler", "exit"}, {"http.HandlerFunc", "entry"}}},
 	})
 }

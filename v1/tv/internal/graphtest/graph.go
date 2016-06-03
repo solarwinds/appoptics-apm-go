@@ -75,7 +75,7 @@ func buildGraph(t *testing.T, bufs [][]byte) eventGraph {
 type MatchNode struct{ Layer, Label string }
 
 // MatchNode describes an outedge's destination node.
-type MatchNodeURL struct{ Layer, Label, URL string }
+type MatchNodeKV struct{ Layer, Label, K, V string }
 
 // OutEdges is a list of outedges to assert on.
 type OutEdges []MatchNode
@@ -88,7 +88,7 @@ type AssertNode struct { // run to assert each Node
 }
 
 type AssertNodeMap map[MatchNode]AssertNode
-type AssertNodeURLMap map[MatchNodeURL]AssertNode
+type AssertNodeKVMap map[MatchNodeKV]AssertNode
 type AsserterMap interface {
 	Match(n Node) (AssertNode, bool)
 	Len() int
@@ -111,6 +111,49 @@ func (m AssertNodeMap) AssertSeen(t *testing.T, n Node) {
 }
 
 func (m AssertNodeMap) AssertMissing(t *testing.T) {
+	for mn, a := range m {
+		assert.True(t, m[mn].Seen, "Didn't see node %v edges %v", mn, a)
+	}
+}
+
+func (m AssertNodeKVMap) Match(n Node) (ret AssertNode, ok bool) {
+	var mn MatchNodeKV
+	if mn, ok = m.match(n); ok {
+		ret, ok = m[mn]
+	}
+	return
+}
+func (m AssertNodeKVMap) match(n Node) (mn MatchNodeKV, ok bool) {
+	// look for node with same KV pair as specified in assert structure
+	for k, v := range n.Map {
+		var vs string
+		if vs, ok = v.(string); !ok {
+			continue
+		}
+		mn = MatchNodeKV{n.Layer, n.Label, k, vs}
+		if _, ok = m[mn]; ok {
+			return
+		}
+	}
+	// or look for node matching just on label/layer, no KV pair
+	if _, ok = m[MatchNodeKV{n.Layer, n.Label, "", ""}]; ok {
+		mn = MatchNodeKV{n.Layer, n.Label, "", ""}
+		return
+	}
+	return
+}
+func (m AssertNodeKVMap) Len() int { return len(m) }
+func (m AssertNodeKVMap) AssertSeen(t *testing.T, n Node) {
+	// assert each node seen once
+	mn, ok := m.match(n)
+	assert.True(t, ok)
+	assert.False(t, m[mn].Seen)
+	asserter := m[mn]
+	asserter.Seen = true
+	m[mn] = asserter
+}
+
+func (m AssertNodeKVMap) AssertMissing(t *testing.T) {
 	for mn, a := range m {
 		assert.True(t, m[mn].Seen, "Didn't see node %v edges %v", mn, a)
 	}
