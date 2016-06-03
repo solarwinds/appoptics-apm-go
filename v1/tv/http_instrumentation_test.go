@@ -39,13 +39,13 @@ func TestHTTPHandler404(t *testing.T) {
 
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
-		{"http.HandlerFunc", "entry"}: {g.OutEdges{}, func(n g.Node) {
+		{"http.HandlerFunc", "entry"}: {OutEdges: g.OutEdges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
 			assert.Equal(t, "GET", n.Map["Method"])
 			assert.Equal(t, "testq", n.Map["Query-String"])
 		}},
-		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
+		{"http.HandlerFunc", "exit"}: {OutEdges: g.OutEdges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 			// assert that response X-Trace header matches trace exit event
 			assert.Equal(t, response.HeaderMap.Get(tv.HTTPHeaderName), n.Map[tv.HTTPHeaderName])
 			assert.EqualValues(t, response.Code, n.Map["Status"])
@@ -62,13 +62,13 @@ func TestHTTPHandler200(t *testing.T) {
 
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
-		{"http.HandlerFunc", "entry"}: {g.OutEdges{}, func(n g.Node) {
+		{"http.HandlerFunc", "entry"}: {OutEdges: g.OutEdges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
 			assert.Equal(t, "GET", n.Map["Method"])
 			assert.Equal(t, "testq", n.Map["Query-String"])
 		}},
-		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
+		{"http.HandlerFunc", "exit"}: {OutEdges: g.OutEdges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 			// assert that response X-Trace header matches trace exit event
 			assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
 			assert.Equal(t, response.HeaderMap[tv.HTTPHeaderName][0], n.Map[tv.HTTPHeaderName])
@@ -282,7 +282,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 		assert.Nil(t, resp)
 		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
-			{"httpTest", "exit"}:  {g.OutEdges{{"httpTest", "entry"}}, nil},
+			{"httpTest", "exit"}:  {OutEdges: g.OutEdges{{"httpTest", "entry"}}},
 		})
 		return
 	}
@@ -299,26 +299,26 @@ func assertHTTPRequestGraph(t *testing.T, bufs [][]byte, resp *http.Response, ur
 
 	g.AssertGraph(t, bufs, 8, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
-		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
+		{"http.Client", "entry"}: {OutEdges: g.OutEdges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
 			assert.Equal(t, url, n.Map["RemoteURL"])
 		}},
-		{"http.Client", "exit"}: {g.OutEdges{{"myHandler", "exit"}, {"http.Client", "entry"}}, nil},
-		{"myHandler", "entry"}: {g.OutEdges{{"http.Client", "entry"}}, func(n g.Node) {
+		{"http.Client", "exit"}: {OutEdges: g.OutEdges{{"myHandler", "exit"}, {"http.Client", "entry"}}},
+		{"myHandler", "entry"}: {OutEdges: g.OutEdges{{"http.Client", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "/test", n.Map["URL"])
 			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
 			assert.Equal(t, "qs=1", n.Map["Query-String"])
 			assert.Equal(t, method, n.Map["Method"])
 		}},
-		{"myHandler", "exit"}: {g.OutEdges{{"DBx", "exit"}, {"myHandler", "entry"}}, func(n g.Node) {
+		{"myHandler", "exit"}: {OutEdges: g.OutEdges{{"DBx", "exit"}, {"myHandler", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, status, n.Map["Status"])
 		}},
-		{"DBx", "entry"}: {g.OutEdges{{"myHandler", "entry"}}, func(n g.Node) {
+		{"DBx", "entry"}: {OutEdges: g.OutEdges{{"myHandler", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "SELECT *", n.Map["Query"])
 			assert.Equal(t, "db.net", n.Map["RemoteHost"])
 		}},
-		{"DBx", "exit"}:      {g.OutEdges{{"DBx", "entry"}}, nil},
-		{"httpTest", "exit"}: {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
+		{"DBx", "exit"}:      {OutEdges: g.OutEdges{{"DBx", "entry"}}},
+		{"httpTest", "exit"}: {OutEdges: g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}},
 	})
 }
 
@@ -329,12 +329,12 @@ func assertHTTPRequestUntracedGraph(t *testing.T, bufs [][]byte, resp *http.Resp
 
 	g.AssertGraph(t, bufs, 4, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
-		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
+		{"http.Client", "entry"}: {OutEdges: g.OutEdges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
 			assert.Equal(t, url, n.Map["RemoteURL"])
 		}},
-		{"http.Client", "exit"}: {g.OutEdges{{"http.Client", "entry"}}, nil},
-		{"httpTest", "exit"}:    {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
+		{"http.Client", "exit"}: {OutEdges: g.OutEdges{{"http.Client", "entry"}}},
+		{"httpTest", "exit"}:    {OutEdges: g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}},
 	})
 }
 
@@ -343,27 +343,27 @@ func assertHTTPRequestPanic(t *testing.T, bufs [][]byte, resp *http.Response, ur
 
 	g.AssertGraph(t, bufs, 7, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
-		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
+		{"http.Client", "entry"}: {OutEdges: g.OutEdges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
 			assert.Equal(t, url, n.Map["RemoteURL"])
 		}},
-		{"http.Client", "exit"}: {g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}, nil},
-		{"http.HandlerFunc", "entry"}: {g.OutEdges{{"http.Client", "entry"}}, func(n g.Node) {
+		{"http.Client", "exit"}: {OutEdges: g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}},
+		{"http.HandlerFunc", "entry"}: {OutEdges: g.OutEdges{{"http.Client", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "/test", n.Map["URL"])
 			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
 			assert.Equal(t, "qs=1", n.Map["Query-String"])
 			assert.Equal(t, method, n.Map["Method"])
 		}},
-		{"http.HandlerFunc", "error"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
+		{"http.HandlerFunc", "error"}: {OutEdges: g.OutEdges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "panic", n.Map["ErrorClass"])
 			assert.Equal(t, "panicking!", n.Map["ErrorMsg"])
 		}},
-		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"http.HandlerFunc", "error"}}, func(n g.Node) {
+		{"http.HandlerFunc", "exit"}: {OutEdges: g.OutEdges{{"http.HandlerFunc", "error"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "tv_test", n.Map["Controller"])
 			assert.Equal(t, "handlerPanic", n.Map["Action"])
 			assert.Equal(t, status, n.Map["Status"])
 		}},
-		{"httpTest", "exit"}: {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
+		{"httpTest", "exit"}: {OutEdges: g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}},
 	})
 }
 
@@ -391,23 +391,23 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 	if badReq { // handle case where http.NewRequest() returned nil
 		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
-			{"httpTest", "exit"}:  {g.OutEdges{{"httpTest", "entry"}}, nil},
+			{"httpTest", "exit"}:  {OutEdges: g.OutEdges{{"httpTest", "entry"}}},
 		})
 		return
 	}
 	// handle case where http.Client.Do() returned an error
 	g.AssertGraph(t, r.Bufs, 5, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
-		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
+		{"http.Client", "entry"}: {OutEdges: g.OutEdges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
 			assert.Equal(t, url, n.Map["RemoteURL"])
 		}},
-		{"http.Client", "error"}: {g.OutEdges{{"http.Client", "entry"}}, func(n g.Node) {
+		{"http.Client", "error"}: {OutEdges: g.OutEdges{{"http.Client", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "error", n.Map["ErrorClass"])
 			assert.Contains(t, n.Map["ErrorMsg"], "dial tcp: invalid port 888888")
 		}},
-		{"http.Client", "exit"}: {g.OutEdges{{"http.Client", "error"}}, nil},
-		{"httpTest", "exit"}:    {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
+		{"http.Client", "exit"}: {OutEdges: g.OutEdges{{"http.Client", "error"}}},
+		{"httpTest", "exit"}:    {OutEdges: g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}},
 	})
 }
 
@@ -430,37 +430,37 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 
 	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
-		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
+		{"http.Client", "entry"}: {OutEdges: g.OutEdges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
 			assert.Equal(t, url, n.Map["RemoteURL"])
 		}},
-		{"http.Client", "exit"}: {g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}, nil},
-		{"http.HandlerFunc", "entry"}: {g.OutEdges{{"http.Client", "entry"}}, func(n g.Node) {
+		{"http.Client", "exit"}: {OutEdges: g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}},
+		{"http.HandlerFunc", "entry"}: {OutEdges: g.OutEdges{{"http.Client", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "/test", n.Map["URL"])
 			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
 			assert.Equal(t, "qs=1", n.Map["Query-String"])
 			assert.Equal(t, "GET", n.Map["Method"])
 		}},
-		{"http.HandlerFunc", "exit"}: {g.OutEdges{{"myHandler", "exit"}, {"http.HandlerFunc", "entry"}}, func(n g.Node) {
+		{"http.HandlerFunc", "exit"}: {OutEdges: g.OutEdges{{"myHandler", "exit"}, {"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, 403, n.Map["Status"])
 			assert.Equal(t, "tv_test", n.Map["Controller"])
 			assert.Equal(t, "testDoubleWrappedServer.func1", n.Map["Action"])
 		}},
-		{"myHandler", "entry"}: {g.OutEdges{{"http.HandlerFunc", "entry"}}, func(n g.Node) {
+		{"myHandler", "entry"}: {OutEdges: g.OutEdges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "/test", n.Map["URL"])
 			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
 			assert.Equal(t, "qs=1", n.Map["Query-String"])
 			assert.Equal(t, "GET", n.Map["Method"])
 		}},
-		{"myHandler", "exit"}: {g.OutEdges{{"DBx", "exit"}, {"myHandler", "entry"}}, func(n g.Node) {
+		{"myHandler", "exit"}: {OutEdges: g.OutEdges{{"DBx", "exit"}, {"myHandler", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, 403, n.Map["Status"])
 		}},
-		{"DBx", "entry"}: {g.OutEdges{{"myHandler", "entry"}}, func(n g.Node) {
+		{"DBx", "entry"}: {OutEdges: g.OutEdges{{"myHandler", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "SELECT *", n.Map["Query"])
 			assert.Equal(t, "db.net", n.Map["RemoteHost"])
 		}},
-		{"DBx", "exit"}:      {g.OutEdges{{"DBx", "entry"}}, nil},
-		{"httpTest", "exit"}: {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
+		{"DBx", "exit"}:      {OutEdges: g.OutEdges{{"DBx", "entry"}}},
+		{"httpTest", "exit"}: {OutEdges: g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}},
 	})
 }
 
@@ -484,14 +484,14 @@ func TestDistributedApp(t *testing.T) {
 
 	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeMap{
 		{"http.HandlerFunc", "entry"}: {},
-		{"aliceHandler", "entry"}:     {g.OutEdges{{"http.HandlerFunc", "entry"}}, nil},
-		{"http.Client", "entry"}:      {g.OutEdges{{"aliceHandler", "entry"}}, func(n g.Node) {}},
-		{"http.HandlerFunc", "entry"}: {g.OutEdges{{"http.Client", "entry"}}, nil},
-		{"bobHandler", "entry"}:       {g.OutEdges{{"http.HandlerFunc", "entry"}}, nil},
-		{"bobHandler", "exit"}:        {g.OutEdges{{"bobHandler", "entry"}}, nil},
-		{"http.HandlerFunc", "exit"}:  {g.OutEdges{{"bobHandler", "exit"}, {"http.HandlerFunc", "entry"}}, nil},
-		{"http.Client", "exit"}:       {g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}, nil},
-		{"aliceHandler", "exit"}:      {g.OutEdges{{"http.Client", "exit"}, {"aliceHandler", "entry"}}, nil},
-		{"http.HandlerFunc", "exit"}:  {g.OutEdges{{"aliceHandler", "exit"}, {"http.HandlerFunc", "entry"}}, nil},
+		{"aliceHandler", "entry"}:     {OutEdges: g.OutEdges{{"http.HandlerFunc", "entry"}}},
+		{"http.Client", "entry"}:      {OutEdges: g.OutEdges{{"aliceHandler", "entry"}}, Callback: func(n g.Node) {}},
+		{"http.HandlerFunc", "entry"}: {OutEdges: g.OutEdges{{"http.Client", "entry"}}},
+		{"bobHandler", "entry"}:       {OutEdges: g.OutEdges{{"http.HandlerFunc", "entry"}}},
+		{"bobHandler", "exit"}:        {OutEdges: g.OutEdges{{"bobHandler", "entry"}}},
+		{"http.HandlerFunc", "exit"}:  {OutEdges: g.OutEdges{{"bobHandler", "exit"}, {"http.HandlerFunc", "entry"}}},
+		{"http.Client", "exit"}:       {OutEdges: g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}},
+		{"aliceHandler", "exit"}:      {OutEdges: g.OutEdges{{"http.Client", "exit"}, {"aliceHandler", "entry"}}},
+		{"http.HandlerFunc", "exit"}:  {OutEdges: g.OutEdges{{"aliceHandler", "exit"}, {"http.HandlerFunc", "entry"}}},
 	})
 }

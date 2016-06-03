@@ -83,7 +83,7 @@ func TestNullSpan(t *testing.T) {
 
 	g.AssertGraph(t, r.Bufs, 3, g.AssertNodeMap{
 		{"TestNullSpan", "entry"}: {},
-		{"L1", "entry"}:           {g.OutEdges{{"TestNullSpan", "entry"}}, nil},
-		{"L1", "exit"}:            {g.OutEdges{{"L1", "entry"}}, nil},
+		{"L1", "entry"}:           {OutEdges: g.OutEdges{{"TestNullSpan", "entry"}}},
+		{"L1", "exit"}:            {OutEdges: g.OutEdges{{"L1", "entry"}}},
 	})
 }

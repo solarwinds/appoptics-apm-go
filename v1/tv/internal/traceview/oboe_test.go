@@ -28,13 +28,13 @@ func TestInitMessage(t *testing.T) {
 }
 func assertInitMessage(t *testing.T, bufs [][]byte) {
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
-		{"go", "entry"}: {g.OutEdges{}, func(n g.Node) {
+		{"go", "entry"}: {OutEdges: g.OutEdges{}, Callback: func(n g.Node) {
 			assert.Equal(t, 1, n.Map["__Init"])
 			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
 			assert.NotEmpty(t, n.Map["Oboe.Version"])
 			assert.NotEmpty(t, n.Map["Go.Version"])
 		}},
-		{"go", "exit"}: {g.OutEdges{{"go", "entry"}}, nil},
+		{"go", "exit"}: {OutEdges: g.OutEdges{{"go", "entry"}}},
 	})
 }
 
@@ -136,7 +136,7 @@ func TestRateSampleRequest(t *testing.T) {
 	sendMetricsMessage()
 	time.Sleep(50 * time.Millisecond)
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
-		{"JMX", "entry"}: {g.OutEdges{}, func(n g.Node) {
+		{"JMX", "entry"}: {OutEdges: g.OutEdges{}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["ProcessName"], initLayer)
 			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
 			assert.True(t, n.Map[metricsPrefix+"type=threadcount,name=NumGoroutine"].(int64) > 0)
@@ -145,7 +145,7 @@ func TestRateSampleRequest(t *testing.T) {
 			assert.NotContains(t, "RequestCount", n.Map)
 			assert.NotContains(t, "SampleCount", n.Map)
 		}},
-		{"JMX", "exit"}: {g.OutEdges{{"JMX", "entry"}}, nil},
+		{"JMX", "exit"}: {OutEdges: g.OutEdges{{"JMX", "entry"}}},
 	})
 
 	traced := int64(0)
@@ -171,7 +171,7 @@ func TestRateSampleRequest(t *testing.T) {
 	sendMetricsMessage()
 	time.Sleep(50 * time.Millisecond)
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
-		{"JMX", "entry"}: {g.OutEdges{}, func(n g.Node) {
+		{"JMX", "entry"}: {OutEdges: g.OutEdges{}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["ProcessName"], initLayer)
 			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
 			assert.True(t, n.Map[metricsPrefix+"type=threadcount,name=NumGoroutine"].(int64) > 0)
@@ -181,7 +181,7 @@ func TestRateSampleRequest(t *testing.T) {
 			assert.Equal(t, testLayerCount(traced), n.Map["TraceCount"])
 			assert.Equal(t, testLayerCount(limited), n.Map["TokenBucketExhaustionCount"])
 		}},
-		{"JMX", "exit"}: {g.OutEdges{{"JMX", "entry"}}, nil},
+		{"JMX", "exit"}: {OutEdges: g.OutEdges{{"JMX", "entry"}}},
 	})
 
 	bufs = nil
@@ -189,7 +189,7 @@ func TestRateSampleRequest(t *testing.T) {
 	sendMetricsMessage()
 	time.Sleep(50 * time.Millisecond)
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
-		{"JMX", "entry"}: {g.OutEdges{}, func(n g.Node) {
+		{"JMX", "entry"}: {OutEdges: g.OutEdges{}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["ProcessName"], initLayer)
 			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
 			assert.True(t, n.Map[metricsPrefix+"type=threadcount,name=NumGoroutine"].(int64) > 0)
@@ -198,7 +198,7 @@ func TestRateSampleRequest(t *testing.T) {
 			assert.EqualValues(t, testLayerCount(0), n.Map["RequestCount"])
 			assert.EqualValues(t, testLayerCount(0), n.Map["SampleCount"])
 		}},
-		{"JMX", "exit"}: {g.OutEdges{{"JMX", "entry"}}, nil},
+		{"JMX", "exit"}: {OutEdges: g.OutEdges{{"JMX", "entry"}}},
 	})
 
 	// error sending metrics message: no reporting

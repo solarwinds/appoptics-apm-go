@@ -61,11 +61,11 @@ func assertTraceChild(t *testing.T, bufs [][]byte) {
 	// validate events reported
 	g.AssertGraph(t, bufs, 6, g.AssertNodeMap{
 		{"childExample", "entry"}: {},
-		{"L1", "entry"}:           {g.OutEdges{{"childExample", "entry"}}, nil},
-		{"DBx", "entry"}:          {g.OutEdges{{"L1", "entry"}}, nil},
-		{"DBx", "exit"}:           {g.OutEdges{{"DBx", "entry"}}, nil},
-		{"L1", "exit"}:            {g.OutEdges{{"DBx", "exit"}, {"L1", "entry"}}, nil},
-		{"childExample", "exit"}:  {g.OutEdges{{"L1", "exit"}, {"childExample", "entry"}}, nil},
+		{"L1", "entry"}:           {OutEdges: g.OutEdges{{"childExample", "entry"}}},
+		{"DBx", "entry"}:          {OutEdges: g.OutEdges{{"L1", "entry"}}},
+		{"DBx", "exit"}:           {OutEdges: g.OutEdges{{"DBx", "entry"}}},
+		{"L1", "exit"}:            {OutEdges: g.OutEdges{{"DBx", "exit"}, {"L1", "entry"}}},
+		{"childExample", "exit"}:  {OutEdges: g.OutEdges{{"L1", "exit"}, {"childExample", "entry"}}},
 	})
 }
 

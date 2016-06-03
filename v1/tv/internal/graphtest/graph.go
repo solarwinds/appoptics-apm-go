@@ -84,6 +84,7 @@ type OutEdges []MatchNode
 type AssertNode struct { // run to assert each Node
 	OutEdges OutEdges
 	Callback func(n Node)
+	Seen     bool
 }
 
 type AssertNodeMap map[MatchNode]AssertNode
@@ -102,17 +103,17 @@ func (m AssertNodeMap) Match(n Node) (AssertNode, bool) {
 func (m AssertNodeMap) Len() int { return len(m) }
 func (m AssertNodeMap) AssertSeen(t *testing.T, n Node) {
 	// assert each node seen once
-	// mn := MatchNode{n.Layer, n.Label}
-	// assert.False(t, m[mn].Seen)
-	// asserter := m[mn]
-	// asserter.Seen = true
-	// m[mn] = asserter
+	mn := MatchNode{n.Layer, n.Label}
+	assert.False(t, m[mn].Seen)
+	asserter := m[mn]
+	asserter.Seen = true
+	m[mn] = asserter
 }
 
 func (m AssertNodeMap) AssertMissing(t *testing.T) {
-	// for mn, a := range m {
-	// 	assert.True(t, m[mn].Seen, "Didn't see node %v edges %v", mn, a)
-	// }
+	for mn, a := range m {
+		assert.True(t, m[mn].Seen, "Didn't see node %v edges %v", mn, a)
+	}
 }
 
 var checkedEdges = 0
