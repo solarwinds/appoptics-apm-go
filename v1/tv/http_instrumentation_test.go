@@ -467,13 +467,17 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 func TestDistributedApp(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 
+	aliceLn, err := net.Listen("tcp", ":8080")
+	assert.NoError(t, err)
+	bobLn, err := net.Listen("tcp", ":8081")
+	assert.NoError(t, err)
 	go func() {
-		s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(app.AliceHandler)), Addr: ":8080"}
-		assert.NoError(t, s.ListenAndServe())
+		s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(app.AliceHandler))}
+		assert.NoError(t, s.Serve(aliceLn))
 	}()
 	go func() {
-		s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(app.BobHandler)), Addr: ":8081"}
-		assert.NoError(t, s.ListenAndServe())
+		s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(app.BobHandler))}
+		assert.NoError(t, s.Serve(bobLn))
 	}()
 
 	resp, err := http.Get("http://localhost:8080/alice")
