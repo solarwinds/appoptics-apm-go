@@ -1,0 +1,30 @@
+version: '2'
+services:
+  redis:
+    image: redis
+
+  alice:
+    build:
+      context: ./alice
+      args:
+        - APPNETA_KEY=${APPNETA_KEY}
+    links:
+      - bob
+      - caroljs:carol
+    ports:
+      - "8890:8890"
+
+  bob:
+    build:
+      context: ./bob
+      args:
+        - APPNETA_KEY=${APPNETA_KEY} 
+    links:
+      - redis
+      - caroljs:carol
+
+  caroljs:
+    build:
+      context: ./caroljs
+      args:
+        - APPNETA_KEY=${APPNETA_KEY} 

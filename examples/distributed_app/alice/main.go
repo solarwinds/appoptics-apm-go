@@ -4,7 +4,9 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 
 	"golang.org/x/net/context"
@@ -18,7 +20,12 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := tv.NewContext(context.Background(), t)
 
 	// call an HTTP endpoint and propagate the distributed trace context
-	url := "http://127.0.0.1:8891/bob"
+	var url string
+	if rand.Intn(2) == 0 { // flip a coin between bob & carol
+		url = "http://bob:8081/bob"
+	} else {
+		url = "http://carol:8082/carol"
+	}
 
 	// create HTTP client and set trace metadata header
 	httpClient := &http.Client{}
@@ -31,6 +38,7 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	l.AddHTTPResponse(resp, err)
 	if err != nil {
 		w.WriteHeader(500)
+		w.Write([]byte(fmt.Sprintf("err: %v", err)))
 		l.End() // end HTTP client timing
 		return
 	}
