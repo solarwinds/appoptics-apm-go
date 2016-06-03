@@ -6,16 +6,11 @@ package main
 import (
 	"net/http"
 
+	"github.com/appneta/go-appneta/examples/distributed_app"
 	"github.com/appneta/go-appneta/v1/tv"
 )
 
-func bobHandler(w http.ResponseWriter, r *http.Request) {
-	t, w := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
-	defer t.End()
-	w.Write([]byte(`{"result":"hello from bob"}`))
-}
-
 func main() {
-	http.HandleFunc("/bob", tv.HTTPHandler(bobHandler))
+	http.HandleFunc("/bob", tv.HTTPHandler(app.BobHandler))
 	http.ListenAndServe(":8081", nil)
 }

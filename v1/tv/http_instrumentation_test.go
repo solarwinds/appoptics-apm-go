@@ -4,11 +4,13 @@ package tv_test
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/appneta/go-appneta/examples/distributed_app"
 	"github.com/appneta/go-appneta/v1/tv"
 	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
 	"github.com/appneta/go-appneta/v1/tv/internal/traceview"
@@ -459,5 +461,37 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 		}},
 		{"DBx", "exit"}:      {g.OutEdges{{"DBx", "entry"}}, nil},
 		{"httpTest", "exit"}: {g.OutEdges{{"http.Client", "exit"}, {"httpTest", "entry"}}, nil},
+	})
+}
+
+func TestDistributedApp(t *testing.T) {
+	r := traceview.SetTestReporter() // set up test reporter
+
+	go func() {
+		s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(app.AliceHandler)), Addr: ":8080"}
+		assert.NoError(t, s.ListenAndServe())
+	}()
+	go func() {
+		s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(app.BobHandler)), Addr: ":8081"}
+		assert.NoError(t, s.ListenAndServe())
+	}()
+
+	resp, err := http.Get("http://localhost:8080/alice")
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	buf, err := ioutil.ReadAll(resp.Body)
+	t.Logf("Response: %v BUF %s", resp, buf)
+
+	g.AssertGraph(t, r.Bufs, 10, map[g.MatchNode]g.AssertNode{
+		{"http.HandlerFunc", "entry"}: {},
+		{"aliceHandler", "entry"}:     {g.OutEdges{{"http.HandlerFunc", "entry"}}, nil},
+		{"http.Client", "entry"}:      {g.OutEdges{{"aliceHandler", "entry"}}, func(n g.Node) {}},
+		{"http.HandlerFunc", "entry"}: {g.OutEdges{{"http.Client", "entry"}}, nil},
+		{"bobHandler", "entry"}:       {g.OutEdges{{"http.HandlerFunc", "entry"}}, nil},
+		{"bobHandler", "exit"}:        {g.OutEdges{{"bobHandler", "entry"}}, nil},
+		{"http.HandlerFunc", "exit"}:  {g.OutEdges{{"bobHandler", "exit"}, {"http.HandlerFunc", "entry"}}, nil},
+		{"http.Client", "exit"}:       {g.OutEdges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}, nil},
+		{"aliceHandler", "exit"}:      {g.OutEdges{{"http.Client", "exit"}, {"aliceHandler", "entry"}}, nil},
+		{"http.HandlerFunc", "exit"}:  {g.OutEdges{{"aliceHandler", "exit"}, {"http.HandlerFunc", "entry"}}, nil},
 	})
 }
