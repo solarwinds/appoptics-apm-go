@@ -196,7 +196,7 @@ func TestReportEventMap(t *testing.T) {
 		"testK":  "testV",
 		"intval": 333,
 	}))
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"myLayer", "entry"}: {},
 		{"myLayer", "info"}: {g.OutEdges{{"myLayer", "entry"}}, func(n g.Node) {
 			assert.EqualValues(t, 333, n.Map["intval"])

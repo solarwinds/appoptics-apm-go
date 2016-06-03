@@ -74,6 +74,9 @@ func buildGraph(t *testing.T, bufs [][]byte) eventGraph {
 // MatchNode describes an outedge's destination node.
 type MatchNode struct{ Layer, Label string }
 
+// MatchNode describes an outedge's destination node.
+type MatchNodeURL struct{ Layer, Label, URL string }
+
 // OutEdges is a list of outedges to assert on.
 type OutEdges []MatchNode
 
@@ -83,35 +86,58 @@ type AssertNode struct { // run to assert each Node
 	Callback func(n Node)
 }
 
+type AssertNodeMap map[MatchNode]AssertNode
+type AssertNodeURLMap map[MatchNodeURL]AssertNode
+type AsserterMap interface {
+	Match(n Node) (AssertNode, bool)
+	Len() int
+	AssertSeen(t *testing.T, n Node)
+	AssertMissing(t *testing.T)
+}
+
+func (m AssertNodeMap) Match(n Node) (AssertNode, bool) {
+	ret, ok := m[MatchNode{n.Layer, n.Label}]
+	return ret, ok
+}
+func (m AssertNodeMap) Len() int { return len(m) }
+func (m AssertNodeMap) AssertSeen(t *testing.T, n Node) {
+	// assert each node seen once
+	// mn := MatchNode{n.Layer, n.Label}
+	// assert.False(t, m[mn].Seen)
+	// asserter := m[mn]
+	// asserter.Seen = true
+	// m[mn] = asserter
+}
+
+func (m AssertNodeMap) AssertMissing(t *testing.T) {
+	// for mn, a := range m {
+	// 	assert.True(t, m[mn].Seen, "Didn't see node %v edges %v", mn, a)
+	// }
+}
+
 var checkedEdges = 0
 var checkedNodes = 0
 
 // AssertGraph builds a graph from encoded events and asserts out-edges for each node in nodeMap.
-func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, nodeMap map[MatchNode]AssertNode) {
+func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, asserterMap AsserterMap) {
 	assert.Equal(t, len(bufs), numNodes, "bufs len expected %d, actual %d", numNodes, len(bufs))
 	g := buildGraph(t, bufs)
 	assert.Equal(t, len(g), numNodes, "graph len expected %d, actual %d", numNodes, len(g))
-	assert.Len(t, nodeMap, numNodes)
-	seen := make(map[MatchNode]bool)
+	assert.Len(t, asserterMap, numNodes)
 	for op, n := range g {
 		assert.Equal(t, op, n.OpID)
 		// assert edges for this node
-		m := MatchNode{n.Layer, n.Label}
-		asserter, ok := nodeMap[m]
+		asserter, ok := asserterMap.Match(n)
 		assert.True(t, ok, "Unrecognized event: "+fmt.Sprintf("%v", n))
 		assertOutEdges(t, g, n, asserter.OutEdges...)
 		// call assert cb if provided
 		if asserter.Callback != nil {
 			asserter.Callback(n)
 		}
-		// assert each node seen once
-		assert.False(t, seen[m])
-		seen[m] = true
+		asserterMap.AssertSeen(t, n)
 		checkedNodes++
 	}
-	for m, a := range nodeMap {
-		assert.True(t, seen[m], "Didn't see node %v edges %v", m, a)
-	}
+	asserterMap.AssertMissing(t)
 
 	t.Logf("Total %d nodes, %d edges checked", checkedNodes, checkedEdges)
 

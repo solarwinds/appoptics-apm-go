@@ -24,7 +24,7 @@ func TestTraceMetadata(t *testing.T) {
 	tr.End("Edge", "872453", // bad Edge KV, should be ignored
 		"NotReported") // odd-length arg, should be ignored
 
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"test", "entry"}: {},
 		{"test", "exit"}: {g.OutEdges{{"test", "entry"}}, func(n g.Node) {
@@ -186,7 +186,7 @@ func TestTraceExampleCtx(t *testing.T) {
 }
 
 func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
-	g.AssertGraph(t, bufs, 13, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 13, g.AssertNodeMap{
 		// entry event should have no edges
 		{"myExample", "entry"}: {nil, func(n g.Node) {
 			h, err := os.Hostname()
@@ -280,7 +280,7 @@ func TestTraceFromMetadata(t *testing.T) {
 	tr := tv.NewTraceFromID("test", incomingID, nil)
 	tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Extra": "Arg"} })
 
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have edge to incoming opID
 		{"test", "entry"}: {g.OutEdges{{"Edge", incomingID[42:]}}, func(n g.Node) {
 			// trace ID should match incoming ID
@@ -324,7 +324,7 @@ func TestTraceJoin(t *testing.T) {
 	l.End()
 	tr.End()
 
-	g.AssertGraph(t, r.Bufs, 4, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 4, g.AssertNodeMap{
 		// entry event should have no edges
 		{"test", "entry"}: {},
 		{"L1", "entry"}:   {g.OutEdges{{"test", "entry"}}, nil},

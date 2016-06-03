@@ -79,7 +79,7 @@ func TestDocLayerExampleCtx(t *testing.T) {
 	assertDocLayerExample(t, r.Bufs)
 }
 func assertDocLayerExample(t *testing.T, bufs [][]byte) {
-	g.AssertGraph(t, bufs, 11, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 11, g.AssertNodeMap{
 		{"myApp", "entry"}:   {},
 		{"myLayer", "entry"}: {g.OutEdges{{"myApp", "entry"}}, nil},
 		{"", "profile_entry"}: {g.OutEdges{{"myLayer", "entry"}}, func(n g.Node) {

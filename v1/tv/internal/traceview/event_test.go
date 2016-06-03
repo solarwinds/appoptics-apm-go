@@ -69,7 +69,7 @@ func TestSendEvent(t *testing.T) {
 	err = e.Report(ctx)
 	assert.NoError(t, err)
 
-	g.AssertGraph(t, r.Bufs, 3, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 3, g.AssertNodeMap{
 		{"go_test", "entry"}: {nil, func(n g.Node) {
 			assert.EqualValues(t, n.Map["IntTest"], 123)
 		}},
@@ -136,7 +136,7 @@ func TestEventMetadata(t *testing.T) {
 	e2.AddEdgeFromMetadataString(e.MetadataString())
 	assert.NoError(t, e2.Report(ctx))
 	// test event pair
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"alice", "exit"}: {},
 		{"bob", "entry"}:  {g.OutEdges{{"alice", "exit"}}, nil},
 	})
@@ -153,7 +153,7 @@ func TestEvent(t *testing.T) {
 	se := ctx.NewEvent(LabelExit, testLayer, true)
 	assert.NoError(t, se.ReportContext(ctx, false))
 
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"go_test", "entry"}: {},
 		{"go_test", "exit"}:  {g.OutEdges{{"go_test", "entry"}}, nil},
 	})
@@ -168,7 +168,7 @@ func TestEventNoEdge(t *testing.T) {
 	se := ctx.NewEvent(LabelExit, testLayer, false) // create event without edge
 	assert.NoError(t, se.ReportContext(ctx, false)) // report event without edge
 	// exit event is unconnected
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"go_test", "entry"}: {},
 		{"go_test", "exit"}:  {},
 	})

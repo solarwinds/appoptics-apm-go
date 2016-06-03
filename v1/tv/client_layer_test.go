@@ -32,7 +32,7 @@ func TestCacheRPCLayers(t *testing.T) {
 
 	tv.End(ctx)
 
-	g.AssertGraph(t, r.Bufs, 7, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 7, g.AssertNodeMap{
 		// entry event should have no edges
 		{"myExample", "entry"}: {},
 		{"redis", "entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {

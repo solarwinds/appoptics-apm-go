@@ -37,7 +37,7 @@ func TestHTTPHandler404(t *testing.T) {
 	response := httpTest(handler404)
 	assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
 
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {g.OutEdges{}, func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
@@ -60,7 +60,7 @@ func TestHTTPHandler200(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 	response := httpTest(handler200)
 
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {g.OutEdges{}, func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
@@ -280,7 +280,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 	if badReq { // handle case where http.NewRequest() returned nil
 		assert.Error(t, err)
 		assert.Nil(t, resp)
-		g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {g.OutEdges{{"httpTest", "entry"}}, nil},
 		})
@@ -297,7 +297,7 @@ func assertHTTPRequestGraph(t *testing.T, bufs [][]byte, resp *http.Response, ur
 	assert.Len(t, resp.Header[tv.HTTPHeaderName], 1)
 	assert.Equal(t, status, resp.StatusCode)
 
-	g.AssertGraph(t, bufs, 8, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 8, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
@@ -327,7 +327,7 @@ func assertHTTPRequestUntracedGraph(t *testing.T, bufs [][]byte, resp *http.Resp
 	assert.NotContains(t, resp.Header[tv.HTTPHeaderName], "Header")
 	assert.Equal(t, status, resp.StatusCode)
 
-	g.AssertGraph(t, bufs, 4, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 4, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
@@ -341,7 +341,7 @@ func assertHTTPRequestUntracedGraph(t *testing.T, bufs [][]byte, resp *http.Resp
 // assert traces that hit a TV-wrapped, panicking http Handler.
 func assertHTTPRequestPanic(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
 
-	g.AssertGraph(t, bufs, 7, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 7, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
@@ -389,14 +389,14 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 	assert.Nil(t, resp)
 
 	if badReq { // handle case where http.NewRequest() returned nil
-		g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {g.OutEdges{{"httpTest", "entry"}}, nil},
 		})
 		return
 	}
 	// handle case where http.Client.Do() returned an error
-	g.AssertGraph(t, r.Bufs, 5, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 5, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
@@ -428,7 +428,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	assert.Len(t, resp.Header[tv.HTTPHeaderName], 1)
 	assert.Equal(t, 403, resp.StatusCode)
 
-	g.AssertGraph(t, r.Bufs, 10, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {g.OutEdges{{"httpTest", "entry"}}, func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
@@ -482,7 +482,7 @@ func TestDistributedApp(t *testing.T) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	t.Logf("Response: %v BUF %s", resp, buf)
 
-	g.AssertGraph(t, r.Bufs, 10, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeMap{
 		{"http.HandlerFunc", "entry"}: {},
 		{"aliceHandler", "entry"}:     {g.OutEdges{{"http.HandlerFunc", "entry"}}, nil},
 		{"http.Client", "entry"}:      {g.OutEdges{{"aliceHandler", "entry"}}, func(n g.Node) {}},

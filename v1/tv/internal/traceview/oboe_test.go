@@ -27,7 +27,7 @@ func TestInitMessage(t *testing.T) {
 	assertInitMessage(t, r.Bufs)
 }
 func assertInitMessage(t *testing.T, bufs [][]byte) {
-	g.AssertGraph(t, bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"go", "entry"}: {g.OutEdges{}, func(n g.Node) {
 			assert.Equal(t, 1, n.Map["__Init"])
 			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
@@ -135,7 +135,7 @@ func TestRateSampleRequest(t *testing.T) {
 	startTestUDPListener(t, &bufs, 2)
 	sendMetricsMessage()
 	time.Sleep(50 * time.Millisecond)
-	g.AssertGraph(t, bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {g.OutEdges{}, func(n g.Node) {
 			assert.Equal(t, n.Map["ProcessName"], initLayer)
 			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
@@ -170,7 +170,7 @@ func TestRateSampleRequest(t *testing.T) {
 	startTestUDPListener(t, &bufs, 2)
 	sendMetricsMessage()
 	time.Sleep(50 * time.Millisecond)
-	g.AssertGraph(t, bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {g.OutEdges{}, func(n g.Node) {
 			assert.Equal(t, n.Map["ProcessName"], initLayer)
 			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
@@ -188,7 +188,7 @@ func TestRateSampleRequest(t *testing.T) {
 	startTestUDPListener(t, &bufs, 2)
 	sendMetricsMessage()
 	time.Sleep(50 * time.Millisecond)
-	g.AssertGraph(t, bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {g.OutEdges{}, func(n g.Node) {
 			assert.Equal(t, n.Map["ProcessName"], initLayer)
 			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)

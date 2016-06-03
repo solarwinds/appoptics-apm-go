@@ -59,7 +59,7 @@ func childExampleCtx(ctx context.Context) {
 
 func assertTraceChild(t *testing.T, bufs [][]byte) {
 	// validate events reported
-	g.AssertGraph(t, bufs, 6, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 6, g.AssertNodeMap{
 		{"childExample", "entry"}: {},
 		{"L1", "entry"}:           {g.OutEdges{{"childExample", "entry"}}, nil},
 		{"DBx", "entry"}:          {g.OutEdges{{"L1", "entry"}}, nil},
