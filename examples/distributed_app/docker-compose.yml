@@ -1,8 +1,10 @@
+# Example distributed app using TraceView: http://www.appneta.com/products/traceview/
+# APPNETA_KEY="xx" docker-compose build
 version: '2'
 services:
   redis:
     image: redis
-
+  # Alice is a Go service
   alice:
     build:
       context: ./alice
@@ -13,7 +15,7 @@ services:
       - caroljs:carol
     ports:
       - "8890:8890"
-
+  # Bob is a Go service
   bob:
     build:
       context: ./bob
@@ -22,7 +24,7 @@ services:
     links:
       - redis
       - caroljs:carol
-
+  # Carol runs in Node.js
   caroljs:
     build:
       context: ./caroljs

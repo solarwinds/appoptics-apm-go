@@ -23,7 +23,7 @@ func TestBeginProfile(t *testing.T) {
 
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
-		{"", "profile_entry"}: {OutEdges: g.OutEdges{{"testLayer", "entry"}}, Callback: func(n g.Node) {
+		{"", "profile_entry"}: {Edges: g.Edges{{"testLayer", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testProf")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test.testProf")
@@ -47,16 +47,16 @@ func TestBeginLayerProfile(t *testing.T) {
 
 	g.AssertGraph(t, r.Bufs, 6, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
-		{"L1", "entry"}:        {OutEdges: g.OutEdges{{"testLayer", "entry"}}},
-		{"", "profile_entry"}: {OutEdges: g.OutEdges{{"L1", "entry"}}, Callback: func(n g.Node) {
+		{"L1", "entry"}:        {Edges: g.Edges{{"testLayer", "entry"}}},
+		{"", "profile_entry"}: {Edges: g.Edges{{"L1", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testLayerProf")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test.testLayerProf")
 			assert.Contains(t, n.Map["File"], "/go-appneta/v1/tv/profile_test.go")
 		}},
-		{"", "profile_exit"}:  {OutEdges: g.OutEdges{{"", "profile_entry"}}},
-		{"L1", "exit"}:        {OutEdges: g.OutEdges{{"", "profile_exit"}, {"L1", "entry"}}},
-		{"testLayer", "exit"}: {OutEdges: g.OutEdges{{"L1", "exit"}, {"testLayer", "entry"}}},
+		{"", "profile_exit"}:  {Edges: g.Edges{{"", "profile_entry"}}},
+		{"L1", "exit"}:        {Edges: g.Edges{{"", "profile_exit"}, {"L1", "entry"}}},
+		{"testLayer", "exit"}: {Edges: g.Edges{{"L1", "exit"}, {"testLayer", "entry"}}},
 	})
 
 }
@@ -91,6 +91,6 @@ func TestTraceErrorBeginLayerProfile(t *testing.T) {
 	testLayerProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
-		{"testLayer", "exit"}:  {OutEdges: g.OutEdges{{"testLayer", "entry"}}},
+		{"testLayer", "exit"}:  {Edges: g.Edges{{"testLayer", "entry"}}},
 	})
 }

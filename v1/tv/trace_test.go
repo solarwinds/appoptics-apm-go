@@ -27,7 +27,7 @@ func TestTraceMetadata(t *testing.T) {
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"test", "entry"}: {},
-		{"test", "exit"}: {OutEdges: g.OutEdges{{"test", "entry"}}, Callback: func(n g.Node) {
+		{"test", "exit"}: {Edges: g.Edges{{"test", "entry"}}, Callback: func(n g.Node) {
 			// exit event should match ExitMetadata
 			assert.Equal(t, md, n.Map[tv.HTTPHeaderName])
 		}},
@@ -194,18 +194,18 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 			assert.Equal(t, h, n.Map["Hostname"])
 		}},
 		// first profile event should link to entry event
-		{"", "profile_entry"}: {OutEdges: g.OutEdges{{"myExample", "entry"}}, Callback: func(n g.Node) {
+		{"", "profile_entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "f0")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test."+f0name)
 		}},
-		{"", "profile_exit"}: {OutEdges: g.OutEdges{{"", "profile_entry"}}},
+		{"", "profile_exit"}: {Edges: g.Edges{{"", "profile_entry"}}},
 		// nested layer in http.Get profile points to trace entry
-		{"http.Get", "entry"}: {OutEdges: g.OutEdges{{"myExample", "entry"}}, Callback: func(n g.Node) {
+		{"http.Get", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["RemoteURL"], "http://a.b")
 		}},
 		// http.Get info points to entry
-		{"http.Get", "info"}: {OutEdges: g.OutEdges{{"http.Get", "entry"}}, Callback: func(n g.Node) {
+		{"http.Get", "info"}: {Edges: g.Edges{{"http.Get", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["floatV"], 3.5)
 			assert.Equal(t, n.Map["boolT"], true)
 			assert.Equal(t, n.Map["boolF"], false)
@@ -215,34 +215,34 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 			assert.EqualValues(t, n.Map["float32V"], float32(0.1))
 		}},
 		// http.Get error points to info
-		{"http.Get", "error"}: {OutEdges: g.OutEdges{{"http.Get", "info"}}, Callback: func(n g.Node) {
+		{"http.Get", "error"}: {Edges: g.Edges{{"http.Get", "info"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "error", n.Map["ErrorClass"])
 			assert.Equal(t, "test error!", n.Map["ErrorMsg"])
 		}},
 		// end of nested layer should link to last layer event (error)
-		{"http.Get", "exit"}: {OutEdges: g.OutEdges{{"http.Get", "error"}}},
+		{"http.Get", "exit"}: {Edges: g.Edges{{"http.Get", "error"}}},
 		// first query after call to f0 should link to ...?
-		{"DBx", "entry"}: {OutEdges: g.OutEdges{{"myExample", "entry"}}, Callback: func(n g.Node) {
+		{"DBx", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.EqualValues(t, n.Map["Query"], "SELECT * FROM tbl")
 			assert.Equal(t, n.Map["Flavor"], "postgresql")
 			assert.Equal(t, n.Map["RemoteHost"], "db.com")
 		}},
 		// error in nested layer should link to layer entry
-		{"DBx", "error"}: {OutEdges: g.OutEdges{{"DBx", "entry"}}, Callback: func(n g.Node) {
+		{"DBx", "error"}: {Edges: g.Edges{{"DBx", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "QueryError", n.Map["ErrorClass"])
 			assert.Equal(t, "Error running query!", n.Map["ErrorMsg"])
 		}},
 		// end of nested layer should link to layer entry
-		{"DBx", "exit"}: {OutEdges: g.OutEdges{{"DBx", "error"}}},
+		{"DBx", "exit"}: {Edges: g.Edges{{"DBx", "error"}}},
 
-		{"myExample", "info"}: {OutEdges: g.OutEdges{{"myExample", "entry"}}, Callback: func(n g.Node) {
+		{"myExample", "info"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, 500, n.Map["HTTP-Status"])
 		}},
-		{"myExample", "error"}: {OutEdges: g.OutEdges{{"myExample", "info"}}, Callback: func(n g.Node) {
+		{"myExample", "error"}: {Edges: g.Edges{{"myExample", "info"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "TimeoutError", n.Map["ErrorClass"])
 			assert.Equal(t, "response timeout", n.Map["ErrorMsg"])
 		}},
-		{"myExample", "exit"}: {OutEdges: g.OutEdges{
+		{"myExample", "exit"}: {Edges: g.Edges{
 			{"http.Get", "exit"}, {"", "profile_exit"}, {"DBx", "exit"}, {"myExample", "error"},
 		}},
 	})
@@ -282,12 +282,12 @@ func TestTraceFromMetadata(t *testing.T) {
 
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have edge to incoming opID
-		{"test", "entry"}: {OutEdges: g.OutEdges{{"Edge", incomingID[42:]}}, Callback: func(n g.Node) {
+		{"test", "entry"}: {Edges: g.Edges{{"Edge", incomingID[42:]}}, Callback: func(n g.Node) {
 			// trace ID should match incoming ID
 			assert.Equal(t, incomingID[2:42], n.Map[tv.HTTPHeaderName].(string)[2:42])
 		}},
 		// exit event links to entry
-		{"test", "exit"}: {OutEdges: g.OutEdges{{"test", "entry"}}, Callback: func(n g.Node) {
+		{"test", "exit"}: {Edges: g.Edges{{"test", "entry"}}, Callback: func(n g.Node) {
 			// trace ID should match incoming ID
 			assert.Equal(t, incomingID[2:42], n.Map[tv.HTTPHeaderName].(string)[2:42])
 			assert.Equal(t, "Arg", n.Map["Extra"])
@@ -327,8 +327,8 @@ func TestTraceJoin(t *testing.T) {
 	g.AssertGraph(t, r.Bufs, 4, g.AssertNodeMap{
 		// entry event should have no edges
 		{"test", "entry"}: {},
-		{"L1", "entry"}:   {OutEdges: g.OutEdges{{"test", "entry"}}},
-		{"L1", "exit"}:    {OutEdges: g.OutEdges{{"L1", "entry"}}},
-		{"test", "exit"}:  {OutEdges: g.OutEdges{{"L1", "exit"}, {"test", "entry"}}},
+		{"L1", "entry"}:   {Edges: g.Edges{{"test", "entry"}}},
+		{"L1", "exit"}:    {Edges: g.Edges{{"L1", "entry"}}},
+		{"test", "exit"}:  {Edges: g.Edges{{"L1", "exit"}, {"test", "entry"}}},
 	})
 }
