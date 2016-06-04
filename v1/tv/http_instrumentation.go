@@ -61,25 +61,25 @@ func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *ht
 	return t, wrapper
 }
 
-// httpResponseWriter observes an http.ResponseWriter when WriteHeader is called to check
+// HTTPResponseWriter observes an http.ResponseWriter when WriteHeader is called to check
 // the status code and response headers.
-type httpResponseWriter struct {
-	writer      http.ResponseWriter
+type HTTPResponseWriter struct {
+	Writer      http.ResponseWriter
 	t           Trace
-	status      int
-	wroteHeader bool
+	StatusCode  int
+	WroteHeader bool
 }
 
-func (w *httpResponseWriter) Write(p []byte) (n int, err error) {
-	if !w.wroteHeader {
-		w.WriteHeader(w.status)
+func (w *HTTPResponseWriter) Write(p []byte) (n int, err error) {
+	if !w.WroteHeader {
+		w.WriteHeader(w.StatusCode)
 	}
-	return w.writer.Write(p)
+	return w.Writer.Write(p)
 }
-func (w *httpResponseWriter) Header() http.Header { return w.writer.Header() }
+func (w *HTTPResponseWriter) Header() http.Header { return w.Writer.Header() }
 
-func (w *httpResponseWriter) WriteHeader(status int) {
-	w.status = status                    // observe HTTP status code
+func (w *HTTPResponseWriter) WriteHeader(status int) {
+	w.StatusCode = status                // observe HTTP status code
 	md := w.Header().Get(HTTPHeaderName) // check response for downstream metadata
 	if w.t.IsTracing() {                 // set trace exit metadata in X-Trace header
 		// if downstream response headers mention a different layer, add edge to it
@@ -88,15 +88,15 @@ func (w *httpResponseWriter) WriteHeader(status int) {
 		}
 		w.Header().Set(HTTPHeaderName, w.t.ExitMetadata()) // replace downstream MD with ours
 	}
-	w.wroteHeader = true
-	w.writer.WriteHeader(status)
+	w.WroteHeader = true
+	w.Writer.WriteHeader(status)
 }
 
 // newResponseWriter observes the HTTP Status code of an HTTP response, returning a
 // wrapped http.ResponseWriter and a pointer to an int containing the status.
-func newResponseWriter(writer http.ResponseWriter, t Trace) *httpResponseWriter {
-	w := &httpResponseWriter{writer: writer, t: t, status: http.StatusOK}
-	t.AddEndArgs("Status", &w.status)
+func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter {
+	w := &HTTPResponseWriter{Writer: writer, t: t, StatusCode: http.StatusOK}
+	t.AddEndArgs("Status", &w.StatusCode)
 	// add exit event metadata to X-Trace header
 	if t.IsTracing() {
 		// add/replace response header metadata with this trace's
