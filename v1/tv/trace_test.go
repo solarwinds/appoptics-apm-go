@@ -24,10 +24,10 @@ func TestTraceMetadata(t *testing.T) {
 	tr.End("Edge", "872453", // bad Edge KV, should be ignored
 		"NotReported") // odd-length arg, should be ignored
 
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"test", "entry"}: {},
-		{"test", "exit"}: {g.OutEdges{{"test", "entry"}}, func(n g.Node) {
+		{"test", "exit"}: {Edges: g.Edges{{"test", "entry"}}, Callback: func(n g.Node) {
 			// exit event should match ExitMetadata
 			assert.Equal(t, md, n.Map[tv.HTTPHeaderName])
 		}},
@@ -186,26 +186,26 @@ func TestTraceExampleCtx(t *testing.T) {
 }
 
 func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
-	g.AssertGraph(t, bufs, 13, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 13, g.AssertNodeMap{
 		// entry event should have no edges
-		{"myExample", "entry"}: {nil, func(n g.Node) {
+		{"myExample", "entry"}: {Callback: func(n g.Node) {
 			h, err := os.Hostname()
 			assert.NoError(t, err)
 			assert.Equal(t, h, n.Map["Hostname"])
 		}},
 		// first profile event should link to entry event
-		{"", "profile_entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
+		{"", "profile_entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "f0")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test."+f0name)
 		}},
-		{"", "profile_exit"}: {g.OutEdges{{"", "profile_entry"}}, nil},
+		{"", "profile_exit"}: {Edges: g.Edges{{"", "profile_entry"}}},
 		// nested layer in http.Get profile points to trace entry
-		{"http.Get", "entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
+		{"http.Get", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["RemoteURL"], "http://a.b")
 		}},
 		// http.Get info points to entry
-		{"http.Get", "info"}: {g.OutEdges{{"http.Get", "entry"}}, func(n g.Node) {
+		{"http.Get", "info"}: {Edges: g.Edges{{"http.Get", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["floatV"], 3.5)
 			assert.Equal(t, n.Map["boolT"], true)
 			assert.Equal(t, n.Map["boolF"], false)
@@ -215,36 +215,36 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 			assert.EqualValues(t, n.Map["float32V"], float32(0.1))
 		}},
 		// http.Get error points to info
-		{"http.Get", "error"}: {g.OutEdges{{"http.Get", "info"}}, func(n g.Node) {
+		{"http.Get", "error"}: {Edges: g.Edges{{"http.Get", "info"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "error", n.Map["ErrorClass"])
 			assert.Equal(t, "test error!", n.Map["ErrorMsg"])
 		}},
 		// end of nested layer should link to last layer event (error)
-		{"http.Get", "exit"}: {g.OutEdges{{"http.Get", "error"}}, nil},
+		{"http.Get", "exit"}: {Edges: g.Edges{{"http.Get", "error"}}},
 		// first query after call to f0 should link to ...?
-		{"DBx", "entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
+		{"DBx", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.EqualValues(t, n.Map["Query"], "SELECT * FROM tbl")
 			assert.Equal(t, n.Map["Flavor"], "postgresql")
 			assert.Equal(t, n.Map["RemoteHost"], "db.com")
 		}},
 		// error in nested layer should link to layer entry
-		{"DBx", "error"}: {g.OutEdges{{"DBx", "entry"}}, func(n g.Node) {
+		{"DBx", "error"}: {Edges: g.Edges{{"DBx", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "QueryError", n.Map["ErrorClass"])
 			assert.Equal(t, "Error running query!", n.Map["ErrorMsg"])
 		}},
 		// end of nested layer should link to layer entry
-		{"DBx", "exit"}: {g.OutEdges{{"DBx", "error"}}, nil},
+		{"DBx", "exit"}: {Edges: g.Edges{{"DBx", "error"}}},
 
-		{"myExample", "info"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
+		{"myExample", "info"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, 500, n.Map["HTTP-Status"])
 		}},
-		{"myExample", "error"}: {g.OutEdges{{"myExample", "info"}}, func(n g.Node) {
+		{"myExample", "error"}: {Edges: g.Edges{{"myExample", "info"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "TimeoutError", n.Map["ErrorClass"])
 			assert.Equal(t, "response timeout", n.Map["ErrorMsg"])
 		}},
-		{"myExample", "exit"}: {g.OutEdges{
+		{"myExample", "exit"}: {Edges: g.Edges{
 			{"http.Get", "exit"}, {"", "profile_exit"}, {"DBx", "exit"}, {"myExample", "error"},
-		}, nil},
+		}},
 	})
 }
 func TestNoTraceExample(t *testing.T) {
@@ -280,14 +280,14 @@ func TestTraceFromMetadata(t *testing.T) {
 	tr := tv.NewTraceFromID("test", incomingID, nil)
 	tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Extra": "Arg"} })
 
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have edge to incoming opID
-		{"test", "entry"}: {g.OutEdges{{"Edge", incomingID[42:]}}, func(n g.Node) {
+		{"test", "entry"}: {Edges: g.Edges{{"Edge", incomingID[42:]}}, Callback: func(n g.Node) {
 			// trace ID should match incoming ID
 			assert.Equal(t, incomingID[2:42], n.Map[tv.HTTPHeaderName].(string)[2:42])
 		}},
 		// exit event links to entry
-		{"test", "exit"}: {g.OutEdges{{"test", "entry"}}, func(n g.Node) {
+		{"test", "exit"}: {Edges: g.Edges{{"test", "entry"}}, Callback: func(n g.Node) {
 			// trace ID should match incoming ID
 			assert.Equal(t, incomingID[2:42], n.Map[tv.HTTPHeaderName].(string)[2:42])
 			assert.Equal(t, "Arg", n.Map["Extra"])
@@ -324,11 +324,11 @@ func TestTraceJoin(t *testing.T) {
 	l.End()
 	tr.End()
 
-	g.AssertGraph(t, r.Bufs, 4, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 4, g.AssertNodeMap{
 		// entry event should have no edges
 		{"test", "entry"}: {},
-		{"L1", "entry"}:   {g.OutEdges{{"test", "entry"}}, nil},
-		{"L1", "exit"}:    {g.OutEdges{{"L1", "entry"}}, nil},
-		{"test", "exit"}:  {g.OutEdges{{"L1", "exit"}, {"test", "entry"}}, nil},
+		{"L1", "entry"}:   {Edges: g.Edges{{"test", "entry"}}},
+		{"L1", "exit"}:    {Edges: g.Edges{{"L1", "entry"}}},
+		{"test", "exit"}:  {Edges: g.Edges{{"L1", "exit"}, {"test", "entry"}}},
 	})
 }

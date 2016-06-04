@@ -79,26 +79,26 @@ func TestDocLayerExampleCtx(t *testing.T) {
 	assertDocLayerExample(t, r.Bufs)
 }
 func assertDocLayerExample(t *testing.T, bufs [][]byte) {
-	g.AssertGraph(t, bufs, 11, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, bufs, 11, g.AssertNodeMap{
 		{"myApp", "entry"}:   {},
-		{"myLayer", "entry"}: {g.OutEdges{{"myApp", "entry"}}, nil},
-		{"", "profile_entry"}: {g.OutEdges{{"myLayer", "entry"}}, func(n g.Node) {
+		{"myLayer", "entry"}: {Edges: g.Edges{{"myApp", "entry"}}},
+		{"", "profile_entry"}: {Edges: g.Edges{{"myLayer", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["ProfileName"], "slowFunc")
 		}},
-		{"", "profile_exit"}: {g.OutEdges{{"", "profile_entry"}}, nil},
-		{"myDB1", "entry"}: {g.OutEdges{{"myLayer", "entry"}}, func(n g.Node) {
+		{"", "profile_exit"}: {Edges: g.Edges{{"", "profile_entry"}}},
+		{"myDB1", "entry"}: {Edges: g.Edges{{"myLayer", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "SELECT * FROM tbl1", n.Map["Query"])
 		}},
-		{"myDB1", "exit"}: {g.OutEdges{{"myDB1", "entry"}}, nil},
-		{"myDB2", "entry"}: {g.OutEdges{{"myLayer", "entry"}}, func(n g.Node) {
+		{"myDB1", "exit"}: {Edges: g.Edges{{"myDB1", "entry"}}},
+		{"myDB2", "entry"}: {Edges: g.Edges{{"myLayer", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "SELECT * FROM tbl2", n.Map["Query"])
 		}},
-		{"myDB2", "exit"}:   {g.OutEdges{{"myDB2", "entry"}}, nil},
-		{"myLayer", "exit"}: {g.OutEdges{{"", "profile_exit"}, {"myDB1", "exit"}, {"myDB2", "exit"}, {"myLayer", "entry"}}, nil},
-		{"myApp", "error"}: {g.OutEdges{{"myApp", "entry"}}, func(n g.Node) {
+		{"myDB2", "exit"}:   {Edges: g.Edges{{"myDB2", "entry"}}},
+		{"myLayer", "exit"}: {Edges: g.Edges{{"", "profile_exit"}, {"myDB1", "exit"}, {"myDB2", "exit"}, {"myLayer", "entry"}}},
+		{"myApp", "error"}: {Edges: g.Edges{{"myApp", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "error", n.Map["ErrorClass"])
 			assert.Equal(t, "Got bad error!", n.Map["ErrorMsg"])
 		}},
-		{"myApp", "exit"}: {g.OutEdges{{"myLayer", "exit"}, {"myApp", "error"}}, nil},
+		{"myApp", "exit"}: {Edges: g.Edges{{"myLayer", "exit"}, {"myApp", "error"}}},
 	})
 }

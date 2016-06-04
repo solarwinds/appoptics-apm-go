@@ -89,7 +89,7 @@ func TestReportEvent(t *testing.T) {
 	// re-report: shouldn't work (op IDs the same)
 	assert.Error(t, reportEvent(r, ctx, ev))
 
-	g.AssertGraph(t, r.Bufs, 1, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{
 		{"go_test", "exit"}: {},
 	})
 }

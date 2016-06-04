@@ -15,8 +15,6 @@ COPY . /go/src/app
 RUN go-wrapper download -tags traceview
 RUN go-wrapper install -tags traceview
 
-# Start tracelyzer agent and app
-#  https://docs.appneta.com/install-instrumentation#traceview--docker
-# Example running agent in a separate container: https://github.com/tlunter/tracelytics-docker
-CMD service tracelyzer start; /go/bin/app -testClients true -addr :8899
-EXPOSE 8899
+# Start tracelyzer agent running alongside app
+CMD service tracelyzer start; /go/bin/app -addr :8081
+EXPOSE 8081

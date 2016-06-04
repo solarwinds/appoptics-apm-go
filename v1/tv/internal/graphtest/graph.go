@@ -71,47 +71,136 @@ func buildGraph(t *testing.T, bufs [][]byte) eventGraph {
 	return g
 }
 
-// MatchNode describes an outedge's destination node.
+// MatchNode describes a node by its Layer and Label, used to match for assertions about a node and
+// when listing its outedges.
 type MatchNode struct{ Layer, Label string }
 
-// OutEdges is a list of outedges to assert on.
-type OutEdges []MatchNode
+// MatchNodeKV allows a test to assert properties of a node by specifying its Layer, Label and a KV
+// pair.
+type MatchNodeKV struct{ Layer, Label, K, V string }
 
-// AssertNode checks a list of outedges and calls cb to run more asserts for this node.
-type AssertNode struct { // run to assert each Node
-	OutEdges OutEdges
+// Edges is a list of outedges to assert on.
+type Edges []MatchNode
+
+// NodeAsserter checks a list of outedges and calls cb to run more asserts for this node.
+type NodeAsserter struct { // run to assert each Node
+	Edges    Edges
 	Callback func(n Node)
+	Seen     bool
+}
+
+// an AsserterMap looks up NodeAsserters for Nodes in a graph, keeping track of which
+// have been seen.
+type AsserterMap interface {
+	Match(n Node) (NodeAsserter, bool)
+	Len() int
+	AssertSeen(t *testing.T, n Node)
+	AssertMissing(t *testing.T)
+}
+
+// An AssertNodeMap describes a list of nodes by {Layer, Label} and assertions about them.
+type AssertNodeMap map[MatchNode]NodeAsserter
+
+// An AssertNodeKVMap describes a list of nodes by {Layer, Label, K, V} and assertions about them.
+type AssertNodeKVMap map[MatchNodeKV]NodeAsserter
+
+// Match a node, returning an asserter.
+func (m AssertNodeMap) Match(n Node) (NodeAsserter, bool) {
+	ret, ok := m[MatchNode{n.Layer, n.Label}]
+	return ret, ok
+}
+
+// Len returns the number of nodes in the asserted graph.
+func (m AssertNodeMap) Len() int { return len(m) }
+
+// AssertSeen ensures each node is seen at most once.
+func (m AssertNodeMap) AssertSeen(t *testing.T, n Node) {
+	mn := MatchNode{n.Layer, n.Label}
+	assert.False(t, m[mn].Seen)
+	asserter := m[mn]
+	asserter.Seen = true
+	m[mn] = asserter
+}
+
+// AssertMissing ensures each node is seen.
+func (m AssertNodeMap) AssertMissing(t *testing.T) {
+	for mn, a := range m {
+		assert.True(t, m[mn].Seen, "Didn't see node %v edges %v", mn, a)
+	}
+}
+
+// Match a node by KV pair, returning an asserter.
+func (m AssertNodeKVMap) Match(n Node) (ret NodeAsserter, ok bool) {
+	var mn MatchNodeKV
+	if mn, ok = m.match(n); ok {
+		ret, ok = m[mn]
+	}
+	return
+}
+func (m AssertNodeKVMap) match(n Node) (mn MatchNodeKV, ok bool) {
+	// look for node with same KV pair as specified in assert structure
+	for k, v := range n.Map {
+		var vs string
+		if vs, ok = v.(string); !ok {
+			continue
+		}
+		mn = MatchNodeKV{n.Layer, n.Label, k, vs}
+		if _, ok = m[mn]; ok {
+			return
+		}
+	}
+	// or look for node matching just on label/layer, no KV pair
+	if _, ok = m[MatchNodeKV{n.Layer, n.Label, "", ""}]; ok {
+		mn = MatchNodeKV{n.Layer, n.Label, "", ""}
+		return
+	}
+	return
+}
+
+// Len returns the number of nodes in the asserted graph.
+func (m AssertNodeKVMap) Len() int { return len(m) }
+
+// AssertSeen ensures each node is seen at most once.
+func (m AssertNodeKVMap) AssertSeen(t *testing.T, n Node) {
+	mn, ok := m.match(n)
+	assert.True(t, ok)
+	assert.False(t, m[mn].Seen)
+	asserter := m[mn]
+	asserter.Seen = true
+	m[mn] = asserter
+}
+
+// AssertMissing ensures each node is seen.
+func (m AssertNodeKVMap) AssertMissing(t *testing.T) {
+	for mn, a := range m {
+		assert.True(t, m[mn].Seen, "Didn't see node %v edges %v", mn, a)
+	}
 }
 
 var checkedEdges = 0
 var checkedNodes = 0
 
-// AssertGraph builds a graph from encoded events and asserts out-edges for each node in nodeMap.
-func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, nodeMap map[MatchNode]AssertNode) {
+// AssertGraph builds a graph from encoded events and asserts properties and edges about each node
+// in asserterMap.
+func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, asserterMap AsserterMap) {
 	assert.Equal(t, len(bufs), numNodes, "bufs len expected %d, actual %d", numNodes, len(bufs))
 	g := buildGraph(t, bufs)
 	assert.Equal(t, len(g), numNodes, "graph len expected %d, actual %d", numNodes, len(g))
-	assert.Len(t, nodeMap, numNodes)
-	seen := make(map[MatchNode]bool)
+	assert.Len(t, asserterMap, numNodes)
 	for op, n := range g {
 		assert.Equal(t, op, n.OpID)
 		// assert edges for this node
-		m := MatchNode{n.Layer, n.Label}
-		asserter, ok := nodeMap[m]
+		asserter, ok := asserterMap.Match(n)
 		assert.True(t, ok, "Unrecognized event: "+fmt.Sprintf("%v", n))
-		assertOutEdges(t, g, n, asserter.OutEdges...)
+		assertOutEdges(t, g, n, asserter.Edges...)
 		// call assert cb if provided
 		if asserter.Callback != nil {
 			asserter.Callback(n)
 		}
-		// assert each node seen once
-		assert.False(t, seen[m])
-		seen[m] = true
+		asserterMap.AssertSeen(t, n)
 		checkedNodes++
 	}
-	for m, a := range nodeMap {
-		assert.True(t, seen[m], "Didn't see node %v edges %v", m, a)
-	}
+	asserterMap.AssertMissing(t)
 
 	t.Logf("Total %d nodes, %d edges checked", checkedNodes, checkedEdges)
 

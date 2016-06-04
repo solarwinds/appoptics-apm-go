@@ -69,11 +69,11 @@ func TestSendEvent(t *testing.T) {
 	err = e.Report(ctx)
 	assert.NoError(t, err)
 
-	g.AssertGraph(t, r.Bufs, 3, map[g.MatchNode]g.AssertNode{
-		{"go_test", "entry"}: {nil, func(n g.Node) {
+	g.AssertGraph(t, r.Bufs, 3, g.AssertNodeMap{
+		{"go_test", "entry"}: {Callback: func(n g.Node) {
 			assert.EqualValues(t, n.Map["IntTest"], 123)
 		}},
-		{"go_test", "info"}: {g.OutEdges{{"go_test", "entry"}}, func(n g.Node) {
+		{"go_test", "info"}: {Edges: g.Edges{{"go_test", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Controller"], "test_controller")
 			assert.Equal(t, n.Map["Action"], "test_action")
 			assert.EqualValues(t, n.Map["TestInt"], intTest)
@@ -95,7 +95,7 @@ func TestSendEvent(t *testing.T) {
 			assert.Equal(t, n.Map["TestBool"], boolTest)
 			assert.Equal(t, n.Map["TestBuf"], bufTest)
 		}},
-		{"go_test", "exit"}: {g.OutEdges{{"go_test", "info"}}, nil},
+		{"go_test", "exit"}: {Edges: g.Edges{{"go_test", "info"}}},
 	})
 }
 
@@ -136,9 +136,9 @@ func TestEventMetadata(t *testing.T) {
 	e2.AddEdgeFromMetadataString(e.MetadataString())
 	assert.NoError(t, e2.Report(ctx))
 	// test event pair
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"alice", "exit"}: {},
-		{"bob", "entry"}:  {g.OutEdges{{"alice", "exit"}}, nil},
+		{"bob", "entry"}:  {Edges: g.Edges{{"alice", "exit"}}},
 	})
 }
 
@@ -153,9 +153,9 @@ func TestEvent(t *testing.T) {
 	se := ctx.NewEvent(LabelExit, testLayer, true)
 	assert.NoError(t, se.ReportContext(ctx, false))
 
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"go_test", "entry"}: {},
-		{"go_test", "exit"}:  {g.OutEdges{{"go_test", "entry"}}, nil},
+		{"go_test", "exit"}:  {Edges: g.Edges{{"go_test", "entry"}}},
 	})
 }
 func TestEventNoEdge(t *testing.T) {
@@ -168,7 +168,7 @@ func TestEventNoEdge(t *testing.T) {
 	se := ctx.NewEvent(LabelExit, testLayer, false) // create event without edge
 	assert.NoError(t, se.ReportContext(ctx, false)) // report event without edge
 	// exit event is unconnected
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"go_test", "entry"}: {},
 		{"go_test", "exit"}:  {},
 	})

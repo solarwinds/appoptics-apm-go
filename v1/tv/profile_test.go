@@ -21,9 +21,9 @@ func TestBeginProfile(t *testing.T) {
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("testLayer"))
 	testProf(ctx)
 
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
-		{"", "profile_entry"}: {g.OutEdges{{"testLayer", "entry"}}, func(n g.Node) {
+		{"", "profile_entry"}: {Edges: g.Edges{{"testLayer", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testProf")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test.testProf")
@@ -45,18 +45,18 @@ func TestBeginLayerProfile(t *testing.T) {
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("testLayer"))
 	testLayerProf(ctx)
 
-	g.AssertGraph(t, r.Bufs, 6, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 6, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
-		{"L1", "entry"}:        {g.OutEdges{{"testLayer", "entry"}}, nil},
-		{"", "profile_entry"}: {g.OutEdges{{"L1", "entry"}}, func(n g.Node) {
+		{"L1", "entry"}:        {Edges: g.Edges{{"testLayer", "entry"}}},
+		{"", "profile_entry"}: {Edges: g.Edges{{"L1", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testLayerProf")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test.testLayerProf")
 			assert.Contains(t, n.Map["File"], "/go-appneta/v1/tv/profile_test.go")
 		}},
-		{"", "profile_exit"}:  {g.OutEdges{{"", "profile_entry"}}, nil},
-		{"L1", "exit"}:        {g.OutEdges{{"", "profile_exit"}, {"L1", "entry"}}, nil},
-		{"testLayer", "exit"}: {g.OutEdges{{"L1", "exit"}, {"testLayer", "entry"}}, nil},
+		{"", "profile_exit"}:  {Edges: g.Edges{{"", "profile_entry"}}},
+		{"L1", "exit"}:        {Edges: g.Edges{{"", "profile_exit"}, {"L1", "entry"}}},
+		{"testLayer", "exit"}: {Edges: g.Edges{{"L1", "exit"}, {"testLayer", "entry"}}},
 	})
 
 }
@@ -73,7 +73,7 @@ func TestTraceErrorBeginProfile(t *testing.T) {
 	r := traceview.SetTestReporter()
 	r.ErrorEvents = map[int]bool{1: true}
 	testProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
-	g.AssertGraph(t, r.Bufs, 1, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
 	})
 }
@@ -89,8 +89,8 @@ func TestTraceErrorBeginLayerProfile(t *testing.T) {
 	r := traceview.SetTestReporter()
 	r.ErrorEvents = map[int]bool{1: true}
 	testLayerProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
-	g.AssertGraph(t, r.Bufs, 2, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
-		{"testLayer", "exit"}:  {g.OutEdges{{"testLayer", "entry"}}, nil},
+		{"testLayer", "exit"}:  {Edges: g.Edges{{"testLayer", "entry"}}},
 	})
 }

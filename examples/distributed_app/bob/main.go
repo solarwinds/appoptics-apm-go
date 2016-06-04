@@ -10,12 +10,12 @@ import (
 )
 
 func bobHandler(w http.ResponseWriter, r *http.Request) {
-	t, w := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
+	t, w := tv.TraceFromHTTPRequestResponse("bobHandler", w, r)
 	defer t.End()
 	w.Write([]byte(`{"result":"hello from bob"}`))
 }
 
 func main() {
 	http.HandleFunc("/bob", tv.HTTPHandler(bobHandler))
-	http.ListenAndServe(":8891", nil)
+	http.ListenAndServe(":8081", nil)
 }

@@ -32,26 +32,26 @@ func TestCacheRPCLayers(t *testing.T) {
 
 	tv.End(ctx)
 
-	g.AssertGraph(t, r.Bufs, 7, map[g.MatchNode]g.AssertNode{
+	g.AssertGraph(t, r.Bufs, 7, g.AssertNodeMap{
 		// entry event should have no edges
 		{"myExample", "entry"}: {},
-		{"redis", "entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
+		{"redis", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "redis.net", n.Map["RemoteHost"])
 			assert.Equal(t, "INCR", n.Map["KVOp"])
 			assert.Equal(t, "key31", n.Map["KVKey"])
 			assert.Equal(t, true, n.Map["KVHit"])
 		}},
-		{"redis", "error"}: {g.OutEdges{{"redis", "entry"}}, func(n g.Node) {
+		{"redis", "error"}: {Edges: g.Edges{{"redis", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "CacheTimeoutError", n.Map["ErrorClass"])
 			assert.Equal(t, "Cache request timeout error!", n.Map["ErrorMsg"])
 		}},
-		{"redis", "exit"}: {g.OutEdges{{"redis", "error"}}, nil},
-		{"myServiceClient", "entry"}: {g.OutEdges{{"myExample", "entry"}}, func(n g.Node) {
+		{"redis", "exit"}: {Edges: g.Edges{{"redis", "error"}}},
+		{"myServiceClient", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "service.net", n.Map["RemoteHost"])
 			assert.Equal(t, "incrKey", n.Map["RemoteController"])
 			assert.Equal(t, "thrift", n.Map["RemoteProtocol"])
 		}},
-		{"myServiceClient", "exit"}: {g.OutEdges{{"myServiceClient", "entry"}}, nil},
-		{"myExample", "exit"}:       {g.OutEdges{{"redis", "exit"}, {"myServiceClient", "exit"}, {"myExample", "entry"}}, nil},
+		{"myServiceClient", "exit"}: {Edges: g.Edges{{"myServiceClient", "entry"}}},
+		{"myExample", "exit"}:       {Edges: g.Edges{{"redis", "exit"}, {"myServiceClient", "exit"}, {"myExample", "entry"}}},
 	})
 }
