@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 
@@ -19,14 +20,15 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	t, w := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
 	ctx := tv.NewContext(context.Background(), t)
 	defer t.End()
+	log.Printf("%s %s", r.Method, r.URL)
 
 	// call an HTTP endpoint and propagate the distributed trace context
-	var url string
-	if rand.Intn(2) == 0 { // flip a coin between bob & carol
-		url = "http://bob:8081/bob"
-	} else {
-		url = "http://carol:8082/carol"
+	urls := []string{
+		"http://bob:8081/bob",
+		"http://carol:8082/carol",
+		"http://dave:8083/",
 	}
+	url := urls[rand.Intn(len(urls))]
 
 	// create HTTP client and set trace metadata header
 	httpClient := &http.Client{}

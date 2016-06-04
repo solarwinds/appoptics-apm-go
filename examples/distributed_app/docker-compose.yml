@@ -10,9 +10,12 @@ services:
       context: ./alice
       args:
         - APPNETA_KEY=${APPNETA_KEY}
+    cap_add:
+      - SYS_PTRACE
     links:
       - bob
       - caroljs:carol
+      - davepy:dave
     ports:
       - "8890:8890"
   # Bob is a Go service
@@ -21,6 +24,8 @@ services:
       context: ./bob
       args:
         - APPNETA_KEY=${APPNETA_KEY} 
+    cap_add:
+      - SYS_PTRACE
     links:
       - redis
       - caroljs:carol
@@ -30,3 +35,13 @@ services:
       context: ./caroljs
       args:
         - APPNETA_KEY=${APPNETA_KEY} 
+    cap_add:
+      - SYS_PTRACE
+  # Dave is a Flask app running on uWSGI
+  davepy:
+    build:
+      context: ./davepy
+      args:
+        - APPNETA_KEY=${APPNETA_KEY}
+    cap_add:
+      - SYS_PTRACE
