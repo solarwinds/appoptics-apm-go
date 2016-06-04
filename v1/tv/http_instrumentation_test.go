@@ -614,6 +614,7 @@ func TestConcurrentApp(t *testing.T) {
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	t.Logf("Response: %v BUF %s", resp, buf)
 
 	g.AssertGraph(t, r.Bufs, 14, g.AssertNodeKVMap{
@@ -635,4 +636,32 @@ func TestConcurrentApp(t *testing.T) {
 				assert.EqualValues(t, 200, n.Map["Status"])
 			}},
 	})
+}
+
+func TestConcurrentAppNoTrace(t *testing.T) {
+	r := traceview.SetTestReporter() // set up test reporter
+	r.ShouldTrace = false
+
+	aliceLn, err := net.Listen("tcp", ":8084")
+	assert.NoError(t, err)
+	bobLn, err := net.Listen("tcp", ":8085")
+	assert.NoError(t, err)
+	go func() {
+		s := &http.Server{Handler: http.HandlerFunc(concurrentAliceHandler)}
+		assert.NoError(t, s.Serve(aliceLn))
+	}()
+	go func() {
+		s := &http.Server{Handler: http.HandlerFunc(BobHandler)}
+		assert.NoError(t, s.Serve(bobLn))
+	}()
+
+	resp, err := http.Get("http://localhost:8084/alice")
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	buf, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	assert.NotNil(t, buf)
+
+	// shouldn't report anything
+	assert.Len(t, r.Bufs, 0)
 }
