@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/appneta/go-appneta/v1/tv"
@@ -540,5 +541,98 @@ func TestDistributedApp(t *testing.T) {
 		{"http.Client", "exit", "", ""}:                        {Edges: g.Edges{{"http.HandlerFunc", "exit"}, {"http.Client", "entry"}}},
 		{"aliceHandler", "exit", "", ""}:                       {Edges: g.Edges{{"http.Client", "exit"}, {"aliceHandler", "entry"}}},
 		{"http.HandlerFunc", "exit", "Action", "AliceHandler"}: {Edges: g.Edges{{"aliceHandler", "exit"}, {"http.HandlerFunc", "entry"}}},
+	})
+}
+
+func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
+	// trace this request, overwriting w with wrapped ResponseWriter
+	t, w := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	ctx := tv.NewContext(context.Background(), t)
+	t.SetAsync(true)
+	defer t.End()
+
+	// call an HTTP endpoint and propagate the distributed trace context
+	urls := []string{
+		"http://localhost:8083/A",
+		"http://localhost:8083/B",
+		"http://localhost:8083/C",
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(urls))
+	var out []byte
+	for _, u := range urls {
+		go func(url string) {
+			// create HTTP client and set trace metadata header
+			client := &http.Client{}
+			req, _ := http.NewRequest("GET", url, nil)
+			// begin layer for the client side of the HTTP service request
+			l := tv.BeginHTTPClientLayer(ctx, req)
+
+			// make HTTP request to external API
+			resp, err := client.Do(req)
+			l.AddHTTPResponse(resp, err)
+			if err != nil {
+				l.End() // end HTTP client timing
+				w.WriteHeader(500)
+				return
+			}
+			// read response body
+			defer resp.Body.Close()
+			buf, err := ioutil.ReadAll(resp.Body)
+			l.End() // end HTTP client timing
+			if err != nil {
+				out = append(out, []byte(fmt.Sprintf(`{"error":"%v"}`, err))...)
+			} else {
+				out = append(out, buf...)
+			}
+			wg.Done()
+		}(u)
+	}
+	wg.Wait()
+
+	w.Write(out)
+}
+
+func TestConcurrentApp(t *testing.T) {
+	r := traceview.SetTestReporter() // set up test reporter
+
+	aliceLn, err := net.Listen("tcp", ":8082")
+	assert.NoError(t, err)
+	bobLn, err := net.Listen("tcp", ":8083")
+	assert.NoError(t, err)
+	go func() {
+		s := &http.Server{Handler: http.HandlerFunc(concurrentAliceHandler)}
+		assert.NoError(t, s.Serve(aliceLn))
+	}()
+	go func() {
+		s := &http.Server{Handler: http.HandlerFunc(BobHandler)}
+		assert.NoError(t, s.Serve(bobLn))
+	}()
+
+	resp, err := http.Get("http://localhost:8082/alice")
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	buf, err := ioutil.ReadAll(resp.Body)
+	t.Logf("Response: %v BUF %s", resp, buf)
+
+	g.AssertGraph(t, r.Bufs, 14, g.AssertNodeKVMap{
+		{"aliceHandler", "entry", "URL", "/alice"}:                       {},
+		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/A"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
+		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/B"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
+		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/C"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
+		{"bobHandler", "entry", "URL", "/A"}:                             {Edges: g.Edges{{"http.Client", "entry"}}},
+		{"bobHandler", "entry", "URL", "/B"}:                             {Edges: g.Edges{{"http.Client", "entry"}}},
+		{"bobHandler", "entry", "URL", "/C"}:                             {Edges: g.Edges{{"http.Client", "entry"}}},
+		{"bobHandler", "exit", "", ""}:                                   {Edges: g.Edges{{"bobHandler", "entry"}}, Count: 3},
+		{"http.Client", "exit", "", ""}: {
+			Edges: g.Edges{{"bobHandler", "exit"}, {"http.Client", "entry"}}, Count: 3, Callback: func(n g.Node) {
+				assert.EqualValues(t, 200, n.Map["RemoteStatus"])
+			}},
+		{"aliceHandler", "exit", "", ""}: {
+			Edges: g.Edges{{"http.Client", "exit"}, {"http.Client", "exit"}, {"http.Client", "exit"}, {"aliceHandler", "entry"}}, Callback: func(n g.Node) {
+				assert.Equal(t, true, n.Map["Async"])
+				assert.EqualValues(t, 200, n.Map["Status"])
+			}},
 	})
 }

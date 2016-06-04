@@ -34,6 +34,9 @@ type Layer interface {
 	// e.g. to provide as an "X-Trace" header in an outgoing HTTP request.
 	MetadataString() string
 
+	// SetAsync(true) provides a hint that this Layer is a parent of concurrent overlapping child Layers.
+	SetAsync(bool)
+
 	IsTracing() bool
 	addChildEdge(traceview.Context)
 	addProfile(Profile)
@@ -140,6 +143,13 @@ func (s *layerSpan) MetadataString() string {
 	return ""
 }
 
+// SetAsync(true) provides a hint that this Layer is a parent of concurrent overlapping child Layers.
+func (s *layerSpan) SetAsync(val bool) {
+	if val {
+		s.AddEndArgs("Async", true)
+	}
+}
+
 // Error reports an error, distinguished by its class and message
 func (s *span) Error(class, msg string) {
 	if s.ok() {
@@ -184,6 +194,7 @@ func (s *nullSpan) addProfile(Profile)                                     {}
 func (s *nullSpan) ok() bool                                               { return false }
 func (s *nullSpan) tvContext() traceview.Context                           { return traceview.NewNullContext() }
 func (s *nullSpan) MetadataString() string                                 { return "" }
+func (s *nullSpan) SetAsync(bool)                                          {}
 
 // is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool                     { return s != nil && !s.ended }
