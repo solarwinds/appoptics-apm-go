@@ -146,7 +146,7 @@ type TestReporter struct {
 	bufChan     chan []byte
 }
 
-var testReporterTimeout = 10 * time.Second
+var testReporterTimeout = 1 * time.Second
 
 func (r *TestReporter) resultWriter() {
 	r.wg.Add(1)

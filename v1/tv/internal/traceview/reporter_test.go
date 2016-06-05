@@ -5,6 +5,7 @@ package traceview
 import (
 	"errors"
 	"testing"
+	"time"
 
 	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
@@ -94,4 +95,22 @@ func TestReportEvent(t *testing.T) {
 	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{
 		{"go_test", "exit"}: {},
 	})
+}
+
+// test behavior of the TestReporter
+func TestTestReporter(t *testing.T) {
+	r := SetTestReporter()
+	r.Close(1) // wait on event that will never be reported: causes timeout
+	assert.Len(t, r.Bufs, 0)
+
+	r = SetTestReporter()
+	go func() { // simulate late event
+		time.Sleep(100 * time.Millisecond)
+		ctx := newTestContext(t)
+		ev, err := ctx.newEvent(LabelExit, testLayer)
+		assert.NoError(t, err)
+		assert.NoError(t, reportEvent(r, ctx, ev))
+	}()
+	r.Close(1) // wait on late event -- blocks until timeout or event received
+	assert.Len(t, r.Bufs, 1)
 }
