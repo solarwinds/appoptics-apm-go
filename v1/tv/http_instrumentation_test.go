@@ -570,6 +570,14 @@ func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
 	wg.Add(len(urls))
 	var out []byte
+	outCh := make(chan []byte)
+	doneCh := make(chan struct{})
+	go func() {
+		for buf := range outCh {
+			out = append(out, buf...)
+		}
+		close(doneCh)
+	}()
 	for _, u := range urls {
 		go func(url string) {
 			// create HTTP client and set trace metadata header
@@ -591,14 +599,16 @@ func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 			buf, err := ioutil.ReadAll(resp.Body)
 			l.End() // end HTTP client timing
 			if err != nil {
-				out = append(out, []byte(fmt.Sprintf(`{"error":"%v"}`, err))...)
+				outCh <- []byte(fmt.Sprintf(`{"error":"%v"}`, err))
 			} else {
-				out = append(out, buf...)
+				outCh <- buf
 			}
 			wg.Done()
 		}(u)
 	}
 	wg.Wait()
+	close(outCh)
+	<-doneCh
 
 	w.Write(out)
 }
