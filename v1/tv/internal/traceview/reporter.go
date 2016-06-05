@@ -158,7 +158,6 @@ func (r *TestReporter) resultWriter() {
 				r.wg.Done()
 				return
 			}
-			//close(r.done)
 			r.done = nil
 		case <-time.After(testReporterTimeout):
 			r.wg.Done()
@@ -173,10 +172,10 @@ func (r *TestReporter) resultWriter() {
 	}
 }
 
-// Close stops listening and frees any resources used by the TestReporter. r.Bufs will no longer be updated.
+// Close stops listening and frees any resources used by the TestReporter.
+// r.Bufs will no longer be updated.
 func (r *TestReporter) Close(numBufs int) {
 	r.done <- numBufs
-	//close(r.done)
 	r.wg.Wait()
 }
 

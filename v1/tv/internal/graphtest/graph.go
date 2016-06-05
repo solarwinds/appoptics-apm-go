@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -196,7 +195,7 @@ func (m AssertNodeKVMap) Size() (ret int) {
 // AssertSeen ensures each node is seen at most once.
 func (m AssertNodeKVMap) AssertSeen(t *testing.T, n Node) {
 	mn, ok := m.match(n)
-	require.True(t, ok)
+	assert.True(t, ok)
 	if m[mn].Count > 0 {
 		asserter := m[mn]
 		asserter.Count--

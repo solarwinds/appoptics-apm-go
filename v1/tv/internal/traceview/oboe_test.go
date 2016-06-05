@@ -24,6 +24,7 @@ func TestInitMessage(t *testing.T) {
 	r := SetTestReporter()
 
 	sendInitMessage()
+	r.Close(2)
 	assertInitMessage(t, r.Bufs)
 }
 func assertInitMessage(t *testing.T, bufs [][]byte) {
@@ -40,11 +41,9 @@ func assertInitMessage(t *testing.T, bufs [][]byte) {
 
 func TestInitMessageUDP(t *testing.T) {
 	var bufs [][]byte
-	startTestUDPListener(t, &bufs, 2)
-
+	done := startTestUDPListener(t, &bufs, 2)
 	sendInitMessage()
-	time.Sleep(50 * time.Millisecond)
-
+	<-done
 	assertInitMessage(t, bufs)
 }
 
@@ -101,7 +100,8 @@ func TestOboeRateCounterTime(t *testing.T) {
 	assert.True(t, b.consume(1)) // another token available
 }
 
-func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) {
+func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) chan struct{} {
+	done := make(chan struct{})
 	// set up UDP listener on alternate listen address
 	reporterAddr = "127.0.0.1:7832"
 	globalReporter = newReporter()
@@ -123,8 +123,10 @@ func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) {
 			}
 			*bufs = append(*bufs, buf[0:n])
 		}
+		close(done)
 		t.Logf("Closing UDP listener, got %d bufs", numBufs)
 	}(numbufs)
+	return done
 }
 
 func testLayerCount(count int64) interface{} {
@@ -132,9 +134,9 @@ func testLayerCount(count int64) interface{} {
 }
 func TestRateSampleRequest(t *testing.T) {
 	var bufs [][]byte
-	startTestUDPListener(t, &bufs, 2)
+	done := startTestUDPListener(t, &bufs, 2)
 	sendMetricsMessage()
-	time.Sleep(50 * time.Millisecond)
+	<-done
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["ProcessName"], initLayer)
@@ -167,9 +169,9 @@ func TestRateSampleRequest(t *testing.T) {
 
 	// send UDP message & assert
 	bufs = nil
-	startTestUDPListener(t, &bufs, 2)
+	done = startTestUDPListener(t, &bufs, 2)
 	sendMetricsMessage()
-	time.Sleep(50 * time.Millisecond)
+	<-done
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["ProcessName"], initLayer)
@@ -185,9 +187,9 @@ func TestRateSampleRequest(t *testing.T) {
 	})
 
 	bufs = nil
-	startTestUDPListener(t, &bufs, 2)
+	done = startTestUDPListener(t, &bufs, 2)
 	sendMetricsMessage()
-	time.Sleep(50 * time.Millisecond)
+	<-done
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["ProcessName"], initLayer)
@@ -205,10 +207,15 @@ func TestRateSampleRequest(t *testing.T) {
 	r := SetTestReporter()
 	randReader = &errorReader{failOn: map[int]bool{0: true}}
 	sendMetricsMessage()
+	time.Sleep(100 * time.Millisecond)
+	r.Close(0)
 	assert.Len(t, r.Bufs, 0)
 
+	r = SetTestReporter()
 	randReader = &errorReader{failOn: map[int]bool{2: true}}
 	sendMetricsMessage()
+	time.Sleep(100 * time.Millisecond)
+	r.Close(0)
 	assert.Len(t, r.Bufs, 0)
 
 	randReader = rand.Reader // set back to normal

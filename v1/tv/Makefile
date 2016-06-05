@@ -4,13 +4,14 @@ cov_out=-coverprofile=cov.out
 covtv_out=-coverprofile=covtv.out 
 cov_files=cov.out covtv.out internal/traceview/cov.out internal/traceview/covtv.out
 cov_merge=covmerge.out
+test_args=-race
 
 test: export TRACEVIEW_DEBUG=1
 test:
-	go test $(cov_args) -v $(cov_out)
-	go test $(cov_args) -v $(covtv_out) -tags traceview
-	cd internal/traceview && go test $(cov_args) $(cov_out) -v
-	cd internal/traceview && go test $(cov_args) $(covtv_out) -v -tags traceview
+	go test $(test_args) $(cov_args) -v $(cov_out)
+	go test $(test_args) $(cov_args) -v $(covtv_out) -tags traceview
+	cd internal/traceview && go test $(test_args) $(cov_args) $(cov_out) -v
+	cd internal/traceview && go test $(test_args) $(cov_args) $(covtv_out) -v -tags traceview
 
 $(cov_merge): test $(cov_files)
 	gocovmerge $(cov_files) > $(cov_merge)

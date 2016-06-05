@@ -85,11 +85,12 @@ func TestReportEvent(t *testing.T) {
 
 	// successful event
 	assert.NoError(t, reportEvent(r, ctx, ev))
+	r.Close(1)
 	assert.Len(t, r.Bufs, 1)
-	// re-report: shouldn't work (op IDs the same)
+
+	// re-report: shouldn't work (op IDs the same, reporter closed)
 	assert.Error(t, reportEvent(r, ctx, ev))
 
-	r.Close(1)
 	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{
 		{"go_test", "exit"}: {},
 	})
