@@ -73,6 +73,7 @@ func TestTraceChild(t *testing.T) {
 	r := traceview.SetTestReporter() // enable test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("childExample"))
 	childExample(ctx) // generate events
+	r.Close(6)
 	assertTraceChild(t, r.Bufs)
 }
 
@@ -80,6 +81,7 @@ func TestTraceChildCtx(t *testing.T) {
 	r := traceview.SetTestReporter() // enable test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("childExample"))
 	childExampleCtx(ctx) // generate events
+	r.Close(6)
 	assertTraceChild(t, r.Bufs)
 }
 

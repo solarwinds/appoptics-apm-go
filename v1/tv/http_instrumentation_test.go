@@ -37,6 +37,7 @@ func TestHTTPHandler404(t *testing.T) {
 	response := httpTest(handler404)
 	assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
 
+	r.Close(2)
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
@@ -60,6 +61,7 @@ func TestHTTPHandler200(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 	response := httpTest(handler200)
 
+	r.Close(2)
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
@@ -230,13 +232,14 @@ type testClientFn func(t *testing.T, ctx context.Context, method, url string) (*
 type testServerFn struct {
 	serverFn func(t *testing.T, list net.Listener)
 	assertFn func(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int)
+	numBufs  int
 	status   int
 }
 
-var testHTTPSvr = testServerFn{testServer, assertHTTPRequestGraph, 403}
-var testHTTPSvr200 = testServerFn{testServer200, assertHTTPRequestUntracedGraph, 200}
-var testHTTPSvr403 = testServerFn{testServer403, assertHTTPRequestUntracedGraph, 403}
-var testHTTPSvrPanic = testServerFn{testServerPanic, assertHTTPRequestPanic, 200}
+var testHTTPSvr = testServerFn{testServer, assertHTTPRequestGraph, 8, 403}
+var testHTTPSvr200 = testServerFn{testServer200, assertHTTPRequestUntracedGraph, 4, 200}
+var testHTTPSvr403 = testServerFn{testServer403, assertHTTPRequestUntracedGraph, 4, 403}
+var testHTTPSvrPanic = testServerFn{testServerPanic, assertHTTPRequestPanic, 7, 200}
 
 var badURL = "%gh&%ij" // url.Parse() will return error
 var invalidPortURL = "http://0.0.0.0:888888"
@@ -280,6 +283,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 	if badReq { // handle case where http.NewRequest() returned nil
 		assert.Error(t, err)
 		assert.Nil(t, resp)
+		r.Close(2)
 		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {Edges: g.Edges{{"httpTest", "entry"}}},
@@ -289,6 +293,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 	// handle case where http.Client.Do() did not return an error
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
+	r.Close(server.numBufs)
 	server.assertFn(t, r.Bufs, resp, url, method, port, server.status)
 }
 
@@ -389,6 +394,7 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 	assert.Nil(t, resp)
 
 	if badReq { // handle case where http.NewRequest() returned nil
+		r.Close(2)
 		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {Edges: g.Edges{{"httpTest", "entry"}}},
@@ -396,6 +402,7 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 		return
 	}
 	// handle case where http.Client.Do() returned an error
+	r.Close(5)
 	g.AssertGraph(t, r.Bufs, 5, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {Edges: g.Edges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
@@ -428,6 +435,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	assert.Len(t, resp.Header[tv.HTTPHeaderName], 1)
 	assert.Equal(t, 403, resp.StatusCode)
 
+	r.Close(10)
 	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {Edges: g.Edges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
@@ -530,6 +538,7 @@ func TestDistributedApp(t *testing.T) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	t.Logf("Response: %v BUF %s", resp, buf)
 
+	r.Close(10)
 	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeKVMap{
 		{"http.HandlerFunc", "entry", "URL", "/alice"}:         {},
 		{"aliceHandler", "entry", "URL", "/alice"}:             {Edges: g.Edges{{"http.HandlerFunc", "entry"}}},
@@ -617,6 +626,7 @@ func TestConcurrentApp(t *testing.T) {
 	assert.NoError(t, err)
 	t.Logf("Response: %v BUF %s", resp, buf)
 
+	r.Close(14)
 	g.AssertGraph(t, r.Bufs, 14, g.AssertNodeKVMap{
 		{"aliceHandler", "entry", "URL", "/alice"}:                       {},
 		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/A"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
