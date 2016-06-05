@@ -5,6 +5,7 @@ package tv
 import (
 	"runtime"
 	"runtime/debug"
+	"sync"
 
 	"github.com/appneta/go-appneta/v1/tv/internal/traceview"
 	"golang.org/x/net/context"
@@ -97,6 +98,8 @@ func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profil
 // End a profiled block or method.
 func (s *span) End(args ...interface{}) {
 	if s.ok() {
+		s.lock.Lock()
+		defer s.lock.Unlock()
 		for _, prof := range s.childProfiles {
 			prof.End()
 		}
@@ -123,7 +126,9 @@ func (s *layerSpan) AddEndArgs(args ...interface{}) {
 		if len(args)%2 == 1 {
 			args = args[0 : len(args)-1]
 		}
+		s.lock.Lock()
 		s.endArgs = append(s.endArgs, args...)
+		s.lock.Unlock()
 	}
 }
 
@@ -176,6 +181,7 @@ type span struct {
 	childProfiles []Profile
 	endArgs       []interface{}
 	ended         bool // has exit event been reported?
+	lock          sync.Mutex
 }
 type layerSpan struct{ span }   // satisfies Layer
 type profileSpan struct{ span } // satisfies Profile
@@ -202,8 +208,16 @@ func (s *span) IsTracing() bool              { return s.ok() }
 func (s *span) tvContext() traceview.Context { return s.tvCtx }
 
 // addChildEdge keeps track of edges to closed child spans
-func (s *span) addChildEdge(ctx traceview.Context) { s.childEdges = append(s.childEdges, ctx) }
-func (s *span) addProfile(p Profile)               { s.childProfiles = append([]Profile{p}, s.childProfiles...) }
+func (s *span) addChildEdge(ctx traceview.Context) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.childEdges = append(s.childEdges, ctx)
+}
+func (s *span) addProfile(p Profile) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.childProfiles = append([]Profile{p}, s.childProfiles...)
+}
 
 // labelers help spans choose label and layer names.
 type labeler interface {
