@@ -78,7 +78,7 @@ func NewTraceFromID(layerName, mdstr string, cb func() KVMap) Trace {
 // No more events should be reported from this trace.
 func (t *tvTrace) End(args ...interface{}) {
 	if t.ok() {
-		t.endArgs = append(t.endArgs, args...)
+		t.AddEndArgs(args...)
 		t.reportExit()
 	}
 }
@@ -87,9 +87,11 @@ func (t *tvTrace) End(args ...interface{}) {
 func (t *tvTrace) EndCallback(cb func() KVMap) {
 	if t.ok() {
 		if cb != nil {
+			var args []interface{}
 			for k, v := range cb() {
-				t.endArgs = append(t.endArgs, k, v)
+				args = append(args, k, v)
 			}
+			t.AddEndArgs(args...)
 		}
 		t.reportExit()
 	}
@@ -97,6 +99,8 @@ func (t *tvTrace) EndCallback(cb func() KVMap) {
 
 func (t *tvTrace) reportExit() {
 	if t.ok() {
+		t.lock.Lock()
+		defer t.lock.Unlock()
 		for _, edge := range t.childEdges { // add Edge KV for each joined child
 			t.endArgs = append(t.endArgs, "Edge", edge)
 		}

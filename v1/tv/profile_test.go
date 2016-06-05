@@ -21,6 +21,7 @@ func TestBeginProfile(t *testing.T) {
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("testLayer"))
 	testProf(ctx)
 
+	r.Close(2)
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
 		{"", "profile_entry"}: {Edges: g.Edges{{"testLayer", "entry"}}, Callback: func(n g.Node) {
@@ -45,6 +46,7 @@ func TestBeginLayerProfile(t *testing.T) {
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("testLayer"))
 	testLayerProf(ctx)
 
+	r.Close(6)
 	g.AssertGraph(t, r.Bufs, 6, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
 		{"L1", "entry"}:        {Edges: g.Edges{{"testLayer", "entry"}}},
@@ -66,6 +68,7 @@ func TestNoTraceBeginProfile(t *testing.T) {
 	r := traceview.SetTestReporter()
 	ctx := context.Background()
 	testProf(ctx)
+	r.Close(0)
 	assert.Len(t, r.Bufs, 0)
 }
 func TestTraceErrorBeginProfile(t *testing.T) {
@@ -73,6 +76,7 @@ func TestTraceErrorBeginProfile(t *testing.T) {
 	r := traceview.SetTestReporter()
 	r.ErrorEvents = map[int]bool{1: true}
 	testProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
+	r.Close(1)
 	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
 	})
@@ -82,6 +86,7 @@ func TestNoTraceBeginLayerProfile(t *testing.T) {
 	r := traceview.SetTestReporter()
 	ctx := context.Background()
 	testLayerProf(ctx)
+	r.Close(0)
 	assert.Len(t, r.Bufs, 0)
 }
 func TestTraceErrorBeginLayerProfile(t *testing.T) {
@@ -89,6 +94,7 @@ func TestTraceErrorBeginLayerProfile(t *testing.T) {
 	r := traceview.SetTestReporter()
 	r.ErrorEvents = map[int]bool{1: true}
 	testLayerProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
+	r.Close(2)
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"testLayer", "entry"}: {},
 		{"testLayer", "exit"}:  {Edges: g.Edges{{"testLayer", "entry"}}},

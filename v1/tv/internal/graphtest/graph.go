@@ -86,6 +86,7 @@ type Edges []MatchNode
 type NodeAsserter struct { // run to assert each Node
 	Edges    Edges
 	Callback func(n Node)
+	Count    int
 	Seen     bool
 }
 
@@ -93,9 +94,13 @@ type NodeAsserter struct { // run to assert each Node
 // have been seen.
 type AsserterMap interface {
 	Match(n Node) (NodeAsserter, bool)
-	Len() int
+	Size() int
 	AssertSeen(t *testing.T, n Node)
 	AssertMissing(t *testing.T)
+}
+
+type matcher interface {
+	Match(n Node) (mn matcher, ok bool)
 }
 
 // An AssertNodeMap describes a list of nodes by {Layer, Label} and assertions about them.
@@ -110,16 +115,33 @@ func (m AssertNodeMap) Match(n Node) (NodeAsserter, bool) {
 	return ret, ok
 }
 
-// Len returns the number of nodes in the asserted graph.
-func (m AssertNodeMap) Len() int { return len(m) }
+// Size returns the number of nodes in the asserted graph.
+func (m AssertNodeMap) Size() (ret int) {
+	for _, a := range m {
+		switch {
+		case a.Count == 0:
+			ret++
+		case a.Count > 0:
+			ret += a.Count
+		}
+	}
+	return
+}
 
 // AssertSeen ensures each node is seen at most once.
 func (m AssertNodeMap) AssertSeen(t *testing.T, n Node) {
 	mn := MatchNode{n.Layer, n.Label}
-	assert.False(t, m[mn].Seen)
-	asserter := m[mn]
-	asserter.Seen = true
-	m[mn] = asserter
+	if m[mn].Count > 0 {
+		asserter := m[mn]
+		asserter.Count--
+		m[mn] = asserter
+	}
+	if m[mn].Count == 0 {
+		assert.False(t, m[mn].Seen, "Already saw node %v match %v", n, mn)
+		asserter := m[mn]
+		asserter.Seen = true
+		m[mn] = asserter
+	}
 }
 
 // AssertMissing ensures each node is seen.
@@ -157,17 +179,34 @@ func (m AssertNodeKVMap) match(n Node) (mn MatchNodeKV, ok bool) {
 	return
 }
 
-// Len returns the number of nodes in the asserted graph.
-func (m AssertNodeKVMap) Len() int { return len(m) }
+// Size returns the number of nodes in the asserted graph.
+func (m AssertNodeKVMap) Size() (ret int) {
+	for _, a := range m {
+		switch {
+		case a.Count == 0:
+			ret++
+		case a.Count > 0:
+			ret += a.Count
+		}
+	}
+	return
+}
 
 // AssertSeen ensures each node is seen at most once.
 func (m AssertNodeKVMap) AssertSeen(t *testing.T, n Node) {
 	mn, ok := m.match(n)
 	assert.True(t, ok)
-	assert.False(t, m[mn].Seen)
-	asserter := m[mn]
-	asserter.Seen = true
-	m[mn] = asserter
+	if m[mn].Count > 0 {
+		asserter := m[mn]
+		asserter.Count--
+		m[mn] = asserter
+	}
+	if m[mn].Count == 0 {
+		assert.False(t, m[mn].Seen, "Already saw node %v match %v", n, mn)
+		asserter := m[mn]
+		asserter.Seen = true
+		m[mn] = asserter
+	}
 }
 
 // AssertMissing ensures each node is seen.
@@ -186,7 +225,7 @@ func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, asserterMap Asserter
 	assert.Equal(t, len(bufs), numNodes, "bufs len expected %d, actual %d", numNodes, len(bufs))
 	g := buildGraph(t, bufs)
 	assert.Equal(t, len(g), numNodes, "graph len expected %d, actual %d", numNodes, len(g))
-	assert.Len(t, asserterMap, numNodes)
+	assert.Equal(t, asserterMap.Size(), numNodes)
 	for op, n := range g {
 		assert.Equal(t, op, n.OpID)
 		// assert edges for this node

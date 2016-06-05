@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/appneta/go-appneta/v1/tv"
@@ -36,6 +37,7 @@ func TestHTTPHandler404(t *testing.T) {
 	response := httpTest(handler404)
 	assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
 
+	r.Close(2)
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
@@ -59,6 +61,7 @@ func TestHTTPHandler200(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 	response := httpTest(handler200)
 
+	r.Close(2)
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
@@ -229,13 +232,14 @@ type testClientFn func(t *testing.T, ctx context.Context, method, url string) (*
 type testServerFn struct {
 	serverFn func(t *testing.T, list net.Listener)
 	assertFn func(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int)
+	numBufs  int
 	status   int
 }
 
-var testHTTPSvr = testServerFn{testServer, assertHTTPRequestGraph, 403}
-var testHTTPSvr200 = testServerFn{testServer200, assertHTTPRequestUntracedGraph, 200}
-var testHTTPSvr403 = testServerFn{testServer403, assertHTTPRequestUntracedGraph, 403}
-var testHTTPSvrPanic = testServerFn{testServerPanic, assertHTTPRequestPanic, 200}
+var testHTTPSvr = testServerFn{testServer, assertHTTPRequestGraph, 8, 403}
+var testHTTPSvr200 = testServerFn{testServer200, assertHTTPRequestUntracedGraph, 4, 200}
+var testHTTPSvr403 = testServerFn{testServer403, assertHTTPRequestUntracedGraph, 4, 403}
+var testHTTPSvrPanic = testServerFn{testServerPanic, assertHTTPRequestPanic, 7, 200}
 
 var badURL = "%gh&%ij" // url.Parse() will return error
 var invalidPortURL = "http://0.0.0.0:888888"
@@ -279,6 +283,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 	if badReq { // handle case where http.NewRequest() returned nil
 		assert.Error(t, err)
 		assert.Nil(t, resp)
+		r.Close(2)
 		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {Edges: g.Edges{{"httpTest", "entry"}}},
@@ -288,6 +293,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 	// handle case where http.Client.Do() did not return an error
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
+	r.Close(server.numBufs)
 	server.assertFn(t, r.Bufs, resp, url, method, port, server.status)
 }
 
@@ -388,6 +394,7 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 	assert.Nil(t, resp)
 
 	if badReq { // handle case where http.NewRequest() returned nil
+		r.Close(2)
 		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {Edges: g.Edges{{"httpTest", "entry"}}},
@@ -395,6 +402,7 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 		return
 	}
 	// handle case where http.Client.Do() returned an error
+	r.Close(5)
 	g.AssertGraph(t, r.Bufs, 5, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {Edges: g.Edges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
@@ -427,6 +435,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	assert.Len(t, resp.Header[tv.HTTPHeaderName], 1)
 	assert.Equal(t, 403, resp.StatusCode)
 
+	r.Close(10)
 	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {Edges: g.Edges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
@@ -529,6 +538,7 @@ func TestDistributedApp(t *testing.T) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	t.Logf("Response: %v BUF %s", resp, buf)
 
+	r.Close(10)
 	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeKVMap{
 		{"http.HandlerFunc", "entry", "URL", "/alice"}:         {},
 		{"aliceHandler", "entry", "URL", "/alice"}:             {Edges: g.Edges{{"http.HandlerFunc", "entry"}}},
@@ -541,4 +551,137 @@ func TestDistributedApp(t *testing.T) {
 		{"aliceHandler", "exit", "", ""}:                       {Edges: g.Edges{{"http.Client", "exit"}, {"aliceHandler", "entry"}}},
 		{"http.HandlerFunc", "exit", "Action", "AliceHandler"}: {Edges: g.Edges{{"aliceHandler", "exit"}, {"http.HandlerFunc", "entry"}}},
 	})
+}
+
+func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
+	// trace this request, overwriting w with wrapped ResponseWriter
+	t, w := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	ctx := tv.NewContext(context.Background(), t)
+	t.SetAsync(true)
+	defer t.End()
+
+	// call an HTTP endpoint and propagate the distributed trace context
+	urls := []string{
+		"http://localhost:8083/A",
+		"http://localhost:8083/B",
+		"http://localhost:8083/C",
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(urls))
+	var out []byte
+	outCh := make(chan []byte)
+	doneCh := make(chan struct{})
+	go func() {
+		for buf := range outCh {
+			out = append(out, buf...)
+		}
+		close(doneCh)
+	}()
+	for _, u := range urls {
+		go func(url string) {
+			// create HTTP client and set trace metadata header
+			client := &http.Client{}
+			req, _ := http.NewRequest("GET", url, nil)
+			// begin layer for the client side of the HTTP service request
+			l := tv.BeginHTTPClientLayer(ctx, req)
+
+			// make HTTP request to external API
+			resp, err := client.Do(req)
+			l.AddHTTPResponse(resp, err)
+			if err != nil {
+				l.End() // end HTTP client timing
+				w.WriteHeader(500)
+				return
+			}
+			// read response body
+			defer resp.Body.Close()
+			buf, err := ioutil.ReadAll(resp.Body)
+			l.End() // end HTTP client timing
+			if err != nil {
+				outCh <- []byte(fmt.Sprintf(`{"error":"%v"}`, err))
+			} else {
+				outCh <- buf
+			}
+			wg.Done()
+		}(u)
+	}
+	wg.Wait()
+	close(outCh)
+	<-doneCh
+
+	w.Write(out)
+}
+
+func TestConcurrentApp(t *testing.T) {
+	r := traceview.SetTestReporter() // set up test reporter
+
+	aliceLn, err := net.Listen("tcp", ":8082")
+	assert.NoError(t, err)
+	bobLn, err := net.Listen("tcp", ":8083")
+	assert.NoError(t, err)
+	go func() {
+		s := &http.Server{Handler: http.HandlerFunc(concurrentAliceHandler)}
+		assert.NoError(t, s.Serve(aliceLn))
+	}()
+	go func() {
+		s := &http.Server{Handler: http.HandlerFunc(BobHandler)}
+		assert.NoError(t, s.Serve(bobLn))
+	}()
+
+	resp, err := http.Get("http://localhost:8082/alice")
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	buf, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	t.Logf("Response: %v BUF %s", resp, buf)
+
+	r.Close(14)
+	g.AssertGraph(t, r.Bufs, 14, g.AssertNodeKVMap{
+		{"aliceHandler", "entry", "URL", "/alice"}:                       {},
+		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/A"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
+		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/B"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
+		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/C"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
+		{"bobHandler", "entry", "URL", "/A"}:                             {Edges: g.Edges{{"http.Client", "entry"}}},
+		{"bobHandler", "entry", "URL", "/B"}:                             {Edges: g.Edges{{"http.Client", "entry"}}},
+		{"bobHandler", "entry", "URL", "/C"}:                             {Edges: g.Edges{{"http.Client", "entry"}}},
+		{"bobHandler", "exit", "", ""}:                                   {Edges: g.Edges{{"bobHandler", "entry"}}, Count: 3},
+		{"http.Client", "exit", "", ""}: {
+			Edges: g.Edges{{"bobHandler", "exit"}, {"http.Client", "entry"}}, Count: 3, Callback: func(n g.Node) {
+				assert.EqualValues(t, 200, n.Map["RemoteStatus"])
+			}},
+		{"aliceHandler", "exit", "", ""}: {
+			Edges: g.Edges{{"http.Client", "exit"}, {"http.Client", "exit"}, {"http.Client", "exit"}, {"aliceHandler", "entry"}}, Callback: func(n g.Node) {
+				assert.Equal(t, true, n.Map["Async"])
+				assert.EqualValues(t, 200, n.Map["Status"])
+			}},
+	})
+}
+
+func TestConcurrentAppNoTrace(t *testing.T) {
+	r := traceview.SetTestReporter() // set up test reporter
+	r.ShouldTrace = false
+
+	aliceLn, err := net.Listen("tcp", ":8084")
+	assert.NoError(t, err)
+	bobLn, err := net.Listen("tcp", ":8085")
+	assert.NoError(t, err)
+	go func() {
+		s := &http.Server{Handler: http.HandlerFunc(concurrentAliceHandler)}
+		assert.NoError(t, s.Serve(aliceLn))
+	}()
+	go func() {
+		s := &http.Server{Handler: http.HandlerFunc(BobHandler)}
+		assert.NoError(t, s.Serve(bobLn))
+	}()
+
+	resp, err := http.Get("http://localhost:8084/alice")
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+	buf, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	assert.NotNil(t, buf)
+
+	// shouldn't report anything
+	assert.Len(t, r.Bufs, 0)
 }

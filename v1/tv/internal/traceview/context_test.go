@@ -196,6 +196,7 @@ func TestReportEventMap(t *testing.T) {
 		"testK":  "testV",
 		"intval": 333,
 	}))
+	r.Close(2)
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		{"myLayer", "entry"}: {},
 		{"myLayer", "info"}: {Edges: g.Edges{{"myLayer", "entry"}}, Callback: func(n g.Node) {

@@ -36,7 +36,7 @@ data in our production environment!) so please share any feedback you have; PRs 
 
 To get tracing, you'll need a [a (free) TraceView account](http://www.appneta.com/products/traceview/).
 
-In the product install flow, **choose to skip the webserver and select any language.**  (You'll notice the absense of Go because we're currently in beta.)
+In the product install flow, **choose to skip the webserver and select any language.**  (You'll notice the absence of Go because we're currently in beta.)
 
 Follow the instructions during signup to install the Host Agent (“tracelyzer”). This will also
 install the liboboe and liboboe-dev packages on your platform.

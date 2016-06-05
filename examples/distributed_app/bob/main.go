@@ -4,6 +4,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/appneta/go-appneta/v1/tv"
@@ -12,6 +13,7 @@ import (
 func bobHandler(w http.ResponseWriter, r *http.Request) {
 	t, w := tv.TraceFromHTTPRequestResponse("bobHandler", w, r)
 	defer t.End()
+	log.Printf("%s %s", r.Method, r.URL)
 	w.Write([]byte(`{"result":"hello from bob"}`))
 }
 
