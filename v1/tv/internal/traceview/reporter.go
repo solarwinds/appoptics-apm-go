@@ -122,6 +122,7 @@ func shouldTraceRequest(layer, xtraceHeader string) (sampled bool, sampleRate, s
 }
 
 // SetTestReporter sets and returns a test reporter that captures raw event bytes
+// for making assertions about using the graphtest package.
 func SetTestReporter() *TestReporter {
 	r := &TestReporter{
 		ShouldTrace: true,
@@ -146,7 +147,7 @@ type TestReporter struct {
 	bufChan     chan []byte
 }
 
-var testReporterTimeout = 1 * time.Second
+var testReporterTimeout = 2 * time.Second
 
 func (r *TestReporter) resultWriter() {
 	r.wg.Add(1)
@@ -172,21 +173,23 @@ func (r *TestReporter) resultWriter() {
 	}
 }
 
-// Close stops listening and frees any resources used by the TestReporter.
-// r.Bufs will no longer be updated.
+// Close stops the test reporter from listening for events; r.Bufs will no longer be updated and any
+// calls to WritePacket() will panic.
 func (r *TestReporter) Close(numBufs int) {
 	r.done <- numBufs
+	// wait for reader goroutine to receive numBufs events, or timeout.
 	r.wg.Wait()
+	close(r.bufChan)
 }
 
-// WritePacket appends buf to Bufs.
+// WritePacket appends buf to Bufs; if TestReporter.Close() was called it will panic.
 func (r *TestReporter) WritePacket(buf []byte) (int, error) {
 	atomic.AddInt64(&r.eventCount, 1)
 	if r.ShouldError || // error all events
 		(r.ErrorEvents != nil && r.ErrorEvents[(int(r.eventCount)-1)]) { // error certain specified events
 		return 0, errors.New("TestReporter error")
 	}
-	r.bufChan <- buf
+	r.bufChan <- buf // a send to a closed channel panics.
 	return len(buf), nil
 }
 
