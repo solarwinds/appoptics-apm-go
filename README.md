@@ -253,7 +253,7 @@ our [blog's release announcement](https://www.appneta.com/blog/go-long-with-gola
 heatmap underlaid with memory metrics, just after fixing a memory leak and restarting a service
 inside a staging environment.
 
-![heatmap with memory metrics](https://github.com/appneta/go-appneta/raw/master/img/metrics-screenshot1.png)
+<img width=729 src="https://github.com/appneta/go-appneta/raw/master/img/metrics-screenshot1.png">
 
 ## Help and examples
 
