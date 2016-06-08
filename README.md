@@ -28,7 +28,7 @@ monitored using TraceView.
 
 Go support is currently in beta (though we run the instrumentation to process
 data in our production environment!) so please share any feedback you have; PRs welcome.
-
+Read more about this release in our [blog post announcing our Go instrumentation](https://www.appneta.com/blog/go-long-with-golang/).
 
 ## Getting started
 
