@@ -115,7 +115,7 @@ func (t *tvTrace) reportExit() {
 	}
 }
 
-func (t *tvTrace) IsTracing() bool { return t.tvCtx.IsTracing() }
+func (t *tvTrace) IsTracing() bool { return t != nil && t.tvCtx.IsTracing() }
 
 // ExitMetadata reports the X-Trace metadata string that will be used by the exit event.
 // This is useful for setting response headers before reporting the end of the span.

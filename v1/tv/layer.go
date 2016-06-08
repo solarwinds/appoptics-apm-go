@@ -181,7 +181,7 @@ type span struct {
 	childProfiles []Profile
 	endArgs       []interface{}
 	ended         bool // has exit event been reported?
-	lock          sync.Mutex
+	lock          sync.RWMutex
 }
 type layerSpan struct{ span }   // satisfies Layer
 type profileSpan struct{ span } // satisfies Profile
@@ -203,7 +203,11 @@ func (s *nullSpan) MetadataString() string                                 { ret
 func (s *nullSpan) SetAsync(bool)                                          {}
 
 // is this span still valid (has it timed out, expired, not sampled)
-func (s *span) ok() bool                     { return s != nil && !s.ended }
+func (s *span) ok() bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	return s != nil && !s.ended
+}
 func (s *span) IsTracing() bool              { return s.ok() }
 func (s *span) tvContext() traceview.Context { return s.tvCtx }
 
