@@ -245,6 +245,16 @@ The `GO_TRACEVIEW_TRACING_MODE` environment variable may be set to "always", "th
 - Mode "never" will disable tracing, and will neither start nor continue traces.
 
 
+## Metrics
+
+In addition to distributed tracing and latency measurement, this package also provides Go metrics
+monitoring for runtime metrics such as memory and number of goroutines. Below is a screenshot from
+our [blog's release announcement](https://www.appneta.com/blog/go-long-with-golang/) of a latency
+heatmap underlaid with memory metrics, just after fixing a memory leak and restarting a service
+inside a staging environment.
+
+![heatmap with memory metrics](https://github.com/appneta/go-appneta/raw/master/img/dashboard-screenshot.png)
+
 ## Help and examples
 
 ### Support
