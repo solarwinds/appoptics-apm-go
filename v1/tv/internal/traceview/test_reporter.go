@@ -4,7 +4,6 @@ package traceview
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,9 +11,14 @@ import (
 
 // SetTestReporter sets and returns a test reporter that captures raw event bytes
 // for making assertions about using the graphtest package.
-func SetTestReporter() *TestReporter {
+func SetTestReporter(args ...interface{}) *TestReporter {
+	timeout := 2 * time.Second
+	if len(args) == 1 {
+		timeout, _ = args[0].(time.Duration)
+	}
 	r := &TestReporter{
 		ShouldTrace: true,
+		Timeout:     timeout,
 		done:        make(chan int),
 		bufChan:     make(chan []byte),
 	}
@@ -34,9 +38,8 @@ type TestReporter struct {
 	done        chan int
 	wg          sync.WaitGroup
 	bufChan     chan []byte
+	Timeout     time.Duration
 }
-
-var testReporterTimeout = 2 * time.Second
 
 func (r *TestReporter) resultWriter() {
 	r.wg.Add(1)
@@ -49,7 +52,7 @@ func (r *TestReporter) resultWriter() {
 				return
 			}
 			r.done = nil
-		case <-time.After(testReporterTimeout):
+		case <-time.After(r.Timeout):
 			r.wg.Done()
 			return
 		case buf := <-r.bufChan:
@@ -78,7 +81,6 @@ func (r *TestReporter) WritePacket(buf []byte) (int, error) {
 		(r.ErrorEvents != nil && r.ErrorEvents[(int(r.eventCount)-1)]) { // error certain specified events
 		return 0, errors.New("TestReporter error")
 	}
-	fmt.Printf("[%v] WritePacket\n", time.Now())
 	r.bufChan <- buf // a send to a closed channel panics.
 	return len(buf), nil
 }

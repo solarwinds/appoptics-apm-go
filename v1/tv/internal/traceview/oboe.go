@@ -74,7 +74,9 @@ func sendInitMessage() {
 		)
 		c.ReportEvent(LabelExit, initLayer)
 	}
-	go sendMetrics()
+	if !disableMetrics {
+		go sendMetrics(globalReporter)
+	}
 }
 
 var rateCounterDefaultRate = 5.0
@@ -150,17 +152,24 @@ func getNextInterval(now time.Time) time.Duration {
 			time.Duration(now.Nanosecond())*time.Nanosecond)
 }
 
-func sendMetrics() {
+var stopMetrics = make(chan struct{})
+var disableMetrics bool
+
+func sendMetrics(r reporter) {
 	for {
-		time.Sleep(getNextInterval(time.Now()))
-		sendMetricsMessage()
+		select {
+		case <-stopMetrics:
+			break
+		case <-time.After(getNextInterval(time.Now())):
+			sendMetricsMessage(r)
+		}
 	}
 }
 
 var metricsLayerName = "JMX"
 var metricsPrefix = metricsLayerName + "."
 
-func sendMetricsMessage() {
+func sendMetricsMessage(r reporter) {
 	ctx, ok := newContext().(*oboeContext)
 	if !ok {
 		return
@@ -207,7 +216,7 @@ func sendMetricsMessage() {
 	appendCount(ev, counts, "SampleCount", func(c *rateCounts) int64 { return c.sampled })
 	appendCount(ev, counts, "ThroughCount", func(c *rateCounts) int64 { return c.through })
 
-	ev.Report(ctx)
+	ev.ReportUsing(ctx, r)
 	ctx.ReportEvent(LabelExit, metricsLayerName)
 }
 

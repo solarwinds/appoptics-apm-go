@@ -173,6 +173,7 @@ func TestMetadataRandom(t *testing.T) {
 	assert.Error(t, ctx3.(*oboeContext).reportEvent(LabelEntry, "randErrLayer", false))
 	assert.Empty(t, r.Bufs) // no events reported
 
+	r.Close(0)
 	randReader = rand.Reader // set back to normal
 }
 
@@ -213,6 +214,7 @@ func TestNewContext(t *testing.T) {
 	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
 	assert.Len(t, r.Bufs, 0) // no reporting
+	r.Close(0)
 }
 
 func TestNullContext(t *testing.T) {
@@ -248,4 +250,5 @@ func TestNullContext(t *testing.T) {
 	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
 
 	assert.Len(t, r.Bufs, 0) // no reporting
+	r.Close(0)
 }
