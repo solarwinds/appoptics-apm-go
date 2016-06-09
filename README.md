@@ -13,6 +13,7 @@
     - [Usage examples](#usage-examples)
     - [Distributed tracing and context propagation](#distributed-tracing-and-context-propagation)
     - [Configuration](#configuration)
+    - [Metrics](#metrics)
 * [Help and examples](#help-and-examples)
     - [Support](#support)
     - [Demo app](#demo-app)
@@ -21,14 +22,17 @@
 
 ## Introduction
 
-[AppNeta TraceView](http://appneta.com/products/traceview) provides distributed
-tracing and code-level application performance monitoring.  This repository
-provides instrumentation for Go, which allows Go-based applications to be
-monitored using TraceView.
+[AppNeta TraceView](http://appneta.com/products/traceview) provides distributed tracing and
+code-level application performance monitoring. TraceView's cross-language, production-ready,
+low-overhead distributed tracing system (similar to Dapper, Zipkin, or X-Trace) can follow the path
+of an application request as it is processed and forwarded between services written in [Go, Java,
+Scala, Node.js, Ruby, Python, PHP, and C#/.NET](https://docs.appneta.com/support-matrix), reporting data to TraceView's cloud platform for
+analysis, monitoring, and fine-grained, filterable data visualization. This repository provides
+instrumentation for Go, which allows Go-based applications to be monitored using TraceView.
 
 Go support is currently in beta (though we run the instrumentation to process
 data in our production environment!) so please share any feedback you have; PRs welcome.
-Read more about this release in our [blog post announcing our Go instrumentation](https://www.appneta.com/blog/go-long-with-golang/).
+Also, you can read more about how we use Go at AppNeta in our [blog post announcing our Go instrumentation](https://www.appneta.com/blog/go-long-with-golang/)!
 
 ## Getting started
 
@@ -245,7 +249,7 @@ The `GO_TRACEVIEW_TRACING_MODE` environment variable may be set to "always", "th
 - Mode "never" will disable tracing, and will neither start nor continue traces.
 
 
-## Metrics
+### Metrics
 
 In addition to distributed tracing and latency measurement, this package also provides Go metrics
 monitoring for runtime metrics such as memory and number of goroutines. Below is a screenshot from
