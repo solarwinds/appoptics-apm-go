@@ -266,12 +266,12 @@ inside a staging environment.
 While we use TraceView to trace our own production Go services, this version of our Go instrumentation is currently in beta
 and under active development. We welcome your feedback, issues and feature requests, and please contact us at go@appneta.com!
 
-### Demo app
+### Demo web app
 
-If you have installed TraceView and the this package, you can run the sample “web app” included with go-appneta:
+If you have installed TraceView and this package, you can run the sample “web app” included with go-appneta:
 
-    cd $GOPATH/src/github.com/appneta/go-appneta/examples/sample_app
-    go run -tags traceview main.go
+    $ cd $GOPATH/src/github.com/appneta/go-appneta/examples/sample_app
+    $ go run -tags traceview main.go
 
 A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:
 
@@ -279,6 +279,37 @@ A web server will run on port 8899. It doesn’t do much, except wait a bit and 
     Slow request... Path: /hello
 
 You should see these requests appear on your TraceView dashboard.
+
+### Distributed app
+
+There is also a demonstration of distributed tracing in examples/distributed_app, a sample system
+comprised of two Go services, a Node.js service, and a Python service. It can be built and run from
+source in each service's subdirectory, or by using docker-compose:
+
+    $ cd $GOPATH/src/github.com/appneta/go-appneta/examples/distributed_app
+    $ APPNETA_KEY="xxx" docker-compose build
+    # ... (building)
+    $ docker-compose up -d
+    Starting distributedapp_alice_1
+    Starting distributedapp_bob_1
+    Starting distributedapp_caroljs_1
+    Starting distributedapp_davepy_1
+    Starting distributedapp_redis_1
+
+and substituting "xxx" withyour AppNeta access key. This app currently provides two HTTP handlers:
+`aliceHandler`, which randomly forwards requests to either of "bob" (Go), "caroljs", or "davepy",
+and `concurrentAliceHandler`, which makes requests to all three in parallel.
+
+    $ curl http://localhost:8890/alice
+    {"result":"hello from bob"}
+    $ curl http://localhost:8890/alice
+    Hello from Flask!
+    $ curl http://localhost:8890/alice
+    Hello from app.js
+    $ curl http://localhost:8890/concurrent
+    Hello from Flask!{"result":"hello from bob"}Hello from app.js
+
+You should see traces for these appear on your TraceView dashboard.
 
 ## License
 

@@ -9,11 +9,19 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"sync"
 
 	"golang.org/x/net/context"
 
 	"github.com/appneta/go-appneta/v1/tv"
 )
+
+// hard-coded service discovery
+var urls = []string{
+	"http://bob:8081/bob",
+	"http://carol:8082/carol",
+	"http://dave:8083/",
+}
 
 func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
@@ -23,11 +31,6 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s", r.Method, r.URL)
 
 	// call an HTTP endpoint and propagate the distributed trace context
-	urls := []string{
-		"http://bob:8081/bob",
-		"http://carol:8082/carol",
-		"http://dave:8083/",
-	}
 	url := urls[rand.Intn(len(urls))]
 
 	// create HTTP client and set trace metadata header
@@ -58,7 +61,62 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
+	// trace this request, overwriting w with wrapped ResponseWriter
+	t, w := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	ctx := tv.NewContext(context.Background(), t)
+	t.SetAsync(true)
+	defer t.End()
+
+	// call an HTTP endpoint and propagate the distributed trace context
+	var wg sync.WaitGroup
+	wg.Add(len(urls))
+	var out []byte
+	outCh := make(chan []byte)
+	doneCh := make(chan struct{})
+	go func() {
+		for buf := range outCh {
+			out = append(out, buf...)
+		}
+		close(doneCh)
+	}()
+	for _, u := range urls {
+		go func(url string) {
+			// create HTTP client and set trace metadata header
+			client := &http.Client{}
+			req, _ := http.NewRequest("GET", url, nil)
+			// begin layer for the client side of the HTTP service request
+			l := tv.BeginHTTPClientLayer(ctx, req)
+
+			// make HTTP request to external API
+			resp, err := client.Do(req)
+			l.AddHTTPResponse(resp, err)
+			if err != nil {
+				l.End() // end HTTP client timing
+				w.WriteHeader(500)
+				return
+			}
+			// read response body
+			defer resp.Body.Close()
+			buf, err := ioutil.ReadAll(resp.Body)
+			l.End() // end HTTP client timing
+			if err != nil {
+				outCh <- []byte(fmt.Sprintf(`{"error":"%v"}`, err))
+			} else {
+				outCh <- buf
+			}
+			wg.Done()
+		}(u)
+	}
+	wg.Wait()
+	close(outCh)
+	<-doneCh
+
+	w.Write(out)
+}
+
 func main() {
 	http.HandleFunc("/alice", tv.HTTPHandler(aliceHandler))
+	http.HandleFunc("/concurrent", tv.HTTPHandler(concurrentAliceHandler))
 	http.ListenAndServe(":8890", nil)
 }
