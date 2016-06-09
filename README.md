@@ -164,7 +164,7 @@ func slowFunc(ctx context.Context) {
     // ... do something slow
 }
 
-func myHandler() {
+func myHandler(ctx context.Context) {
     // create new tv.Layer and context.Context for this part of the request
     L, ctxL := tv.BeginLayer(ctx, "myHandler")
     defer L.End()
@@ -188,6 +188,33 @@ func processRequest() {
     ctx := tv.NewContext(context.Background(), tv.NewTrace("myApp"))
     myHandler(ctx) // Dispatch handler for request
     tv.EndTrace(ctx)
+}
+```
+
+### Retrieving the context from an http request
+
+A common pattern when tracing in golang is to call `tv.HTTPHandler(handler)` then retrieve the trace
+context inside of the handler.  
+```go
+
+func myHandler( w http.ResponseWriter, r *http.Request ) {
+    // trace this request, overwriting w with wrapped ResponseWriter
+    t, w := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
+    ctx := tv.NewContext(context.Background(), t)
+    defer t.End()
+
+    //create a query layer
+    q1L := tv.BeginQueryLayer(ctx, "myDB", "SELECT * FROM tbl1", "postgresql", "db1.com")
+    //run you're query here
+
+    //
+    q1L.End()
+
+    fmt.Fprintf(w, "I ran a query")
+
+func main() {
+    http.HandleFunc("/endpoint", tv.HTTPHandler(myHandler))
+    http.ListenAndServe(":8899", nil)
 }
 ```
 
