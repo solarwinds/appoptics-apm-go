@@ -116,7 +116,7 @@ func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/alice", tv.HTTPHandler(aliceHandler))
-	http.HandleFunc("/concurrent", tv.HTTPHandler(concurrentAliceHandler))
+	http.HandleFunc("/alice", aliceHandler)
+	http.HandleFunc("/concurrent", concurrentAliceHandler)
 	http.ListenAndServe(":8890", nil)
 }

@@ -309,7 +309,9 @@ and `concurrentAliceHandler`, which makes requests to all three in parallel.
     $ curl http://localhost:8890/concurrent
     Hello from Flask!{"result":"hello from bob"}Hello from app.js
 
-You should see traces for these appear on your TraceView dashboard.
+You should see traces for these appear on your TraceView dashboard. Here is an example trace of the
+concurrent handler:
+<img width=729 src="https://github.com/appneta/go-appneta/raw/master/img/concurrent-tracedetails.gif">
 
 ## License
 
