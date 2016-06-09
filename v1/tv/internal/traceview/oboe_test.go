@@ -6,6 +6,7 @@ package traceview
 
 import (
 	"crypto/rand"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -132,10 +133,15 @@ func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) chan struct
 func testLayerCount(count int64) interface{} {
 	return bson.D{bson.DocElem{Name: testLayer, Value: count}}
 }
+
+func init() {
+	disableMetrics = true
+}
+
 func TestRateSampleRequest(t *testing.T) {
 	var bufs [][]byte
 	done := startTestUDPListener(t, &bufs, 2)
-	sendMetricsMessage()
+	sendMetricsMessage(globalReporter)
 	<-done
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
@@ -170,7 +176,7 @@ func TestRateSampleRequest(t *testing.T) {
 	// send UDP message & assert
 	bufs = nil
 	done = startTestUDPListener(t, &bufs, 2)
-	sendMetricsMessage()
+	sendMetricsMessage(globalReporter)
 	<-done
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
@@ -188,7 +194,7 @@ func TestRateSampleRequest(t *testing.T) {
 
 	bufs = nil
 	done = startTestUDPListener(t, &bufs, 2)
-	sendMetricsMessage()
+	sendMetricsMessage(globalReporter)
 	<-done
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
@@ -202,18 +208,21 @@ func TestRateSampleRequest(t *testing.T) {
 		}},
 		{"JMX", "exit"}: {Edges: g.Edges{{"JMX", "entry"}}},
 	})
+}
 
+func TestMetrics(t *testing.T) {
 	// error sending metrics message: no reporting
 	r := SetTestReporter()
+
 	randReader = &errorReader{failOn: map[int]bool{0: true}}
-	sendMetricsMessage()
+	sendMetricsMessage(r)
 	time.Sleep(100 * time.Millisecond)
 	r.Close(0)
 	assert.Len(t, r.Bufs, 0)
 
 	r = SetTestReporter()
 	randReader = &errorReader{failOn: map[int]bool{2: true}}
-	sendMetricsMessage()
+	sendMetricsMessage(r)
 	time.Sleep(100 * time.Millisecond)
 	r.Close(0)
 	assert.Len(t, r.Bufs, 0)
@@ -238,6 +247,39 @@ func TestGetNextInterval(t *testing.T) {
 	assertGetNextInterval(t, "2016-08-15T23:31:30.00-00:00", "30s")
 	assertGetNextInterval(t, "2016-01-02T15:04:59.999999999-04:00", "1ns")
 	assertGetNextInterval(t, "2016-01-07T15:04:29.999999999-00:00", "1ns")
+}
+
+func TestSendMetrics(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping metrics periodic sender test")
+	}
+	// full periodic sender test: wait for next interval & report
+	r := SetTestReporter(time.Duration(30) * time.Second)
+	disableMetrics = false
+	go sendInitMessage()
+	d0 := getNextInterval(time.Now()) + time.Second
+	fmt.Printf("[%v] TestSendMetrics Sleeping for %v\n", time.Now(), d0)
+	time.Sleep(d0)
+	fmt.Printf("[%v] TestSendMetrics Closing\n", time.Now())
+	r.Close(4)
+	g.AssertGraph(t, r.Bufs, 4, g.AssertNodeMap{
+		{"go", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
+			assert.Equal(t, 1, n.Map["__Init"])
+			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
+			assert.NotEmpty(t, n.Map["Oboe.Version"])
+			assert.NotEmpty(t, n.Map["Go.Version"])
+		}},
+		{"go", "exit"}: {Edges: g.Edges{{"go", "entry"}}},
+		{metricsLayerName, "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
+			assert.Equal(t, "go", n.Map["ProcessName"])
+			assert.IsType(t, int64(0), n.Map["JMX.type=threadcount,name=NumGoroutine"])
+			assert.IsType(t, int64(0), n.Map["JMX.Memory:MemStats.Alloc"])
+			assert.True(t, len(n.Map) > 10)
+		}},
+		{metricsLayerName, "exit"}: {Edges: g.Edges{{metricsLayerName, "entry"}}},
+	})
+	stopMetrics <- struct{}{}
+	disableMetrics = true
 }
 
 func TestOboeTracingMode(t *testing.T) {

@@ -113,4 +113,12 @@ func TestTestReporter(t *testing.T) {
 	}()
 	r.Close(1) // wait on late event -- blocks until timeout or event received
 	assert.Len(t, r.Bufs, 1)
+
+	// send an event after calling Close -- should panic
+	assert.Panics(t, func() {
+		ctx := newTestContext(t)
+		ev, err := ctx.newEvent(LabelExit, testLayer)
+		assert.NoError(t, err)
+		assert.NoError(t, reportEvent(r, ctx, ev))
+	})
 }

@@ -61,8 +61,8 @@ func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *ht
 	return t, wrapper
 }
 
-// HTTPResponseWriter observes an http.ResponseWriter when WriteHeader is called to check
-// the status code and response headers.
+// HTTPResponseWriter observes an http.ResponseWriter when WriteHeader() or Write() is called to
+// check the status code and response headers.
 type HTTPResponseWriter struct {
 	Writer      http.ResponseWriter
 	t           Trace
