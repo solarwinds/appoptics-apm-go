@@ -17,15 +17,18 @@ type Trace interface {
 	//  IsTracing() bool
 	Layer
 
-	// End a Trace, and include KV pairs returned by func f. Useful alternative to End() when used
-	// with defer to delay evaluation of KVs until the end of the trace (since a deferred function's
-	// arguments are evaluated when the defer statement is evaluated). Func f will not be called at
-	// all if this span is not tracing.
+	// End a Trace, and include KV pairs returned by func f. Useful
+	// alternative to End() when used with defer to delay evaluation
+	// of KVs until the end of the trace (since a deferred function's
+	// arguments are evaluated when the defer statement is
+	// evaluated). Func f will not be called at all if this span is
+	// not tracing.
 	EndCallback(f func() KVMap)
 
-	// ExitMetadata returns a hex string that propagates the end of this span back to a remote
-	// client. It is typically used in an response header (e.g. the HTTP Header "X-Trace"). Call
-	// this method to set a response header in advance of calling End().
+	// ExitMetadata returns a hex string that propagates the end of
+	// this span back to a remote client. It is typically used in an
+	// response header (e.g. the HTTP Header "X-Trace"). Call this
+	// method to set a response header in advance of calling End().
 	ExitMetadata() string
 }
 

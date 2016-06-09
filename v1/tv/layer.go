@@ -16,7 +16,8 @@ import (
 type Layer interface {
 	// BeginLayer starts a new Layer span, returning a child of this Layer.
 	BeginLayer(layerName string, args ...interface{}) Layer
-	// BeginProfile starts a new Profile, used to measure a named span of time spent in this Layer.
+	// BeginProfile starts a new Profile, used to measure a named span
+	// of time spent in this Layer.
 	BeginProfile(profileName string, args ...interface{}) Profile
 	// End ends a Layer, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
@@ -31,11 +32,13 @@ type Layer interface {
 	// Err reports details about error err (along with a stack trace) for this Layer.
 	Err(error)
 
-	// MetadataString returns a string representing this Layer for use in distributed tracing,
-	// e.g. to provide as an "X-Trace" header in an outgoing HTTP request.
+	// MetadataString returns a string representing this Layer for use
+	// in distributed tracing, e.g. to provide as an "X-Trace" header
+	// in an outgoing HTTP request.
 	MetadataString() string
 
-	// SetAsync(true) provides a hint that this Layer is a parent of concurrent overlapping child Layers.
+	// SetAsync(true) provides a hint that this Layer is a parent of
+	// concurrent overlapping child Layers.
 	SetAsync(bool)
 
 	IsTracing() bool
