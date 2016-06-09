@@ -34,7 +34,7 @@ Read more about this release in our [blog post announcing our Go instrumentation
 
 ### Installing
 
-To get tracing, you'll need a [a (free) TraceView account](http://www.appneta.com/products/traceview/).
+To get tracing, you'll need a [(free) TraceView account](http://www.appneta.com/products/traceview/).
 
 In the product install flow, **choose to skip the webserver and select any language.**  (You'll notice the absence of Go because we're currently in beta.)
 
