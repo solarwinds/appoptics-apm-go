@@ -2,7 +2,7 @@
 
 package tv
 
-import "github.com/appneta/go-appneta/v1/tv/internal/traceview"
+import "github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
 
 // Trace represents a distributed trace for this request that reports
 // events to AppNeta TraceView.

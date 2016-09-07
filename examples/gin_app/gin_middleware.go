@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"net"
 
-	"github.com/appneta/go-appneta/v1/tv"
+	"github.com/tracelytics/go-traceview/v1/tv"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/net/context"
 )
