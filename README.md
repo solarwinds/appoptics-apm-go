@@ -295,7 +295,7 @@ and under active development. We welcome your feedback, issues and feature reque
 
 ### Demo web app
 
-If you have installed TraceView and this package, you can run the sample “web app” included with go-appneta:
+If you have installed TraceView and this package, you can run the sample “web app” included with go-traceview:
 
     $ cd $GOPATH/src/github.com/tracelytics/go-traceview/examples/sample_app
     $ go run -tags traceview main.go

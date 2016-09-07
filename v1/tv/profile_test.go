@@ -28,7 +28,7 @@ func TestBeginProfile(t *testing.T) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testProf")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/tracelytics/go-traceview/v1/tv_test.testProf")
-			assert.Contains(t, n.Map["File"], "/go-appneta/v1/tv/profile_test.go")
+			assert.Contains(t, n.Map["File"], "/go-traceview/v1/tv/profile_test.go")
 		}},
 	})
 }
@@ -54,7 +54,7 @@ func TestBeginLayerProfile(t *testing.T) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testLayerProf")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/tracelytics/go-traceview/v1/tv_test.testLayerProf")
-			assert.Contains(t, n.Map["File"], "/go-appneta/v1/tv/profile_test.go")
+			assert.Contains(t, n.Map["File"], "/go-traceview/v1/tv/profile_test.go")
 		}},
 		{"", "profile_exit"}:  {Edges: g.Edges{{"", "profile_entry"}}},
 		{"L1", "exit"}:        {Edges: g.Edges{{"", "profile_exit"}, {"L1", "entry"}}},
