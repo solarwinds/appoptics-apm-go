@@ -1,4 +1,4 @@
-coverpkg="github.com/appneta/go-appneta/v1/tv/internal/traceview,github.com/appneta/go-appneta/v1/tv"
+coverpkg="github.com/tracelytics/go-traceview/v1/tv/internal/traceview,github.com/tracelytics/go-traceview/v1/tv"
 cov_args=-covermode=atomic -coverpkg=$(coverpkg)
 cov_out=-coverprofile=cov.out 
 covtv_out=-coverprofile=covtv.out 

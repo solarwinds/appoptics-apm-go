@@ -10,9 +10,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/appneta/go-appneta/v1/tv"
-	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
-	"github.com/appneta/go-appneta/v1/tv/internal/traceview"
+	"github.com/tracelytics/go-traceview/v1/tv"
+	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
+	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -203,7 +203,7 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 		{"", "profile_entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "f0")
-			assert.Equal(t, n.Map["FunctionName"], "github.com/appneta/go-appneta/v1/tv_test."+f0name)
+			assert.Equal(t, n.Map["FunctionName"], "github.com/tracelytics/go-traceview/v1/tv_test."+f0name)
 		}},
 		{"", "profile_exit"}: {Edges: g.Edges{{"", "profile_entry"}}},
 		// nested layer in http.Get profile points to trace entry

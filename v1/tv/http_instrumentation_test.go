@@ -11,9 +11,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/appneta/go-appneta/v1/tv"
-	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
-	"github.com/appneta/go-appneta/v1/tv/internal/traceview"
+	"github.com/tracelytics/go-traceview/v1/tv"
+	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
+	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )

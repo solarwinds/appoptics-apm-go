@@ -1,9 +1,9 @@
 # TraceView for Go
 
-[![GoDoc](https://godoc.org/github.com/appneta/go-appneta/v1/tv?status.svg)](https://godoc.org/github.com/appneta/go-appneta/v1/tv)
-[![Build Status](https://travis-ci.org/appneta/go-appneta.svg?branch=master)](https://travis-ci.org/appneta/go-appneta)
-[![Coverage Status](https://coveralls.io/repos/github/appneta/go-appneta/badge.svg?branch=master)](https://coveralls.io/github/appneta/go-appneta?branch=master)
-[![codecov](https://codecov.io/gh/appneta/go-appneta/branch/master/graph/badge.svg)](https://codecov.io/gh/appneta/go-appneta)
+[![GoDoc](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv?status.svg)](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv)
+[![Build Status](https://travis-ci.org/tracelytics/go-traceview.svg?branch=master)](https://travis-ci.org/tracelytics/go-traceview)
+[![Coverage Status](https://coveralls.io/repos/github/tracelytics/go-traceview/badge.svg?branch=master)](https://coveralls.io/github/tracelytics/go-traceview?branch=master)
+[![codecov](https://codecov.io/gh/tracelytics/go-traceview/branch/master/graph/badge.svg)](https://codecov.io/gh/tracelytics/go-traceview)
 
 * [Introduction](#introduction)
 * [Getting started](#getting-started)
@@ -48,7 +48,7 @@ install the liboboe and liboboe-dev packages on your platform.
 Then, install the following:
 
 * [Go >= 1.5](https://golang.org/dl/)
-* This package: go get github.com/appneta/go-appneta/v1/tv
+* This package: go get github.com/tracelytics/go-traceview/v1/tv
 
 The install flow will wait for 5 traces to come in from your app.  You can
 check out the [demo](#demo) app below to get a quick start.  One you have 5,
@@ -72,11 +72,11 @@ Once the liboboe-dev (or liboboe-devel) package is installed you can build your 
 ### Usage examples
 
 The simplest integration option is this package's
-[tv.HTTPHandler](https://godoc.org/github.com/appneta/go-appneta/v1/tv#HTTPHandler) wrapper.  This
+[tv.HTTPHandler](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#HTTPHandler) wrapper.  This
 will monitor the performance of the provided
 [http.HandlerFunc](https://golang.org/pkg/net/http/#HandlerFunc), visualized with latency
 distribution heatmaps filterable by dimensions such as URL host & path, HTTP status & method, server
-hostname, etc. [tv.HTTPHandler](https://godoc.org/github.com/appneta/go-appneta/v1/tv#HTTPHandler)
+hostname, etc. [tv.HTTPHandler](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#HTTPHandler)
 will also continue a distributed trace described in the incoming HTTP request headers (from
 TraceView's [automatic](https://docs.appneta.com/support-matrix)
 [C#/.NET](https://docs.appneta.com/support-matrix#net),
@@ -97,7 +97,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/appneta/go-appneta/v1/tv"
+	"github.com/tracelytics/go-traceview/v1/tv"
 )
 
 var startTime = time.Now()
@@ -125,7 +125,7 @@ func main() {
 	http.ListenAndServe(":8899", nil)
 }
 ```
-![sample_app screenshot](https://github.com/appneta/go-appneta/raw/master/img/readme-screenshot1.png)
+![sample_app screenshot](https://github.com/tracelytics/go-traceview/raw/master/img/readme-screenshot1.png)
 
 To monitor more than just the overall latency of each request to your Go service, you will need to
 break a request's processing time down by placing small benchmarks into your code. To do so, first
@@ -143,15 +143,15 @@ computation(s) occurring in a `Layer`. Layers can be created as children of othe
 TraceView identifies a reported Layer's type from its key-value pairs; if keys named "Query" and
 "RemoteHost" are used, a Layer is assumed to measure the extent of a DB query. KV pairs can be
 appended to Layer and Profile extents as optional extra variadic arguments to methods such as
-[BeginLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginLayer) or
-[BeginProfile()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginProfile),
-[Info()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer), and
-[End()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer). We also provide helper methods
-such as [BeginQueryLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginQueryLayer),
-[BeginCacheLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginCacheLayer),
-[BeginRemoteURLLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginRemoteURLLayer),
-[BeginRPCLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginRPCLayer), and
-[BeginHTTPClientLayer()](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginHTTPClientLayer)
+[BeginLayer()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#BeginLayer) or
+[BeginProfile()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#BeginProfile),
+[Info()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#Layer), and
+[End()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#Layer). We also provide helper methods
+such as [BeginQueryLayer()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#BeginQueryLayer),
+[BeginCacheLayer()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#BeginCacheLayer),
+[BeginRemoteURLLayer()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#BeginRemoteURLLayer),
+[BeginRPCLayer()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#BeginRPCLayer), and
+[BeginHTTPClientLayer()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#BeginHTTPClientLayer)
 that match the spec in our
 [custom instrumentation docs](http://docs.appneta.com/traceview-instrumentation#special-interpretation)
 to report attributes associated with different types of service calls, used for indexing TraceView's
@@ -236,16 +236,16 @@ argument to every function on the call path between incoming and outgoing reques
 [Gizmo](https://godoc.org/github.com/NYTimes/gizmo/server#ContextHandler) use Context
 implementations, for example. We provide helper methods that allow a Trace to be associated with a
 [context.Context](https://godoc.org/golang.org/x/net/context) interface; for example,
-[tv.BeginLayer](https://godoc.org/github.com/appneta/go-appneta/v1/tv#BeginLayer) returns both a
+[tv.BeginLayer](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#BeginLayer) returns both a
 new Layer and an associated context, and
-[tv.Info(ctx)](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Info) and
-[tv.End(ctx)](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer) both use the Layer
+[tv.Info(ctx)](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#Info) and
+[tv.End(ctx)](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#Layer) both use the Layer
 defined in the provided context.
 
 It is not required to work with context.Context to trace your app, however. You can also use just
-the [Trace](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Trace),
-[Layer](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Layer), and
-[Profile](https://godoc.org/github.com/appneta/go-appneta/v1/tv#Profile) interfaces directly, if it
+the [Trace](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#Trace),
+[Layer](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#Layer), and
+[Profile](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#Profile) interfaces directly, if it
 better suits your instrumentation use case.
 
 ```go
@@ -284,7 +284,7 @@ our [blog's release announcement](https://www.appneta.com/blog/go-long-with-gola
 heatmap underlaid with memory metrics, just after fixing a memory leak and restarting a service
 inside a staging environment.
 
-<img width=729 src="https://github.com/appneta/go-appneta/raw/master/img/metrics-screenshot1.png">
+<img width=729 src="https://github.com/tracelytics/go-traceview/raw/master/img/metrics-screenshot1.png">
 
 ## Help and examples
 
@@ -297,7 +297,7 @@ and under active development. We welcome your feedback, issues and feature reque
 
 If you have installed TraceView and this package, you can run the sample “web app” included with go-appneta:
 
-    $ cd $GOPATH/src/github.com/appneta/go-appneta/examples/sample_app
+    $ cd $GOPATH/src/github.com/tracelytics/go-traceview/examples/sample_app
     $ go run -tags traceview main.go
 
 A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:
@@ -313,7 +313,7 @@ There is also a demonstration of distributed tracing in examples/distributed_app
 comprised of two Go services, a Node.js service, and a Python service. It can be built and run from
 source in each service's subdirectory, or by using docker-compose:
 
-    $ cd $GOPATH/src/github.com/appneta/go-appneta/examples/distributed_app
+    $ cd $GOPATH/src/github.com/tracelytics/go-traceview/examples/distributed_app
     $ APPNETA_KEY="xxx" docker-compose build
     # ... (building)
     $ docker-compose up -d
@@ -338,7 +338,7 @@ and `concurrentAliceHandler`, which makes requests to all three in parallel.
 
 You should see traces for these appear on your TraceView dashboard. Here is an example trace of the
 concurrent handler:
-<img width=729 src="https://github.com/appneta/go-appneta/raw/master/img/concurrent-tracedetails.gif">
+<img width=729 src="https://github.com/tracelytics/go-traceview/raw/master/img/concurrent-tracedetails.gif">
 
 ## License
 

@@ -4,7 +4,7 @@
 # ./graphtest.sh -v
 # ./graphtest.sh -tags traceview
 # ./graphtest.sh -v -run TestTraceHTTP
-# ./graphtest.sh -v -tags traceview github.com/appneta/go-appneta/v1/tv/internal/traceview/
+# ./graphtest.sh -v -tags traceview github.com/tracelytics/go-traceview/v1/tv/internal/traceview/
 graphdir="${DOT_GRAPHDIR:=$(pwd)}"
 DOT_GRAPHS=1 DOT_GRAPHDIR="$graphdir" go test "$@"
 OPEN="echo"

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	g "github.com/appneta/go-appneta/v1/tv/internal/graphtest"
+	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
 )
 
