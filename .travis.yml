@@ -12,7 +12,7 @@ env:
         
 install:
   - wget https://files.appneta.com/install_appneta.sh
-  - sudo sh ./install_appneta.sh f08da708-7f1c-4935-ae2e-122caf1ebe31
+  - sudo sh ./install_appneta.sh $TRACEVIEW_API
   - go get golang.org/x/tools/cmd/cover
   - go get github.com/mattn/goveralls
   - go get github.com/wadey/gocovmerge

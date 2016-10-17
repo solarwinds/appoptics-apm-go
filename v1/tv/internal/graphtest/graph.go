@@ -1,4 +1,4 @@
-// Copyright (C) 2016 AppNeta, Inc. All rights reserved.
+// Copyright (C) 2016 Librato, Inc. All rights reserved.
 
 // Package graphtest provides test utilities for asserting properties of event graphs.
 package graphtest

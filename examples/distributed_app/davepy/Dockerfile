@@ -1,6 +1,6 @@
 FROM ubuntu:14.04
 
-# Install AppNeta packages and agent.
+# Install TraceView packages and agent.
 RUN apt-get update && apt-get -y install wget
 ARG APPNETA_KEY
 RUN wget https://files.appneta.com/install_appneta.sh

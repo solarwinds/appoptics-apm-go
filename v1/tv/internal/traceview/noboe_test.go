@@ -1,6 +1,6 @@
 // +build !traceview
 
-// Copyright (C) 2016 AppNeta, Inc. All rights reserved.
+// Copyright (C) 2016 Librato, Inc. All rights reserved.
 
 package traceview
 
