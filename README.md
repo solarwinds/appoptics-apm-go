@@ -22,7 +22,7 @@
 
 ## Introduction
 
-[AppNeta TraceView](http://appneta.com/products/traceview) provides distributed tracing and
+[TraceView](http://appneta.com/products/traceview) provides distributed tracing and
 code-level application performance monitoring. TraceView's cross-language, production-ready,
 low-overhead distributed tracing system (similar to Dapper, Zipkin, or X-Trace) can follow the path
 of an application request as it is processed and forwarded between services written in [Go, Java,
@@ -32,7 +32,7 @@ instrumentation for Go, which allows Go-based applications to be monitored using
 
 Go support is currently in beta (though we run the instrumentation to process
 data in our production environment!) so please share any feedback you have; PRs welcome.
-Also, you can read more about how we use Go at AppNeta in our [blog post announcing our Go instrumentation](https://www.appneta.com/blog/go-long-with-golang/)!
+Also, you can read more about how we use Go at TraceView in our [blog post announcing our Go instrumentation](https://www.appneta.com/blog/go-long-with-golang/)!
 
 ## Getting started
 
@@ -323,7 +323,7 @@ source in each service's subdirectory, or by using docker-compose:
     Starting distributedapp_davepy_1
     Starting distributedapp_redis_1
 
-and substituting "xxx" withyour AppNeta access key. This app currently provides two HTTP handlers:
+and substituting "xxx" with your TraceView access key. This app currently provides two HTTP handlers:
 `aliceHandler`, which randomly forwards requests to either of "bob" (Go), "caroljs", or "davepy",
 and `concurrentAliceHandler`, which makes requests to all three in parallel.
 
@@ -342,7 +342,7 @@ concurrent handler:
 
 ## License
 
-Copyright (c) 2016 AppNeta, Inc.
+Copyright (c) 2016 Librato, Inc.
 
-Released under the [AppNeta Open License](http://www.appneta.com/appneta-license), Version 1.0
+Released under the [Librato Open License](http://www.appneta.com/appneta-license), Version 1.0
 

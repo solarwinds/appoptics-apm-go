@@ -1,7 +1,7 @@
-// Copyright (C) 2016 AppNeta, Inc. All rights reserved.
+// Copyright (C) 2016 Librato, Inc. All rights reserved.
 
 // Package traceview provides a low-level API for creating and reporting events for
-// distributed tracing with AppNeta's TraceView.
+// distributed tracing with TraceView.
 package traceview
 
 import (
