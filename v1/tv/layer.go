@@ -266,7 +266,8 @@ func newProfile(tvCtx traceview.Context, profileName string, parent Layer, args 
 	); err != nil {
 		return &nullSpan{}
 	}
-	p := &profileSpan{span{tvCtx: tvCtx.Copy(), labeler: pl, parent: parent}}
+	p := &profileSpan{span{tvCtx: tvCtx.Copy(), labeler: pl, parent: parent,
+		endArgs: []interface{}{"Language", "go", "ProfileName", profileName}}}
 	if parent != nil && parent.ok() {
 		parent.addProfile(p)
 	}
