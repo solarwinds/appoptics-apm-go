@@ -22,11 +22,11 @@
 
 ## Introduction
 
-[TraceView](http://appneta.com/products/traceview) provides distributed tracing and
+[TraceView](http://traceview.solarwinds.com) provides distributed tracing and
 code-level application performance monitoring. TraceView's cross-language, production-ready,
 low-overhead distributed tracing system (similar to Dapper, Zipkin, or X-Trace) can follow the path
 of an application request as it is processed and forwarded between services written in [Go, Java,
-Scala, Node.js, Ruby, Python, PHP, and C#/.NET](https://docs.appneta.com/support-matrix), reporting data to TraceView's cloud platform for
+Scala, Node.js, Ruby, Python, PHP, and C#/.NET](http://docs.traceview.solarwinds.com/TraceView/support-matrix), reporting data to TraceView's cloud platform for
 analysis, monitoring, and fine-grained, filterable data visualization. This repository provides
 instrumentation for Go, which allows Go-based applications to be monitored using TraceView.
 
@@ -38,7 +38,7 @@ Also, you can read more about how we use Go at TraceView in our [blog post annou
 
 ### Installing
 
-To get tracing, you'll need a [(free) TraceView account](http://www.appneta.com/products/traceview/).
+To get tracing, you'll need a [(free) TraceView account](http://traceview.solarwinds.com).
 
 In the product install flow, **choose to skip the webserver and select any language.**  (You'll notice the absence of Go because we're currently in beta.)
 
@@ -53,7 +53,7 @@ Then, install the following:
 The install flow will wait for 5 traces to come in from your app.  You can
 check out the [demo](#demo) app below to get a quick start.  One you have 5,
 you can progress to [your account's overview
-page](https://login.tv.appneta.com/overview).
+page](https://login.tv.solarwinds.com/overview).
 
 ### Building your app with tracing
 
@@ -78,14 +78,14 @@ will monitor the performance of the provided
 distribution heatmaps filterable by dimensions such as URL host & path, HTTP status & method, server
 hostname, etc. [tv.HTTPHandler](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#HTTPHandler)
 will also continue a distributed trace described in the incoming HTTP request headers (from
-TraceView's [automatic](https://docs.appneta.com/support-matrix)
-[C#/.NET](https://docs.appneta.com/support-matrix#net),
-[Java](https://docs.appneta.com/support-matrix#java-scala),
-[Node.js](https://github.com/appneta/node-traceview),
-[PHP](https://docs.appneta.com/support-matrix#php),
-[Python](https://github.com/appneta/python-traceview),
-[Ruby](https://github.com/appneta/ruby-traceview), and
-[Scala](https://docs.appneta.com/support-matrix#java-scala) instrumentation) through to the HTTP
+TraceView's [automatic](http://docs.traceview.solarwinds.com/TraceViewsupport-matrix)
+[C#/.NET](http://docs.traceview.solarwinds.com/TraceView/support-matrix#net),
+[Java](http://docs.traceview.solarwinds.com/TraceView/support-matrix#java-scala),
+[Node.js](https://github.com/tracelytics/node-traceview),
+[PHP](http://docs.traceview.solarwinds.com/TraceView/support-matrix#php),
+[Python](https://github.com/tracelytics/python-traceview),
+[Ruby](https://github.com/tracelytics/ruby-traceview), and
+[Scala](http://docs.traceview.solarwinds.com/TraceView/support-matrix#java-scala) instrumentation) through to the HTTP
 response.
 
 ```go
@@ -153,7 +153,7 @@ such as [BeginQueryLayer()](https://godoc.org/github.com/tracelytics/go-tracevie
 [BeginRPCLayer()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#BeginRPCLayer), and
 [BeginHTTPClientLayer()](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv#BeginHTTPClientLayer)
 that match the spec in our
-[custom instrumentation docs](http://docs.appneta.com/traceview-instrumentation#special-interpretation)
+[custom instrumentation docs](http://docs.traceview.solarwinds.com/Instrumentation/instrumentation.html#special-interpretation)
 to report attributes associated with different types of service calls, used for indexing TraceView's
 filterable charts and latency heatmaps.
 
@@ -226,7 +226,7 @@ to start a new Layer you need either a Trace or another Layer to begin from. (Th
 interface is also the root Layer, typically created when a request is first received.) Each new
 Layer is connected to its parent, so you should begin new child Layers from parents in a way that
 logically matches your application; for more information [see our custom layer
-documentation](http://docs.appneta.com/traceview-instrumentation#custom-layers).
+documentation](http://docs.traceview.solarwinds.com/TraceView/instrumentation#custom-layers).
 
 The [Go blog](https://blog.golang.org/context) recommends propagating request context using the
 package [golang.org/x/net/context](godoc.org/golang.org/x/net/context): "At Google, we require that
@@ -291,7 +291,7 @@ inside a staging environment.
 ### Support
 
 While we use TraceView to trace our own production Go services, this version of our Go instrumentation is currently in beta
-and under active development. We welcome your feedback, issues and feature requests, and please contact us at go@appneta.com!
+and under active development. We welcome your feedback, issues and feature requests, and please contact us at traceview@solarwinds.com!
 
 ### Demo web app
 
@@ -342,7 +342,7 @@ concurrent handler:
 
 ## License
 
-Copyright (c) 2016 Librato, Inc.
+Copyright (c) 2017 Librato, Inc.
 
-Released under the [Librato Open License](http://www.appneta.com/appneta-license), Version 1.0
+Released under the [Librato Open License](http://docs.traceview.solarwinds.com/Instrumentation/librato-open-license.html), Version 1.0
 
