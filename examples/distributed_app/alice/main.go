@@ -21,6 +21,7 @@ var urls = []string{
 	"http://bob:8081/bob",
 	"http://carol:8082/carol",
 	"http://dave:8083/",
+	"http://otto:8084/otto",
 }
 
 func aliceHandler(w http.ResponseWriter, r *http.Request) {

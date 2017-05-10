@@ -64,6 +64,8 @@ func server(t *testing.T) {
 			"serverSpan",
 			ext.RPCServerOption(wireSpanContext))
 		serverSpan.SetTag("component", "server")
+		ext.HTTPUrl.Set(serverSpan, req.URL.String())
+		ext.HTTPMethod.Set(serverSpan, req.Method)
 		defer serverSpan.Finish()
 		// check baggage propagation
 		assert.Equal(t, serverSpan.BaggageItem(testBaggageKey), testBaggageVal)
@@ -95,6 +97,8 @@ func TestTracer(t *testing.T) {
 		{"serverSpan", "entry"}: {Edges: g.Edges{{"getInput", "entry"}}, Callback: nil},
 		{"serverSpan", "exit"}: {Edges: g.Edges{{"serverSpan", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "server", n.Map["OTComponent"])
+			assert.Equal(t, "/", n.Map["URL"])
+			assert.Equal(t, "POST", n.Map["Method"])
 			assert.Equal(t, testTextVal, n.Map[otLogPrefix+"request body"])
 		}},
 	})
