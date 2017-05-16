@@ -340,3 +340,13 @@ func TestTraceJoin(t *testing.T) {
 		{"test", "exit"}:  {Edges: g.Edges{{"L1", "exit"}, {"test", "entry"}}},
 	})
 }
+
+func TestNullTrace(t *testing.T) {
+	r := traceview.SetTestReporter()
+	r.ShouldTrace = true
+	tr := tv.NewNullTrace()
+	md := tr.ExitMetadata()
+	tr.End()
+	assert.Equal(t, md, "")
+	assert.Len(t, r.Bufs, 0)
+}
