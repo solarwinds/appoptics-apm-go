@@ -14,7 +14,7 @@ import (
 	ot "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	otlog "github.com/opentracing/opentracing-go/log"
-	ottv "github.com/tracelytics/go-traceview/v1/tv/ot"
+	"github.com/tracelytics/go-traceview/v1/tv/ottv"
 )
 
 // hard-coded service discovery

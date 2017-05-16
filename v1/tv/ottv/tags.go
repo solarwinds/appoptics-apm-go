@@ -1,4 +1,6 @@
-package tracelytics
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
+
+package ottv
 
 import "github.com/opentracing/opentracing-go/ext"
 

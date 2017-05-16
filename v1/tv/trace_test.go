@@ -10,10 +10,10 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/tracelytics/go-traceview/v1/tv"
 	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
 	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestTraceMetadata(t *testing.T) {
