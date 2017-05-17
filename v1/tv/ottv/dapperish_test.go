@@ -4,8 +4,10 @@ package ottv
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	golog "log"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -29,7 +31,7 @@ const (
 	testBaggageVal = "BaggageUser"
 )
 
-func client(t *testing.T) {
+func client(t *testing.T, port int) {
 	span := opentracing.StartSpan("getInput")
 	ctx := opentracing.ContextWithSpan(context.Background(), span)
 	// Make sure that global baggage propagation works.
@@ -39,7 +41,7 @@ func client(t *testing.T) {
 	span.LogFields(log.String(testTextKey, text))
 
 	httpClient := &http.Client{}
-	httpReq, _ := http.NewRequest("POST", "http://localhost:8080/", bytes.NewReader([]byte(text)))
+	httpReq, _ := http.NewRequest("POST", fmt.Sprintf("http://localhost:%d/", port), bytes.NewReader([]byte(text)))
 	textCarrier := opentracing.HTTPHeadersCarrier(httpReq.Header)
 	err := span.Tracer().Inject(span.Context(), opentracing.TextMap, textCarrier)
 	require.NoError(t, err)
@@ -55,8 +57,8 @@ func client(t *testing.T) {
 	span.Finish()
 }
 
-func server(t *testing.T) {
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+func server(t *testing.T, list net.Listener) {
+	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		textCarrier := opentracing.HTTPHeadersCarrier(req.Header)
 		wireSpanContext, err := opentracing.GlobalTracer().Extract(
 			opentracing.TextMap, textCarrier)
@@ -78,17 +80,21 @@ func server(t *testing.T) {
 			serverSpan.LogFields(log.Error(err))
 		}
 		serverSpan.LogFields(log.String("request body", string(fullBody)))
-	})
+	})}
 
-	golog.Fatal(http.ListenAndServe(":8080", nil))
+	golog.Fatal(s.Serve(list))
 }
 
 func TestTracer(t *testing.T) {
 	r := traceview.SetTestReporter() // set up test reporter
 	opentracing.InitGlobalTracer(NewTracer())
 
-	go server(t)
-	go client(t)
+	ln, err := net.Listen("tcp", ":0") // pick an unallocated port
+	assert.NoError(t, err)
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	go server(t, ln)
+	go client(t, port)
 
 	r.Close(4)
 	g.AssertGraph(t, r.Bufs, 4, g.AssertNodeMap{
