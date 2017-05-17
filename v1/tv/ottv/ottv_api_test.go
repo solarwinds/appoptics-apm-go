@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/harness"
 	"github.com/stretchr/testify/suite"
 	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
+	"github.com/tracelytics/go-traceview/v1/tv/ottv/internal/harness"
 )
 
 func TestAPI(t *testing.T) {
