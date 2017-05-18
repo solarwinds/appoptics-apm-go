@@ -12,13 +12,17 @@ import (
 
 // NewTracer returns a new Tracelytics tracer.
 func NewTracer() ot.Tracer {
-	return &Tracer{}
+	return &Tracer{
+		textMapPropagator: &textMapPropagator{},
+		binaryPropagator:  &binaryPropagator{marshaler: &jsonMarshaler{}},
+	}
 }
 
 // Tracer reports trace data to Tracelytics.
 type Tracer struct {
-	textMapPropagator *textMapPropagator
-	binaryPropagator  *binaryPropagator
+	textMapPropagator  *textMapPropagator
+	binaryPropagator   *binaryPropagator
+	TrimUnsampledSpans bool
 }
 
 // StartSpan belongs to the Tracer interface.
@@ -39,7 +43,7 @@ func (t *Tracer) StartSpanWithOptions(operationName string, opts ot.StartSpanOpt
 		// trace has parent XXX only handles one parent
 		case ot.ChildOfRef, ot.FollowsFromRef:
 			refCtx := ref.ReferencedContext.(spanContext)
-			if refCtx.Layer == nil { // referenced spanContext created by Extract()
+			if refCtx.layer == nil { // referenced spanContext created by Extract()
 				var layer tv.Layer
 				if refCtx.sampled {
 					layer = tv.NewTraceFromID(operationName, refCtx.remoteMD, func() tv.KVMap {
@@ -48,41 +52,42 @@ func (t *Tracer) StartSpanWithOptions(operationName string, opts ot.StartSpanOpt
 				} else {
 					layer = tv.NewNullTrace()
 				}
-				return &spanImpl{context: spanContext{
-					Layer:   layer,
+				return &spanImpl{tracer: t, context: spanContext{
+					layer:   layer,
 					sampled: refCtx.sampled,
-					Baggage: refCtx.Baggage,
-				}}
+					baggage: refCtx.baggage,
+				},
+				}
 			}
 			// referenced spanContext was in-process
-			return &spanImpl{context: spanContext{Layer: refCtx.Layer.BeginLayer(operationName)}}
+			return &spanImpl{tracer: t, context: spanContext{layer: refCtx.layer.BeginLayer(operationName)}}
 		}
 	}
 
 	// otherwise, no parent span found, so make new trace and return as span
-	newSpan := &spanImpl{context: spanContext{Layer: tv.NewTrace(operationName)}}
+	newSpan := &spanImpl{tracer: t, context: spanContext{layer: tv.NewTrace(operationName)}}
 	return newSpan
 }
 
 type spanContext struct {
 	// 1. spanContext created by StartSpanWithOptions
-	Layer tv.Layer
+	layer tv.Layer
 	// 2. spanContext created by Extract()
 	remoteMD string
 	sampled  bool
 
 	// The span's associated baggage.
-	Baggage map[string]string // initialized on first use
+	baggage map[string]string // initialized on first use
 }
 
 type spanImpl struct {
+	tracer     *Tracer
 	sync.Mutex // protects the field below
 	context    spanContext
 }
 
 func (s *spanImpl) SetBaggageItem(key, val string) ot.Span {
-	// XXX could support baggage configuration similar to basictracer's TrimUnsampledSpans
-	if !s.context.Layer.IsTracing() {
+	if !s.context.sampled && s.tracer.TrimUnsampledSpans {
 		return s
 	}
 
@@ -96,7 +101,7 @@ func (s *spanImpl) SetBaggageItem(key, val string) ot.Span {
 // The bool return value indicates if the handler wants to continue iterating
 // through the rest of the baggage items.
 func (c spanContext) ForeachBaggageItem(handler func(k, v string) bool) {
-	for k, v := range c.Baggage {
+	for k, v := range c.baggage {
 		if !handler(k, v) {
 			break
 		}
@@ -107,45 +112,45 @@ func (c spanContext) ForeachBaggageItem(handler func(k, v string) bool) {
 // given key:value baggage pair set.
 func (c spanContext) WithBaggageItem(key, val string) spanContext {
 	var newBaggage map[string]string
-	if c.Baggage == nil {
+	if c.baggage == nil {
 		newBaggage = map[string]string{key: val}
 	} else {
-		newBaggage = make(map[string]string, len(c.Baggage)+1)
-		for k, v := range c.Baggage {
+		newBaggage = make(map[string]string, len(c.baggage)+1)
+		for k, v := range c.baggage {
 			newBaggage[k] = v
 		}
 		newBaggage[key] = val
 	}
 	// Use positional parameters so the compiler will help catch new fields.
-	return spanContext{c.Layer, c.remoteMD, c.sampled, newBaggage}
+	return spanContext{c.layer, c.remoteMD, c.sampled, newBaggage}
 }
 
 func (s *spanImpl) BaggageItem(key string) string {
 	s.Lock()
 	defer s.Unlock()
-	return s.context.Baggage[key]
+	return s.context.baggage[key]
 }
 
 const otLogPrefix = "OT-Log-"
 
 func (s *spanImpl) LogFields(fields ...log.Field) {
 	for _, field := range fields {
-		s.context.Layer.AddEndArgs(otLogPrefix+field.Key(), field.Value())
+		s.context.layer.AddEndArgs(otLogPrefix+field.Key(), field.Value())
 	}
 }
-func (s *spanImpl) LogKV(keyVals ...interface{}) { s.context.Layer.AddEndArgs(keyVals...) }
+func (s *spanImpl) LogKV(keyVals ...interface{}) { s.context.layer.AddEndArgs(keyVals...) }
 func (s *spanImpl) Context() ot.SpanContext      { return s.context }
-func (s *spanImpl) Finish()                      { s.context.Layer.End() }
-func (s *spanImpl) Tracer() ot.Tracer            { return &Tracer{} }
+func (s *spanImpl) Finish()                      { s.context.layer.End() }
+func (s *spanImpl) Tracer() ot.Tracer            { return s.tracer }
 
 // XXX handle FinishTime, LogRecords
-func (s *spanImpl) FinishWithOptions(opts ot.FinishOptions) { s.context.Layer.End() }
+func (s *spanImpl) FinishWithOptions(opts ot.FinishOptions) { s.context.layer.End() }
 
 // XXX handle changing operation name
 func (s *spanImpl) SetOperationName(operationName string) ot.Span { return s }
 
 func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
-	s.context.Layer.AddEndArgs(translateTagName(key), value)
+	s.context.layer.AddEndArgs(translateTagName(key), value)
 	return s
 }
 

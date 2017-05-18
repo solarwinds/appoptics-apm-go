@@ -1,5 +1,3 @@
-// +build traceview
-
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
 package ottv
@@ -13,7 +11,7 @@ import (
 	"github.com/tracelytics/go-traceview/v1/tv/ottv/internal/harness"
 )
 
-func TestAPI(t *testing.T) {
+func TestAPICheck(t *testing.T) {
 	_ = traceview.SetTestReporter() // set up test reporter
 	apiSuite := harness.NewAPICheckSuite(func() (tracer opentracing.Tracer, closer func()) {
 		return NewTracer(), nil

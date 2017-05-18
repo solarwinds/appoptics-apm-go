@@ -11,6 +11,7 @@ import (
 
 	ot "github.com/opentracing/opentracing-go"
 	"github.com/tracelytics/go-traceview/v1/tv"
+	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
 )
 
 const (
@@ -41,7 +42,9 @@ func (t *Tracer) Extract(format interface{}, carrier interface{}) (ot.SpanContex
 }
 
 type textMapPropagator struct{}
-type binaryPropagator struct{}
+type binaryPropagator struct {
+	marshaler binaryMarshaler
+}
 
 func (p *textMapPropagator) Inject(spanCtx ot.SpanContext, opaqueCarrier interface{}) error {
 	sc, ok := spanCtx.(spanContext)
@@ -52,12 +55,12 @@ func (p *textMapPropagator) Inject(spanCtx ot.SpanContext, opaqueCarrier interfa
 	if !ok {
 		return ot.ErrInvalidCarrier
 	}
-	if md := sc.Layer.MetadataString(); md != "" {
+	if md := sc.layer.MetadataString(); md != "" {
 		carrier.Set(tv.HTTPHeaderName, md)
 	}
-	carrier.Set(fieldNameSampled, strconv.FormatBool(sc.Layer.IsTracing()))
+	carrier.Set(fieldNameSampled, strconv.FormatBool(sc.layer.IsTracing()))
 
-	for k, v := range sc.Baggage {
+	for k, v := range sc.baggage {
 		carrier.Set(prefixBaggage+k, v)
 	}
 	return nil
@@ -68,6 +71,15 @@ type tracerState struct {
 	Sampled      bool              `json:"sampled,omitempty"`
 	BaggageItems map[string]string `json:"baggage_items,omitempty"`
 }
+
+type binaryMarshaler interface {
+	Marshal(v *tracerState) ([]byte, error)
+	Unmarshal(data []byte, v *tracerState) error
+}
+type jsonMarshaler struct{}
+
+func (*jsonMarshaler) Marshal(s *tracerState) ([]byte, error)      { return json.Marshal(s) }
+func (*jsonMarshaler) Unmarshal(data []byte, s *tracerState) error { return json.Unmarshal(data, s) }
 
 func (p *binaryPropagator) Inject(spanCtx ot.SpanContext, opaqueCarrier interface{}) error {
 	sc, ok := spanCtx.(spanContext)
@@ -80,12 +92,12 @@ func (p *binaryPropagator) Inject(spanCtx ot.SpanContext, opaqueCarrier interfac
 	}
 
 	state := tracerState{
-		XTraceID:     sc.Layer.MetadataString(),
-		Sampled:      sc.Layer.IsTracing(),
-		BaggageItems: sc.Baggage,
+		XTraceID:     sc.layer.MetadataString(),
+		Sampled:      sc.layer.IsTracing(),
+		BaggageItems: sc.baggage,
 	}
 
-	b, err := json.Marshal(&state)
+	b, err := p.marshaler.Marshal(&state)
 	if err != nil {
 		return err
 	}
@@ -120,14 +132,14 @@ func (p *binaryPropagator) Extract(opaqueCarrier interface{}) (ot.SpanContext, e
 	}
 
 	ctx := tracerState{}
-	if err := json.Unmarshal(buf, &ctx); err != nil {
+	if err := p.marshaler.Unmarshal(buf, &ctx); err != nil {
 		return nil, ot.ErrSpanContextCorrupted
 	}
 
 	return spanContext{
 		remoteMD: ctx.XTraceID,
 		sampled:  ctx.Sampled,
-		Baggage:  ctx.BaggageItems,
+		baggage:  ctx.BaggageItems,
 	}, nil
 }
 
@@ -136,26 +148,25 @@ func (p *textMapPropagator) Extract(opaqueCarrier interface{}) (ot.SpanContext, 
 	if !ok {
 		return nil, ot.ErrInvalidCarrier
 	}
-	requiredFieldCount := 0
 	var xTraceID string
 	var sampled bool
+	var sawSampled bool
 	var err error
 	decodedBaggage := make(map[string]string)
 	err = carrier.ForeachKey(func(k, v string) error {
 		switch strings.ToLower(k) {
 		case strings.ToLower(tv.HTTPHeaderName):
-			xTraceID = v // XXX could validate X-Trace metadata here
-			err = nil
-			if err != nil {
+			if traceview.ValidMetadata(v) {
+				xTraceID = v
+			} else {
 				return ot.ErrSpanContextCorrupted
 			}
-			requiredFieldCount++
 		case fieldNameSampled:
+			sawSampled = true
 			sampled, err = strconv.ParseBool(v)
 			if err != nil {
 				return ot.ErrSpanContextCorrupted
 			}
-			requiredFieldCount++
 		default:
 			lowercaseK := strings.ToLower(k)
 			if strings.HasPrefix(lowercaseK, prefixBaggage) {
@@ -167,13 +178,16 @@ func (p *textMapPropagator) Extract(opaqueCarrier interface{}) (ot.SpanContext, 
 	if err != nil {
 		return nil, err
 	}
-	if requiredFieldCount == 0 {
+	if xTraceID == "" {
 		return nil, ot.ErrSpanContextNotFound
+	}
+	if xTraceID != "" && sawSampled == false {
+		sampled = true
 	}
 
 	return spanContext{
 		remoteMD: xTraceID,
 		sampled:  sampled,
-		Baggage:  decodedBaggage,
+		baggage:  decodedBaggage,
 	}, nil
 }
