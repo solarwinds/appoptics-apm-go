@@ -146,12 +146,24 @@ func TestTextMapExtract(t *testing.T) {
 	assert.Equal(t, ctx.(spanContext).remoteMD, span.Context().(spanContext).layer.MetadataString(),
 		"extracted context should have same ID as original span")
 
-	// missing trace ID
+	// missing trace ID, true sample flag
 	badCarrier := opentracing.TextMapCarrier{}
 	badCarrier.Set(fieldNameSampled, "true")
 	ctx, err = tr.Extract(opentracing.TextMap, badCarrier)
 	assert.Nil(t, ctx)
 	assert.Equal(t, opentracing.ErrSpanContextNotFound, err)
+
+	// valid trace ID, false sample flag
+	carrier := opentracing.TextMapCarrier{}
+	carrier.Set(tv.HTTPHeaderName, textCarrier[tv.HTTPHeaderName])
+	carrier.Set(fieldNameSampled, "false")
+	ctx, err = tr.Extract(opentracing.TextMap, carrier)
+	assert.NotNil(t, ctx)
+	assert.NoError(t, err)
+	childSpan := tr.StartSpan("op2", opentracing.ChildOf(ctx))
+	assert.NotNil(t, childSpan)
+	assert.NotNil(t, childSpan.Context().(spanContext).layer)
+	assert.False(t, childSpan.Context().(spanContext).layer.IsTracing())
 
 	// valid trace ID, no sampled flag
 	tvCarrier := opentracing.TextMapCarrier{}

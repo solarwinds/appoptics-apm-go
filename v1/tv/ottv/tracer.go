@@ -154,7 +154,7 @@ func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
 	return s
 }
 
-// XXX ignoring arbitrary non-KV Log strings
+// deprecated Log methods are not supported.
 func (s *spanImpl) LogEvent(event string)                                 {}
 func (s *spanImpl) LogEventWithPayload(event string, payload interface{}) {}
 func (s *spanImpl) Log(data ot.LogData)                                   {}

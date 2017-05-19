@@ -145,6 +145,11 @@ func (s *APICheckSuite) TestSpanLogs() {
 				},
 			},
 		}})
+
+	// Test deprecated log methods
+	span.LogEvent("an arbitrary event")
+	span.LogEventWithPayload("y", "z")
+	span.Log(opentracing.LogData{Event: "y", Payload: "z"})
 }
 
 func assertEmptyBaggage(t *testing.T, spanContext opentracing.SpanContext) {
