@@ -10,10 +10,10 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/tracelytics/go-traceview/v1/tv"
 	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
 	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestTraceMetadata(t *testing.T) {
@@ -339,4 +339,14 @@ func TestTraceJoin(t *testing.T) {
 		{"L1", "exit"}:    {Edges: g.Edges{{"L1", "entry"}}},
 		{"test", "exit"}:  {Edges: g.Edges{{"L1", "exit"}, {"test", "entry"}}},
 	})
+}
+
+func TestNullTrace(t *testing.T) {
+	r := traceview.SetTestReporter()
+	r.ShouldTrace = true
+	tr := tv.NewNullTrace()
+	md := tr.ExitMetadata()
+	tr.End()
+	assert.Equal(t, md, "")
+	assert.Len(t, r.Bufs, 0)
 }

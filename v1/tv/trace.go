@@ -139,3 +139,6 @@ type nullTrace struct{ nullSpan }
 
 func (t *nullTrace) EndCallback(f func() KVMap) {}
 func (t *nullTrace) ExitMetadata() string       { return "" }
+
+// NewNullTrace returns a trace that is not sampled.
+func NewNullTrace() Trace { return &nullTrace{} }

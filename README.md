@@ -291,7 +291,7 @@ inside a staging environment.
 ### Support
 
 While we use TraceView to trace our own production Go services, this version of our Go instrumentation is currently in beta
-and under active development. We welcome your feedback, issues and feature requests, and please contact us at traceview@solarwinds.com!
+and under active development. We welcome your feedback, issues and feature requests, and please contact us at traceviewsupport@solarwinds.com!
 
 ### Demo web app
 
@@ -339,6 +339,18 @@ and `concurrentAliceHandler`, which makes requests to all three in parallel.
 You should see traces for these appear on your TraceView dashboard. Here is an example trace of the
 concurrent handler:
 <img width=729 src="https://github.com/tracelytics/go-traceview/raw/master/img/concurrent-tracedetails.gif">
+
+### OpenTracing
+
+Support for the OpenTracing 1.0 API is available in the [ottv](https://godoc.org/github.com/tracelytics/go-traceview/v1/tv/ottv) package as a technology preview. The
+OpenTracing tracer in that package provides support for OpenTracing span reporting and context
+propagation by using TraceView's layer reporting and HTTP header formats, permitting the OT tracer
+to continue distributed traces started by TraceView's instrumentation and vice versa. Some of the
+OpenTracing standardized tags are mapped to TraceView tag names as well.
+
+To set TraceView's tracer to be your global tracer, call `opentracing.InitGlobalTracer(ottv.NewTracer())`.
+Currently, `ottv.NewTracer()` does not accept any options, but this may change in the future.
+Please let us know if you are using this package while it is in preview by contacting us at opentracing@tracelytics.com.
 
 ## License
 

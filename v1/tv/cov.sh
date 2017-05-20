@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-COVERPKG="github.com/tracelytics/go-traceview/v1/tv/internal/traceview,github.com/tracelytics/go-traceview/v1/tv"
+COVERPKG="github.com/tracelytics/go-traceview/v1/tv/internal/traceview,github.com/tracelytics/go-traceview/v1/tv,github.com/tracelytics/go-traceview/v1/tv/ottv"
 export TRACEVIEW_DEBUG=1
 go test -v -covermode=count -coverprofile=cov.out -coverpkg $COVERPKG
 go test -v -tags traceview -covermode=count -coverprofile=covtv.out -coverpkg $COVERPKG
@@ -11,6 +11,11 @@ go test -v -covermode=count -coverprofile=cov.out
 go test -v -tags traceview -covermode=count -coverprofile=covtv.out
 popd
 
-gocovmerge cov.out covtv.out internal/traceview/cov.out internal/traceview/covtv.out > covmerge.out
+pushd ottv
+go test -v -covermode=count -coverprofile=cov.out
+go test -v -tags traceview -covermode=count -coverprofile=covtv.out
+popd
+
+gocovmerge cov.out covtv.out internal/traceview/cov.out internal/traceview/covtv.out ottv/cov.out ottv/covtv.out > covmerge.out
 
 #go tool cover -html=covmerge.out

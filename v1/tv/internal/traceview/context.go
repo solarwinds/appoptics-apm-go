@@ -36,6 +36,16 @@ type oboeContext struct {
 	metadata oboeMetadata
 }
 
+// ValidMetadata checks if a metadata string is valid.
+func ValidMetadata(mdstr string) bool {
+	md := &oboeMetadata{}
+	md.Init()
+	if err := md.FromString(mdstr); err != nil {
+		return false
+	}
+	return true
+}
+
 func (md *oboeMetadata) Init() {
 	if md == nil {
 		return

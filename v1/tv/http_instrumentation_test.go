@@ -11,10 +11,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tracelytics/go-traceview/v1/tv"
 	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
 	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
-	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )
 
@@ -411,7 +412,8 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 		}},
 		{"http.Client", "error"}: {Edges: g.Edges{{"http.Client", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "error", n.Map["ErrorClass"])
-			assert.Contains(t, n.Map["ErrorMsg"], "dial tcp: invalid port 888888")
+			assert.Contains(t, n.Map["ErrorMsg"], "dial tcp:")
+			assert.Contains(t, n.Map["ErrorMsg"], "invalid port")
 		}},
 		{"http.Client", "exit"}: {Edges: g.Edges{{"http.Client", "error"}}},
 		{"httpTest", "exit"}:    {Edges: g.Edges{{"http.Client", "exit"}, {"httpTest", "entry"}}},
@@ -521,8 +523,10 @@ func TestDistributedApp(t *testing.T) {
 
 	aliceLn, err := net.Listen("tcp", ":8080")
 	assert.NoError(t, err)
+	require.NotNil(t, aliceLn, "can't open port 8080")
 	bobLn, err := net.Listen("tcp", ":8081")
 	assert.NoError(t, err)
+	require.NotNil(t, bobLn, "can't open port 8081")
 	go func() {
 		s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(AliceHandler))}
 		assert.NoError(t, s.Serve(aliceLn))

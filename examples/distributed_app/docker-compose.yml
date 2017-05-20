@@ -14,6 +14,7 @@ services:
       - bob
       - caroljs:carol
       - davepy:dave
+      - otto:otto
     ports:
       - "8890:8890"
   # Bob is a Go service
@@ -37,3 +38,14 @@ services:
       context: ./davepy
       args:
         - APPNETA_KEY=${APPNETA_KEY}
+  otto:
+    build:
+      context: ./otto
+      args:
+        - APPNETA_KEY=${APPNETA_KEY}
+    links:
+      - bob
+      - caroljs:carol
+      - davepy:dave
+    ports:
+      - "8084:8084"
