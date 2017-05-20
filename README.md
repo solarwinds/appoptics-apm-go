@@ -338,6 +338,7 @@ and `concurrentAliceHandler`, which makes requests to all three in parallel.
 
 You should see traces for these appear on your TraceView dashboard. Here is an example trace of the
 concurrent handler:
+
 <img width=729 src="https://github.com/tracelytics/go-traceview/raw/master/img/concurrent-tracedetails.gif">
 
 ### OpenTracing
