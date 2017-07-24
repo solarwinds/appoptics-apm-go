@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/tracelytics/go-traceview/v1/tv"
+	"github.com/librato/go-traceview/v1/tv"
 )
 
 // hard-coded service discovery

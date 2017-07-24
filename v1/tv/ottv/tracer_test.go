@@ -7,7 +7,7 @@ import (
 
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
-	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
+	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 )
 
 func TestSpanBaggageUnsampled(t *testing.T) {

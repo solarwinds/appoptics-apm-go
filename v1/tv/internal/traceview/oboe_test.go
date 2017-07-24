@@ -17,7 +17,7 @@ import (
 
 	"gopkg.in/mgo.v2/bson"
 
-	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
+	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
 )
 

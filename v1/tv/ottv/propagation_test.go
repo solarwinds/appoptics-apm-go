@@ -12,8 +12,8 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tracelytics/go-traceview/v1/tv"
-	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
+	"github.com/librato/go-traceview/v1/tv"
+	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 )
 
 type badReader struct{}

@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/tracelytics/go-traceview/v1/tv"
+	"github.com/librato/go-traceview/v1/tv"
 )
 
 func bobHandler(w http.ResponseWriter, r *http.Request) {

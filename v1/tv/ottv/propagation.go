@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	ot "github.com/opentracing/opentracing-go"
-	"github.com/tracelytics/go-traceview/v1/tv"
-	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
+	"github.com/librato/go-traceview/v1/tv"
+	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 )
 
 const (

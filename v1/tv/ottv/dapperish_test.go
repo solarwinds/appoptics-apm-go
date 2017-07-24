@@ -17,8 +17,8 @@ import (
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
-	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
+	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
+	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 	"golang.org/x/net/context"
 )
 
