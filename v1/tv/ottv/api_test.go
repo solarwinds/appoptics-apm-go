@@ -7,8 +7,8 @@ import (
 
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/suite"
-	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview"
-	"github.com/tracelytics/go-traceview/v1/tv/ottv/internal/harness"
+	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	"github.com/librato/go-traceview/v1/tv/ottv/internal/harness"
 )
 
 func TestAPICheck(t *testing.T) {

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-COVERPKG="github.com/tracelytics/go-traceview/v1/tv/internal/traceview,github.com/tracelytics/go-traceview/v1/tv,github.com/tracelytics/go-traceview/v1/tv/ottv"
+COVERPKG="github.com/librato/go-traceview/v1/tv/internal/traceview,github.com/librato/go-traceview/v1/tv,github.com/librato/go-traceview/v1/tv/ottv"
 export TRACEVIEW_DEBUG=1
 go test -v -covermode=count -coverprofile=cov.out -coverpkg $COVERPKG
 go test -v -tags traceview -covermode=count -coverprofile=covtv.out -coverpkg $COVERPKG

@@ -13,7 +13,7 @@ import (
 	_ "net/http/pprof"
 	"time"
 
-	"github.com/tracelytics/go-traceview/v1/tv"
+	"github.com/librato/go-traceview/v1/tv"
 )
 
 var startTime = time.Now()

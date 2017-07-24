@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
-	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
 )
 
 // Exercise sampling rate logic:

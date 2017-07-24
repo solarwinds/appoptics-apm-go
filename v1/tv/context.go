@@ -6,8 +6,8 @@ import "golang.org/x/net/context"
 
 type contextKeyT string
 
-var contextKey = contextKeyT("github.com/tracelytics/go-traceview/v1/tv.Trace")
-var contextLayerKey = contextKeyT("github.com/tracelytics/go-traceview/v1/tv.Layer")
+var contextKey = contextKeyT("github.com/librato/go-traceview/v1/tv.Trace")
+var contextLayerKey = contextKeyT("github.com/librato/go-traceview/v1/tv.Layer")
 
 // NewContext returns a copy of the parent context and associates it with a Trace.
 func NewContext(ctx context.Context, t Trace) context.Context {

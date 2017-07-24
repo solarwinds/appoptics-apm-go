@@ -23,7 +23,7 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 	// At wrap time (when binding handler to router): get name of wrapped handler func
 	var endArgs []interface{}
 	if f := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()); f != nil {
-		// e.g. "main.slowHandler", "github.com/tracelytics/go-traceview/v1/tv_test.handler404"
+		// e.g. "main.slowHandler", "github.com/librato/go-traceview/v1/tv_test.handler404"
 		fname := f.Name()
 		if s := strings.SplitN(fname[strings.LastIndex(fname, "/")+1:], ".", 2); len(s) == 2 {
 			endArgs = append(endArgs, "Controller", s[0], "Action", s[1])
