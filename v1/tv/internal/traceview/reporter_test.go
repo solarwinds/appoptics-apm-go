@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
+	g "github.com/tracelytics/go-traceview/v1/tv/internal/graphtest"
 )
 
 // Exercise sampling rate logic:
@@ -46,11 +46,11 @@ func TestNullReporter(t *testing.T) {
 }
 
 func TestNewReporter(t *testing.T) {
-	assert.IsType(t, &udpReporter{}, newReporter())
+	assert.IsType(t, &udpReporter{}, newUDPReporter())
 	t.Logf("Forcing UDP listen error for invalid port 7777831")
-	reporterAddr = "127.0.0.1:777831"
-	assert.IsType(t, &nullReporter{}, newReporter())
-	reporterAddr = "127.0.0.1:7831"
+	udpReporterAddr = "127.0.0.1:777831"
+	assert.IsType(t, &nullReporter{}, newUDPReporter())
+	udpReporterAddr = "127.0.0.1:7831"
 }
 
 // dependency injection for os.Hostname and net.{ResolveUDPAddr/DialUDP}
@@ -60,10 +60,10 @@ func (h failHostnamer) Hostname() (string, error) {
 	return "", errors.New("couldn't resolve hostname")
 }
 func TestCacheHostname(t *testing.T) {
-	assert.IsType(t, &udpReporter{}, newReporter())
+	assert.IsType(t, &udpReporter{}, newUDPReporter())
 	t.Logf("Forcing hostname error: 'Unable to get hostname' log message expected")
 	cacheHostname(failHostnamer{})
-	assert.IsType(t, &nullReporter{}, newReporter())
+	assert.IsType(t, &nullReporter{}, newUDPReporter())
 }
 
 func TestReportEvent(t *testing.T) {
