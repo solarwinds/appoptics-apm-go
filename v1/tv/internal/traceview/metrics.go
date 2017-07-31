@@ -44,8 +44,8 @@ type metricsAggregator struct {
 }
 
 type MetricsRaw struct {
-	histograms map[string]Histogram
-	measurements map[string]Measurement
+	histograms map[string]*Histogram
+	measurements map[string]*Measurement
 }
 
 type baseHistogram struct {
@@ -181,7 +181,15 @@ func (am *metricsAggregator) processMeasurements(transaction string, record Metr
 
 // recordMeasurement updates a particular measurement based on the tags and duration
 func (am *metricsAggregator) recordMeasurement(tags *map[string]string, duration time.Duration) {
-	// TODO: need to initialize the map before use it
+	var id string
+	for k, v := range *tags {
+		id += k + ":" + v + "&"
+	}
+	if _, ok := am.metrics.measurements[id]; !ok {
+		am.metrics.measurements[id] = newMeasurement(tags)
+	}
+	am.metrics.measurements[id].count++
+	am.metrics.measurements[id].sum += uint64(duration.Seconds()*1e6)
 }
 
 // pushMetricsRaw is called when FlushBSON requires a new histograms message
@@ -202,6 +210,17 @@ func (am *metricsAggregator) PushMetricsRecord(record MetricsRecord) bool {
 	}
 }
 
+// newMeasurement creates a Measurement object with tags
+func newMeasurement(inTags *map[string]string) *Measurement {
+	var measurement = Measurement{
+		tags: make(map[string]string),
+	}
+	for k, v := range *inTags {
+		measurement.tags[k] = v
+	}
+	return &measurement
+}
+
 // newMetricsAggregator is the newMetricsAggregator initializer. Note: You still need to
 // initialize the Hisogram.data each time you add a new key/value to it, as by default
 // it's a nil map pointer.
@@ -213,8 +232,8 @@ func newMetricsAggregator() MetricsAggregator {
 		exit: make(chan struct{}),
 		transNames: make(map[string]bool),
 		metrics: MetricsRaw{
-			histograms: make(map[string]Histogram),
-			measurements: make(map[string]Measurement),
+			histograms: make(map[string]*Histogram),
+			measurements: make(map[string]*Measurement),
 		},
 	}
 }
