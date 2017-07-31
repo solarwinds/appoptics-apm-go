@@ -2,7 +2,10 @@
 
 package traceview
 
-import "time"
+import (
+	"time"
+	"strconv"
+)
 
 const (
 	MetricsRecordMaxSize = 100
@@ -25,17 +28,24 @@ type MetricsAggregator interface {
 }
 
 type metricsAggregator struct {
+	// Receive the MetricsRecord sent by traces and update the MetricsRaw.
 	records chan MetricsRecord
+	// Receive a request from periodic goroutine for a new MetricsRaw struct
 	rawReq chan struct{}
+	// Send the MetricsRaw through this channel to periodic goroutine
 	raw chan MetricsRaw
+	// Used to notify the ProcessMetrics goroutine to exit
 	exit chan struct{}
+	// Stores the seen transaction names, the limit is defined by MaxTransactionNames
 	transNames map[string]bool
+	// The raw struct of histograms and measurements, it's consumed by FlushBSON to create
+	// the metrics message
 	metrics MetricsRaw
 }
 
 type MetricsRaw struct {
 	histograms map[string]Histogram
-	measurements Measurements
+	measurements map[string]Measurement
 }
 
 type baseHistogram struct {
@@ -47,8 +57,10 @@ type Histogram struct {
 	tags map[string]string
 }
 
-type Measurements struct {
-	// TODO
+type Measurement struct {
+	tags map[string]string
+	count uint32
+	sum uint64
 }
 
 type MetricsRecord struct {
@@ -74,6 +86,7 @@ func (am *metricsAggregator) FlushBSON() [][]byte {
 // the BSON message.
 func (am *metricsAggregator) createMetricsMsg(raw MetricsRaw) [][]byte {
 	// TODO
+	return [][]byte{}  //TODO: remove it
 }
 
 // ProcessMetrics consumes the records sent by traces and update the histograms.
@@ -128,19 +141,53 @@ func (am *metricsAggregator) updateMetricsRaw(record MetricsRecord) {
 // recordHistogram updates the histogram based on the new MetricsRecord (transaction name and
 // the duration).
 func (am *metricsAggregator) recordHistogram(transaction string, duration time.Duration) {
-	// TODO
+	// TODO: need to initialize the map before use it
 }
 
 // processMeasurements updates the measurements struct based on the new MetricsRecord
 func (am *metricsAggregator) processMeasurements(transaction string, record MetricsRecord) {
-	// TODO
+	// primary ID: TransactionName
+	var primaryTags = map[string]string{}
+	primaryTags["TransactionName"] = transaction
+	am.recordMeasurement(&primaryTags, record.Duration)
+
+	// secondary keys: HttpMethod
+	var withMethodTags = map[string]string{}
+	for k, v := range primaryTags {
+		withMethodTags[k] = v
+	}
+	withMethodTags["HttpMethod"] = record.Method
+	am.recordMeasurement(&withMethodTags, record.Duration)
+
+	// secondary keys: HttpStatus
+	var withStatusTags = map[string]string{}
+	for k, v := range primaryTags {
+		withStatusTags[k] = v
+	}
+	withStatusTags["HttpStatus"] = strconv.Itoa(record.Status)
+	am.recordMeasurement(&withStatusTags, record.Duration)
+
+	// secondary keys: Errors
+	if record.HasError {
+		var withErrorTags = map[string]string{}
+		for k, v := range primaryTags {
+			withErrorTags[k] = v
+		}
+		withErrorTags["Errors"] = "true"
+		am.recordMeasurement(&withErrorTags, record.Duration)
+	}
+
+}
+
+// recordMeasurement updates a particular measurement based on the tags and duration
+func (am *metricsAggregator) recordMeasurement(tags *map[string]string, duration time.Duration) {
+	// TODO: need to initialize the map before use it
 }
 
 // pushMetricsRaw is called when FlushBSON requires a new histograms message
 // for encoding. It pushes the newest values of the histograms to the raw channel
 // which will be consumed by FlushBSON.
 func (am *metricsAggregator) pushMetricsRaw() {
-	// TODO
 	am.raw <- am.metrics
 }
 
@@ -165,6 +212,9 @@ func newMetricsAggregator() MetricsAggregator {
 		raw: make(chan MetricsRaw),
 		exit: make(chan struct{}),
 		transNames: make(map[string]bool),
-		metrics: MetricsRaw{histograms: make(map[string]Histogram)},
+		metrics: MetricsRaw{
+			histograms: make(map[string]Histogram),
+			measurements: make(map[string]Measurement),
+		},
 	}
 }
