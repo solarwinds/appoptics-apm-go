@@ -11,13 +11,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/tracelytics/go-traceview/v1/tv/internal/traceview/collector"
+	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
 	"google.golang.org/grpc"
 )
 
 type reporter interface {
 	WritePacket([]byte) (int, error)
 	IsOpen() bool
+	// PushMetricsRecord is invoked by a trace to push the metrics record
+	PushMetricsRecord(record MetricsRecord) bool
 }
 
 func newUDPReporter() reporter {
@@ -40,22 +42,24 @@ func newUDPReporter() reporter {
 
 type nullReporter struct{}
 
-func (r *nullReporter) IsOpen() bool                        { return false }
-func (r *nullReporter) WritePacket(buf []byte) (int, error) { return len(buf), nil }
+func (r *nullReporter) IsOpen() bool                                { return false }
+func (r *nullReporter) WritePacket(buf []byte) (int, error)         { return len(buf), nil }
+func (r *nullReporter) PushMetricsRecord(record MetricsRecord) bool { return true }
 
 type udpReporter struct {
 	conn *net.UDPConn
 }
 
-func (r *udpReporter) IsOpen() bool                        { return r.conn != nil }
-func (r *udpReporter) WritePacket(buf []byte) (int, error) { return r.conn.Write(buf) }
+func (r *udpReporter) IsOpen() bool                                { return r.conn != nil }
+func (r *udpReporter) WritePacket(buf []byte) (int, error)         { return r.conn.Write(buf) }
+func (r *udpReporter) PushMetricsRecord(record MetricsRecord) bool { return false}
 
 type grpcReporter struct {
 	client  collector.TraceCollectorClient
 	ch      chan []byte
 	exit    chan struct{}
 	apiKey  string
-	metrics AgentMetrics
+	metrics MetricsAggregator
 }
 
 type grpcResult struct {
@@ -138,7 +142,15 @@ func (r *grpcReporter) postEvents(batches <-chan [][]byte) <-chan *grpcResult {
 	return ret
 }
 
+func (r *grpcReporter) PushMetricsRecord(record MetricsRecord) bool {
+	if !r.IsOpen() {
+		return false
+	}
+	return r.metrics.PushMetricsRecord(record)
+}
+
 func (r *grpcReporter) periodic() {
+	go r.metrics.ProcessMetrics()
 	for {
 		// wait until next interval
 		now := time.Now()
@@ -195,6 +207,7 @@ func newGRPCReporter() reporter {
 		client: collector.NewTraceCollectorClient(conn),
 		ch:     make(chan []byte),
 		exit:   make(chan struct{}),
+		metrics: newMetricsAggregator(),
 	}
 	go r.reportEvents()
 	go r.periodic()
@@ -209,6 +222,7 @@ var reportingDisabled bool
 var usingTestReporter bool
 var cachedHostname string
 var debugLog bool
+var debugLevel DebugLevel = ERROR
 var latestSettings []*collector.OboeSetting
 
 type hostnamer interface {
@@ -278,4 +292,9 @@ func reportEvent(r reporter, ctx *oboeContext, e *event) error {
 // This is our only dependency on the liboboe C library.
 func shouldTraceRequest(layer, xtraceHeader string) (sampled bool, sampleRate, sampleSource int) {
 	return oboeSampleRequest(layer, xtraceHeader)
+}
+
+// PushMetricsRecord push the metrics record into a channel using the global reporter.
+func PushMetricsRecord(record MetricsRecord) bool {
+	return globalReporter.PushMetricsRecord(record)
 }
