@@ -32,7 +32,7 @@ type metricsAggregator struct {
 }
 
 type MetricsRaw struct {
-	Histograms
+	histogram Histograms
 	Measurements
 }
 
@@ -40,8 +40,11 @@ type histogram struct {
 	// TODO: use the hdr library
 }
 
-type Histograms struct {
-	histograms map[string]histogram
+type Histograms map[string]Histogram
+
+type Histogram struct {
+	hist histogram
+	tags map[string]string
 }
 
 type Measurements struct {
