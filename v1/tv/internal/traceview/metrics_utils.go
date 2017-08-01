@@ -23,6 +23,12 @@ const (
 	BSON_KEY_TRANSACTION_NAME_OVERFLOW = "TransactionNameOverflow"
 )
 
+const (
+	REDHAT = "/etc/redhat-release"
+	AMAZON = "/etc/release-cpe"
+	// TODO
+)
+
 // appendHostname appends the hostname to the BSON buffer
 func (am *metricsAggregator) appendHostname(bbuf *bsonBuffer) {
 	hostname, err := os.Hostname()
@@ -41,16 +47,17 @@ func (am *metricsAggregator) appendUUID(bbuf *bsonBuffer) {
 func (am *metricsAggregator) getHostId() (idStr string) {
 	var id string
 	var err error
+
+	if id, ok := am.cachedSysMeta[BSON_KEY_HOST_ID]; ok {
+		return id
+	}
+
 	// Use cached hostID
 	defer func() {
 		if idStr != "" {
 			am.cachedSysMeta[BSON_KEY_HOST_ID] = idStr
 		}
 	}()
-
-	if id, ok := am.cachedSysMeta[BSON_KEY_HOST_ID]; ok {
-		return id
-	}
 
 	// Calculate the ID
 	id, err = am.getContainerId()
@@ -79,7 +86,24 @@ func (am *metricsAggregator) getHostId() (idStr string) {
 
 // appendDistro appends the distro information to BSON buffer
 func (am *metricsAggregator) appendDistro(bbuf *bsonBuffer) {
+	bsonAppendString(bbuf, BSON_KEY_DISTRO, getDistro())
 	//TODO
+}
+
+// getDistro retrieves the distribution information and caches it in metricsAggregator
+func (am *metricsAggregator) getDistro(bbuf *bsonBuffer) (distro string) {
+	if distro, ok := am.cachedSysMeta[BSON_KEY_DISTRO]; ok {
+		return distro
+	}
+
+	// Use cached hostID
+	defer func() {
+		if distro != "" {
+			am.cachedSysMeta[BSON_KEY_HOST_ID] = distro
+		}
+	}()
+
+	return distro
 }
 
 // appendPID appends the process ID to the BSON buffer
