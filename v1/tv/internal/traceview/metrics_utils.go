@@ -55,6 +55,10 @@ const (
 	AWS_INSTANCE_ID_FETCH_TIMEOUT = 1 // it means AWS_INSTANCE_ID_FETCH_TIMEOUT seconds
 )
 
+const (
+	CONTAINER_META_FILE = "/proc/self/cgroup"
+)
+
 // TODO: combine and refactor the append* methods: apendGeneric(KEY_NAME, FUNC_TO_GET_THE_STRING)
 
 // appendHostname appends the hostname to the BSON buffer
@@ -128,7 +132,8 @@ func (am *metricsAggregator) getDistro() (distro string) {
 		am.cachedSysMeta[BSON_KEY_DISTRO] = distro
 	}()
 
-	// Note: Order of checking is important because some distros share same file names but with different function.
+	// Note: Order of checking is important because some distros share same file names
+	// but with different function.
 	// Keep this order: redhat based -> ubuntu -> debian
 	// TODO: get distro/version for various Linux distributions
 	return distro
@@ -228,15 +233,17 @@ func (am *metricsAggregator) getAWSInstanceMeta(key string, url string) (meta st
 	}()
 
 	// Retrieve the instance meta from a pre-defined URL
-	// It's a synchronous call but we're OK as the metricsSender interval is 1 minute (or 30 seconds?)
+	// It's a synchronous call but we're OK as the metricsSender interval is 1 minute
+	// (or 30 seconds?)
 	timeout := time.Duration(AWS_INSTANCE_ID_FETCH_TIMEOUT * time.Second)
 	client := http.Client{
 		Timeout: timeout,
 	}
-	// I don't want to retry as the connection is supposed to be reliable if this is an AWS instance.
+	// I don't want to retry as the connection is supposed to be reliable if this is
+	// an AWS instance.
 	resp, err := client.Get(url)
 	if err != nil {
-		OboeLog(DEBUG, "Timeout in fetching AWS Instance Metadata, probably it's not an AWS Instance.", err)
+		OboeLog(DEBUG, "Timeout in getting AWS metadata, not an AWS instance?", err)
 		return
 	}
 
@@ -270,7 +277,26 @@ func (am *metricsAggregator) appendContainerID(bbuf *bsonBuffer) {
 
 // getContainerID retrieves the docker container id, if any, and caches it.
 func (am *metricsAggregator) getContainerID() (id string) {
-	//TODO
+	if id, ok := am.cachedSysMeta[BSON_KEY_DOCKER_CONTAINER_ID]; ok {
+		return id
+	}
+
+	// Use cached Instance metadata
+	defer func() {
+		am.cachedSysMeta[BSON_KEY_DOCKER_CONTAINER_ID] = id
+	}()
+
+	line := getLineByKeyword(CONTAINER_META_FILE, "docker")
+	if line == "" {
+		return "" // not found
+	}
+	tokens := strings.Split(line, "/")
+	// A typical line returned by cat /proc/self/cgroup (that's why we expect 3 tokens):
+	// 9:devices:/docker/40188af19439697187e3f60b933e7e37c5c41035f4c0b266a51c86c5a0074b25
+	if len(tokens) != 3 {
+		return ""
+	}
+	id = tokens[2]
 	return
 }
 
