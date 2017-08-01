@@ -302,15 +302,18 @@ func (am *metricsAggregator) getContainerID() (id string) {
 
 // appendTimestamp appends the timestamp information to the BSON buffer
 func (am *metricsAggregator) appendTimestamp(bbuf *bsonBuffer) {
-	//TODO
+	//micro seconds since epoch
+	bsonAppendInt64(bbuf, BSON_KEY_TIMESTAMP, int64(time.Now().UnixNano() / 1000))
 }
 
 // appendFlushInterval appends the flush interval to the BSON buffer
 func (am *metricsAggregator) appendFlushInterval(bbuf *bsonBuffer) {
-	//TODO
+	bsonAppendInt64(bbuf, BSON_KEY_FLUSH_INTERVAL, int64(agentMetricsInterval/time.Second))
 }
 
 // appendTransactionNameOverflow appends the transaction name overflow flag to BSON buffer
 func (am *metricsAggregator) appendTransactionNameOverflow(bbuf *bsonBuffer) {
-	// TODO
+	if len(am.transNames) >= MaxTransactionNames {
+		bsonAppendBool(bbuf, BSON_KEY_TRANSACTION_NAME_OVERFLOW, true)
+	}
 }
