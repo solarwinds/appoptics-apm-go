@@ -52,7 +52,7 @@ const (
 
 // Timeout for retrieving AWS instance ID
 const (
-	AWS_INSTANCE_ID_FETCH_TIMEOUT = 1 // it means AWS_INSTANCE_ID_FETCH_TIMEOUT seconds
+	AWSInstanceIDFetchTimeout = 1 // in seconds
 )
 
 const (
@@ -235,7 +235,7 @@ func (am *metricsAggregator) getAWSInstanceMeta(key string, url string) (meta st
 	// Retrieve the instance meta from a pre-defined URL
 	// It's a synchronous call but we're OK as the metricsSender interval is 1 minute
 	// (or 30 seconds?)
-	timeout := time.Duration(AWS_INSTANCE_ID_FETCH_TIMEOUT * time.Second)
+	timeout := time.Duration(AWSInstanceIDFetchTimeout * time.Second)
 	client := http.Client{
 		Timeout: timeout,
 	}

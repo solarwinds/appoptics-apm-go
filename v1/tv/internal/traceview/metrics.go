@@ -7,6 +7,7 @@ import (
 	"strconv"
 )
 
+// Some default parameters which may be subject to change.
 const (
 	MetricsRecordMaxSize = 100
 	MaxTransactionNames = 200
@@ -93,8 +94,6 @@ func (am *metricsAggregator) createMetricsMsg(raw MetricsRaw) [][]byte {
 	var bbuf bsonBuffer
 	bsonBufferInit(&bbuf)
 
-	// TODO: some of the appends are optional (only when the info is available), check and decide whether
-	// TODO: to append it inside the appendXXX function. See generateMetricMessage in liboboe.
 	am.appendHostname(&bbuf)
 	am.appendUUID(&bbuf)
 	am.appendDistro(&bbuf)
