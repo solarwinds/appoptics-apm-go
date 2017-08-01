@@ -16,12 +16,11 @@ const (
 )
 
 //OboeLog print logs based on the debug level.
-// TODO: add 2. log stream?  3. move it to utils.go
 func OboeLog(level DebugLevel, msg string, err error) {
 	if !debugLog { // remove it
 		return
 	}
 	if level >= debugLevel {
-		log.Printf("%s : %v", msg, err)
+		log.Printf("%s: %v", msg, err)
 	}
 }

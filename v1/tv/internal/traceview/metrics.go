@@ -1,4 +1,4 @@
-// Copyright (C) 2016 Librato, Inc. All rights reserved.
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
 
 package traceview
 
@@ -10,7 +10,9 @@ import (
 const (
 	MetricsRecordMaxSize = 100
 	MaxTransactionNames = 200
+	DefaultHistogramPrecision = 2
 )
+
 // MetricsAggregator processes the metrics records and calculate the metrics and
 // histograms message from them.
 type MetricsAggregator interface {
@@ -41,6 +43,9 @@ type metricsAggregator struct {
 	// The raw struct of histograms and measurements, it's consumed by FlushBSON to create
 	// the metrics message
 	metrics MetricsRaw
+
+	// system metadata cache (expensive to get)
+	cachedSysMeta map[string]string
 }
 
 type MetricsRaw struct {
@@ -53,8 +58,8 @@ type baseHistogram struct {
 }
 
 type Histogram struct {
-	data baseHistogram
 	tags map[string]string
+	data baseHistogram
 }
 
 type Measurement struct {
@@ -85,8 +90,33 @@ func (am *metricsAggregator) FlushBSON() [][]byte {
 // createMetricsMsg read the histogram and measurement data from MetricsRaw and build
 // the BSON message.
 func (am *metricsAggregator) createMetricsMsg(raw MetricsRaw) [][]byte {
-	// TODO
-	return [][]byte{}  //TODO: remove it
+	var bbuf bsonBuffer
+	bsonBufferInit(&bbuf)
+
+	// TODO: some of the appends are optional (only when the info is available), check and decide whether
+	// TODO: to append it inside the appendXXX function. See generateMetricMessage in liboboe.
+	am.appendHostname(&bbuf)
+	am.appendUUID(&bbuf)
+	am.appendDistro(&bbuf)
+	am.appendPID(&bbuf)
+	am.appendTID(&bbuf)
+	am.appendSysName(&bbuf)
+	am.appendVersion(&bbuf)
+	am.appendIPAddresses(&bbuf)
+	am.appendMAC(&bbuf)
+	am.appendEC2InstanceID(&bbuf)
+	am.appendEC2InstanceZone(&bbuf)
+	am.appendContainerID(&bbuf)
+	am.appendTimestamp(&bbuf)
+	am.appendFlushInterval(&bbuf)
+	am.appendTransactionNameOverflow(&bbuf)
+
+
+	// TODO: continue to add measurements and other elements.
+
+	var bufs = make([][]byte, 1)
+	bufs[0] = bbuf.buf
+	return bufs
 }
 
 // ProcessMetrics consumes the records sent by traces and update the histograms.
@@ -141,7 +171,16 @@ func (am *metricsAggregator) updateMetricsRaw(record MetricsRecord) {
 // recordHistogram updates the histogram based on the new MetricsRecord (transaction name and
 // the duration).
 func (am *metricsAggregator) recordHistogram(transaction string, duration time.Duration) {
-	// TODO: need to initialize the map before use it
+	var tags = map[string]string{}
+
+	if transaction {
+		tags["TransactionName"] = transaction
+	}
+
+	if _, ok := am.metrics.histograms[transaction]; !ok {
+		am.metrics.histograms[transaction] = newHistogram(&tags, DefaultHistogramPrecision)
+	}
+	am.metrics.histograms[transaction].recordValue(uint64(duration.Seconds()*1e6))
 }
 
 // processMeasurements updates the measurements struct based on the new MetricsRecord
@@ -210,6 +249,23 @@ func (am *metricsAggregator) PushMetricsRecord(record MetricsRecord) bool {
 	}
 }
 
+// recordValue records the duration to the histogram
+func (hist *Histogram) recordValue(duration uint64) {
+	// TODO: use the API from hdr library
+}
+
+// newHistogram creates a Histogram object with tags and precision
+func newHistogram(inTags *map[string]string, precision int) *Histogram {
+	var histogram = Histogram{
+		tags: make(map[string]string),
+	}
+	for k, v := range *inTags {
+		histogram.tags[k] = v
+	}
+	// TODO: initialize hdr histogram (Histogram.data)
+	return &histogram
+}
+
 // newMeasurement creates a Measurement object with tags
 func newMeasurement(inTags *map[string]string) *Measurement {
 	var measurement = Measurement{
@@ -235,5 +291,8 @@ func newMetricsAggregator() MetricsAggregator {
 			histograms: make(map[string]*Histogram),
 			measurements: make(map[string]*Measurement),
 		},
+		cachedSysMeta: make(map[string]string),
 	}
 }
+
+
