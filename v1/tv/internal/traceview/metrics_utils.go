@@ -2,15 +2,21 @@
 
 package traceview
 
-import "os"
+import (
+	"os"
+	"syscall"
+	"net"
+	"strconv"
+	"strings"
+)
 
+// Metrics key strings
 const (
 	BSON_KEY_HOST_ID = "HostID"
 	BSON_KEY_UUID = "UUID"
 	BSON_KEY_HOSTNAME = "Hostname"
 	BSON_KEY_DISTRO = "Distro"
 	BSON_KEY_PID = "PID"
-	BSON_KEY_TID = "TID"
 	BSON_KEY_SYSNAME = "UnameSysName"
 	BSON_KEY_VERSION = "UnameVersion"
 	BSON_KEY_IPADDR = "IPAddresses"
@@ -23,10 +29,16 @@ const (
 	BSON_KEY_TRANSACTION_NAME_OVERFLOW = "TransactionNameOverflow"
 )
 
+// Linux distributions
 const (
 	REDHAT = "/etc/redhat-release"
 	AMAZON = "/etc/release-cpe"
-	// TODO
+	UBUNTU = "/etc/lsb-release"
+	DEBIAN = "/etc/debian_version"
+	SUSE = "/etc/SuSE-release"
+	SLACKWARE = "/etc/slackware-version"
+	GENTOO = "/etc/gentoo-release"
+	OTHER = "/etc/issue"
 )
 
 // appendHostname appends the hostname to the BSON buffer
@@ -44,8 +56,7 @@ func (am *metricsAggregator) appendUUID(bbuf *bsonBuffer) {
 
 // getHostId gets the unique host identifier (e.g., AWS instance ID, docker container ID or MAC address)
 // This function is not concurrency-safe.
-func (am *metricsAggregator) getHostId() (idStr string) {
-	var id string
+func (am *metricsAggregator) getHostId() (id string) {
 	var err error
 
 	if id, ok := am.cachedSysMeta[BSON_KEY_HOST_ID]; ok {
@@ -54,86 +65,126 @@ func (am *metricsAggregator) getHostId() (idStr string) {
 
 	// Use cached hostID
 	defer func() {
-		if idStr != "" {
-			am.cachedSysMeta[BSON_KEY_HOST_ID] = idStr
-		}
+		am.cachedSysMeta[BSON_KEY_HOST_ID] = id
 	}()
 
 	// Calculate the ID
 	id, err = am.getContainerId()
 	if err == nil {
-		idStr = "container:" + id
-		return idStr
+		id = "container:" + id
+		return id
 	}
 
 	id, err = am.getAWSInstanceId()
 	if err == nil {
-		idStr = "aws:" + id
-		return idStr
+		id = "aws:" + id
+		return id
+	}
+	// getMacList always returns a string.
+	id = am.getMACList()
+	if id != "" {
+		id = "mac:" + id
+		return id
 	}
 
-	id, err = am.getMACList()
-	if err == nil {
-		idStr = "mac:" + id
-		return idStr
-	}
-
-	idStr = "undefined"
+	// Fallback to undefined, no error is returned.
+	id = "undefined"
 	OboeLog(WARNING, "getHostId(): could not retrieve host ID. Last error", err)
 
-	return idStr
+	return id
 }
 
 // appendDistro appends the distro information to BSON buffer
 func (am *metricsAggregator) appendDistro(bbuf *bsonBuffer) {
-	bsonAppendString(bbuf, BSON_KEY_DISTRO, getDistro())
-	//TODO
+	bsonAppendString(bbuf, BSON_KEY_DISTRO, am.getDistro())
 }
 
 // getDistro retrieves the distribution information and caches it in metricsAggregator
-func (am *metricsAggregator) getDistro(bbuf *bsonBuffer) (distro string) {
+func (am *metricsAggregator) getDistro() (distro string) {
 	if distro, ok := am.cachedSysMeta[BSON_KEY_DISTRO]; ok {
 		return distro
 	}
 
 	// Use cached hostID
 	defer func() {
-		if distro != "" {
-			am.cachedSysMeta[BSON_KEY_HOST_ID] = distro
-		}
+		am.cachedSysMeta[BSON_KEY_HOST_ID] = distro
 	}()
 
+	// Note: Order of checking is important because some distros share same file names but with different function.
+	// Keep this order: redhat based -> ubuntu -> debian
+	// TODO: get distro/version for various Linux distributions
 	return distro
 }
 
 // appendPID appends the process ID to the BSON buffer
 func (am *metricsAggregator) appendPID(bbuf *bsonBuffer) {
-	//TODO
+	bsonAppendInt(bbuf, BSON_KEY_PID, os.Getpid())
 }
 
-// appendTID appends the thread ID to the BSON buffer
-func (am *metricsAggregator) appendTID(bbuf *bsonBuffer) {
-	//TODO
-}
-
-// appendSysName appends the sysname to BSON buffer
-func (am *metricsAggregator) appendSysName(bbuf *bsonBuffer) {
-	//TODO
-}
-
-// appendVersion appends the version info the BSON buffer
-func (am *metricsAggregator) appendVersion(bbuf *bsonBuffer) {
-	//TODO
+// appendSysName appends the uname.Sysname and Version to BSON buffer
+func (am *metricsAggregator) appendUname(bbuf *bsonBuffer) {
+	var uname syscall.Utsname
+	if err := syscall.Uname(&uname); err == nil {
+		bsonAppendString(bbuf, BSON_KEY_SYSNAME, uname.Sysname)
+		bsonAppendString(bbuf, BSON_KEY_VERSION, uname.Version)
+	}
 }
 
 // appendIPAddresses appends the IP addresses to the BSON buffer
+// TODO: do we need to cache the IPAddr?
 func (am *metricsAggregator) appendIPAddresses(bbuf *bsonBuffer) {
-	//TODO
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return
+	}
+
+	start := bsonAppendStartArray(bbuf, BSON_KEY_IPADDR)
+	var idx int = 0
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			bsonAppendString(bbuf, strconv.Itoa(idx), ipnet.IP.String())
+		}
+	}
+
+	bsonAppendFinishObject(bbuf, start)
 }
 
 // appendMAC appends the MAC addresses to the BSON buffer
 func (am *metricsAggregator) appendMAC(bbuf *bsonBuffer) {
-	// TODO
+	macs:= am.getMACList()
+	if macs == "" {
+		return
+	}
+	// TODO: make sure the start returned is used in FinishObject.
+	start := bsonAppendStartArray(bbuf, BSON_KEY_MAC)
+	var idx int = 0
+	for _, mac := range strings.Split(macs, ",") {
+		bsonAppendString(bbuf, strconv.Itoa(idx), mac)
+	}
+	bsonAppendFinishObject(bbuf, start)
+}
+
+func (am *metricsAggregator) getMACList() (macs string) {
+	if macs, ok := am.cachedSysMeta[BSON_KEY_MAC]; ok {
+		return macs
+	}
+
+	// Use cached MACList
+	defer func() {
+		am.cachedSysMeta[BSON_KEY_HOST_ID] = macs
+	}()
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return
+	}
+	for _, iface := range ifaces {
+		//TODO: get rid of loopback interfaces
+		if mac := iface.HardwareAddr.String(); mac != "" {
+			macs += iface.HardwareAddr.String() + ","
+		}
+	}
+	return macs
 }
 
 // appendEC2InstanceID appends the EC2 Instance ID if any
@@ -173,10 +224,5 @@ func (am *metricsAggregator) getContainerId() (id string, err error) {
 
 // getAWSInstanceId gets the AWS instance ID, if any
 func (am *metricsAggregator) getAWSInstanceId() (id string, err error) {
-	// TODO
-}
-
-// getMACList gets the MAC address(es)
-func (am *metricsAggregator) getMACList() (id string, err error) {
 	// TODO
 }
