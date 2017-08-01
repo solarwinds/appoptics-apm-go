@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // HTTPHeaderName is a constant for the HTTP header used by TraceView ("X-Trace") to propagate
@@ -118,6 +119,9 @@ func traceFromHTTPRequest(layerName string, r *http.Request) Trace {
 			"Query-String": r.URL.RawQuery,
 		}
 	})
+	// set the start time and method for metrics collection
+	t.SetMethod(r.Method)
+	t.SetStartTime(time.Now())
 	// update incoming metadata in request headers for any downstream readers
 	r.Header.Set(HTTPHeaderName, t.MetadataString())
 	return t

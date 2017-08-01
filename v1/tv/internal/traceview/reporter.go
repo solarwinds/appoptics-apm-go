@@ -4,24 +4,30 @@ package traceview
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"log"
 	"net"
 	"os"
 	"time"
+
+	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
+	"google.golang.org/grpc"
 )
 
 type reporter interface {
 	WritePacket([]byte) (int, error)
 	IsOpen() bool
+	// PushMetricsRecord is invoked by a trace to push the metrics record
+	PushMetricsRecord(record MetricsRecord) bool
 }
 
-func newReporter() reporter {
+func newUDPReporter() reporter {
 	var conn *net.UDPConn
 	if reportingDisabled {
 		return &nullReporter{}
 	}
-	serverAddr, err := net.ResolveUDPAddr("udp4", reporterAddr)
+	serverAddr, err := net.ResolveUDPAddr("udp4", udpReporterAddr)
 	if err == nil {
 		conn, err = net.DialUDP("udp4", nil, serverAddr)
 	}
@@ -36,22 +42,188 @@ func newReporter() reporter {
 
 type nullReporter struct{}
 
-func (r *nullReporter) IsOpen() bool                        { return false }
-func (r *nullReporter) WritePacket(buf []byte) (int, error) { return len(buf), nil }
+func (r *nullReporter) IsOpen() bool                                { return false }
+func (r *nullReporter) WritePacket(buf []byte) (int, error)         { return len(buf), nil }
+func (r *nullReporter) PushMetricsRecord(record MetricsRecord) bool { return true }
 
 type udpReporter struct {
 	conn *net.UDPConn
 }
 
-func (r *udpReporter) IsOpen() bool                        { return r.conn != nil }
-func (r *udpReporter) WritePacket(buf []byte) (int, error) { return r.conn.Write(buf) }
+func (r *udpReporter) IsOpen() bool                                { return r.conn != nil }
+func (r *udpReporter) WritePacket(buf []byte) (int, error)         { return r.conn.Write(buf) }
+func (r *udpReporter) PushMetricsRecord(record MetricsRecord) bool { return false}
 
-var reporterAddr = "127.0.0.1:7831"
+type grpcReporter struct {
+	client  collector.TraceCollectorClient
+	ch      chan []byte
+	exit    chan struct{}
+	apiKey  string
+	metrics MetricsAggregator
+}
+
+type grpcResult struct {
+	result *collector.MessageResult
+	err    error
+}
+
+func (r *grpcReporter) IsOpen() bool { return r.client != nil }
+func (r *grpcReporter) WritePacket(buf []byte) (int, error) {
+	r.ch <- buf
+	return len(buf), nil
+}
+
+const (
+	maxEventBytes            = 64 * 1024 * 1024
+	grpcReporterFlushTimeout = 100 * time.Millisecond
+	agentMetricsInterval     = time.Minute
+)
+
+func (r *grpcReporter) reportEvents() {
+	batches := make(chan [][]byte)
+	results := r.postEvents(batches)
+
+	var batch [][]byte
+	var eventBytes int
+	var logIsRunning bool
+	flushBatch := func() {
+		if !logIsRunning && len(batch) > 0 {
+			logIsRunning = true
+			batches <- batch
+			batch = nil
+			eventBytes = 0
+		}
+	}
+	for {
+		select {
+		case evbuf := <-r.ch:
+			if (eventBytes + len(evbuf)) > maxEventBytes { // max buffer reached
+				if len(evbuf) >= maxEventBytes {
+					break // new event larger than max buffer size, drop
+				}
+				// drop oldest to make room for newest
+				for dropped := 0; dropped < len(evbuf); {
+					var oldest []byte
+					oldest, batch = batch[0], batch[1:]
+					dropped += len(oldest)
+				}
+			}
+			// apend to batch
+			batch = append(batch, evbuf)
+			eventBytes += len(evbuf)
+		case result := <-results:
+			_ = result // XXX check return code, reconnect if disconnected
+			logIsRunning = false
+			flushBatch()
+		case <-time.After(grpcReporterFlushTimeout):
+			flushBatch()
+		case <-r.exit:
+			close(batches)
+			break
+		}
+	}
+}
+
+func (r *grpcReporter) postEvents(batches <-chan [][]byte) <-chan *grpcResult {
+	ret := make(chan *grpcResult)
+	go func() {
+		for batch := range batches {
+			// call PostEvents
+			req := &collector.MessageRequest{
+				ApiKey:   r.apiKey,
+				Messages: batch,
+				Encoding: collector.EncodingType_BSON,
+			}
+			res, err := r.client.PostEvents(context.TODO(), req)
+			ret <- &grpcResult{result: res, err: err}
+		}
+		close(ret)
+	}()
+	return ret
+}
+
+func (r *grpcReporter) PushMetricsRecord(record MetricsRecord) bool {
+	if !r.IsOpen() {
+		return false
+	}
+	return r.metrics.PushMetricsRecord(record)
+}
+
+func (r *grpcReporter) periodic() {
+	go r.metrics.ProcessMetrics()
+	for {
+		// wait until next interval
+		now := time.Now()
+		nextInterval := now.Round(agentMetricsInterval)
+		if nextInterval.Before(now) {
+			nextInterval = nextInterval.Add(agentMetricsInterval)
+		}
+		<-time.After(nextInterval.Sub(now))
+		// call PostMetrics
+		mreq := &collector.MessageRequest{
+			ApiKey:   r.apiKey,
+			Messages: r.metrics.FlushBSON(),
+			Encoding: collector.EncodingType_BSON,
+		}
+		mres, err := r.client.PostMetrics(context.TODO(), mreq)
+		_, _ = mres, err // TODO: error handling XXX
+
+		// call GetSettings
+		sreq := &collector.SettingsRequest{
+			ApiKey:        r.apiKey,
+			ClientVersion: grpcReporterVersion,
+			Identity: &collector.HostID{
+				Hostname:    cachedHostname,
+				IpAddresses: nil, // XXX
+				Uuid:        "",  // XXX
+			},
+		}
+		sres, err := r.client.GetSettings(context.TODO(), sreq)
+		if err != nil {
+			break
+		}
+		storeSettings(sres)
+	}
+}
+
+func storeSettings(r *collector.SettingsResult) {
+	if r != nil && len(r.Settings) > 0 {
+		latestSettings = r.Settings
+	}
+}
+
+func newGRPCReporter() reporter {
+	if reportingDisabled {
+		return &nullReporter{}
+	}
+	conn, err := grpc.Dial(grpcReporterAddr)
+	if err != nil {
+		if os.Getenv("TRACEVIEW_DEBUG") != "" {
+			log.Printf("TraceView failed to initialize gRPC reporter: %v", err)
+		}
+		return &nullReporter{}
+	}
+	r := &grpcReporter{
+		client: collector.NewTraceCollectorClient(conn),
+		ch:     make(chan []byte),
+		exit:   make(chan struct{}),
+		metrics: newMetricsAggregator(),
+	}
+	go r.reportEvents()
+	go r.periodic()
+	return r
+}
+
+var udpReporterAddr = "127.0.0.1:7831"
+var grpcReporterAddr = "collector.librato.com:443"
+var grpcReporterVersion = "golang-v1"
 var globalReporter reporter = &nullReporter{}
 var reportingDisabled bool
 var usingTestReporter bool
 var cachedHostname string
 var debugLog bool
+var debugLevel DebugLevel = ERROR
+var latestSettings []*collector.OboeSetting
 
 type hostnamer interface {
 	Hostname() (name string, err error)
@@ -62,6 +234,9 @@ func (h osHostnamer) Hostname() (string, error) { return os.Hostname() }
 
 func init() {
 	debugLog = (os.Getenv("TRACEVIEW_DEBUG") != "")
+	if addr := os.Getenv("TRACEVIEW_GRPC_COLLECTOR_ADDR"); addr != "" {
+		grpcReporterAddr = addr
+	}
 	cacheHostname(osHostnamer{})
 }
 func cacheHostname(hn hostnamer) {
@@ -117,4 +292,9 @@ func reportEvent(r reporter, ctx *oboeContext, e *event) error {
 // This is our only dependency on the liboboe C library.
 func shouldTraceRequest(layer, xtraceHeader string) (sampled bool, sampleRate, sampleSource int) {
 	return oboeSampleRequest(layer, xtraceHeader)
+}
+
+// PushMetricsRecord push the metrics record into a channel using the global reporter.
+func PushMetricsRecord(record MetricsRecord) bool {
+	return globalReporter.PushMetricsRecord(record)
 }

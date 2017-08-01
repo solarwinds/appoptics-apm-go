@@ -15,7 +15,7 @@ func TestNoboe(t *testing.T) {
 	globalReporter = &nullReporter{}
 	sampled, _, _ := shouldTraceRequest("test", "")
 	assert.False(t, sampled)
-	globalReporter = newReporter()
+	globalReporter = newUDPReporter()
 	sampled, _, _ = shouldTraceRequest("test", "")
 	assert.False(t, sampled)
 
