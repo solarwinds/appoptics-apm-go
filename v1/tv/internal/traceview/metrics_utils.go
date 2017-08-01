@@ -8,6 +8,9 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"net/http"
+	"time"
+	"io/ioutil"
 )
 
 // Metrics key strings
@@ -41,6 +44,19 @@ const (
 	OTHER = "/etc/issue"
 )
 
+// URL for retrieving AWS instance ID
+const (
+	URL_FOR_AWS_INSTANCE_ID = "http://169.254.169.254/latest/meta-data/instance-id"
+	URL_FOR_AWS_ZONE_ID = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
+)
+
+// Timeout for retrieving AWS instance ID
+const (
+	AWS_INSTANCE_ID_FETCH_TIMEOUT = 1 // it means AWS_INSTANCE_ID_FETCH_TIMEOUT seconds
+)
+
+// TODO: combine and refactor the append* methods: apendGeneric(KEY_NAME, FUNC_TO_GET_THE_STRING)
+
 // appendHostname appends the hostname to the BSON buffer
 func (am *metricsAggregator) appendHostname(bbuf *bsonBuffer) {
 	hostname, err := os.Hostname()
@@ -69,18 +85,20 @@ func (am *metricsAggregator) getHostId() (id string) {
 	}()
 
 	// Calculate the ID
-	id, err = am.getContainerId()
-	if err == nil {
+	id = am.getContainerID()
+	if id != "" {
 		id = "container:" + id
 		return id
 	}
 
-	id, err = am.getAWSInstanceId()
-	if err == nil {
+	// getAWSInstanceMeta has a internal cache and always return a string.
+	id = am.getAWSInstanceMeta(BSON_KEY_EC2_ID, URL_FOR_AWS_INSTANCE_ID)
+	if id != "" {
 		id = "aws:" + id
 		return id
 	}
-	// getMacList always returns a string.
+
+	// getMacList has a internal cache and always returns a string.
 	id = am.getMACList()
 	if id != "" {
 		id = "mac:" + id
@@ -107,7 +125,7 @@ func (am *metricsAggregator) getDistro() (distro string) {
 
 	// Use cached hostID
 	defer func() {
-		am.cachedSysMeta[BSON_KEY_HOST_ID] = distro
+		am.cachedSysMeta[BSON_KEY_DISTRO] = distro
 	}()
 
 	// Note: Order of checking is important because some distros share same file names but with different function.
@@ -171,7 +189,7 @@ func (am *metricsAggregator) getMACList() (macs string) {
 
 	// Use cached MACList
 	defer func() {
-		am.cachedSysMeta[BSON_KEY_HOST_ID] = macs
+		am.cachedSysMeta[BSON_KEY_MAC] = macs
 	}()
 
 	ifaces, err := net.Interfaces()
@@ -179,7 +197,9 @@ func (am *metricsAggregator) getMACList() (macs string) {
 		return
 	}
 	for _, iface := range ifaces {
-		//TODO: get rid of loopback interfaces
+		if iface.Flags & net.FlagLoopback {
+			continue
+		}
 		if mac := iface.HardwareAddr.String(); mac != "" {
 			macs += iface.HardwareAddr.String() + ","
 		}
@@ -187,19 +207,71 @@ func (am *metricsAggregator) getMACList() (macs string) {
 	return macs
 }
 
-// appendEC2InstanceID appends the EC2 Instance ID if any
-func (am *metricsAggregator) appendEC2InstanceID(bbuf *bsonBuffer) {
-	//TODO
+// appendAWSInstanceID appends the EC2 Instance ID if any
+func (am *metricsAggregator) appendAWSInstanceID(bbuf *bsonBuffer) {
+	var awsInstanceId = am.getAWSInstanceMeta(BSON_KEY_EC2_ID, URL_FOR_AWS_INSTANCE_ID)
+	if awsInstanceId == "" {
+		return
+	}
+	bsonAppendString(bbuf, BSON_KEY_EC2_ID, awsInstanceId)
 }
 
-// appendEC2InstanceZone appends the EC2 zone information to the BSON buffer
-func (am *metricsAggregator) appendEC2InstanceZone(bbuf *bsonBuffer) {
-	//TODO
+// getAWSInstanceMeta gets the AWS instance metadata, if any
+func (am *metricsAggregator) getAWSInstanceMeta(key string, url string) (meta string) {
+	if meta, ok := am.cachedSysMeta[key]; ok {
+		return meta
+	}
+
+	// Use cached Instance metadata
+	defer func() {
+		am.cachedSysMeta[key] = meta
+	}()
+
+	// Retrieve the instance meta from a pre-defined URL
+	// It's a synchronous call but we're OK as the metricsSender interval is 1 minute (or 30 seconds?)
+	timeout := time.Duration(AWS_INSTANCE_ID_FETCH_TIMEOUT * time.Second)
+	client := http.Client{
+		Timeout: timeout,
+	}
+	// I don't want to retry as the connection is supposed to be reliable if this is an AWS instance.
+	resp, err := client.Get(url)
+	if err != nil {
+		OboeLog(DEBUG, "Timeout in fetching AWS Instance Metadata, probably it's not an AWS Instance.", err)
+		return
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+
+	meta = string(body)
+	return
+}
+
+// appendAWSInstanceZone appends the EC2 zone information to the BSON buffer
+func (am *metricsAggregator) appendAWSInstanceZone(bbuf *bsonBuffer) {
+	zone := am.getAWSInstanceMeta(BSON_KEY_EC2_ZONE, URL_FOR_AWS_ZONE_ID)
+	if zone == "" {
+		return
+	}
+	bsonAppendString(bbuf, BSON_KEY_EC2_ZONE, zone)
 }
 
 // appendContainerID appends the docker container ID to the BSON buffer
 func (am *metricsAggregator) appendContainerID(bbuf *bsonBuffer) {
+	cid := am.getContainerID()
+	if cid == "" {
+		return
+	}
+	bsonAppendString(bbuf, BSON_KEY_DOCKER_CONTAINER_ID, cid)
+}
+
+// getContainerID retrieves the docker container id, if any, and caches it.
+func (am *metricsAggregator) getContainerID() (id string) {
 	//TODO
+	return
 }
 
 // appendTimestamp appends the timestamp information to the BSON buffer
@@ -214,15 +286,5 @@ func (am *metricsAggregator) appendFlushInterval(bbuf *bsonBuffer) {
 
 // appendTransactionNameOverflow appends the transaction name overflow flag to BSON buffer
 func (am *metricsAggregator) appendTransactionNameOverflow(bbuf *bsonBuffer) {
-	// TODO
-}
-
-// getContainerId gets the Docker Container ID, if any
-func (am *metricsAggregator) getContainerId() (id string, err error) {
-	// TODO
-}
-
-// getAWSInstanceId gets the AWS instance ID, if any
-func (am *metricsAggregator) getAWSInstanceId() (id string, err error) {
 	// TODO
 }
