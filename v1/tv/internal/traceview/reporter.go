@@ -165,7 +165,7 @@ func (r *grpcReporter) periodic() {
 			Messages: r.metrics.FlushBSON(),
 			Encoding: collector.EncodingType_BSON,
 		}
-		mres, err := r.client.PostMetrics(context.TODO(), mreq)
+		mres, err := r.client.PostMetrics(context.TODO(), mreq) // TODO?
 		_, _ = mres, err // TODO: error handling XXX
 
 		// call GetSettings

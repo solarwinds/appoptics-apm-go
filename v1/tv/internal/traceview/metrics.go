@@ -94,22 +94,13 @@ func (am *metricsAggregator) createMetricsMsg(raw MetricsRaw) [][]byte {
 	var bbuf bsonBuffer
 	bsonBufferInit(&bbuf)
 
-	am.appendHostname(&bbuf)
-	am.appendUUID(&bbuf)
-	am.appendDistro(&bbuf)
-	am.appendPID(&bbuf)
-	am.appendUname(&bbuf)
-	am.appendIPAddresses(&bbuf)
-	am.appendMAC(&bbuf)
-	am.appendAWSInstanceID(&bbuf)
-	am.appendAWSInstanceZone(&bbuf)
-	am.appendContainerID(&bbuf)
-	am.appendTimestamp(&bbuf)
-	am.appendFlushInterval(&bbuf)
-	am.appendTransactionNameOverflow(&bbuf)
+	am.metricsAppendSysMetadata(&bbuf)
+	am.metricsAppendMeasurements(&bbuf)
+	am.metricsAppendHistograms(&bbuf)
 
-
-	// TODO: continue to add measurements and other elements.
+	// We don't reset metricAggregator's internal counters (maps or lists) here as it has
+	// been done in ProcessMetrics goroutine in a synchronous way for counters consistency.
+	bsonBufferFinish(&bbuf)
 
 	var bufs = make([][]byte, 1)
 	bufs[0] = bbuf.buf
@@ -232,7 +223,19 @@ func (am *metricsAggregator) recordMeasurement(tags *map[string]string, duration
 // for encoding. It pushes the newest values of the histograms to the raw channel
 // which will be consumed by FlushBSON.
 func (am *metricsAggregator) pushMetricsRaw() {
-	am.raw <- am.metrics
+	// Make a copy of metrics and reset it immediately, otherwise it will be
+	// updated while encoding the message.
+	// The following two methods (Copy and resetCounters) should not take too much time,
+	// otherwise the records buffered channel may be full in extreme workload.
+	var m MetricsRaw = am.metrics.Copy()
+	// Reset the counters for each interval
+	am.resetCounters()
+	am.raw <- m
+}
+
+// Copy makes a copy of this struct and its internal data.
+func (m *MetricsRaw) Copy() MetricsRaw {
+	// TODO:
 }
 
 // PushMetricsRecord is called by the Trace to record the metadata of a call, e.g., call duration,
@@ -251,6 +254,11 @@ func (hist *Histogram) recordValue(duration uint64) {
 	// TODO: use the API from hdr library
 }
 
+// encode is used to encode the histogram into a string
+func (hist *Histogram) encode() string {
+	return hist.data.encode()
+}
+
 // newHistogram creates a Histogram object with tags and precision
 func newHistogram(inTags *map[string]string, precision int) *Histogram {
 	var histogram = Histogram{
@@ -261,6 +269,11 @@ func newHistogram(inTags *map[string]string, precision int) *Histogram {
 	}
 	// TODO: initialize hdr histogram (Histogram.data)
 	return &histogram
+}
+
+// encode is a wrapper of hdr's function with (probably) the same name
+func (h *baseHistogram) encode() string {
+	// TODO
 }
 
 // newMeasurement creates a Measurement object with tags

@@ -30,6 +30,7 @@ const (
 	BSON_KEY_TIMESTAMP = "Timestamp_u"
 	BSON_KEY_FLUSH_INTERVAL = "MetricsFlushInterval"
 	BSON_KEY_TRANSACTION_NAME_OVERFLOW = "TransactionNameOverflow"
+	BSON_KEY_HISTOGRAMS = "histograms"
 )
 
 // Linux distributions
@@ -44,7 +45,7 @@ const (
 	OTHER = "/etc/issue"
 )
 
-// URL for retrieving AWS instance ID
+// URsL for retrieving AWS metadata
 const (
 	URL_FOR_AWS_INSTANCE_ID = "http://169.254.169.254/latest/meta-data/instance-id"
 	URL_FOR_AWS_ZONE_ID = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
@@ -60,6 +61,52 @@ const (
 )
 
 // TODO: combine and refactor the append* methods: apendGeneric(KEY_NAME, FUNC_TO_GET_THE_STRING)
+
+// metricsAppendSysMetadata appends system metadata to the metrics message
+func (am *metricsAggregator) metricsAppendSysMetadata(bbuf *bsonBuffer) {
+	am.appendHostname(bbuf)
+	am.appendUUID(bbuf)
+	am.appendDistro(bbuf)
+	am.appendPID(bbuf)
+	am.appendUname(bbuf)
+	am.appendIPAddresses(bbuf)
+	am.appendMAC(bbuf)
+	am.appendAWSInstanceID(bbuf)
+	am.appendAWSInstanceZone(bbuf)
+	am.appendContainerID(bbuf)
+	am.appendTimestamp(bbuf)
+	am.appendFlushInterval(bbuf)
+	am.appendTransactionNameOverflow(bbuf)
+}
+
+// metricsAppendMeasurements appends global and transaction measurements to the metrics message
+func (am *metricsAggregator) metricsAppendMeasurements(bbuf *bsonBuffer) {
+	// TODO
+}
+
+// metricsAppendHistograms appends histograms to the metrics message
+func (am *metricsAggregator) metricsAppendHistograms(bbuf *bsonBuffer) {
+	start := bsonAppendStartArray(bbuf, BSON_KEY_HISTOGRAMS)
+	for _, hist := range am.metrics.histograms {
+		am.addHistogram(bbuf, hist.encode(), hist.tags)
+	}
+	bsonAppendFinishObject(bbuf, start)
+}
+
+// addHistogram encode a single histogram to the metrics message
+func (am *metricsAggregator) addHistogram(bbuf *bsonBuffer, data string, tags map[string]string) {
+	// TODO
+}
+
+// resetCounters resets the maps/lists in metricsAggregateor. It's called after each time
+// the metrics message is encoded
+func (am *metricsAggregator) resetCounters() {
+	am.transNames = make(map[string]bool)
+	am.metrics = MetricsRaw{
+		histograms: make(map[string]*Histogram),
+		measurements: make(map[string]*Measurement),
+	}
+}
 
 // appendHostname appends the hostname to the BSON buffer
 func (am *metricsAggregator) appendHostname(bbuf *bsonBuffer) {
@@ -146,6 +193,7 @@ func (am *metricsAggregator) appendPID(bbuf *bsonBuffer) {
 
 // appendSysName appends the uname.Sysname and Version to BSON buffer
 func (am *metricsAggregator) appendUname(bbuf *bsonBuffer) {
+	// There is no syscall.Uname (as well as Utsname) on macOS
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err == nil {
 		bsonAppendString(bbuf, BSON_KEY_SYSNAME, uname.Sysname)
@@ -178,7 +226,7 @@ func (am *metricsAggregator) appendMAC(bbuf *bsonBuffer) {
 	if macs == "" {
 		return
 	}
-	// TODO: make sure the start returned is used in FinishObject.
+	// TODO: make sure the start returned is used in FinishObject (also check appendIPAddresses).
 	start := bsonAppendStartArray(bbuf, BSON_KEY_MAC)
 	var idx int = 0
 	for _, mac := range strings.Split(macs, ",") {
