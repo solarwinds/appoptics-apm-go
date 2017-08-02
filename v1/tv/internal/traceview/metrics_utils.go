@@ -13,7 +13,7 @@ import (
 	"io/ioutil"
 )
 
-// Metrics key strings
+// Metrics key/value strings
 const (
 	BSON_KEY_HOST_ID = "HostID"
 	BSON_KEY_UUID = "UUID"
@@ -31,6 +31,10 @@ const (
 	BSON_KEY_FLUSH_INTERVAL = "MetricsFlushInterval"
 	BSON_KEY_TRANSACTION_NAME_OVERFLOW = "TransactionNameOverflow"
 	BSON_KEY_HISTOGRAMS = "histograms"
+	BSON_KEY_HIST_NAME = "name"
+	BSON_KEY_HIST_VALUE = "value"
+	BSON_KEY_HIST_TAGS = "tags"
+	BSON_VALUE_HIST_TRANSACTION_RT = "TransactionResponseTime"
 )
 
 // Linux distributions
@@ -45,22 +49,17 @@ const (
 	OTHER = "/etc/issue"
 )
 
-// URsL for retrieving AWS metadata
+// Paths (URLs or filesystems) for fetching instance metadata (AWS, Docker, etc.)
 const (
 	URL_FOR_AWS_INSTANCE_ID = "http://169.254.169.254/latest/meta-data/instance-id"
 	URL_FOR_AWS_ZONE_ID = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
-)
-
-// Timeout for retrieving AWS instance ID
-const (
-	AWSInstanceIDFetchTimeout = 1 // in seconds
-)
-
-const (
 	CONTAINER_META_FILE = "/proc/self/cgroup"
 )
 
-// TODO: combine and refactor the append* methods: apendGeneric(KEY_NAME, FUNC_TO_GET_THE_STRING)
+// Configurations
+const (
+	AWSInstanceIDFetchTimeout = 1 // in seconds
+)
 
 // metricsAppendSysMetadata appends system metadata to the metrics message
 func (am *metricsAggregator) metricsAppendSysMetadata(bbuf *bsonBuffer) {
@@ -77,25 +76,6 @@ func (am *metricsAggregator) metricsAppendSysMetadata(bbuf *bsonBuffer) {
 	am.appendTimestamp(bbuf)
 	am.appendFlushInterval(bbuf)
 	am.appendTransactionNameOverflow(bbuf)
-}
-
-// metricsAppendMeasurements appends global and transaction measurements to the metrics message
-func (am *metricsAggregator) metricsAppendMeasurements(bbuf *bsonBuffer) {
-	// TODO
-}
-
-// metricsAppendHistograms appends histograms to the metrics message
-func (am *metricsAggregator) metricsAppendHistograms(bbuf *bsonBuffer) {
-	start := bsonAppendStartArray(bbuf, BSON_KEY_HISTOGRAMS)
-	for _, hist := range am.metrics.histograms {
-		am.addHistogram(bbuf, hist.encode(), hist.tags)
-	}
-	bsonAppendFinishObject(bbuf, start)
-}
-
-// addHistogram encode a single histogram to the metrics message
-func (am *metricsAggregator) addHistogram(bbuf *bsonBuffer, data string, tags map[string]string) {
-	// TODO
 }
 
 // resetCounters resets the maps/lists in metricsAggregateor. It's called after each time
@@ -226,7 +206,7 @@ func (am *metricsAggregator) appendMAC(bbuf *bsonBuffer) {
 	if macs == "" {
 		return
 	}
-	// TODO: make sure the start returned is used in FinishObject (also check appendIPAddresses).
+
 	start := bsonAppendStartArray(bbuf, BSON_KEY_MAC)
 	var idx int = 0
 	for _, mac := range strings.Split(macs, ",") {
@@ -364,4 +344,42 @@ func (am *metricsAggregator) appendTransactionNameOverflow(bbuf *bsonBuffer) {
 	if len(am.transNames) >= MaxTransactionNames {
 		bsonAppendBool(bbuf, BSON_KEY_TRANSACTION_NAME_OVERFLOW, true)
 	}
+}
+
+// metricsAppendMeasurements appends global and transaction measurements to the metrics message
+// This is a function rather than a method of metricsAggregator to avoid using am.metrics
+// by mistake.
+func metricsAppendMeasurements(bbuf *bsonBuffer, raw *MetricsRaw) {
+	// TODO: don't use am.metrics, use raw.* instead!!!
+}
+
+// metricsAppendHistograms appends histograms to the metrics message
+// This is a function rather than a method of metricsAggregator to avoid using am.metrics
+// by mistake.
+func metricsAppendHistograms(bbuf *bsonBuffer, raw *MetricsRaw) {
+	start := bsonAppendStartArray(bbuf, BSON_KEY_HISTOGRAMS)
+	var index int = 0
+	for _, hist := range raw.histograms {
+		addHistogram(bbuf, index, hist.encode(), hist.tags)
+		index += 1
+	}
+	bsonAppendFinishObject(bbuf, start)
+}
+
+// addHistogram encode a single histogram to the metrics message
+// This is a function rather than a method of metricsAggregator to avoid using am.metrics
+// by mistake.
+func addHistogram(bbuf *bsonBuffer, idx int, data string, tags map[string]string) {
+	histStart := bsonAppendStartObject(bbuf, string(idx))
+	bsonAppendString(bbuf, BSON_KEY_HIST_NAME, BSON_VALUE_HIST_TRANSACTION_RT)
+	bsonAppendString(bbuf, BSON_KEY_HIST_VALUE, data)
+
+	tagsStart := bsonAppendStartObject(bbuf, BSON_KEY_HIST_TAGS)
+	for k, v := range tags {
+		k = k[:MaxTagNameLength]
+		v = v[:MaxTagValueLength]
+		bsonAppendString(bbuf, k, v)
+	}
+	bsonAppendFinishObject(bbuf, tagsStart)
+	bsonAppendFinishObject(bbuf, histStart)
 }
