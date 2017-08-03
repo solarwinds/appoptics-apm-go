@@ -3,57 +3,57 @@
 package traceview
 
 import (
-	"os"
-	"syscall"
+	"io/ioutil"
 	"net"
+	"net/http"
+	"os"
 	"strconv"
 	"strings"
-	"net/http"
+	"syscall"
 	"time"
-	"io/ioutil"
 )
 
 // Metrics key/value strings
 const (
-	BSON_KEY_HOST_ID = "HostID"
-	BSON_KEY_UUID = "UUID"
-	BSON_KEY_HOSTNAME = "Hostname"
-	BSON_KEY_DISTRO = "Distro"
-	BSON_KEY_PID = "PID"
-	BSON_KEY_SYSNAME = "UnameSysName"
-	BSON_KEY_VERSION = "UnameVersion"
-	BSON_KEY_IPADDR = "IPAddresses"
-	BSON_KEY_MAC = "MACAddresses"
-	BSON_KEY_EC2_ID = "EC2InstanceID"
-	BSON_KEY_EC2_ZONE = "EC2AvailabilityZone"
-	BSON_KEY_DOCKER_CONTAINER_ID = "DockerContainerID"
-	BSON_KEY_TIMESTAMP = "Timestamp_u"
-	BSON_KEY_FLUSH_INTERVAL = "MetricsFlushInterval"
+	BSON_KEY_HOST_ID                   = "HostID"
+	BSON_KEY_UUID                      = "UUID"
+	BSON_KEY_HOSTNAME                  = "Hostname"
+	BSON_KEY_DISTRO                    = "Distro"
+	BSON_KEY_PID                       = "PID"
+	BSON_KEY_SYSNAME                   = "UnameSysName"
+	BSON_KEY_VERSION                   = "UnameVersion"
+	BSON_KEY_IPADDR                    = "IPAddresses"
+	BSON_KEY_MAC                       = "MACAddresses"
+	BSON_KEY_EC2_ID                    = "EC2InstanceID"
+	BSON_KEY_EC2_ZONE                  = "EC2AvailabilityZone"
+	BSON_KEY_DOCKER_CONTAINER_ID       = "DockerContainerID"
+	BSON_KEY_TIMESTAMP                 = "Timestamp_u"
+	BSON_KEY_FLUSH_INTERVAL            = "MetricsFlushInterval"
 	BSON_KEY_TRANSACTION_NAME_OVERFLOW = "TransactionNameOverflow"
-	BSON_KEY_HISTOGRAMS = "histograms"
-	BSON_KEY_HIST_NAME = "name"
-	BSON_KEY_HIST_VALUE = "value"
-	BSON_KEY_HIST_TAGS = "tags"
-	BSON_VALUE_HIST_TRANSACTION_RT = "TransactionResponseTime"
+	BSON_KEY_HISTOGRAMS                = "histograms"
+	BSON_KEY_HIST_NAME                 = "name"
+	BSON_KEY_HIST_VALUE                = "value"
+	BSON_KEY_HIST_TAGS                 = "tags"
+	BSON_VALUE_HIST_TRANSACTION_RT     = "TransactionResponseTime"
 )
 
 // Linux distributions
 const (
-	REDHAT = "/etc/redhat-release"
-	AMAZON = "/etc/release-cpe"
-	UBUNTU = "/etc/lsb-release"
-	DEBIAN = "/etc/debian_version"
-	SUSE = "/etc/SuSE-release"
+	REDHAT    = "/etc/redhat-release"
+	AMAZON    = "/etc/release-cpe"
+	UBUNTU    = "/etc/lsb-release"
+	DEBIAN    = "/etc/debian_version"
+	SUSE      = "/etc/SuSE-release"
 	SLACKWARE = "/etc/slackware-version"
-	GENTOO = "/etc/gentoo-release"
-	OTHER = "/etc/issue"
+	GENTOO    = "/etc/gentoo-release"
+	OTHER     = "/etc/issue"
 )
 
 // Paths (URLs or filesystems) for fetching instance metadata (AWS, Docker, etc.)
 const (
 	URL_FOR_AWS_INSTANCE_ID = "http://169.254.169.254/latest/meta-data/instance-id"
-	URL_FOR_AWS_ZONE_ID = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
-	CONTAINER_META_FILE = "/proc/self/cgroup"
+	URL_FOR_AWS_ZONE_ID     = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
+	CONTAINER_META_FILE     = "/proc/self/cgroup"
 )
 
 // Configurations
@@ -83,11 +83,12 @@ func (am *metricsAggregator) metricsAppendSysMetadata(bbuf *bsonBuffer) {
 func (am *metricsAggregator) resetCounters() {
 	am.transNames = make(map[string]bool)
 	am.metrics = MetricsRaw{
-		histograms: make(map[string]*Histogram),
+		histograms:   make(map[string]*Histogram),
 		measurements: make(map[string]*Measurement),
 	}
 }
 
+// TODO: use a generic function for multiple appends/gets
 // appendHostname appends the hostname to the BSON buffer
 func (am *metricsAggregator) appendHostname(bbuf *bsonBuffer) {
 	hostname, err := os.Hostname()
@@ -202,7 +203,7 @@ func (am *metricsAggregator) appendIPAddresses(bbuf *bsonBuffer) {
 
 // appendMAC appends the MAC addresses to the BSON buffer
 func (am *metricsAggregator) appendMAC(bbuf *bsonBuffer) {
-	macs:= am.getMACList()
+	macs := am.getMACList()
 	if macs == "" {
 		return
 	}
@@ -336,7 +337,7 @@ func (am *metricsAggregator) getContainerID() (id string) {
 // appendTimestamp appends the timestamp information to the BSON buffer
 func (am *metricsAggregator) appendTimestamp(bbuf *bsonBuffer) {
 	//micro seconds since epoch
-	bsonAppendInt64(bbuf, BSON_KEY_TIMESTAMP, int64(time.Now().UnixNano() / 1000))
+	bsonAppendInt64(bbuf, BSON_KEY_TIMESTAMP, int64(time.Now().UnixNano()/1000))
 }
 
 // appendFlushInterval appends the flush interval to the BSON buffer

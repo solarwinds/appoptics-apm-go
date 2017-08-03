@@ -3,25 +3,25 @@
 package traceview
 
 import (
-	"time"
 	"strconv"
+	"time"
 )
 
 // Some default parameters which may be subject to change.
 const (
-	MetricsRecordMaxSize = 100
-	MaxTransactionNames = 200
+	MetricsRecordMaxSize      = 100
+	MaxTransactionNames       = 200
 	DefaultHistogramPrecision = 2
-	MaxTagNameLength = 64
-	MaxTagValueLength = 255
+	MaxTagNameLength          = 64
+	MaxTagValueLength         = 255
 )
 
 // Tags definition
 const (
 	TAGS_TRANSACTION_NAME = "TransactionName"
-	TAGS_HTTP_METHOD = "HttpMethod"
-	TAG_HTTP_STATUS = "HttpStatus"
-	TAGS_ERRORS = "Errors"
+	TAGS_HTTP_METHOD      = "HttpMethod"
+	TAG_HTTP_STATUS       = "HttpStatus"
+	TAGS_ERRORS           = "Errors"
 )
 
 // MetricsAggregator processes the metrics records and calculate the metrics and
@@ -62,22 +62,22 @@ type metricsAggregator struct {
 	exit chan struct{}
 	// Stores the seen transaction names, the limit is defined by MaxTransactionNames
 	transNames map[string]bool
-	// The raw struct of histograms and measurements, it's consumed by FlushBSON to create
-	// the metrics message
-	// The main goroutine is responsible for updating the metrics in this struct, while the other
-	// goroutine requests a **deep copy** of this struct from the main goroutine and encodes
-	// the metrics message. The main goroutine needs to reset/clear this struct immediately after
-	// send a copy to the metrics-message-encoding goroutine.
+	// The raw struct of histograms and measurements, it's consumed by FlushBSON to
+	// create the metrics message
+	// The main goroutine is responsible for updating the metrics in this struct, while
+	// the other goroutine requests a **deep copy** of this struct from the main goroutine
+	// and encodes the metrics message. The main goroutine needs to reset/clear this
+	// struct immediately after send a copy to the metrics-message-encoding goroutine.
 	metrics MetricsRaw
 
 	// System metadata cache for metrics messages, which is usually expensive to calculate.
 	cachedSysMeta map[string]string
 }
 
-// MetricsRaw defines the histograms and measurements maintained by the main goroutine which finally
-// are pushed to the BSON encoding/sending goroutine
+// MetricsRaw defines the histograms and measurements maintained by the main goroutine
+// which finally are pushed to the BSON encoding/sending goroutine
 type MetricsRaw struct {
-	histograms map[string]*Histogram
+	histograms   map[string]*Histogram
 	measurements map[string]*Measurement
 }
 
@@ -94,18 +94,19 @@ type Histogram struct {
 
 // Measurement keeps the tags map, count and sum of the matched request
 type Measurement struct {
-	tags map[string]string
+	tags  map[string]string
 	count uint32
-	sum uint64
+	sum   uint64
 }
 
-// MetricsRecord is used to collect and transfer the metrics record (http span) by the trace agent
+// MetricsRecord is used to collect and transfer the metrics record (http span) by the
+// trace agent.
 type MetricsRecord struct {
 	Transaction string
-	Duration time.Duration
-	Status int
-	Method string
-	HasError bool
+	Duration    time.Duration
+	Status      int
+	Method      string
+	HasError    bool
 }
 
 // FlushBSON is called by the reporter to generate the histograms/metrics
@@ -115,7 +116,7 @@ type MetricsRecord struct {
 func (am *metricsAggregator) FlushBSON() [][]byte {
 	am.rawReq <- struct{}{}
 	// Don't let me get blocked here too long
-	raw := <- am.raw
+	raw := <-am.raw
 	return am.createMetricsMsg(raw)
 }
 
@@ -146,9 +147,9 @@ func (am *metricsAggregator) ProcessMetrics() {
 		select {
 		case record := <-am.records:
 			am.updateMetricsRaw(&record)
-		case <- am.rawReq:
+		case <-am.rawReq:
 			am.pushMetricsRaw()
-		case <- am.exit:
+		case <-am.exit:
 			OboeLog(INFO, "Closing ProcessMetrics goroutine.", nil)
 			close(am.raw)
 			break
@@ -156,9 +157,9 @@ func (am *metricsAggregator) ProcessMetrics() {
 	}
 }
 
-// isWithinLimit stores the transaction name into a internal set and returns true, before that
-// it checks if the number of transaction names stored inside metricsAggregator is still within
-// the limit. If not it returns false and does not store the transaction name.
+// isWithinLimit stores the transaction name into a internal set and returns true, before
+// that it checks if the number of transaction names stored inside metricsAggregator is
+// still within the limit. If not it returns false and does not store the transaction name.
 func (am *metricsAggregator) isWithinLimit(transaction string, max int) bool {
 	if _, ok := am.transNames[transaction]; !ok {
 		if len(am.transNames) < max {
@@ -171,8 +172,8 @@ func (am *metricsAggregator) isWithinLimit(transaction string, max int) bool {
 	return true
 }
 
-// metricsAggregator updates the Metrics (histograms and measurements) raw data structs based on
-// the MetricsRecord.
+// metricsAggregator updates the Metrics (histograms and measurements) raw data structs
+// based on the MetricsRecord.
 func (am *metricsAggregator) updateMetricsRaw(record *MetricsRecord) {
 	am.recordHistogram("", record.Duration)
 	if record.Transaction {
@@ -199,7 +200,7 @@ func (am *metricsAggregator) recordHistogram(transaction string, duration time.D
 	if _, ok := am.metrics.histograms[transaction]; !ok {
 		am.metrics.histograms[transaction] = newHistogram(&tags, DefaultHistogramPrecision)
 	}
-	am.metrics.histograms[transaction].recordValue(uint64(duration.Seconds()*1e6))
+	am.metrics.histograms[transaction].recordValue(uint64(duration.Seconds() * 1e6))
 }
 
 // processMeasurements updates the measurements struct based on the new MetricsRecord
@@ -247,7 +248,7 @@ func (am *metricsAggregator) recordMeasurement(tags *map[string]string, duration
 		am.metrics.measurements[id] = newMeasurement(tags)
 	}
 	am.metrics.measurements[id].count++
-	am.metrics.measurements[id].sum += uint64(duration.Seconds()*1e6)
+	am.metrics.measurements[id].sum += uint64(duration.Seconds() * 1e6)
 }
 
 // pushMetricsRaw is called when FlushBSON requires a new histograms message
@@ -268,7 +269,7 @@ func (am *metricsAggregator) pushMetricsRaw() {
 // Don't make the MetricsRaw object too big.
 func (m *MetricsRaw) Copy() *MetricsRaw {
 	mr := &MetricsRaw{
-		histograms: make(map[string]*Histogram),
+		histograms:   make(map[string]*Histogram),
 		measurements: make(map[string]*Measurement),
 	}
 
@@ -375,17 +376,15 @@ func newMeasurement(inTags *map[string]string) *Measurement {
 // it's a nil map pointer.
 func newMetricsAggregator() MetricsAggregator {
 	return &metricsAggregator{
-		records: make(chan MetricsRecord, MetricsRecordMaxSize),
-		rawReq: make(chan struct{}),
-		raw: make(chan *MetricsRaw),
-		exit: make(chan struct{}),
+		records:    make(chan MetricsRecord, MetricsRecordMaxSize),
+		rawReq:     make(chan struct{}),
+		raw:        make(chan *MetricsRaw),
+		exit:       make(chan struct{}),
 		transNames: make(map[string]bool),
 		metrics: MetricsRaw{
-			histograms: make(map[string]*Histogram),
+			histograms:   make(map[string]*Histogram),
 			measurements: make(map[string]*Measurement),
 		},
 		cachedSysMeta: make(map[string]string),
 	}
 }
-
-
