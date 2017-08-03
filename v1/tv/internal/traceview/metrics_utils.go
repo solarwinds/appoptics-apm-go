@@ -210,6 +210,9 @@ func (am *metricsAggregator) appendMAC(bbuf *bsonBuffer) {
 	start := bsonAppendStartArray(bbuf, BSON_KEY_MAC)
 	var idx int = 0
 	for _, mac := range strings.Split(macs, ",") {
+		if mac == "" {
+			continue
+		}
 		bsonAppendString(bbuf, strconv.Itoa(idx), mac)
 	}
 	bsonAppendFinishObject(bbuf, start)
@@ -238,6 +241,7 @@ func (am *metricsAggregator) getMACList() (macs string) {
 			macs += iface.HardwareAddr.String() + ","
 		}
 	}
+	macs = strings.TrimSuffix(macs, ",") // Trim the final one
 	return macs
 }
 
