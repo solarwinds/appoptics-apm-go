@@ -150,7 +150,7 @@ func (am *metricsAggregator) ProcessMetrics() {
 		case <-am.rawReq:
 			am.pushMetricsRaw()
 		case <-am.exit:
-			OboeLog(INFO, "Closing ProcessMetrics goroutine.", nil)
+			OboeLog(INFO, "ProcessMetrics(): Closing ProcessMetrics goroutine.", nil)
 			close(am.raw)
 			break
 		}

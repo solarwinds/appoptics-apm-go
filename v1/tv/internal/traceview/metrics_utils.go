@@ -125,7 +125,7 @@ func (am *metricsAggregator) appendData(bbuf *bsonBuffer, k string, retriever Re
 		bsonAppendFinishObject(bbuf, start)
 
 	default:
-		errStr := fmt.Sprintf("Invalid metrics element type: %v(%T)", v, v)
+		errStr := fmt.Sprintf("appendData(): Bad type %v(%T)", v, v)
 		OboeLog(INFO, errStr, nil)
 	}
 }
@@ -209,6 +209,8 @@ func (am *metricsAggregator) getDistro() (distro string) {
 		return distro
 	}
 
+	var ds []string // distro slice
+
 	// Use cached hostID
 	defer func() {
 		am.cachedSysMeta[BSON_KEY_DISTRO] = distro
@@ -217,7 +219,41 @@ func (am *metricsAggregator) getDistro() (distro string) {
 	// Note: Order of checking is important because some distros share same file names
 	// but with different function.
 	// Keep this order: redhat based -> ubuntu -> debian
-	// TODO: get distro/version for various Linux distributions
+
+	// redhat
+	if distro = getStrByKeyword(REDHAT, ""); distro != "" {
+		return distro
+	}
+	// amazon linux
+	distro = getStrByKeyword(AMAZON, "")
+	ds = strings.Split(distro, ":")
+	distro = ds[len(ds)-1]
+	if distro != "" {
+		distro = "Amzn Linux " + distro
+		return distro
+	}
+	// ubuntu
+	distro = getStrByKeyword(UBUNTU, "DISTRIB_DESCRIPTION")
+	if distro != "" {
+		ds = strings.Split(distro, "=")
+		distro = ds[len(ds)-1]
+		if distro != "" {
+			distro = strings.Trim(distro, "\"")
+		} else {
+			distro = "Ubuntu unknown"
+		}
+		return distro
+	}
+
+	pathes := []string{DEBIAN, SUSE, SLACKWARE, GENTOO, OTHER}
+	if path, line := getStrByKeywordFiles(pathes, ""); path != "" && line != "" {
+		distro = line
+		if path == "Debian" {
+			distro = "Debian " + distro
+		}
+	} else {
+		distro = "Unknown"
+	}
 	return distro
 }
 
@@ -360,7 +396,7 @@ func (am *metricsAggregator) getAWSInstanceMeta(key string, url string) (meta st
 	// an AWS instance.
 	resp, err := client.Get(url)
 	if err != nil {
-		OboeLog(DEBUG, "Timeout in getting AWS metadata, not an AWS instance?", err)
+		OboeLog(DEBUG, "getAWSInstanceMeta(): Timeout, not on AWS?", err)
 		return
 	}
 
