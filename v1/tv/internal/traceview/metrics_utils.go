@@ -3,6 +3,7 @@
 package traceview
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -88,18 +89,66 @@ func (am *metricsAggregator) resetCounters() {
 	}
 }
 
-// TODO: use a generic function for multiple appends/gets
+type Retriever func(am *metricsAggregator) interface{}
+
+// appendData append data of various types with various appenders
+func (am *metricsAggregator) appendData(bbuf *bsonBuffer, k string, retriever Retriever) {
+	v := retriever(am)
+	// Only support string int/int64 and string slice for now, as no other types are needed,
+	// therefore we don't need reflect for generic types.
+	switch v.(type) {
+	case int:
+		vi := v.(int)
+		bsonAppendInt(bbuf, k, vi)
+	case int64:
+		vi64 := v.(int64)
+		bsonAppendInt64(bbuf, k, vi64)
+	case string:
+		vs := v.(string)
+		if vs == "" {
+			return
+		}
+		bsonAppendString(bbuf, k, vs)
+	case []string:
+		vss := v.([]string)
+		if vss == nil {
+			return
+		}
+		start := bsonAppendStartArray(bbuf, k)
+		var idx int = 0
+		for _, v := range vss {
+			if v == "" {
+				continue
+			}
+			bsonAppendString(bbuf, strconv.Itoa(idx), v)
+		}
+		bsonAppendFinishObject(bbuf, start)
+
+	default:
+		errStr := fmt.Sprintf("Invalid metrics element type: %v(%T)", v, v)
+		OboeLog(INFO, errStr, nil)
+	}
+}
+
 // appendHostname appends the hostname to the BSON buffer
 func (am *metricsAggregator) appendHostname(bbuf *bsonBuffer) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		bsonAppendString(bbuf, BSON_KEY_HOSTNAME, hostname)
-	}
+	am.appendData(
+		bbuf,
+		BSON_KEY_HOSTNAME,
+		func(am *metricsAggregator) interface{} {
+			hostname, _ := os.Hostname()
+			return hostname
+		})
 }
 
 // appendUUID appends the UUID to the BSON buffer
 func (am *metricsAggregator) appendUUID(bbuf *bsonBuffer) {
-	bsonAppendString(bbuf, BSON_KEY_UUID, am.getHostId())
+	am.appendData(
+		bbuf,
+		BSON_KEY_UUID,
+		func(am *metricsAggregator) interface{} {
+			return am.getHostId()
+		})
 }
 
 // getHostId gets the unique host identifier (e.g., AWS instance ID, docker container ID or MAC address)
@@ -131,9 +180,9 @@ func (am *metricsAggregator) getHostId() (id string) {
 	}
 
 	// getMacList has a internal cache and always returns a string.
-	id = am.getMACList()
-	if id != "" {
-		id = "mac:" + id
+	ids := am.getMACList()
+	if ids != nil {
+		id = "mac:" + strings.Join(ids, ",")
 		return id
 	}
 
@@ -146,7 +195,12 @@ func (am *metricsAggregator) getHostId() (id string) {
 
 // appendDistro appends the distro information to BSON buffer
 func (am *metricsAggregator) appendDistro(bbuf *bsonBuffer) {
-	bsonAppendString(bbuf, BSON_KEY_DISTRO, am.getDistro())
+	am.appendData(
+		bbuf,
+		BSON_KEY_DISTRO,
+		func(am *metricsAggregator) interface{} {
+			return am.getDistro()
+		})
 }
 
 // getDistro retrieves the distribution information and caches it in metricsAggregator
@@ -169,7 +223,12 @@ func (am *metricsAggregator) getDistro() (distro string) {
 
 // appendPID appends the process ID to the BSON buffer
 func (am *metricsAggregator) appendPID(bbuf *bsonBuffer) {
-	bsonAppendInt(bbuf, BSON_KEY_PID, os.Getpid())
+	am.appendData(
+		bbuf,
+		BSON_KEY_PID,
+		func(am *metricsAggregator) interface{} {
+			return os.Getpid()
+		})
 }
 
 // appendSysName appends the uname.Sysname and Version to BSON buffer
@@ -177,39 +236,42 @@ func (am *metricsAggregator) appendUname(bbuf *bsonBuffer) {
 	// There is no syscall.Uname (as well as Utsname) on macOS
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err == nil {
-		bsonAppendString(bbuf, BSON_KEY_SYSNAME, uname.Sysname)
-		bsonAppendString(bbuf, BSON_KEY_VERSION, uname.Version)
+		am.appendData(
+			bbuf,
+			BSON_KEY_SYSNAME,
+			func(am *metricsAggregator) interface{} {
+				return uname.Sysname
+			})
+		am.appendData(
+			bbuf,
+			BSON_KEY_VERSION,
+			func(am *metricsAggregator) interface{} {
+				return uname.Version
+			})
 	}
 }
 
 // appendIPAddresses appends the IP addresses to the BSON buffer
 func (am *metricsAggregator) appendIPAddresses(bbuf *bsonBuffer) {
-	ips := am.getIPList()
-	if ips == "" {
-		return
-	}
-
-	start := bsonAppendStartArray(bbuf, BSON_KEY_IPADDR)
-	var idx int = 0
-	for _, ip := range strings.Split(ips, ",") {
-		if ip == "" {
-			continue
-		}
-		bsonAppendString(bbuf, strconv.Itoa(idx), ip)
-	}
-	bsonAppendFinishObject(bbuf, start)
+	am.appendData(
+		bbuf,
+		BSON_KEY_IPADDR,
+		func(am *metricsAggregator) interface{} {
+			return am.getIPList()
+		})
 }
 
 // getIPList gets the non-loopback IP addresses and returns a string with
 // IP addresses separated with comma.
-func (am *metricsAggregator) getIPList() (ips string) {
-	if ips, ok := am.cachedSysMeta[BSON_KEY_IPADDR]; ok {
-		return ips
+func (am *metricsAggregator) getIPList() (ips []string) {
+	var ipStr string
+	if ipStr, ok := am.cachedSysMeta[BSON_KEY_IPADDR]; ok {
+		return strings.Split(ipStr, ",")
 	}
 
 	// Use cached MACList
 	defer func() {
-		am.cachedSysMeta[BSON_KEY_IPADDR] = ips
+		am.cachedSysMeta[BSON_KEY_IPADDR] = ipStr
 	}()
 
 	addrs, err := net.InterfaceAddrs()
@@ -219,40 +281,34 @@ func (am *metricsAggregator) getIPList() (ips string) {
 
 	for _, addr := range addrs {
 		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			ips += ipnet.IP.String() + ","
+			ipStr += ipnet.IP.String() + ","
 		}
 	}
-	ips = strings.TrimSuffix(ips, ",") // Trim the final one
-	return ips
+	ipStr = strings.TrimSuffix(ipStr, ",") // Trim the final one
+	ips = strings.Split(ipStr, ",")
+	return
 }
 
 // appendMAC appends the MAC addresses to the BSON buffer
 func (am *metricsAggregator) appendMAC(bbuf *bsonBuffer) {
-	macs := am.getMACList()
-	if macs == "" {
-		return
-	}
-
-	start := bsonAppendStartArray(bbuf, BSON_KEY_MAC)
-	var idx int = 0
-	for _, mac := range strings.Split(macs, ",") {
-		if mac == "" {
-			continue
-		}
-		bsonAppendString(bbuf, strconv.Itoa(idx), mac)
-	}
-	bsonAppendFinishObject(bbuf, start)
+	am.appendData(
+		bbuf,
+		BSON_KEY_MAC,
+		func(am *metricsAggregator) interface{} {
+			return am.getMACList()
+		})
 }
 
 // getMACList retrieves the MAC addresses and caches it in the metrics struct
-func (am *metricsAggregator) getMACList() (macs string) {
-	if macs, ok := am.cachedSysMeta[BSON_KEY_MAC]; ok {
-		return macs
+func (am *metricsAggregator) getMACList() (macs []string) {
+	var macStr string
+	if macStr, ok := am.cachedSysMeta[BSON_KEY_MAC]; ok {
+		return strings.Split(macStr, ",")
 	}
 
 	// Use cached MACList
 	defer func() {
-		am.cachedSysMeta[BSON_KEY_MAC] = macs
+		am.cachedSysMeta[BSON_KEY_MAC] = macStr
 	}()
 
 	ifaces, err := net.Interfaces()
@@ -264,20 +320,22 @@ func (am *metricsAggregator) getMACList() (macs string) {
 			continue
 		}
 		if mac := iface.HardwareAddr.String(); mac != "" {
-			macs += iface.HardwareAddr.String() + ","
+			macStr += iface.HardwareAddr.String() + ","
 		}
 	}
-	macs = strings.TrimSuffix(macs, ",") // Trim the final one
-	return macs
+	macStr = strings.TrimSuffix(macStr, ",") // Trim the final one
+	macs = strings.Split(macStr, ",")
+	return
 }
 
 // appendAWSInstanceID appends the EC2 Instance ID if any
 func (am *metricsAggregator) appendAWSInstanceID(bbuf *bsonBuffer) {
-	var awsInstanceId = am.getAWSInstanceMeta(BSON_KEY_EC2_ID, URL_FOR_AWS_INSTANCE_ID)
-	if awsInstanceId == "" {
-		return
-	}
-	bsonAppendString(bbuf, BSON_KEY_EC2_ID, awsInstanceId)
+	am.appendData(
+		bbuf,
+		BSON_KEY_EC2_ID,
+		func(am *metricsAggregator) interface{} {
+			return am.getAWSInstanceMeta(BSON_KEY_EC2_ID, URL_FOR_AWS_INSTANCE_ID)
+		})
 }
 
 // getAWSInstanceMeta gets the AWS instance metadata, if any
@@ -318,20 +376,22 @@ func (am *metricsAggregator) getAWSInstanceMeta(key string, url string) (meta st
 
 // appendAWSInstanceZone appends the EC2 zone information to the BSON buffer
 func (am *metricsAggregator) appendAWSInstanceZone(bbuf *bsonBuffer) {
-	zone := am.getAWSInstanceMeta(BSON_KEY_EC2_ZONE, URL_FOR_AWS_ZONE_ID)
-	if zone == "" {
-		return
-	}
-	bsonAppendString(bbuf, BSON_KEY_EC2_ZONE, zone)
+	am.appendData(
+		bbuf,
+		BSON_KEY_EC2_ZONE,
+		func(am *metricsAggregator) interface{} {
+			return am.getAWSInstanceMeta(BSON_KEY_EC2_ZONE, URL_FOR_AWS_ZONE_ID)
+		})
 }
 
 // appendContainerID appends the docker container ID to the BSON buffer
 func (am *metricsAggregator) appendContainerID(bbuf *bsonBuffer) {
-	cid := am.getContainerID()
-	if cid == "" {
-		return
-	}
-	bsonAppendString(bbuf, BSON_KEY_DOCKER_CONTAINER_ID, cid)
+	am.appendData(
+		bbuf,
+		BSON_KEY_DOCKER_CONTAINER_ID,
+		func(am *metricsAggregator) interface{} {
+			return am.getContainerID()
+		})
 }
 
 // getContainerID retrieves the docker container id, if any, and caches it.
@@ -362,12 +422,22 @@ func (am *metricsAggregator) getContainerID() (id string) {
 // appendTimestamp appends the timestamp information to the BSON buffer
 func (am *metricsAggregator) appendTimestamp(bbuf *bsonBuffer) {
 	//micro seconds since epoch
-	bsonAppendInt64(bbuf, BSON_KEY_TIMESTAMP, int64(time.Now().UnixNano()/1000))
+	am.appendData(
+		bbuf,
+		BSON_KEY_TIMESTAMP,
+		func(am *metricsAggregator) interface{} {
+			return int64(time.Now().UnixNano() / 1000)
+		})
 }
 
 // appendFlushInterval appends the flush interval to the BSON buffer
 func (am *metricsAggregator) appendFlushInterval(bbuf *bsonBuffer) {
-	bsonAppendInt64(bbuf, BSON_KEY_FLUSH_INTERVAL, int64(agentMetricsInterval/time.Second))
+	am.appendData(
+		bbuf,
+		BSON_KEY_FLUSH_INTERVAL,
+		func(am *metricsAggregator) interface{} {
+			return int64(agentMetricsInterval / time.Second)
+		})
 }
 
 // appendTransactionNameOverflow appends the transaction name overflow flag to BSON buffer
