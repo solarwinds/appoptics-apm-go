@@ -215,6 +215,7 @@ func (am *metricsAggregator) appendMAC(bbuf *bsonBuffer) {
 	bsonAppendFinishObject(bbuf, start)
 }
 
+// getMACList retrieves the MAC addresses and caches it in the metrics struct
 func (am *metricsAggregator) getMACList() (macs string) {
 	if macs, ok := am.cachedSysMeta[BSON_KEY_MAC]; ok {
 		return macs

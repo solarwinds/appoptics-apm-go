@@ -258,17 +258,56 @@ func (am *metricsAggregator) pushMetricsRaw() {
 	// updated while encoding the message.
 	// The following two methods (Copy and resetCounters) should not take too much time,
 	// otherwise the records buffered channel may be full in extreme workload.
-	var m MetricsRaw = am.metrics.Copy()
+	var m *MetricsRaw = am.metrics.Copy()
 	// Reset the counters for each interval
 	am.resetCounters()
-	am.raw <- &m
+	am.raw <- m
 }
 
 // Copy makes a copy of this struct and its internal data.
 // Don't make the MetricsRaw object too big.
-func (m *MetricsRaw) Copy() (copy MetricsRaw) {
-	// TODO:
-	return //TODO: remove/check it?
+func (m *MetricsRaw) Copy() *MetricsRaw {
+	mr := &MetricsRaw{
+		histograms: make(map[string]*Histogram),
+		measurements: make(map[string]*Measurement),
+	}
+
+	for k, v := range m.histograms {
+		mr.histograms[k] = v.Copy()
+	}
+
+	for k, v := range m.measurements {
+		mr.measurements[k] = v.Copy()
+	}
+
+	return mr
+}
+
+func (h *Histogram) Copy() *Histogram {
+	hCopy := &Histogram{
+		tags: make(map[string]string),
+		data: h.data.Copy(),
+	}
+
+	for k, v := range h.tags {
+		hCopy.tags[k] = v
+	}
+
+	return hCopy
+}
+
+func (m *Measurement) Copy() *Measurement {
+	mCopy := &Measurement{
+		tags: make(map[string]string),
+	}
+
+	for k, v := range m.tags {
+		mCopy.tags[k] = v
+	}
+	mCopy.count = m.count
+	mCopy.sum = m.sum
+
+	return mCopy
 }
 
 // PushMetricsRecord is called by the Trace to record the metadata of a call, e.g., call duration,
@@ -294,6 +333,14 @@ func (hist *Histogram) encode() string {
 	return hist.data.encode()
 }
 
+func (bh *baseHistogram) Copy() baseHistogram {
+	//TODO
+}
+
+func newBaseHistogram(precision int) baseHistogram {
+	//TODO
+}
+
 // encode is a wrapper of hdr's function with (probably) the same name
 func (h *baseHistogram) encode() (str string) {
 	// TODO
@@ -304,11 +351,11 @@ func (h *baseHistogram) encode() (str string) {
 func newHistogram(inTags *map[string]string, precision int) *Histogram {
 	var histogram = Histogram{
 		tags: make(map[string]string),
+		data: newBaseHistogram(precision),
 	}
 	for k, v := range *inTags {
 		histogram.tags[k] = v
 	}
-	// TODO: initialize hdr histogram (Histogram.data)
 	return &histogram
 }
 
