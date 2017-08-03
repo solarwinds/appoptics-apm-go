@@ -146,7 +146,7 @@ func (r *grpcReporter) PushMetricsRecord(record MetricsRecord) bool {
 	if !r.IsOpen() {
 		return false
 	}
-	return r.metrics.PushMetricsRecord(record)
+	return r.metrics.PushMetricsRecord(&record)
 }
 
 func (r *grpcReporter) periodic() {
