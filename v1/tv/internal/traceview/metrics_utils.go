@@ -495,7 +495,7 @@ func metricsAppendMeasurements(bbuf *bsonBuffer, raw *MetricsRaw) {
 	start := bsonAppendStartArray(bbuf, BSON_KEY_MEASUREMENTS)
 	var index int = 0
 
-	metricsAppendGlobalMeasurements(bbuf, raw, &index)
+	metricsAppendGlobalCounters(bbuf, raw, &index)
 	metricsAppendReporterStats(bbuf, raw, &index)
 	metricsAppendSystemLoad(bbuf, raw, &index)
 	metricsAppendTransactionMeasurements(bbuf, raw, &index)
@@ -503,31 +503,30 @@ func metricsAppendMeasurements(bbuf *bsonBuffer, raw *MetricsRaw) {
 	bsonAppendFinishObject(bbuf, start)
 }
 
-// metricsAppendGlobalMeasurements appends global reporterCounters to mAgg message
-func metricsAppendGlobalMeasurements(bbuf *bsonBuffer, raw *MetricsRaw, index *int) {
-	// TODO: update global reporterCounters recorded in entry layers map
-	// TODO: finish this part after the settings part is done.
+// metricsAppendGlobalCounters appends global reporterCounters to mAgg message
+func metricsAppendGlobalCounters(bbuf *bsonBuffer, raw *MetricsRaw, index *int) {
+	// TODO: update global counters recorded in entry_layer_t, after the settings part is done.
 }
 
 // metricsAppendReporterStats appends reporter reporterCounters
 func metricsAppendReporterStats(bbuf *bsonBuffer, raw *MetricsRaw, index *int) {
 	// We don't secure the order of the counters in the BSON message.
 	for name, value := range raw.reporterCounters {
-		metricsAddIntegerValue(bbuf, index, name, value)
+		metricsAddNumObj(bbuf, index, name, value)
 	}
 }
 
-// metricsAddIntegerValue adds a integer value of various length to the reporter. This function changes
+// metricsAddNumObj adds a integer value of various length to the reporter. This function changes
 // the value of index.
-func metricsAddIntegerValue(bbuf *bsonBuffer, index *int, name string, value interface{}) {
+func metricsAddNumObj(bbuf *bsonBuffer, index *int, name string, value interface{}) {
 	start := bsonAppendStartObject(bbuf, string(index))
 
 	bsonAppendString(bbuf, BSON_KEY_NAME, name)
 	switch value.(type) {
 	case int64:
 		bsonAppendInt64(bbuf, BSON_KEY_VALUE, int64(value))
-	case int32:
-		bsonAppendInt32(bbuf, BSON_KEY_VALUE, int32(value))
+	case float32, float64:
+		bsonAppendFloat64(bbuf, BSON_KEY_VALUE, float64(value))
 	default:
 		return // Don't support other types, don't increase the index either.
 	}
@@ -538,8 +537,15 @@ func metricsAddIntegerValue(bbuf *bsonBuffer, index *int, name string, value int
 }
 
 // metricsAppendSystemLoad appends system load to mAgg message
-func metricsAppendSystemLoad(bbuf *bsonBuffer, raw *MetricsRaw, index *int) {
-	// TODO
+func metricsAppendSystemLoad(bbuf *bsonBuffer, raw *MetricsRaw, idx *int) {
+	// system load of last minute
+	if s := getStrByKeyword("/proc/loadavg", ""); s != "" {
+		metricsAddNumObj(bbuf, idx, BSON_KEY_LOAD1, float64(strings.Split(s, " ")[0]))
+	}
+	// system total / free memory
+	//TODO
+	// process RAM
+	//TODO
 }
 
 // metricsAppendTransactionMeasurements appends transaction based measurements to mAgg
@@ -551,10 +557,10 @@ func metricsAppendTransactionMeasurements(bbuf *bsonBuffer, raw *MetricsRaw, ind
 }
 
 // metricsAddMeasurement add a measurement to the bson message
-func metricsAddMeasurement(bbuf *bsonBuffer, index *int, count int32, sum int64, tags map[string]string) {
-	start := bsonAppendStartObject(bbuf, string(index))
+func metricsAddMeasurement(bbuf *bsonBuffer, idx *int, cnt int32, sum int64, tags map[string]string) {
+	start := bsonAppendStartObject(bbuf, string(idx))
 	bsonAppendString(bbuf, BSON_KEY_NAME, "TransactionResponseTime")
-	bsonAppendInt32(bbuf, BSON_KEY_COUNT, count)
+	bsonAppendInt32(bbuf, BSON_KEY_COUNT, cnt) // A bit different from C-lib, we use int32 here
 	bsonAppendInt64(bbuf, BSON_KEY_SUM, sum)
 
 	subStart := bsonAppendStartObject(bbuf, BSON_KEY_TAGS)
@@ -566,7 +572,7 @@ func metricsAddMeasurement(bbuf *bsonBuffer, index *int, count int32, sum int64,
 	bsonAppendFinishObject(bbuf, subStart)
 
 	bsonAppendFinishObject(bbuf, start)
-	*index += 1
+	*idx += 1
 }
 
 // metricsAppendHistograms appends histograms to the mAgg message
