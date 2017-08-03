@@ -31,6 +31,7 @@ const (
 	BSON_KEY_TIMESTAMP                 = "Timestamp_u"
 	BSON_KEY_FLUSH_INTERVAL            = "MetricsFlushInterval"
 	BSON_KEY_TRANSACTION_NAME_OVERFLOW = "TransactionNameOverflow"
+	BSON_KEY_MEASUREMENTS			= "measurements"
 	BSON_KEY_HISTOGRAMS                = "histograms"
 	BSON_KEY_HIST_NAME                 = "name"
 	BSON_KEY_HIST_VALUE                = "value"
@@ -76,7 +77,6 @@ func (am *metricsAggregator) metricsAppendSysMetadata(bbuf *bsonBuffer) {
 	am.appendContainerID(bbuf)
 	am.appendTimestamp(bbuf)
 	am.appendFlushInterval(bbuf)
-	am.appendTransactionNameOverflow(bbuf)
 }
 
 // resetCounters resets the maps/lists in metricsAggregateor. It's called after each time
@@ -86,6 +86,7 @@ func (am *metricsAggregator) resetCounters() {
 	am.metrics = MetricsRaw{
 		histograms:   make(map[string]*Histogram),
 		measurements: make(map[string]*Measurement),
+		transNamesOverflow: false,
 	}
 }
 
@@ -477,17 +478,41 @@ func (am *metricsAggregator) appendFlushInterval(bbuf *bsonBuffer) {
 }
 
 // appendTransactionNameOverflow appends the transaction name overflow flag to BSON buffer
-func (am *metricsAggregator) appendTransactionNameOverflow(bbuf *bsonBuffer) {
-	if len(am.transNames) >= MaxTransactionNames {
-		bsonAppendBool(bbuf, BSON_KEY_TRANSACTION_NAME_OVERFLOW, true)
-	}
+func appendTransactionNameOverflow(bbuf *bsonBuffer, raw *MetricsRaw) {
+	bsonAppendBool(bbuf, BSON_KEY_TRANSACTION_NAME_OVERFLOW, raw.transNamesOverflow)
 }
 
 // metricsAppendMeasurements appends global and transaction measurements to the metrics message
 // This is a function rather than a method of metricsAggregator to avoid using am.metrics
 // by mistake.
 func metricsAppendMeasurements(bbuf *bsonBuffer, raw *MetricsRaw) {
-	// TODO: don't use am.metrics, use raw.* instead!!!
+	metricsAppendGlobalMeasurements(bbuf, raw)
+	metricsAppendReporterStats(bbuf, raw)
+	metricsAppendSystemLoad(bbuf, raw)
+	metricsAppendTransactionMeasurements(bbuf, raw)
+}
+
+// metricsAppendGlobalMeasurements appends global counters to metrics message
+func metricsAppendGlobalMeasurements(bbuf *bsonBuffer, raw *MetricsRaw) {
+	// TODO: update global counters recorded in entry layers map
+	// TODO: finish this part after the settings part is done.
+}
+
+// metricsAppendReporterStats appends reporter counters
+func metricsAppendReporterStats(bbuf *bsonBuffer, raw *MetricsRaw) {
+	// TODO:
+}
+
+// metricsAppendSystemLoad appends system load to metrics message
+func metricsAppendSystemLoad(bbuf *bsonBuffer, raw *MetricsRaw) {
+	// TODO
+}
+
+// metricsAppendTransactionMeasurements appends transaction based measurements to metrics
+// message.
+func metricsAppendTransactionMeasurements(bbuf *bsonBuffer, raw *MetricsRaw) {
+	appendTransactionNameOverflow(bbuf, raw)
+	//TODO: not done
 }
 
 // metricsAppendHistograms appends histograms to the metrics message

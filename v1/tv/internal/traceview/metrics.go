@@ -69,16 +69,22 @@ type metricsAggregator struct {
 	// and encodes the metrics message. The main goroutine needs to reset/clear this
 	// struct immediately after send a copy to the metrics-message-encoding goroutine.
 	metrics MetricsRaw
-
 	// System metadata cache for metrics messages, which is usually expensive to calculate.
+	// The metadata is unlikely to change and is only updated by BSON encoder goroutine, so
+	// we don't need to pass it through a channel.
 	cachedSysMeta map[string]string
 }
 
 // MetricsRaw defines the histograms and measurements maintained by the main goroutine
-// which finally are pushed to the BSON encoding/sending goroutine
+// which are pushed to the BSON encoding/sending goroutine through a channel, and get reset.
 type MetricsRaw struct {
+	// Stores the transaction based histograms, the size of the map is defined by
+	// MaxTransactionNames
 	histograms   map[string]*Histogram
+	// Stores the transaction based measurement.
 	measurements map[string]*Measurement
+	// A flag to indicate whether the transaction names map is overflow.
+	transNamesOverflow bool
 }
 
 // baseHistogram is a the base HDR histogram, an external library.
@@ -166,6 +172,7 @@ func (am *metricsAggregator) isWithinLimit(transaction string, max int) bool {
 			am.transNames[transaction] = true
 			return true
 		} else {
+			am.metrics.transNamesOverflow = true
 			return false
 		}
 	}
@@ -271,6 +278,7 @@ func (m *MetricsRaw) Copy() *MetricsRaw {
 	mr := &MetricsRaw{
 		histograms:   make(map[string]*Histogram),
 		measurements: make(map[string]*Measurement),
+		transNamesOverflow: m.transNamesOverflow,
 	}
 
 	for k, v := range m.histograms {
@@ -384,6 +392,7 @@ func newMetricsAggregator() MetricsAggregator {
 		metrics: MetricsRaw{
 			histograms:   make(map[string]*Histogram),
 			measurements: make(map[string]*Measurement),
+			transNamesOverflow: false,
 		},
 		cachedSysMeta: make(map[string]string),
 	}
