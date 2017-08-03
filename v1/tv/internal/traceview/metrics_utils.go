@@ -31,10 +31,17 @@ const (
 	BSON_KEY_TIMESTAMP                 = "Timestamp_u"
 	BSON_KEY_FLUSH_INTERVAL            = "MetricsFlushInterval"
 	BSON_KEY_TRANSACTION_NAME_OVERFLOW = "TransactionNameOverflow"
-	BSON_KEY_MEASUREMENTS			= "measurements"
+	BSON_KEY_MEASUREMENTS              = "measurements"
+	BSON_KEY_LOAD1 = "Load1"
+	BSON_KEY_TOTAL_RAM = "TotalRAM"
+	BSON_KEY_FREE_RAM = "FreeRAM"
+	BSON_KEY_PROCESSRAM = "ProcessRAM"
+	BSON_KEY_COUNT = "count"
+	BSON_KEY_SUM = "sum"
+	BSON_KEY_TAGS = "tags"
 	BSON_KEY_HISTOGRAMS                = "histograms"
-	BSON_KEY_HIST_NAME                 = "name"
-	BSON_KEY_HIST_VALUE                = "value"
+	BSON_KEY_NAME                      = "name"
+	BSON_KEY_VALUE                     = "value"
 	BSON_KEY_HIST_TAGS                 = "tags"
 	BSON_VALUE_HIST_TRANSACTION_RT     = "TransactionResponseTime"
 )
@@ -63,7 +70,7 @@ const (
 	AWSInstanceIDFetchTimeout = 1 // in seconds
 )
 
-// metricsAppendSysMetadata appends system metadata to the metrics message
+// metricsAppendSysMetadata appends system metadata to the mAgg message
 func (am *metricsAggregator) metricsAppendSysMetadata(bbuf *bsonBuffer) {
 	am.appendHostname(bbuf)
 	am.appendUUID(bbuf)
@@ -80,20 +87,19 @@ func (am *metricsAggregator) metricsAppendSysMetadata(bbuf *bsonBuffer) {
 }
 
 // resetCounters resets the maps/lists in metricsAggregateor. It's called after each time
-// the metrics message is encoded
+// the mAgg message is encoded
 func (am *metricsAggregator) resetCounters() {
 	am.transNames = make(map[string]bool)
-	am.metrics = MetricsRaw{
-		histograms:   make(map[string]*Histogram),
-		measurements: make(map[string]*Measurement),
-		transNamesOverflow: false,
-	}
+	am.metrics.histograms = make(map[string]*Histogram)
+	am.metrics.measurements = make(map[string]*Measurement)
+	am.metrics.transNamesOverflow = false
+	// Don't reset reporterCounters
 }
 
 type Retriever func(am *metricsAggregator) interface{}
 
-// appendData append data of various types with various appenders
-func (am *metricsAggregator) appendData(bbuf *bsonBuffer, k string, retriever Retriever) {
+// appendSysMetadata append data of various types with various appenders
+func (am *metricsAggregator) appendSysMetadata(bbuf *bsonBuffer, k string, retriever Retriever) {
 	v := retriever(am)
 	// Only support string int/int64 and string slice for now, as no other types are needed,
 	// therefore we don't need reflect for generic types.
@@ -126,14 +132,14 @@ func (am *metricsAggregator) appendData(bbuf *bsonBuffer, k string, retriever Re
 		bsonAppendFinishObject(bbuf, start)
 
 	default:
-		errStr := fmt.Sprintf("appendData(): Bad type %v(%T)", v, v)
+		errStr := fmt.Sprintf("appendSysMetadata(): Bad type %v(%T)", v, v)
 		OboeLog(INFO, errStr, nil)
 	}
 }
 
 // appendHostname appends the hostname to the BSON buffer
 func (am *metricsAggregator) appendHostname(bbuf *bsonBuffer) {
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_HOSTNAME,
 		func(am *metricsAggregator) interface{} {
@@ -144,7 +150,7 @@ func (am *metricsAggregator) appendHostname(bbuf *bsonBuffer) {
 
 // appendUUID appends the UUID to the BSON buffer
 func (am *metricsAggregator) appendUUID(bbuf *bsonBuffer) {
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_UUID,
 		func(am *metricsAggregator) interface{} {
@@ -196,7 +202,7 @@ func (am *metricsAggregator) getHostId() (id string) {
 
 // appendDistro appends the distro information to BSON buffer
 func (am *metricsAggregator) appendDistro(bbuf *bsonBuffer) {
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_DISTRO,
 		func(am *metricsAggregator) interface{} {
@@ -260,7 +266,7 @@ func (am *metricsAggregator) getDistro() (distro string) {
 
 // appendPID appends the process ID to the BSON buffer
 func (am *metricsAggregator) appendPID(bbuf *bsonBuffer) {
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_PID,
 		func(am *metricsAggregator) interface{} {
@@ -273,13 +279,13 @@ func (am *metricsAggregator) appendUname(bbuf *bsonBuffer) {
 	// There is no syscall.Uname (as well as Utsname) on macOS
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err == nil {
-		am.appendData(
+		am.appendSysMetadata(
 			bbuf,
 			BSON_KEY_SYSNAME,
 			func(am *metricsAggregator) interface{} {
 				return uname.Sysname
 			})
-		am.appendData(
+		am.appendSysMetadata(
 			bbuf,
 			BSON_KEY_VERSION,
 			func(am *metricsAggregator) interface{} {
@@ -290,7 +296,7 @@ func (am *metricsAggregator) appendUname(bbuf *bsonBuffer) {
 
 // appendIPAddresses appends the IP addresses to the BSON buffer
 func (am *metricsAggregator) appendIPAddresses(bbuf *bsonBuffer) {
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_IPADDR,
 		func(am *metricsAggregator) interface{} {
@@ -328,7 +334,7 @@ func (am *metricsAggregator) getIPList() (ips []string) {
 
 // appendMAC appends the MAC addresses to the BSON buffer
 func (am *metricsAggregator) appendMAC(bbuf *bsonBuffer) {
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_MAC,
 		func(am *metricsAggregator) interface{} {
@@ -336,7 +342,7 @@ func (am *metricsAggregator) appendMAC(bbuf *bsonBuffer) {
 		})
 }
 
-// getMACList retrieves the MAC addresses and caches it in the metrics struct
+// getMACList retrieves the MAC addresses and caches it in the mAgg struct
 func (am *metricsAggregator) getMACList() (macs []string) {
 	var macStr string
 	if macStr, ok := am.cachedSysMeta[BSON_KEY_MAC]; ok {
@@ -367,7 +373,7 @@ func (am *metricsAggregator) getMACList() (macs []string) {
 
 // appendAWSInstanceID appends the EC2 Instance ID if any
 func (am *metricsAggregator) appendAWSInstanceID(bbuf *bsonBuffer) {
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_EC2_ID,
 		func(am *metricsAggregator) interface{} {
@@ -413,7 +419,7 @@ func (am *metricsAggregator) getAWSInstanceMeta(key string, url string) (meta st
 
 // appendAWSInstanceZone appends the EC2 zone information to the BSON buffer
 func (am *metricsAggregator) appendAWSInstanceZone(bbuf *bsonBuffer) {
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_EC2_ZONE,
 		func(am *metricsAggregator) interface{} {
@@ -423,7 +429,7 @@ func (am *metricsAggregator) appendAWSInstanceZone(bbuf *bsonBuffer) {
 
 // appendContainerID appends the docker container ID to the BSON buffer
 func (am *metricsAggregator) appendContainerID(bbuf *bsonBuffer) {
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_DOCKER_CONTAINER_ID,
 		func(am *metricsAggregator) interface{} {
@@ -459,7 +465,7 @@ func (am *metricsAggregator) getContainerID() (id string) {
 // appendTimestamp appends the timestamp information to the BSON buffer
 func (am *metricsAggregator) appendTimestamp(bbuf *bsonBuffer) {
 	//micro seconds since epoch
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_TIMESTAMP,
 		func(am *metricsAggregator) interface{} {
@@ -469,7 +475,7 @@ func (am *metricsAggregator) appendTimestamp(bbuf *bsonBuffer) {
 
 // appendFlushInterval appends the flush interval to the BSON buffer
 func (am *metricsAggregator) appendFlushInterval(bbuf *bsonBuffer) {
-	am.appendData(
+	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_FLUSH_INTERVAL,
 		func(am *metricsAggregator) interface{} {
@@ -482,41 +488,89 @@ func appendTransactionNameOverflow(bbuf *bsonBuffer, raw *MetricsRaw) {
 	bsonAppendBool(bbuf, BSON_KEY_TRANSACTION_NAME_OVERFLOW, raw.transNamesOverflow)
 }
 
-// metricsAppendMeasurements appends global and transaction measurements to the metrics message
-// This is a function rather than a method of metricsAggregator to avoid using am.metrics
+// metricsAppendMeasurements appends global and transaction measurements to the mAgg message
+// This is a function rather than a method of metricsAggregator to avoid using am.mAgg
 // by mistake.
 func metricsAppendMeasurements(bbuf *bsonBuffer, raw *MetricsRaw) {
-	metricsAppendGlobalMeasurements(bbuf, raw)
-	metricsAppendReporterStats(bbuf, raw)
-	metricsAppendSystemLoad(bbuf, raw)
-	metricsAppendTransactionMeasurements(bbuf, raw)
+	start := bsonAppendStartArray(bbuf, BSON_KEY_MEASUREMENTS)
+	var index int = 0
+
+	metricsAppendGlobalMeasurements(bbuf, raw, &index)
+	metricsAppendReporterStats(bbuf, raw, &index)
+	metricsAppendSystemLoad(bbuf, raw, &index)
+	metricsAppendTransactionMeasurements(bbuf, raw, &index)
+
+	bsonAppendFinishObject(bbuf, start)
 }
 
-// metricsAppendGlobalMeasurements appends global counters to metrics message
-func metricsAppendGlobalMeasurements(bbuf *bsonBuffer, raw *MetricsRaw) {
-	// TODO: update global counters recorded in entry layers map
+// metricsAppendGlobalMeasurements appends global reporterCounters to mAgg message
+func metricsAppendGlobalMeasurements(bbuf *bsonBuffer, raw *MetricsRaw, index *int) {
+	// TODO: update global reporterCounters recorded in entry layers map
 	// TODO: finish this part after the settings part is done.
 }
 
-// metricsAppendReporterStats appends reporter counters
-func metricsAppendReporterStats(bbuf *bsonBuffer, raw *MetricsRaw) {
-	// TODO:
+// metricsAppendReporterStats appends reporter reporterCounters
+func metricsAppendReporterStats(bbuf *bsonBuffer, raw *MetricsRaw, index *int) {
+	// We don't secure the order of the counters in the BSON message.
+	for name, value := range raw.reporterCounters {
+		metricsAddIntegerValue(bbuf, index, name, value)
+	}
 }
 
-// metricsAppendSystemLoad appends system load to metrics message
-func metricsAppendSystemLoad(bbuf *bsonBuffer, raw *MetricsRaw) {
+// metricsAddIntegerValue adds a integer value of various length to the reporter. This function changes
+// the value of index.
+func metricsAddIntegerValue(bbuf *bsonBuffer, index *int, name string, value interface{}) {
+	start := bsonAppendStartObject(bbuf, string(index))
+
+	bsonAppendString(bbuf, BSON_KEY_NAME, name)
+	switch value.(type) {
+	case int64:
+		bsonAppendInt64(bbuf, BSON_KEY_VALUE, int64(value))
+	case int32:
+		bsonAppendInt32(bbuf, BSON_KEY_VALUE, int32(value))
+	default:
+		return // Don't support other types, don't increase the index either.
+	}
+
+	bsonAppendFinishObject(bbuf, start)
+
+	*index += 1
+}
+
+// metricsAppendSystemLoad appends system load to mAgg message
+func metricsAppendSystemLoad(bbuf *bsonBuffer, raw *MetricsRaw, index *int) {
 	// TODO
 }
 
-// metricsAppendTransactionMeasurements appends transaction based measurements to metrics
+// metricsAppendTransactionMeasurements appends transaction based measurements to mAgg
 // message.
-func metricsAppendTransactionMeasurements(bbuf *bsonBuffer, raw *MetricsRaw) {
-	appendTransactionNameOverflow(bbuf, raw)
-	//TODO: not done
+func metricsAppendTransactionMeasurements(bbuf *bsonBuffer, raw *MetricsRaw, index *int) {
+	for _, m := range raw.measurements {
+		metricsAddMeasurement(bbuf, index, m.count, m.sum, m.tags)
+	}
 }
 
-// metricsAppendHistograms appends histograms to the metrics message
-// This is a function rather than a method of metricsAggregator to avoid using am.metrics
+// metricsAddMeasurement add a measurement to the bson message
+func metricsAddMeasurement(bbuf *bsonBuffer, index *int, count int32, sum int64, tags map[string]string) {
+	start := bsonAppendStartObject(bbuf, string(index))
+	bsonAppendString(bbuf, BSON_KEY_NAME, "TransactionResponseTime")
+	bsonAppendInt32(bbuf, BSON_KEY_COUNT, count)
+	bsonAppendInt64(bbuf, BSON_KEY_SUM, sum)
+
+	subStart := bsonAppendStartObject(bbuf, BSON_KEY_TAGS)
+	for k, v := range tags {
+		k = k[:MaxTagNameLength]
+		v = v[:MaxTagValueLength]
+		bsonAppendString(bbuf, k, v)
+	}
+	bsonAppendFinishObject(bbuf, subStart)
+
+	bsonAppendFinishObject(bbuf, start)
+	*index += 1
+}
+
+// metricsAppendHistograms appends histograms to the mAgg message
+// This is a function rather than a method of metricsAggregator to avoid using am.mAgg
 // by mistake.
 func metricsAppendHistograms(bbuf *bsonBuffer, raw *MetricsRaw) {
 	start := bsonAppendStartArray(bbuf, BSON_KEY_HISTOGRAMS)
@@ -528,13 +582,13 @@ func metricsAppendHistograms(bbuf *bsonBuffer, raw *MetricsRaw) {
 	bsonAppendFinishObject(bbuf, start)
 }
 
-// addHistogram encode a single histogram to the metrics message
-// This is a function rather than a method of metricsAggregator to avoid using am.metrics
+// addHistogram encode a single histogram to the mAgg message
+// This is a function rather than a method of metricsAggregator to avoid using am.mAgg
 // by mistake.
 func addHistogram(bbuf *bsonBuffer, idx int, data string, tags map[string]string) {
 	histStart := bsonAppendStartObject(bbuf, string(idx))
-	bsonAppendString(bbuf, BSON_KEY_HIST_NAME, BSON_VALUE_HIST_TRANSACTION_RT)
-	bsonAppendString(bbuf, BSON_KEY_HIST_VALUE, data)
+	bsonAppendString(bbuf, BSON_KEY_NAME, BSON_VALUE_HIST_TRANSACTION_RT)
+	bsonAppendString(bbuf, BSON_KEY_VALUE, data)
 
 	tagsStart := bsonAppendStartObject(bbuf, BSON_KEY_HIST_TAGS)
 	for k, v := range tags {

@@ -18,7 +18,7 @@ import (
 type reporter interface {
 	WritePacket([]byte) (int, error)
 	IsOpen() bool
-	// PushMetricsRecord is invoked by a trace to push the metrics record
+	// PushMetricsRecord is invoked by a trace to push the mAgg record
 	PushMetricsRecord(record MetricsRecord) bool
 }
 
@@ -55,11 +55,11 @@ func (r *udpReporter) WritePacket(buf []byte) (int, error)         { return r.co
 func (r *udpReporter) PushMetricsRecord(record MetricsRecord) bool { return false}
 
 type grpcReporter struct {
-	client  collector.TraceCollectorClient
-	ch      chan []byte
-	exit    chan struct{}
-	apiKey  string
-	metrics MetricsAggregator
+	client collector.TraceCollectorClient
+	ch     chan []byte
+	exit   chan struct{}
+	apiKey string
+	mAgg   MetricsAggregator
 }
 
 type grpcResult struct {
@@ -80,6 +80,8 @@ const (
 )
 
 func (r *grpcReporter) reportEvents() {
+	// TODO: update reporterCounters in mAgg (numSent, numFailed, etc.)
+	// TODO: e.g., r.mAgg.IncrementReporterCounter()
 	batches := make(chan [][]byte)
 	results := r.postEvents(batches)
 
@@ -146,11 +148,11 @@ func (r *grpcReporter) PushMetricsRecord(record MetricsRecord) bool {
 	if !r.IsOpen() {
 		return false
 	}
-	return r.metrics.PushMetricsRecord(&record)
+	return r.mAgg.PushMetricsRecord(&record)
 }
 
 func (r *grpcReporter) periodic() {
-	go r.metrics.ProcessMetrics()
+	go r.mAgg.ProcessMetrics()
 	for {
 		// wait until next interval
 		now := time.Now()
@@ -162,7 +164,7 @@ func (r *grpcReporter) periodic() {
 		// call PostMetrics
 		mreq := &collector.MessageRequest{
 			ApiKey:   r.apiKey,
-			Messages: r.metrics.FlushBSON(),
+			Messages: r.mAgg.FlushBSON(),
 			Encoding: collector.EncodingType_BSON,
 		}
 		mres, err := r.client.PostMetrics(context.TODO(), mreq) // TODO?
@@ -182,7 +184,7 @@ func (r *grpcReporter) periodic() {
 		if err != nil {
 			break
 		}
-		storeSettings(sres)
+		storeSettings(sres)  // TODO: settings
 	}
 }
 
@@ -207,7 +209,7 @@ func newGRPCReporter() reporter {
 		client: collector.NewTraceCollectorClient(conn),
 		ch:     make(chan []byte),
 		exit:   make(chan struct{}),
-		metrics: newMetricsAggregator(),
+		mAgg:   newMetricsAggregator(),
 	}
 	go r.reportEvents()
 	go r.periodic()
@@ -294,7 +296,7 @@ func shouldTraceRequest(layer, xtraceHeader string) (sampled bool, sampleRate, s
 	return oboeSampleRequest(layer, xtraceHeader)
 }
 
-// PushMetricsRecord push the metrics record into a channel using the global reporter.
+// PushMetricsRecord push the mAgg record into a channel using the global reporter.
 func PushMetricsRecord(record MetricsRecord) bool {
 	return globalReporter.PushMetricsRecord(record)
 }

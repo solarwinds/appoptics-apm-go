@@ -24,23 +24,36 @@ const (
 	TAGS_ERRORS           = "Errors"
 )
 
-// MetricsAggregator processes the metrics records and calculate the metrics and
+// Reporter counters
+const (
+	NUM_SENT = "NumSent"
+	NUM_OVERFLOWED = "NumOverflowed"
+	NUM_FAILED = "NumFailed"
+	NUM_TOTAL_EVENTS = "TotalEvents"
+	NUM_QUEUE_LARGEST = "QueueLargest"
+)
+
+// MetricsAggregator processes the mAgg records and calculate the mAgg and
 // histograms message from them.
 type MetricsAggregator interface {
-	// FlushBSON requests a metrics message from the message channel and encode
+	// FlushBSON requests a mAgg message from the message channel and encode
 	// it into a BSON message.
 	FlushBSON() [][]byte
-	// ProcessMetrics consumes the metrics records from the records channel
-	// and update the histograms and metrics based on the records. It will
-	// send a metrics message to the message channel on request and may reset
-	// the histograms and metrics. It is started as a separate goroutine.
+	// ProcessMetrics consumes the mAgg records from the records channel
+	// and update the histograms and mAgg based on the records. It will
+	// send a mAgg message to the message channel on request and may reset
+	// the histograms and mAgg. It is started as a separate goroutine.
 	ProcessMetrics()
-	// PushMetricsRecord push a metrics record to the records channel and return
+	// PushMetricsRecord push a mAgg record to the records channel and return
 	// immediately if the channel is full.
 	// It passes into the function a pointer but will make a dereference to that
 	// pointer when passing into the channel. So it is a separate copy on the other
 	// side of the channel.
 	PushMetricsRecord(record *MetricsRecord) bool
+	// GetReporterCounter returns the current value of the counter
+	GetReporterCounter(counter string) int64
+	// IncrementReporterCounter increase the value of counter by one
+	IncrementReporterCounter(counter string) int64
 }
 
 // metricsAggregator is a struct obeying the MetricsAggregator interface.
@@ -63,13 +76,13 @@ type metricsAggregator struct {
 	// Stores the seen transaction names, the limit is defined by MaxTransactionNames
 	transNames map[string]bool
 	// The raw struct of histograms and measurements, it's consumed by FlushBSON to
-	// create the metrics message
-	// The main goroutine is responsible for updating the metrics in this struct, while
+	// create the mAgg message
+	// The main goroutine is responsible for updating the mAgg in this struct, while
 	// the other goroutine requests a **deep copy** of this struct from the main goroutine
-	// and encodes the metrics message. The main goroutine needs to reset/clear this
-	// struct immediately after send a copy to the metrics-message-encoding goroutine.
+	// and encodes the mAgg message. The main goroutine needs to reset/clear this
+	// struct immediately after send a copy to the mAgg-message-encoding goroutine.
 	metrics MetricsRaw
-	// System metadata cache for metrics messages, which is usually expensive to calculate.
+	// System metadata cache for mAgg messages, which is usually expensive to calculate.
 	// The metadata is unlikely to change and is only updated by BSON encoder goroutine, so
 	// we don't need to pass it through a channel.
 	cachedSysMeta map[string]string
@@ -85,6 +98,8 @@ type MetricsRaw struct {
 	measurements map[string]*Measurement
 	// A flag to indicate whether the transaction names map is overflow.
 	transNamesOverflow bool
+	// Counters of the reporter
+	reporterCounters map[string]int64
 }
 
 // baseHistogram is a the base HDR histogram, an external library.
@@ -101,11 +116,11 @@ type Histogram struct {
 // Measurement keeps the tags map, count and sum of the matched request
 type Measurement struct {
 	tags  map[string]string
-	count uint32
-	sum   uint64
+	count int32
+	sum   int64
 }
 
-// MetricsRecord is used to collect and transfer the metrics record (http span) by the
+// MetricsRecord is used to collect and transfer the mAgg record (http span) by the
 // trace agent.
 type MetricsRecord struct {
 	Transaction string
@@ -115,7 +130,7 @@ type MetricsRecord struct {
 	HasError    bool
 }
 
-// FlushBSON is called by the reporter to generate the histograms/metrics
+// FlushBSON is called by the reporter to generate the histograms/mAgg
 // message in BSON format. It send a request to the histReq channel and
 // blocked in the hist channel. FlushBSON is called synchronous so it
 // expects to get the result in a short time.
@@ -133,11 +148,12 @@ func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw) [][]byte {
 	bsonBufferInit(&bbuf)
 
 	am.metricsAppendSysMetadata(&bbuf)
+	appendTransactionNameOverflow(&bbuf, raw)
 	metricsAppendMeasurements(&bbuf, raw)
 	metricsAppendHistograms(&bbuf, raw)
 
-	// We don't reset metricAggregator's internal counters (maps or lists) here as it has
-	// been done in ProcessMetrics goroutine in a synchronous way for counters consistency.
+	// We don't reset metricAggregator's internal reporterCounters (maps or lists) here as it has
+	// been done in ProcessMetrics goroutine in a synchronous way for reporterCounters consistency.
 	bsonBufferFinish(&bbuf)
 
 	var bufs = make([][]byte, 1)
@@ -146,7 +162,7 @@ func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw) [][]byte {
 }
 
 // ProcessMetrics consumes the records sent by traces and update the histograms.
-// It also generate and push the metrics event to the hist channel which is consumed by
+// It also generate and push the mAgg event to the hist channel which is consumed by
 // FlushBSON to generate the final message in BSON format.
 func (am *metricsAggregator) ProcessMetrics() {
 	for {
@@ -161,6 +177,19 @@ func (am *metricsAggregator) ProcessMetrics() {
 			break
 		}
 	}
+}
+
+// GetReporterCounter returns the current value of counter. It's not goroutine-safe, use channel
+// to transfer owner if you need modify it concurrently.
+func (am *metricsAggregator) GetReporterCounter(counter string) int64 {
+	return am.metrics.reporterCounters[counter] // Returns 0 if not exist
+}
+
+// IncrementReporterCounter increase the value of counter by one. It's not goroutine-safe, use channel
+// to transfer owner if you need modify it concurrently.
+func (am *metricsAggregator) IncrementReporterCounter(counter string) int64 {
+	am.metrics.reporterCounters[counter] += 1
+	return am.metrics.reporterCounters[counter]
 }
 
 // isWithinLimit stores the transaction name into a internal set and returns true, before
@@ -255,19 +284,19 @@ func (am *metricsAggregator) recordMeasurement(tags *map[string]string, duration
 		am.metrics.measurements[id] = newMeasurement(tags)
 	}
 	am.metrics.measurements[id].count++
-	am.metrics.measurements[id].sum += uint64(duration.Seconds() * 1e6)
+	am.metrics.measurements[id].sum += int64(duration.Seconds() * 1e6)
 }
 
 // pushMetricsRaw is called when FlushBSON requires a new histograms message
 // for encoding. It pushes the newest values of the histograms to the raw channel
 // which will be consumed by FlushBSON.
 func (am *metricsAggregator) pushMetricsRaw() {
-	// Make a deep copy of metrics and reset it immediately, otherwise it will be
+	// Make a deep copy of mAgg and reset it immediately, otherwise it will be
 	// updated while encoding the message.
 	// The following two methods (Copy and resetCounters) should not take too much time,
 	// otherwise the records buffered channel may be full in extreme workload.
 	var m *MetricsRaw = am.metrics.Copy()
-	// Reset the counters for each interval
+	// Reset the reporterCounters for each interval
 	am.resetCounters()
 	am.raw <- m
 }
@@ -276,9 +305,10 @@ func (am *metricsAggregator) pushMetricsRaw() {
 // Don't make the MetricsRaw object too big.
 func (m *MetricsRaw) Copy() *MetricsRaw {
 	mr := &MetricsRaw{
-		histograms:   make(map[string]*Histogram),
-		measurements: make(map[string]*Measurement),
+		histograms:         make(map[string]*Histogram),
+		measurements:       make(map[string]*Measurement),
 		transNamesOverflow: m.transNamesOverflow,
+		reporterCounters:   make(map[string]int64),
 	}
 
 	for k, v := range m.histograms {
@@ -287,6 +317,10 @@ func (m *MetricsRaw) Copy() *MetricsRaw {
 
 	for k, v := range m.measurements {
 		mr.measurements[k] = v.Copy()
+	}
+
+	for k, v := range m.reporterCounters {
+		mr.reporterCounters[k] = v
 	}
 
 	return mr
@@ -343,11 +377,11 @@ func (hist *Histogram) encode() string {
 }
 
 func (bh *baseHistogram) Copy() baseHistogram {
-	//TODO
+	return baseHistogram{} //TODO: remove it
 }
 
 func newBaseHistogram(precision int) baseHistogram {
-	//TODO
+	return baseHistogram{} //TODO: remove it
 }
 
 // encode is a wrapper of hdr's function with (probably) the same name
@@ -390,9 +424,10 @@ func newMetricsAggregator() MetricsAggregator {
 		exit:       make(chan struct{}),
 		transNames: make(map[string]bool),
 		metrics: MetricsRaw{
-			histograms:   make(map[string]*Histogram),
-			measurements: make(map[string]*Measurement),
+			histograms:         make(map[string]*Histogram),
+			measurements:       make(map[string]*Measurement),
 			transNamesOverflow: false,
+			reporterCounters:   make(map[string]int64),
 		},
 		cachedSysMeta: make(map[string]string),
 	}
