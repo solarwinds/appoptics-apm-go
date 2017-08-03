@@ -183,22 +183,47 @@ func (am *metricsAggregator) appendUname(bbuf *bsonBuffer) {
 }
 
 // appendIPAddresses appends the IP addresses to the BSON buffer
-// TODO: do we need to cache the IPAddr?
 func (am *metricsAggregator) appendIPAddresses(bbuf *bsonBuffer) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
+	ips := am.getIPList()
+	if ips == "" {
 		return
 	}
 
 	start := bsonAppendStartArray(bbuf, BSON_KEY_IPADDR)
 	var idx int = 0
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			bsonAppendString(bbuf, strconv.Itoa(idx), ipnet.IP.String())
+	for _, ip := range strings.Split(ips, ",") {
+		if ip == "" {
+			continue
 		}
+		bsonAppendString(bbuf, strconv.Itoa(idx), ip)
+	}
+	bsonAppendFinishObject(bbuf, start)
+}
+
+// getIPList gets the non-loopback IP addresses and returns a string with
+// IP addresses separated with comma.
+func (am *metricsAggregator) getIPList() (ips string) {
+	if ips, ok := am.cachedSysMeta[BSON_KEY_IPADDR]; ok {
+		return ips
 	}
 
-	bsonAppendFinishObject(bbuf, start)
+	// Use cached MACList
+	defer func() {
+		am.cachedSysMeta[BSON_KEY_IPADDR] = ips
+	}()
+
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			ips += ipnet.IP.String() + ","
+		}
+	}
+	ips = strings.TrimSuffix(ips, ",") // Trim the final one
+	return ips
 }
 
 // appendMAC appends the MAC addresses to the BSON buffer
