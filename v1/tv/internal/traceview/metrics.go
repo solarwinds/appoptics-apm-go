@@ -144,20 +144,19 @@ func (am *metricsAggregator) FlushBSON() [][]byte {
 // createMetricsMsg read the histogram and measurement data from MetricsRaw and build
 // the BSON message.
 func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw) [][]byte {
-	var bbuf bsonBuffer
-	bsonBufferInit(&bbuf)
+	var bbuf = NewBsonBuffer()
 
-	am.metricsAppendSysMetadata(&bbuf)
-	appendTransactionNameOverflow(&bbuf, raw)
-	metricsAppendMeasurements(&bbuf, raw)
-	metricsAppendHistograms(&bbuf, raw)
+	am.metricsAppendSysMetadata(bbuf)
+	appendTransactionNameOverflow(bbuf, raw)
+	metricsAppendMeasurements(bbuf, raw)
+	metricsAppendHistograms(bbuf, raw)
 
 	// We don't reset metricAggregator's internal reporterCounters (maps or lists) here as it has
 	// been done in ProcessMetrics goroutine in a synchronous way for reporterCounters consistency.
-	bsonBufferFinish(&bbuf)
+	bsonBufferFinish(bbuf)
 
 	var bufs = make([][]byte, 1)
-	bufs[0] = bbuf.buf
+	bufs[0] = bbuf.GetBuf()
 	return bufs
 }
 
@@ -165,6 +164,7 @@ func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw) [][]byte {
 // It also generate and push the mAgg event to the hist channel which is consumed by
 // FlushBSON to generate the final message in BSON format.
 func (am *metricsAggregator) ProcessMetrics() {
+	OboeLog(INFO, "ProcessMetrics(): goroutine started.", nil)
 	for {
 		select {
 		case record := <-am.records:
@@ -271,7 +271,6 @@ func (am *metricsAggregator) processMeasurements(transaction string, record *Met
 		withErrorTags[TAGS_ERRORS] = "true"
 		am.recordMeasurement(&withErrorTags, record.Duration)
 	}
-
 }
 
 // recordMeasurement updates a particular measurement based on the tags and duration
@@ -298,6 +297,7 @@ func (am *metricsAggregator) pushMetricsRaw() {
 	var m *MetricsRaw = am.metrics.Copy()
 	// Reset the reporterCounters for each interval
 	am.resetCounters()
+	OboeLog(DEBUG, "pushMetricsRaw(): pushing MetricsRaw as per request", nil)
 	am.raw <- m
 }
 
@@ -418,7 +418,7 @@ func newMeasurement(inTags *map[string]string) *Measurement {
 // it's a nil map pointer.
 func newMetricsAggregator() MetricsAggregator {
 	return &metricsAggregator{
-		records:    make(chan MetricsRecord, MetricsRecordMaxSize),
+		records:    make(chan MetricsRecord, MetricsRecordMaxSize), // buffered
 		rawReq:     make(chan struct{}),
 		raw:        make(chan *MetricsRaw),
 		exit:       make(chan struct{}),

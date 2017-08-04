@@ -8,6 +8,14 @@ type bsonBuffer struct {
 	buf []byte
 }
 
+func (bbuf *bsonBuffer) GetBuf() []byte { return bbuf.buf }
+
+func NewBsonBuffer() *bsonBuffer {
+	var bbuf = &bsonBuffer{}
+	bsonBufferInit(bbuf)
+	return bbuf
+}
+
 // Conforms to C interface to simplify port
 
 func bsonBufferInit(b *bsonBuffer) {

@@ -20,11 +20,12 @@ const (
 
 // OboeLog print logs based on the debug level.
 func OboeLog(level DebugLevel, msg string, err error) {
+	// TODO: print caller's name inside this function.
 	if !debugLog { // remove it
 		return
 	}
 	if level >= debugLevel {
-		log.Printf("%s: %v", msg, err)
+		log.Printf("%s %v", msg, err)
 	}
 }
 
