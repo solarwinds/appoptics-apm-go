@@ -3,6 +3,7 @@
 package traceview
 
 import (
+	"errors"
 	"strconv"
 	"time"
 )
@@ -38,7 +39,7 @@ const (
 type MetricsAggregator interface {
 	// FlushBSON requests a mAgg message from the message channel and encode
 	// it into a BSON message.
-	FlushBSON() [][]byte
+	FlushBSON() ([][]byte, error)
 	// ProcessMetrics consumes the mAgg records from the records channel
 	// and update the histograms and mAgg based on the records. It will
 	// send a mAgg message to the message channel on request and may reset
@@ -54,6 +55,8 @@ type MetricsAggregator interface {
 	GetReporterCounter(counter string) int64
 	// IncrementReporterCounter increase the value of counter by one
 	IncrementReporterCounter(counter string) int64
+	// GetExitChan returns the exit channel of the aggregator
+	GetExitChan() chan struct{}
 }
 
 // metricsAggregator is a struct obeying the MetricsAggregator interface.
@@ -134,11 +137,14 @@ type MetricsRecord struct {
 // message in BSON format. It send a request to the histReq channel and
 // blocked in the hist channel. FlushBSON is called synchronous so it
 // expects to get the result in a short time.
-func (am *metricsAggregator) FlushBSON() [][]byte {
+func (am *metricsAggregator) FlushBSON() ([][]byte, error) {
 	am.rawReq <- struct{}{}
 	// Don't let me get blocked here too long
-	raw := <-am.raw
-	return am.createMetricsMsg(raw)
+	raw, ok := <-am.raw
+	if !ok {
+		return nil, errors.New("FlushBSON(): failed to read from am.raw")
+	}
+	return am.createMetricsMsg(raw), nil
 }
 
 // createMetricsMsg read the histogram and measurement data from MetricsRaw and build
@@ -174,6 +180,8 @@ func (am *metricsAggregator) ProcessMetrics() {
 		case <-am.exit:
 			OboeLog(INFO, "ProcessMetrics(): Closing ProcessMetrics goroutine.", nil)
 			close(am.raw)
+			for range am.records {
+			} // drops all unprocessed records
 			break
 		}
 	}
@@ -190,6 +198,11 @@ func (am *metricsAggregator) GetReporterCounter(counter string) int64 {
 func (am *metricsAggregator) IncrementReporterCounter(counter string) int64 {
 	am.metrics.reporterCounters[counter] += 1
 	return am.metrics.reporterCounters[counter]
+}
+
+// GetExitChan returns the aggregator's exit channel
+func (am *metricsAggregator) GetExitChan() chan struct{} {
+	return am.exit
 }
 
 // isWithinLimit stores the transaction name into a internal set and returns true, before
@@ -354,8 +367,15 @@ func (m *Measurement) Copy() *Measurement {
 }
 
 // PushMetricsRecord is called by the Trace to record the metadata of a call, e.g., call duration,
-// transaction name, status code.
+// transaction name, status code. It returns false if the buffered channel is full.
 func (am *metricsAggregator) PushMetricsRecord(record *MetricsRecord) bool {
+	// Returns immediately if the metrics channel has been gone.
+	select {
+	case <-am.exit:
+		return false
+	default: // move forward
+	}
+	// Push the records to metrics records channel, or returns false if the channel is full.
 	select {
 	// It makes a copy when *record is passed into the channel, there is no reference types
 	// inside MetricsRecord so we don't need a deep copy.
