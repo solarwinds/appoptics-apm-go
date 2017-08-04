@@ -26,10 +26,10 @@ const (
 
 // Reporter counters
 const (
-	NUM_SENT = "NumSent"
-	NUM_OVERFLOWED = "NumOverflowed"
-	NUM_FAILED = "NumFailed"
-	NUM_TOTAL_EVENTS = "TotalEvents"
+	NUM_SENT          = "NumSent"
+	NUM_OVERFLOWED    = "NumOverflowed"
+	NUM_FAILED        = "NumFailed"
+	NUM_TOTAL_EVENTS  = "TotalEvents"
 	NUM_QUEUE_LARGEST = "QueueLargest"
 )
 
@@ -93,7 +93,7 @@ type metricsAggregator struct {
 type MetricsRaw struct {
 	// Stores the transaction based histograms, the size of the map is defined by
 	// MaxTransactionNames
-	histograms   map[string]*Histogram
+	histograms map[string]*Histogram
 	// Stores the transaction based measurement.
 	measurements map[string]*Measurement
 	// A flag to indicate whether the transaction names map is overflow.

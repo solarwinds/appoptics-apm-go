@@ -32,13 +32,13 @@ const (
 	BSON_KEY_FLUSH_INTERVAL            = "MetricsFlushInterval"
 	BSON_KEY_TRANSACTION_NAME_OVERFLOW = "TransactionNameOverflow"
 	BSON_KEY_MEASUREMENTS              = "measurements"
-	BSON_KEY_LOAD1 = "Load1"
-	BSON_KEY_TOTAL_RAM = "TotalRAM"
-	BSON_KEY_FREE_RAM = "FreeRAM"
-	BSON_KEY_PROCESSRAM = "ProcessRAM"
-	BSON_KEY_COUNT = "count"
-	BSON_KEY_SUM = "sum"
-	BSON_KEY_TAGS = "tags"
+	BSON_KEY_LOAD1                     = "Load1"
+	BSON_KEY_TOTAL_RAM                 = "TotalRAM"
+	BSON_KEY_FREE_RAM                  = "FreeRAM"
+	BSON_KEY_PROC_RAM                  = "ProcessRAM"
+	BSON_KEY_COUNT                     = "count"
+	BSON_KEY_SUM                       = "sum"
+	BSON_KEY_TAGS                      = "tags"
 	BSON_KEY_HISTOGRAMS                = "histograms"
 	BSON_KEY_NAME                      = "name"
 	BSON_KEY_VALUE                     = "value"
@@ -540,12 +540,38 @@ func metricsAddNumObj(bbuf *bsonBuffer, index *int, name string, value interface
 func metricsAppendSystemLoad(bbuf *bsonBuffer, raw *MetricsRaw, idx *int) {
 	// system load of last minute
 	if s := getStrByKeyword("/proc/loadavg", ""); s != "" {
-		metricsAddNumObj(bbuf, idx, BSON_KEY_LOAD1, float64(strings.Split(s, " ")[0]))
+		metricsAddNumObj(bbuf, idx, BSON_KEY_LOAD1, float64(strings.Fields(s)[0]))
 	}
-	// system total / free memory
-	//TODO
-	// process RAM
-	//TODO
+	// system total memory
+	if tStr := getStrByKeyword("/proc/meminfo", "MemTotal"); tStr != "" {
+		tSlice := strings.Fields(tStr) // MemTotal:        7657668 kB
+		if len(tSlice) == 3 {
+			if t, err := strconv.Atoi(tSlice[1]); err == nil {
+				metricsAddNumObj(bbuf, idx, BSON_KEY_TOTAL_RAM, t*1024) // bytes
+			}
+		}
+	}
+	// free memory
+	if fStr := getStrByKeyword("/proc/meminfo", "MemFree"); fStr != "" {
+		fSlice := strings.Fields(fStr) // MemFree:          161396 kB
+		if len(fSlice) == 3 {
+			if f, err := strconv.Atoi(fSlice[1]); err == nil {
+				metricsAddNumObj(bbuf, idx, BSON_KEY_FREE_RAM, f*1024) // bytes
+			}
+		}
+	}
+
+	if pStr := getStrByKeyword("/proc/self/statm", ""); pStr != "" {
+		pSlice := strings.Fields(pStr)
+		if len(pSlice) != 0 {
+			for _, ps := range pSlice {
+				if p, err := strconv.Atoi(ps); err == nil {
+					metricsAddNumObj(bbuf, idx, BSON_KEY_PROC_RAM, p*os.Getpagesize())
+					break
+				}
+			}
+		}
+	}
 }
 
 // metricsAppendTransactionMeasurements appends transaction based measurements to mAgg
