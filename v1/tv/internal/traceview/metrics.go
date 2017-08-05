@@ -369,12 +369,6 @@ func (m *Measurement) Copy() *Measurement {
 // PushMetricsRecord is called by the Trace to record the metadata of a call, e.g., call duration,
 // transaction name, status code. It returns false if the buffered channel is full.
 func (am *metricsAggregator) PushMetricsRecord(record *MetricsRecord) bool {
-	// Returns immediately if the metrics channel has been gone.
-	select {
-	case <-am.exit:
-		return false
-	default: // move forward
-	}
 	// Push the records to metrics records channel, or returns false if the channel is full.
 	select {
 	// It makes a copy when *record is passed into the channel, there is no reference types

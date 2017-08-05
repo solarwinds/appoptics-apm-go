@@ -39,6 +39,7 @@ const (
 type reporter interface {
 	WritePacket([]byte) (int, error)
 	IsOpen() bool
+	IsMetricsConnOpen() bool
 	// PushMetricsRecord is invoked by a trace to push the mAgg record
 	PushMetricsRecord(record MetricsRecord) bool
 }
@@ -64,6 +65,7 @@ func newUDPReporter() reporter {
 type nullReporter struct{}
 
 func (r *nullReporter) IsOpen() bool                                { return false }
+func (r *nullReporter) IsMetricsConnOpen() bool                     { return false }
 func (r *nullReporter) WritePacket(buf []byte) (int, error)         { return len(buf), nil }
 func (r *nullReporter) PushMetricsRecord(record MetricsRecord) bool { return true }
 
@@ -72,6 +74,7 @@ type udpReporter struct {
 }
 
 func (r *udpReporter) IsOpen() bool                                { return r.conn != nil }
+func (r *udpReporter) IsMetricsConnOpen() bool                     { return false }
 func (r *udpReporter) WritePacket(buf []byte) (int, error)         { return r.conn.Write(buf) }
 func (r *udpReporter) PushMetricsRecord(record MetricsRecord) bool { return false }
 
@@ -98,7 +101,8 @@ type grpcResult struct {
 	err    error
 }
 
-func (r *grpcReporter) IsOpen() bool { return r.client != nil } // TODO
+func (r *grpcReporter) IsOpen() bool            { return r.client != nil } // TODO
+func (r *grpcReporter) IsMetricsConnOpen() bool { return r.metrics.client != nil }
 func (r *grpcReporter) WritePacket(buf []byte) (int, error) {
 	r.ch <- buf
 	return len(buf), nil
@@ -170,7 +174,7 @@ func (r *grpcReporter) postEvents(batches <-chan [][]byte) <-chan *grpcResult {
 }
 
 func (r *grpcReporter) PushMetricsRecord(record MetricsRecord) bool {
-	if !r.IsOpen() {
+	if !r.IsMetricsConnOpen() {
 		return false
 	}
 	return r.mAgg.PushMetricsRecord(&record)
@@ -244,7 +248,8 @@ func (r *grpcReporter) reconnect() {
 		} else { // reconnect
 			conn, err := grpc.Dial(grpcReporterAddr) // TODO: is it the correct way to reconnect?
 			if err != nil {
-				r.metrics.nextRetryTime = time.Now().Add(time.Second * retryAmplifier) //TODO: reasonable?
+				// retry time better to be something like 5s, 10s, 20s, 40s, ...
+				r.metrics.nextRetryTime = time.Now().Add(time.Second * retryAmplifier)
 				r.metrics.retries += 1
 			} else { // reconnected
 				r.metrics.client = collector.NewTraceCollectorClient(conn)
