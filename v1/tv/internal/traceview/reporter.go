@@ -223,15 +223,21 @@ func (r *grpcReporter) periodic() {
 		}
 
 		r.healthCheck()
-		if r.metricsConn.status == CLOSING {
-			// CLOSING after health check, resources have been released.
+		if r.metricsConnClosed() {
+			// closed after health check, resources have been released.
 			break
 		}
 	}
 }
 
+// metricsConnClosed checks if the metrics sending connection is closed
+func (r *grpcReporter) metricsConnClosed() bool {
+	return r.metricsConn.status == CLOSING && r.metricsConn.client == nil
+}
+
 // healthCheck checks the status of the reporter (e.g., gRPC connection) and try to fix
-// any problems found. It tries to close the reporter and release resources if the reporter is request to close.
+// any problems found. It tries to close the reporter and release resources if the
+// reporter is request to close.
 func (r *grpcReporter) healthCheck() {
 	if r.metricsConn.status == OK {
 		return
@@ -252,14 +258,12 @@ func (r *grpcReporter) reconnect() {
 	// TODO: gRPC supports auto-reconnection, need to make sure what happens to the sending API then,
 	// TODO: does it wait for the reconnection, or it returns an error immediately?
 	OboeLog(DEBUG, "Reconnecting to gRPC server", nil)
-	if r.metricsConn.status == OK {
-		return
-	} else if r.metricsConn.status == CLOSING {
+	if r.metricsConn.status == OK || r.metricsConn.status == CLOSING {
 		return
 	} else {
 		if r.metricsConn.retries > MaxRetriesNum { // infinitely retry
 			OboeLog(ERROR, "Reached retries limit, exiting", nil)
-			r.metricsConn.status = CLOSING
+			r.metricsConn.status = CLOSING // set it to CLOSING, it will be closed in the next loop
 			return
 		}
 
@@ -385,6 +389,7 @@ func (r *grpcReporter) sendMetrics() {
 	return
 }
 
+// updateRetryParms increases retries number, moves to the next level of retry delay, etc.
 func (r *grpcReporter) updateRetryParms() {
 	// TODO
 }
