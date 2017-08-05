@@ -39,7 +39,7 @@ const (
 type MetricsAggregator interface {
 	// FlushBSON requests a mAgg message from the message channel and encode
 	// it into a BSON message.
-	FlushBSON() ([][]byte, error)
+	FlushBSON() ([]byte, error)
 	// ProcessMetrics consumes the mAgg records from the records channel
 	// and update the histograms and mAgg based on the records. It will
 	// send a mAgg message to the message channel on request and may reset
@@ -137,7 +137,7 @@ type MetricsRecord struct {
 // message in BSON format. It send a request to the histReq channel and
 // blocked in the hist channel. FlushBSON is called synchronous so it
 // expects to get the result in a short time.
-func (am *metricsAggregator) FlushBSON() ([][]byte, error) {
+func (am *metricsAggregator) FlushBSON() ([]byte, error) {
 	am.rawReq <- struct{}{}
 	// Don't let me get blocked here too long
 	raw, ok := <-am.raw
@@ -149,7 +149,7 @@ func (am *metricsAggregator) FlushBSON() ([][]byte, error) {
 
 // createMetricsMsg read the histogram and measurement data from MetricsRaw and build
 // the BSON message.
-func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw) [][]byte {
+func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw) []byte {
 	var bbuf = NewBsonBuffer()
 
 	am.metricsAppendSysMetadata(bbuf)
@@ -160,10 +160,7 @@ func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw) [][]byte {
 	// We don't reset metricAggregator's internal reporterCounters (maps or lists) here as it has
 	// been done in ProcessMetrics goroutine in a synchronous way for reporterCounters consistency.
 	bsonBufferFinish(bbuf)
-
-	var bufs = make([][]byte, 1)
-	bufs[0] = bbuf.GetBuf()
-	return bufs
+	return bbuf.GetBuf()
 }
 
 // ProcessMetrics consumes the records sent by traces and update the histograms.
@@ -369,7 +366,7 @@ func (m *Measurement) Copy() *Measurement {
 // PushMetricsRecord is called by the Trace to record the metadata of a call, e.g., call duration,
 // transaction name, status code. It returns false if the buffered channel is full.
 func (am *metricsAggregator) PushMetricsRecord(record *MetricsRecord) bool {
-	// Push the records to metrics records channel, or returns false if the channel is full.
+	// Push the records to metricsConn records channel, or returns false if the channel is full.
 	select {
 	// It makes a copy when *record is passed into the channel, there is no reference types
 	// inside MetricsRecord so we don't need a deep copy.

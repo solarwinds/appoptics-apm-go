@@ -178,7 +178,7 @@ func sendMetricsMessage(r reporter) {
 	if err != nil {
 		return
 	}
-	// runtime metrics
+	// runtime metricsConn
 	ev.AddString("ProcessName", initLayer)
 	ev.AddInt64(metricsPrefix+"type=threadcount,name=NumGoroutine", int64(runtime.NumGoroutine()))
 

@@ -19,7 +19,7 @@ import (
 const (
 	OK           Status = iota
 	DISCONNECTED        // will try to reconnect it later
-	RECONNECTING        // reconnecting to gRPC server in progress
+	RECONNECTING        // reconnecting to gRPC server (may be a redirected one)
 	CLOSING             // closed by us, don't do anything to resume it
 )
 
@@ -33,7 +33,9 @@ const (
 	maxEventBytes            = 64 * 1024 * 1024
 	grpcReporterFlushTimeout = 100 * time.Millisecond
 	agentMetricsInterval     = time.Minute
-	retryAmplifier           = 30
+	agentMetricsStepInterval = time.Millisecond * 500
+	retryAmplifier           = 2
+	maxRetryInterval         = 60
 )
 
 type reporter interface {
@@ -80,6 +82,15 @@ func (r *udpReporter) PushMetricsRecord(record MetricsRecord) bool { return fals
 
 type Status int
 
+type Sender struct {
+	messages    [][]byte
+	nextTime    time.Time
+	retryActive bool
+	retryDelay  time.Time
+	retryTime   time.Time
+	retries     uint
+}
+
 type gRPC struct {
 	client        collector.TraceCollectorClient
 	status        Status
@@ -88,12 +99,15 @@ type gRPC struct {
 }
 
 type grpcReporter struct {
-	client  collector.TraceCollectorClient
-	metrics gRPC
-	ch      chan []byte
-	exit    chan struct{}
-	apiKey  string
-	mAgg    MetricsAggregator
+	client      collector.TraceCollectorClient
+	metricsConn gRPC
+	metrics     Sender
+	status      Sender
+	settings    Sender
+	ch          chan []byte
+	exit        chan struct{}
+	apiKey      string
+	mAgg        MetricsAggregator
 }
 
 type grpcResult struct {
@@ -102,7 +116,7 @@ type grpcResult struct {
 }
 
 func (r *grpcReporter) IsOpen() bool            { return r.client != nil } // TODO
-func (r *grpcReporter) IsMetricsConnOpen() bool { return r.metrics.client != nil }
+func (r *grpcReporter) IsMetricsConnOpen() bool { return r.metricsConn.client != nil }
 func (r *grpcReporter) WritePacket(buf []byte) (int, error) {
 	r.ch <- buf
 	return len(buf), nil
@@ -183,28 +197,34 @@ func (r *grpcReporter) PushMetricsRecord(record MetricsRecord) bool {
 // periodic is executed in a separate goroutine to encode messages and push them to the gRPC server
 // This function is not concurrency-safe, don't run it in multiple goroutines.
 func (r *grpcReporter) periodic() {
+	OboeLog(DEBUG, "periodic(): goroutine started", nil)
 	go r.mAgg.ProcessMetrics()
 
+	// Initialize next metric sending time
+	r.metrics.nextTime = getNextIntervalTime(agentMetricsInterval)
 	for {
-		// Wait until next interval
-		r.blockTillNextInterval(agentMetricsInterval)
+		// avoid consuming too much CPU by sleeping for a short while.
+		r.blockTillNextInterval(agentMetricsStepInterval)
 
-		// send metrics
-		r.sendMetrics()
-		// send status
-		r.sendStatus()
-		// retrieve new settings
-		r.getSettings()
-
+		if r.metricsConn.status == OK {
+			// send metricsConn
+			r.sendMetrics()
+			// send status
+			r.sendStatus()
+			// retrieve new settings
+			r.getSettings()
+		}
+		// exit as per the request from the other (main) goroutine
 		select {
 		case <-r.exit:
-			r.metrics.status = CLOSING
+			r.metricsConn.status = CLOSING
 			break
 		default:
 		}
 
 		r.healthCheck()
-		if r.metrics.status == CLOSING {
+		if r.metricsConn.status == CLOSING {
+			// CLOSING after health check, resources have been released.
 			break
 		}
 	}
@@ -213,15 +233,14 @@ func (r *grpcReporter) periodic() {
 // healthCheck checks the status of the reporter (e.g., gRPC connection) and try to fix
 // any problems found. It tries to close the reporter and release resources if the reporter is request to close.
 func (r *grpcReporter) healthCheck() {
-	// Close the reporter if requested.
-	if r.metrics.status == CLOSING {
-		r.closeMetricsConn()
+	if r.metricsConn.status == OK {
 		return
 	}
-
-	if r.metrics.status == OK {
+	// Close the reporter if requested.
+	if r.metricsConn.status == CLOSING {
+		r.closeMetricsConn()
 		return
-	} else { // disconnected
+	} else { // disconnected or reconnecting (check retry timeout)
 		r.reconnect()
 	}
 
@@ -230,32 +249,38 @@ func (r *grpcReporter) healthCheck() {
 // reconnect is used to reconnect to the grpc server when the status is DISCONNECTED
 // Consider using mutex as multiple goroutines will access the status parallelly
 func (r *grpcReporter) reconnect() {
+	// TODO: gRPC supports auto-reconnection, need to make sure what happens to the sending API then,
+	// TODO: does it wait for the reconnection, or it returns an error immediately?
 	OboeLog(DEBUG, "Reconnecting to gRPC server", nil)
-	if r.metrics.status == OK {
+	if r.metricsConn.status == OK {
 		return
-	} else if r.metrics.status == CLOSING {
+	} else if r.metricsConn.status == CLOSING {
 		return
 	} else {
-		if r.metrics.retries > MaxRetriesNum {
+		if r.metricsConn.retries > MaxRetriesNum { // infinitely retry
 			OboeLog(ERROR, "Reached retries limit, exiting", nil)
-			r.metrics.status = CLOSING
+			r.metricsConn.status = CLOSING
 			return
 		}
 
-		if r.metrics.nextRetryTime.After(time.Now()) {
-			// check it again after 500ms, avoid comsuming too much CPU
-			<-time.After(time.Millisecond * 500)
+		if r.metricsConn.nextRetryTime.After(time.Now()) {
+			// do nothing
 		} else { // reconnect
-			conn, err := grpc.Dial(grpcReporterAddr) // TODO: is it the correct way to reconnect?
+			// TODO: close the old connection first, as we are redirecting ...
+			conn, err := grpc.Dial(grpcReporterAddr) // TODO: correct way to reconnect? change addr to struct attribtue
 			if err != nil {
-				// retry time better to be something like 5s, 10s, 20s, 40s, ...
-				r.metrics.nextRetryTime = time.Now().Add(time.Second * retryAmplifier)
-				r.metrics.retries += 1
+				// TODO: retry time better to be exponential
+				nextInterval := (r.metricsConn.retries + 1) * retryAmplifier
+				if nextInterval > maxRetryInterval {
+					nextInterval = maxRetryInterval
+				}
+				r.metricsConn.nextRetryTime = time.Now().Add(time.Second * time.Duration(nextInterval)) // TODO: round up?
+				r.metricsConn.retries += 1
 			} else { // reconnected
-				r.metrics.client = collector.NewTraceCollectorClient(conn)
-				r.metrics.retries = 0
-				r.metrics.nextRetryTime = time.Time{}
-				r.metrics.status = OK
+				r.metricsConn.client = collector.NewTraceCollectorClient(conn)
+				r.metricsConn.retries = 0
+				r.metricsConn.nextRetryTime = time.Time{}
+				r.metricsConn.status = OK
 			}
 
 		}
@@ -270,18 +295,19 @@ func (r *grpcReporter) RequestToClose() {
 // close closes the channels and gRPC connections owned by a reporter
 func (r *grpcReporter) closeMetricsConn() {
 	// close channels and connections
-	OboeLog(INFO, "periodic() metrics goroutine is exiting", nil)
+	OboeLog(INFO, "periodic() metricsConn goroutine is exiting", nil)
 	// Finally set toe reporter to nil to avoid repeated closing
 	close(r.mAgg.GetExitChan())
 
 	// TODO: close gRPC client
-	r.metrics.client = nil
+	r.metricsConn.client = nil
 }
 
 // blockTillNextInterval blocks the caller and will return at the next wake up time, which
 // is the nearest multiple of interval (since the zero time)
 func (r *grpcReporter) blockTillNextInterval(interval time.Duration) {
-	if r.metrics.status != OK {
+	// skip the delay if metricsConn connection is not working.
+	if r.metricsConn.status != OK {
 		return
 	}
 
@@ -290,29 +316,77 @@ func (r *grpcReporter) blockTillNextInterval(interval time.Duration) {
 	if nextInterval.Before(now) {
 		nextInterval = nextInterval.Add(interval)
 	}
-	<-time.After(nextInterval.Sub(now))
+	<-time.After(getNextIntervalTime(interval).Sub(now))
+}
+
+func getNextIntervalTime(interval time.Duration) time.Time {
+	now := time.Now()
+	nextInterval := now.Round(interval)
+	if nextInterval.Before(now) {
+		nextInterval = nextInterval.Add(interval)
+	}
+	return nextInterval
 }
 
 // sendMetrics is called periodically (in a interval defined by agentMetricsInterval)
-// to send metrics data to the gRPC sercer
+// to send metricsConn data to the gRPC sercer
 func (r *grpcReporter) sendMetrics() {
 	// Still need to fetch raw data from channel to avoid channels being filled with old data
 	// (and possibly blocks the sender)
-	messages, err := r.mAgg.FlushBSON()
+	if r.metrics.nextTime.After(time.Now()) && !r.metrics.retryActive {
+		return
+	}
+	if r.metrics.nextTime.Before(time.Now()) {
+		r.metrics.nextTime = getNextIntervalTime(agentMetricsInterval) // TODO: change to a value configured by settings.args
 
-	if err != nil || r.metrics.status != OK {
+		message, err := r.mAgg.FlushBSON()
+		if err == nil {
+			r.metrics.messages = append(r.metrics.messages, message)
+		}
+
+	}
+	if len(r.metrics.messages) == 0 || r.metricsConn.status != OK {
 		return
 	}
 
 	mreq := &collector.MessageRequest{
 		ApiKey:   r.apiKey,
-		Messages: messages,
+		Messages: r.metrics.messages,
 		Encoding: collector.EncodingType_BSON,
 	}
-	mres, err := r.metrics.client.PostMetrics(context.TODO(), mreq)
-	_, _ = mres, err // TODO: error handling XXX
+	mres, err := r.metricsConn.client.PostMetrics(context.TODO(), mreq)
+	if err != nil {
+		OboeLog(INFO, "Error in sending metrics", err)
+		r.metricsConn.status = DISCONNECTED
+		return
+	}
+	switch mres.GetResult() {
+	case collector.ResultCode_OK:
+		OboeLog(DEBUG, "Sent metrics.", nil)
+		r.metrics.messages = make([][]byte, 1)
+		r.metrics.retries = 0
+		r.metrics.retryActive = false
+	case collector.ResultCode_TRY_LATER:
+		OboeLog(WARNING, "sendMetrics(): got TRY_LATER from gRPC server", nil)
+		if r.metrics.retries >= MaxRetriesNum {
+			OboeLog(WARNING, "sendMetrics(): exceeds max number of retries", nil)
+			r.metrics.messages = r.metrics.messages[1:] // TODO: correct?
+			break
+		}
+		r.updateRetryParms()
+	case collector.ResultCode_LIMIT_EXCEEDED:
+		// TODO
+	case collector.ResultCode_INVALID_API_KEY:
+		// TODO
+	case collector.ResultCode_REDIRECT:
+		// TODO
 
+	}
 	return
+}
+
+func (r *grpcReporter) updateRetryParms() {
+	// TODO
 }
 
 // sendStatus is called periodically (in a interval defined by agentMetricsInterval)
@@ -321,7 +395,7 @@ func (r *grpcReporter) sendStatus() {
 	// TODO: fetch data from status event channels before check status
 	// TODO: (and drop it if reporter is DISCONNECTED
 
-	if r.metrics.status != OK {
+	if r.metricsConn.status != OK {
 		return
 	}
 	// TODO: encode status message and call gRPC PostStatus to send it
@@ -330,7 +404,7 @@ func (r *grpcReporter) sendStatus() {
 // getSettings is called periodically (in a interval defined by agentMetricsInterval)
 // to retrieve updated setting from gRPC server and process it.
 func (r *grpcReporter) getSettings() {
-	if r.metrics.status != OK {
+	if r.metricsConn.status != OK {
 		return
 	}
 	sreq := &collector.SettingsRequest{
@@ -357,6 +431,26 @@ func storeSettings(r *collector.SettingsResult) {
 	}
 }
 
+func newSender() Sender {
+	return Sender{
+		messages:    make([][]byte, 1),
+		nextTime:    time.Time{},
+		retryActive: false,
+		retryDelay:  time.Time{},
+		retryTime:   time.Time{},
+		retries:     0,
+	}
+}
+
+func newGRPC(conn *grpc.ClientConn) gRPC {
+	return gRPC{
+		client:        collector.TraceCollectorClient(conn),
+		status:        OK,
+		retries:       0,
+		nextRetryTime: time.Time{},
+	}
+}
+
 func newGRPCReporter() reporter {
 	// TODO: fetch data and release channel space even when gRPC is disconnected
 	if reportingDisabled {
@@ -364,19 +458,30 @@ func newGRPCReporter() reporter {
 	}
 	conn, err := grpc.Dial(grpcReporterAddr)
 	if err != nil {
-		if os.Getenv("TRACEVIEW_DEBUG") != "" {
+		if os.Getenv("TRACEVIEW_DEBUG") != "" { // TODO: use OboeLog
 			log.Printf("TraceView failed to initialize gRPC reporter: %v", err)
 		}
 		return &nullReporter{}
 	}
+	mConn, err := grpc.Dial(grpcReporterAddr) // TODO: can we have two connections?
+	if err != nil {
+		OboeLog(ERROR, "Failed to intialize gRPC metrics reporter", nil)
+		// TODO: close conn connection
+		return &nullReporter{}
+	}
+
 	r := &grpcReporter{
-		client: collector.NewTraceCollectorClient(conn),
-		ch:     make(chan []byte),
-		exit:   make(chan struct{}),
-		mAgg:   newMetricsAggregator(),
+		client:      collector.NewTraceCollectorClient(conn),
+		metricsConn: newGRPC(mConn),
+		metrics:     newSender(),
+		status:      newSender(),
+		settings:    newSender(),
+		ch:          make(chan []byte),
+		exit:        make(chan struct{}),
+		mAgg:        newMetricsAggregator(),
 	}
 	go r.reportEvents()
-	go r.periodic() // metrics sender goroutine
+	go r.periodic() // metricsConn sender goroutine
 	return r
 }
 
