@@ -28,16 +28,20 @@ const (
 // Reporter parameters which are unlikely to change
 // TODO: some of them may be updated by settings from server, don't use constants
 const (
-	maxEventBytes            = 64 * 1024 * 1024
-	grpcReporterFlushTimeout = 100 * time.Millisecond
-	agentMetricsInterval     = time.Minute
-	agentMetricsTickInterval = time.Millisecond * 500
-	retryAmplifier           = 1.5
-	intialRetryInterval      = time.Millisecond * 500
-	maxRetryInterval         = time.Minute
-	maxMetricsRetries        = 20
-	maxConnRedirects         = 20
-	maxConnRetries           = ^uint(0)
+	maxEventBytes                = 64 * 1024 * 1024
+	grpcReporterFlushTimeout     = 100 * time.Millisecond
+	agentMetricsInterval         = time.Minute
+	agentMetricsTickInterval     = time.Millisecond * 500
+	retryAmplifier               = 1.5
+	intialRetryInterval          = time.Millisecond * 500
+	maxRetryInterval             = time.Minute
+	maxMetricsRetries            = 20
+	maxConnRedirects             = 20
+	maxConnRetries               = ^uint(0)
+	maxStatusChanCap             = 200
+	loadStatusMsgsShortBlock     = time.Millisecond * 50
+	metricsConnKeepAliveInterval = time.Second * 20
+	maxMetricsMessagesOnePost    = 100
 )
 
 type reporter interface {
@@ -94,24 +98,26 @@ type Sender struct {
 }
 
 type gRPC struct {
-	client        collector.TraceCollectorClient
-	status        Status
-	retries       uint
-	nextRetryTime time.Time
-	redirects     uint
+	client            collector.TraceCollectorClient
+	status            Status
+	retries           uint
+	nextRetryTime     time.Time // only works in DISCONNECTED state
+	redirects         uint
+	nextKeepAliveTime time.Time
 }
 
 type grpcReporter struct {
 	client      collector.TraceCollectorClient
-	serverAddr  string
-	metricsConn gRPC
+	serverAddr  string // server address in string format: host:port
+	metricsConn gRPC   // metrics sender connection, for metrics, status and settings
 	metrics     Sender
 	status      Sender
 	settings    Sender
-	ch          chan []byte
+	ch          chan []byte // event messages
 	exit        chan struct{}
 	apiKey      string
-	mAgg        MetricsAggregator
+	mAgg        MetricsAggregator // metrics raw records, need pre-preprocessing
+	sMsgs       chan []byte       // status messages channel
 }
 
 type grpcResult struct {
@@ -224,8 +230,10 @@ func (r *grpcReporter) periodic() {
 	OboeLog(DEBUG, "periodic(): goroutine started", nil) // TODO: let nil be optional
 	go r.mAgg.ProcessMetrics()
 
+	// Initialize next keep alive time
+	r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
 	// Initialize next metric sending time
-	r.metrics.nextTime = getNextIntervalTime(agentMetricsInterval)
+	r.metrics.nextTime = getNextTime(agentMetricsInterval)
 	for {
 		// avoid consuming too much CPU by sleeping for a short while.
 		r.blockTillNextTick(agentMetricsTickInterval)
@@ -308,6 +316,7 @@ func (r *grpcReporter) reconnect() {
 				r.metricsConn.retries = 0
 				r.metricsConn.nextRetryTime = time.Time{}
 				r.metricsConn.status = OK
+				r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
 			}
 
 		}
@@ -340,16 +349,16 @@ func (r *grpcReporter) blockTillNextTick(interval time.Duration) {
 	if r.metricsConn.status != OK {
 		return
 	}
-	<-time.After(getNextIntervalTime(interval).Sub(time.Now()))
+	<-time.After(getNextTime(interval).Sub(time.Now()))
 }
 
-func getNextIntervalTime(interval time.Duration) time.Time {
+func getNextTime(interval time.Duration) time.Time {
 	now := time.Now()
-	nextInterval := now.Round(interval)
-	if nextInterval.Before(now) {
-		nextInterval = nextInterval.Add(interval)
+	nextTime := now.Round(interval)
+	if nextTime.Before(now) {
+		nextTime = nextTime.Add(interval)
 	}
-	return nextInterval
+	return nextTime
 }
 
 // sendMetrics is called periodically (in a interval defined by agentMetricsInterval)
@@ -357,23 +366,26 @@ func getNextIntervalTime(interval time.Duration) time.Time {
 func (r *grpcReporter) sendMetrics() {
 	// Still need to fetch raw data from channel to avoid channels being filled with old data
 	// (and possibly blocks the sender)
-	if r.metrics.nextTime.After(time.Now()) && !r.metrics.retryActive {
-		return
-	}
 	if r.metrics.nextTime.Before(time.Now()) {
-		r.metrics.nextTime = getNextIntervalTime(agentMetricsInterval) // TODO: change to a value configured by settings.args
+		r.metrics.nextTime = getNextTime(agentMetricsInterval) // TODO: change to a value configured by settings.args
 
 		message, err := r.mAgg.FlushBSON()
-		if err == nil { // TODO: need set a maximum number of stored messages
+		if err == nil {
 			r.metrics.messages = append(r.metrics.messages, message)
+			if len(r.metrics.messages) > maxMetricsMessagesOnePost {
+				r.metrics.messages = r.metrics.messages[1:]
+			}
 		}
-
 	}
-	// If connection is not OK we still need to populate the bson message.
-	if len(r.metrics.messages) == 0 || r.metricsConn.status != OK {
+	// return if in retry state but it's not time for retry
+	if r.metrics.retryActive && r.metrics.retryTime.After(time.Now()) {
 		return
 	}
-
+	// return if connection is not OK or we have no message to send
+	if r.metricsConn.status != OK || len(r.metrics.messages) == 0 {
+		return
+	}
+	// OK we are good now.
 	mreq := &collector.MessageRequest{
 		ApiKey:   r.apiKey,
 		Messages: r.metrics.messages,
@@ -385,9 +397,12 @@ func (r *grpcReporter) sendMetrics() {
 		r.metricsConn.status = DISCONNECTED // TODO: is this process correct?
 		return
 	}
+	// Update connection keep alive time
+	r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
+
 	switch result := mres.GetResult(); result {
 	case collector.ResultCode_OK:
-		OboeLog(DEBUG, "Sent metrics.", nil)
+		OboeLog(DEBUG, "sendMetrics(): sent metrics.", nil)
 		r.metrics.messages = make([][]byte, 1)
 		r.metrics.retries = 0
 		r.metrics.retryActive = false
@@ -397,28 +412,13 @@ func (r *grpcReporter) sendMetrics() {
 		OboeLog(INFO, msg, nil)
 		if r.metrics.setRetryDelay() {
 			r.metrics.messages = r.metrics.messages[1:] // TODO: correct?
-			break
 		}
 	case collector.ResultCode_INVALID_API_KEY:
 		OboeLog(WARNING, "sendMetrics(): got INVALID_API_KEY from server", nil)
 		r.metricsConn.status = CLOSING
 		r.metrics.messages = nil // connection is closing so we're OK with nil
 	case collector.ResultCode_REDIRECT:
-		if r.metricsConn.redirects >= maxConnRedirects {
-			OboeLog(WARNING, "Maximum redirects reached, exiting", nil)
-			r.metricsConn.status = CLOSING
-		} else {
-			r.metricsConn.status = DISCONNECTED
-			if r.setServerAddr(mres.GetArg()) {
-				r.metrics.retryActive = false
-				r.metricsConn.redirects += 1
-				r.metricsConn.retries = 0
-				r.metricsConn.nextRetryTime = time.Time{}
-			} else {
-				r.metricsConn.status = CLOSING
-			}
-		}
-
+		r.processRedirect(mres.GetArg())
 	}
 	return
 }
@@ -437,21 +437,92 @@ func (r *grpcReporter) setServerAddr(host string) bool {
 
 }
 
+// TODO: need an API to the trace to send status message (check grpc is ready otherwise return)
+
 // sendStatus is called periodically (in a interval defined by agentMetricsInterval)
 // to send status events to the gRPC server.
 func (r *grpcReporter) sendStatus() {
-	// TODO: fetch data from status event channels **before check status**
-	// TODO: (and drop it if reporter is DISCONNECTED
-
 	if r.metricsConn.status != OK {
 		return
 	}
-	// TODO: encode status message and call gRPC PostStatus to send it
+	// return if we're retrying and it's not time for retry
+	if r.status.retryActive && r.status.retryTime.After(time.Now()) { // TODO: double check
+		return
+	}
+
+	if len(r.status.messages) > 0 || r.loadStatusMsgs() {
+		mreq := &collector.MessageRequest{
+			ApiKey:   r.apiKey,
+			Messages: r.metrics.messages,
+			Encoding: collector.EncodingType_BSON,
+		}
+		mres, err := r.metricsConn.client.PostStatus(context.TODO(), mreq)
+		if err != nil {
+			OboeLog(INFO, "Error in sending metrics", err)
+			r.metricsConn.status = DISCONNECTED // TODO: is this process correct?
+			return
+		}
+		// Update connection keep alive time
+		r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
+
+		switch result := mres.GetResult(); result {
+		case collector.ResultCode_OK:
+			OboeLog(DEBUG, "sendMetrics(): sent status", nil)
+			r.status.messages = make([][]byte, 1)
+			r.status.retryActive = false
+			r.metricsConn.redirects = 0
+		case collector.ResultCode_TRY_LATER, collector.ResultCode_LIMIT_EXCEEDED:
+			msg := fmt.Sprintf("sendMetrics(): got %s from server", collector.ResultCode_name[int32(result)])
+			OboeLog(INFO, msg, nil)
+			if r.status.setRetryDelay() {
+				r.status.messages = make([][]byte, 1)
+			}
+		case collector.ResultCode_INVALID_API_KEY:
+			OboeLog(WARNING, "sendMetrics(): got INVALID_API_KEY from server", nil)
+			r.metricsConn.status = CLOSING
+			r.status.messages = nil // connection is closing so we're OK with nil
+		case collector.ResultCode_REDIRECT:
+			r.processRedirect(mres.GetArg())
+		}
+	}
+}
+
+// processRedirect process the redirect response from server and set the new server address
+func (r *grpcReporter) processRedirect(host string) {
+	if r.metricsConn.redirects >= maxConnRedirects {
+		OboeLog(WARNING, "Maximum redirects reached, exiting", nil)
+		r.metricsConn.status = CLOSING
+	} else {
+		r.metricsConn.status = DISCONNECTED
+		if r.setServerAddr(host) {
+			r.metrics.retryActive = false
+			r.metricsConn.redirects += 1
+			r.metricsConn.retries = 0
+			r.metricsConn.nextRetryTime = time.Time{}
+		} else {
+			r.metricsConn.status = CLOSING
+		}
+	}
+}
+
+// loadStatusMsgs loads messages from reporter's sMsgs channel to the status senders
+// messages slice, the messages will be sent out in current loop
+func (r *grpcReporter) loadStatusMsgs() bool {
+	var sMsg []byte
+	for {
+		select {
+		case sMsg = <-r.sMsgs:
+			r.status.messages = append(r.status.messages, sMsg)
+		case <-time.After(loadStatusMsgsShortBlock):
+			break
+		}
+	}
+	return len(r.status.messages) > 0
 }
 
 // getSettings is called periodically (in a interval defined by agentMetricsInterval)
 // to retrieve updated setting from gRPC server and process it.
-func (r *grpcReporter) getSettings() {
+func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 	if r.metricsConn.status != OK {
 		return
 	}
@@ -492,11 +563,12 @@ func newSender() Sender {
 
 func newGRPC(conn *grpc.ClientConn) gRPC {
 	return gRPC{
-		client:        collector.TraceCollectorClient(conn),
-		status:        OK,
-		retries:       0,
-		nextRetryTime: time.Time{},
-		redirects:     0,
+		client:            collector.TraceCollectorClient(conn),
+		status:            OK,
+		retries:           0,
+		nextRetryTime:     time.Time{},
+		redirects:         0,
+		nextKeepAliveTime: time.Time{},
 	}
 }
 
@@ -529,6 +601,7 @@ func newGRPCReporter() reporter {
 		ch:          make(chan []byte),
 		exit:        make(chan struct{}),
 		mAgg:        newMetricsAggregator(),
+		sMsgs:       make(chan []byte, maxStatusChanCap),
 	}
 	go r.reportEvents()
 	go r.periodic() // metricsConn sender goroutine
