@@ -250,6 +250,7 @@ func (r *grpcReporter) periodic() {
 		// retrieve new settings
 		r.getSettings()
 		// invalidate outdated settings
+		// TODO: save time.Now() as a variable, don't call it too many times
 		InvalidateOutdatedSettings(&checkTTLTimeout, time.Now())
 		// exit as per the request from the other (main) goroutine
 		select {
