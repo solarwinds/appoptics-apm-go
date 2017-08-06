@@ -28,20 +28,22 @@ const (
 // Reporter parameters which are unlikely to change
 // TODO: some of them may be updated by settings from server, don't use constants
 const (
-	maxEventBytes                = 64 * 1024 * 1024
-	grpcReporterFlushTimeout     = 100 * time.Millisecond
-	agentMetricsInterval         = time.Minute
-	agentMetricsTickInterval     = time.Millisecond * 500
-	retryAmplifier               = 1.5
-	intialRetryInterval          = time.Millisecond * 500
-	maxRetryInterval             = time.Minute
-	maxMetricsRetries            = 20
-	maxConnRedirects             = 20
-	maxConnRetries               = ^uint(0)
-	maxStatusChanCap             = 200
-	loadStatusMsgsShortBlock     = time.Millisecond * 50
-	metricsConnKeepAliveInterval = time.Second * 20
-	maxMetricsMessagesOnePost    = 100
+	maxEventBytes                 = 64 * 1024 * 1024
+	grpcReporterFlushTimeout      = 100 * time.Millisecond
+	agentMetricsInterval          = time.Minute
+	agentMetricsTickInterval      = time.Millisecond * 500
+	retryAmplifier                = 1.5
+	intialRetryInterval           = time.Millisecond * 500
+	maxRetryInterval              = time.Minute
+	maxMetricsRetries             = 20
+	maxConnRedirects              = 20
+	maxConnRetries                = ^uint(0)
+	maxStatusChanCap              = 200
+	loadStatusMsgsShortBlock      = time.Millisecond * 50
+	metricsConnKeepAliveInterval  = time.Second * 20
+	maxMetricsMessagesOnePost     = 100
+	agentSettingsInterval         = time.Second * 20
+	agentCheckSettingsTTLInterval = time.Second * 10
 )
 
 type reporter interface {
@@ -234,6 +236,9 @@ func (r *grpcReporter) periodic() {
 	r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
 	// Initialize next metric sending time
 	r.metrics.nextTime = getNextTime(agentMetricsInterval)
+	// Check and invalidate outdated settings
+	var checkTTLTimeout = getNextTime(agentCheckSettingsTTLInterval)
+
 	for {
 		// avoid consuming too much CPU by sleeping for a short while.
 		r.blockTillNextTick(agentMetricsTickInterval)
@@ -244,6 +249,8 @@ func (r *grpcReporter) periodic() {
 		r.sendStatus()
 		// retrieve new settings
 		r.getSettings()
+		// invalidate outdated settings
+		InvalidateOutdatedSettings(&checkTTLTimeout, time.Now())
 		// exit as per the request from the other (main) goroutine
 		select {
 		case <-r.exit:
@@ -526,27 +533,73 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 	if r.metricsConn.status != OK {
 		return
 	}
-	sreq := &collector.SettingsRequest{
-		ApiKey:        r.apiKey,
-		ClientVersion: grpcReporterVersion,
-		Identity: &collector.HostID{
-			Hostname:    cachedHostname,
-			IpAddresses: nil, // XXX
-			Uuid:        "",  // XXX
-		},
+
+	tn := time.Now()
+	if (!r.settings.retryActive &&
+		(r.settings.nextTime.Before(tn) || r.metricsConn.nextKeepAliveTime.Before(tn))) ||
+		r.settings.retryTime.Before(tn) {
+		OboeLog(DEBUG, "getSettings(): updating settings", nil)
+		mAgg, ok := r.mAgg.(metricsAggregator)
+		var ipAddrs []string
+		var uuid string
+		if ok {
+			ipAddrs = mAgg.getIPList()
+			uuid = mAgg.getHostId()
+		} else {
+			ipAddrs = nil
+			uuid = ""
+		}
+		sreq := &collector.SettingsRequest{
+			ApiKey:        r.apiKey,
+			ClientVersion: grpcReporterVersion,
+			Identity: &collector.HostID{
+				Hostname:    cachedHostname,
+				IpAddresses: ipAddrs,
+				Uuid:        uuid,
+			},
+		}
+		sres, err := r.client.GetSettings(context.TODO(), sreq)
+		if err != nil {
+			OboeLog(INFO, "Error in retrieving settings", err)
+			r.metricsConn.status = DISCONNECTED // TODO: is this process correct?
+			return
+		}
+		r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
+
+		switch result := sres.GetResult(); result {
+		case collector.ResultCode_OK:
+			OboeLog(DEBUG, "getSettings(): got new settings from server", nil)
+			storeSettings(sres)
+			r.settings.nextTime = getNextTime(agentSettingsInterval)
+			r.settings.retryActive = false
+			r.metricsConn.redirects = 0
+		case collector.ResultCode_TRY_LATER, collector.ResultCode_LIMIT_EXCEEDED:
+			msg := fmt.Sprintf("sendMetrics(): got %s from server", collector.ResultCode_name[int32(result)])
+			OboeLog(INFO, msg, nil)
+			r.settings.retries = 0 // retry infinitely
+			r.settings.setRetryDelay()
+
+		case collector.ResultCode_INVALID_API_KEY:
+			OboeLog(DEBUG, "sendMetrics(): got INVALID_API_KEY, exiting", nil)
+			r.metricsConn.status = CLOSING
+		case collector.ResultCode_REDIRECT:
+			r.processRedirect(sres.GetArg())
+		}
 	}
-	sres, err := r.client.GetSettings(context.TODO(), sreq)
-	if err != nil {
-		return
-	}
-	storeSettings(sres) // TODO: settings
-	return
-	// TODO
 }
 
+// TODO: update settings
 func storeSettings(r *collector.SettingsResult) {
 	if r != nil && len(r.Settings) > 0 {
 		latestSettings = r.Settings
+	}
+}
+
+// TODO:
+func InvalidateOutdatedSettings(timeout *time.Time, curr time.Time) {
+	if timeout.Before(curr) {
+		// TODO: delete outdated settings
+		*timeout = getNextTime(agentCheckSettingsTTLInterval)
 	}
 }
 
@@ -610,7 +663,7 @@ func newGRPCReporter() reporter {
 
 var udpReporterAddr = "127.0.0.1:7831"
 var grpcReporterAddr = "collector.librato.com:443"
-var grpcReporterVersion = "golang-v1"
+var grpcReporterVersion = "golang-v2"
 var globalReporter reporter = &nullReporter{}
 var reportingDisabled bool
 var usingTestReporter bool
