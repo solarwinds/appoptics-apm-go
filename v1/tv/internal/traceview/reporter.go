@@ -411,7 +411,7 @@ func (r *grpcReporter) sendMetrics() {
 	switch result := mres.GetResult(); result {
 	case collector.ResultCode_OK:
 		OboeLog(DEBUG, "sendMetrics(): sent metrics.", nil)
-		r.metrics.messages = make([][]byte, 1)
+		r.metrics.messages = make([][]byte, 0, 1)
 		r.metrics.retries = 0
 		r.metrics.retryActive = false
 		r.metricsConn.redirects = 0
@@ -461,7 +461,7 @@ func (r *grpcReporter) sendStatus() {
 	if len(r.status.messages) > 0 || r.loadStatusMsgs() {
 		mreq := &collector.MessageRequest{
 			ApiKey:   r.apiKey,
-			Messages: r.metrics.messages,
+			Messages: r.status.messages,
 			Encoding: collector.EncodingType_BSON,
 		}
 		mres, err := r.metricsConn.client.PostStatus(context.TODO(), mreq)
@@ -476,14 +476,14 @@ func (r *grpcReporter) sendStatus() {
 		switch result := mres.GetResult(); result {
 		case collector.ResultCode_OK:
 			OboeLog(DEBUG, "sendMetrics(): sent status", nil)
-			r.status.messages = make([][]byte, 1)
+			r.status.messages = make([][]byte, 0, 1)
 			r.status.retryActive = false
 			r.metricsConn.redirects = 0
 		case collector.ResultCode_TRY_LATER, collector.ResultCode_LIMIT_EXCEEDED:
 			msg := fmt.Sprintf("sendMetrics(): got %s from server", collector.ResultCode_name[int32(result)])
 			OboeLog(INFO, msg, nil)
 			if r.status.setRetryDelay() {
-				r.status.messages = make([][]byte, 1)
+				r.status.messages = make([][]byte, 0, 1)
 			}
 		case collector.ResultCode_INVALID_API_KEY:
 			OboeLog(WARNING, "sendMetrics(): got INVALID_API_KEY from server", nil)
@@ -606,7 +606,7 @@ func InvalidateOutdatedSettings(timeout *time.Time, curr time.Time) {
 
 func newSender() Sender {
 	return Sender{
-		messages:       make([][]byte, 1),
+		messages:       make([][]byte, 0, 1),
 		nextTime:       time.Time{},
 		retryActive:    false,
 		nextRetryDelay: intialRetryInterval,
