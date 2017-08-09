@@ -167,7 +167,7 @@ func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw) []byte {
 // It also generate and push the mAgg event to the hist channel which is consumed by
 // FlushBSON to generate the final message in BSON format.
 func (am *metricsAggregator) ProcessMetrics() {
-	OboeLog(INFO, "ProcessMetrics(): goroutine started.", nil)
+	OboeLog(INFO, "ProcessMetrics(): goroutine started.")
 	for {
 		select {
 		case record := <-am.records:
@@ -175,7 +175,7 @@ func (am *metricsAggregator) ProcessMetrics() {
 		case <-am.rawReq:
 			am.pushMetricsRaw()
 		case <-am.exit:
-			OboeLog(INFO, "ProcessMetrics(): Closing ProcessMetrics goroutine.", nil)
+			OboeLog(INFO, "ProcessMetrics(): Closing ProcessMetrics goroutine.")
 			close(am.raw)
 			for range am.records {
 			} // drops all unprocessed records
@@ -307,7 +307,7 @@ func (am *metricsAggregator) pushMetricsRaw() {
 	var m *MetricsRaw = am.metrics.Copy()
 	// Reset the reporterCounters for each interval
 	am.resetCounters()
-	OboeLog(DEBUG, "pushMetricsRaw(): pushing MetricsRaw as per request", nil)
+	OboeLog(DEBUG, "pushMetricsRaw(): pushing MetricsRaw as per request")
 	am.raw <- m
 }
 

@@ -39,7 +39,7 @@ const (
 	maxConnRedirects              = 20
 	maxConnRetries                = ^uint(0)
 	maxStatusChanCap              = 200
-	loadStatusMsgsShortBlock      = time.Millisecond * 50
+	loadStatusMsgsShortBlock      = time.Millisecond * 10
 	metricsConnKeepAliveInterval  = time.Second * 20
 	maxMetricsMessagesOnePost     = 100
 	agentSettingsInterval         = time.Second * 20
@@ -112,14 +112,12 @@ type grpcReporter struct {
 	client      collector.TraceCollectorClient
 	serverAddr  string // server address in string format: host:port
 	metricsConn gRPC   // metrics sender connection, for metrics, status and settings
-	metrics     Sender
-	status      Sender
-	settings    Sender
+	metrics, status, settings    Sender
 	ch          chan []byte // event messages
 	exit        chan struct{}
 	apiKey      string
-	mAgg        MetricsAggregator // metrics raw records, need pre-preprocessing
-	sMsgs       chan []byte       // status messages channel
+	mAgg        MetricsAggregator // metrics raw records, need pre-processing
+	sMsgs       chan []byte       // status messages
 }
 
 type grpcResult struct {
@@ -134,7 +132,7 @@ func (s *Sender) setRetryDelay() bool {
 		return false
 	}
 	s.retryTime = time.Now().Add(s.nextRetryDelay)
-	OboeLog(DEBUG, fmt.Sprintf("Retry in %d seconds", s.nextRetryDelay/time.Second), nil)
+	OboeLog(DEBUG, fmt.Sprintf("Retry in %d seconds", s.nextRetryDelay/time.Second))
 	s.retries += 1
 	if !s.retryActive {
 		s.retryActive = true
@@ -146,7 +144,7 @@ func (s *Sender) setRetryDelay() bool {
 	return true
 }
 
-func (r *grpcReporter) IsOpen() bool            { return r.client != nil } // TODO
+func (r *grpcReporter) IsOpen() bool            { return r.client != nil }
 func (r *grpcReporter) IsMetricsConnOpen() bool { return r.metricsConn.client != nil }
 func (r *grpcReporter) WritePacket(buf []byte) (int, error) {
 	r.ch <- buf
@@ -229,7 +227,7 @@ func (r *grpcReporter) PushMetricsRecord(record MetricsRecord) bool {
 // periodic is executed in a separate goroutine to encode messages and push them to the gRPC server
 // This function is not concurrency-safe, don't run it in multiple goroutines.
 func (r *grpcReporter) periodic() {
-	OboeLog(DEBUG, "periodic(): goroutine started", nil) // TODO: let nil be optional
+	OboeLog(DEBUG, "periodic(): goroutine started")
 	go r.mAgg.ProcessMetrics()
 
 	// Initialize next keep alive time
@@ -295,12 +293,12 @@ func (r *grpcReporter) healthCheck() {
 func (r *grpcReporter) reconnect() {
 	// TODO: gRPC supports auto-reconnection, need to make sure what happens to the sending API then,
 	// TODO: does it wait for the reconnection, or it returns an error immediately?
-	OboeLog(DEBUG, "Reconnecting to gRPC server", nil)
+	OboeLog(DEBUG, "Reconnecting to gRPC server")
 	if r.metricsConn.status == OK || r.metricsConn.status == CLOSING {
 		return
 	} else {
 		if r.metricsConn.retries > maxConnRetries { // infinitely retry
-			OboeLog(ERROR, "Reached retries limit, exiting", nil)
+			OboeLog(ERROR, "Reached retries limit, exiting")
 			r.metricsConn.status = CLOSING // set it to CLOSING, it will be closed in the next loop
 			return
 		}
@@ -339,7 +337,7 @@ func (r *grpcReporter) RequestToClose() {
 // close closes the channels and gRPC connections owned by a reporter
 func (r *grpcReporter) closeMetricsConn() {
 	// close channels and connections
-	OboeLog(INFO, "periodic() metricsConn goroutine is exiting", nil)
+	OboeLog(INFO, "periodic() metricsConn goroutine is exiting")
 	// Finally set toe reporter to nil to avoid repeated closing
 	// TODO: handle errors if it's already closed, print err log but don't panic
 	close(r.mAgg.GetExitChan())
@@ -410,19 +408,19 @@ func (r *grpcReporter) sendMetrics() {
 
 	switch result := mres.GetResult(); result {
 	case collector.ResultCode_OK:
-		OboeLog(DEBUG, "sendMetrics(): sent metrics.", nil)
+		OboeLog(DEBUG, "sendMetrics(): sent metrics.")
 		r.metrics.messages = make([][]byte, 0, 1)
 		r.metrics.retries = 0
 		r.metrics.retryActive = false
 		r.metricsConn.redirects = 0
 	case collector.ResultCode_TRY_LATER, collector.ResultCode_LIMIT_EXCEEDED:
 		msg := fmt.Sprintf("sendMetrics(): got %s from server", collector.ResultCode_name[int32(result)])
-		OboeLog(INFO, msg, nil)
+		OboeLog(INFO, msg)
 		if r.metrics.setRetryDelay() {
 			r.metrics.messages = r.metrics.messages[1:] // TODO: correct?
 		}
 	case collector.ResultCode_INVALID_API_KEY:
-		OboeLog(WARNING, "sendMetrics(): got INVALID_API_KEY from server", nil)
+		OboeLog(WARNING, "sendMetrics(): got INVALID_API_KEY from server")
 		r.metricsConn.status = CLOSING
 		r.metrics.messages = nil // connection is closing so we're OK with nil
 	case collector.ResultCode_REDIRECT:
@@ -434,7 +432,7 @@ func (r *grpcReporter) sendMetrics() {
 func (r *grpcReporter) setServerAddr(host string) bool {
 	//TODO: create a new attribute 'server' for grpcReporter
 	if strings.Contains(host, ":") {
-		OboeLog(WARNING, fmt.Sprintf("Invalid reporter server address: %s", host), nil)
+		OboeLog(WARNING, fmt.Sprintf("Invalid reporter server address: %s", host))
 		return false
 	} else {
 		// TODO: mutext protection
@@ -475,18 +473,18 @@ func (r *grpcReporter) sendStatus() {
 
 		switch result := mres.GetResult(); result {
 		case collector.ResultCode_OK:
-			OboeLog(DEBUG, "sendMetrics(): sent status", nil)
+			OboeLog(DEBUG, "sendMetrics(): sent status")
 			r.status.messages = make([][]byte, 0, 1)
 			r.status.retryActive = false
 			r.metricsConn.redirects = 0
 		case collector.ResultCode_TRY_LATER, collector.ResultCode_LIMIT_EXCEEDED:
 			msg := fmt.Sprintf("sendMetrics(): got %s from server", collector.ResultCode_name[int32(result)])
-			OboeLog(INFO, msg, nil)
+			OboeLog(INFO, msg)
 			if r.status.setRetryDelay() {
 				r.status.messages = make([][]byte, 0, 1)
 			}
 		case collector.ResultCode_INVALID_API_KEY:
-			OboeLog(WARNING, "sendMetrics(): got INVALID_API_KEY from server", nil)
+			OboeLog(WARNING, "sendMetrics(): got INVALID_API_KEY from server")
 			r.metricsConn.status = CLOSING
 			r.status.messages = nil // connection is closing so we're OK with nil
 		case collector.ResultCode_REDIRECT:
@@ -498,7 +496,7 @@ func (r *grpcReporter) sendStatus() {
 // processRedirect process the redirect response from server and set the new server address
 func (r *grpcReporter) processRedirect(host string) {
 	if r.metricsConn.redirects >= maxConnRedirects {
-		OboeLog(WARNING, "Maximum redirects reached, exiting", nil)
+		OboeLog(WARNING, "Maximum redirects reached, exiting")
 		r.metricsConn.status = CLOSING
 	} else {
 		r.metricsConn.status = DISCONNECTED
@@ -512,6 +510,8 @@ func (r *grpcReporter) processRedirect(host string) {
 		}
 	}
 }
+
+// TODO: API for sending and encoding status message
 
 // loadStatusMsgs loads messages from reporter's sMsgs channel to the status senders
 // messages slice, the messages will be sent out in current loop
@@ -539,7 +539,7 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 	if (!r.settings.retryActive &&
 		(r.settings.nextTime.Before(tn) || r.metricsConn.nextKeepAliveTime.Before(tn))) ||
 		r.settings.retryTime.Before(tn) {
-		OboeLog(DEBUG, "getSettings(): updating settings", nil)
+		OboeLog(DEBUG, "getSettings(): updating settings")
 		mAgg, ok := r.mAgg.(metricsAggregator)
 		var ipAddrs []string
 		var uuid string
@@ -569,19 +569,19 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 
 		switch result := sres.GetResult(); result {
 		case collector.ResultCode_OK:
-			OboeLog(DEBUG, "getSettings(): got new settings from server", nil)
+			OboeLog(DEBUG, "getSettings(): got new settings from server")
 			storeSettings(sres)
 			r.settings.nextTime = getNextTime(agentSettingsInterval)
 			r.settings.retryActive = false
 			r.metricsConn.redirects = 0
 		case collector.ResultCode_TRY_LATER, collector.ResultCode_LIMIT_EXCEEDED:
 			msg := fmt.Sprintf("sendMetrics(): got %s from server", collector.ResultCode_name[int32(result)])
-			OboeLog(INFO, msg, nil)
+			OboeLog(INFO, msg)
 			r.settings.retries = 0 // retry infinitely
 			r.settings.setRetryDelay()
 
 		case collector.ResultCode_INVALID_API_KEY:
-			OboeLog(DEBUG, "sendMetrics(): got INVALID_API_KEY, exiting", nil)
+			OboeLog(DEBUG, "sendMetrics(): got INVALID_API_KEY, exiting")
 			r.metricsConn.status = CLOSING
 		case collector.ResultCode_REDIRECT:
 			r.processRedirect(sres.GetArg())
@@ -640,7 +640,7 @@ func newGRPCReporter() reporter {
 	}
 	mConn, err := grpc.Dial(grpcReporterAddr) // TODO: can we have two connections?
 	if err != nil {
-		OboeLog(ERROR, "Failed to intialize gRPC metrics reporter", nil)
+		OboeLog(ERROR, "Failed to intialize gRPC metrics reporter")
 		// TODO: close conn connection
 		return &nullReporter{}
 	}

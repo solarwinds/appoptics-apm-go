@@ -133,7 +133,7 @@ func (am *metricsAggregator) appendSysMetadata(bbuf *bsonBuffer, k string, retri
 
 	default:
 		errStr := fmt.Sprintf("appendSysMetadata(): Bad type %v(%T)", v, v)
-		OboeLog(INFO, errStr, nil)
+		OboeLog(INFO, errStr)
 	}
 }
 

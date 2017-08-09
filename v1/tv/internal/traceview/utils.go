@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"fmt"
 )
 
 type DebugLevel uint8
@@ -19,13 +20,13 @@ const (
 )
 
 // OboeLog print logs based on the debug level.
-func OboeLog(level DebugLevel, msg string, err error) {
+func OboeLog(level DebugLevel, msg string, args ...interface{}) {
 	// TODO: print caller's name inside this function.
 	if !debugLog { // remove it
 		return
 	}
 	if level >= debugLevel {
-		log.Printf("%s %v", msg, err)
+		log.Printf("%s %v", msg, args)
 	}
 }
 
