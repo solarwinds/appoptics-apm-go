@@ -21,7 +21,6 @@ import (
 const (
 	OK           Status = iota
 	DISCONNECTED        // will try to reconnect it later
-	RECONNECTING        // reconnecting to gRPC server (may be a redirected one)
 	CLOSING             // closed by us, don't do anything to resume it
 )
 
@@ -39,7 +38,7 @@ const (
 	maxConnRedirects              = 20
 	maxConnRetries                = ^uint(0)
 	maxStatusChanCap              = 200
-	loadStatusMsgsShortBlock      = time.Millisecond * 10
+	loadStatusMsgsShortBlock      = time.Millisecond * 5
 	metricsConnKeepAliveInterval  = time.Second * 20
 	maxMetricsMessagesOnePost     = 100
 	agentSettingsInterval         = time.Second * 20
@@ -106,18 +105,20 @@ type gRPC struct {
 	nextRetryTime     time.Time // only works in DISCONNECTED state
 	redirects         uint
 	nextKeepAliveTime time.Time
+	currTime          time.Time
 }
 
 type grpcReporter struct {
-	client      collector.TraceCollectorClient
-	serverAddr  string // server address in string format: host:port
-	metricsConn gRPC   // metrics sender connection, for metrics, status and settings
-	metrics, status, settings    Sender
-	ch          chan []byte // event messages
-	exit        chan struct{}
-	apiKey      string
-	mAgg        MetricsAggregator // metrics raw records, need pre-processing
-	sMsgs       chan []byte       // status messages
+	client     collector.TraceCollectorClient
+	serverAddr string // server address in string format: host:port
+	exit       chan struct{}
+	apiKey     string
+
+	metricsConn               gRPC // metrics sender connection, for metrics, status and settings
+	metrics, status, settings Sender
+	ch                        chan []byte       // event messages
+	mAgg                      MetricsAggregator // metrics raw records, need pre-processing
+	sMsgs                     chan []byte       // status messages
 }
 
 type grpcResult struct {
@@ -125,13 +126,13 @@ type grpcResult struct {
 	err    error
 }
 
-func (s *Sender) setRetryDelay() bool {
+func (s *Sender) setRetryDelay(now time.Time) bool {
 	if s.retries >= maxMetricsRetries {
 		OboeLog(WARNING, "Maximum number of retries reached", nil)
 		s.retryActive = false
 		return false
 	}
-	s.retryTime = time.Now().Add(s.nextRetryDelay)
+	s.retryTime = now.Add(s.nextRetryDelay)
 	OboeLog(DEBUG, fmt.Sprintf("Retry in %d seconds", s.nextRetryDelay/time.Second))
 	s.retries += 1
 	if !s.retryActive {
@@ -229,17 +230,17 @@ func (r *grpcReporter) PushMetricsRecord(record MetricsRecord) bool {
 func (r *grpcReporter) periodic() {
 	OboeLog(DEBUG, "periodic(): goroutine started")
 	go r.mAgg.ProcessMetrics()
-
+	now := time.Now()
 	// Initialize next keep alive time
-	r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
+	r.metricsConn.nextKeepAliveTime = getNextTime(now, metricsConnKeepAliveInterval)
 	// Initialize next metric sending time
-	r.metrics.nextTime = getNextTime(agentMetricsInterval)
+	r.metrics.nextTime = getNextTime(now, agentMetricsInterval)
 	// Check and invalidate outdated settings
-	var checkTTLTimeout = getNextTime(agentCheckSettingsTTLInterval)
+	var checkTTLTimeout = getNextTime(now, agentCheckSettingsTTLInterval)
 
 	for {
 		// avoid consuming too much CPU by sleeping for a short while.
-		r.blockTillNextTick(agentMetricsTickInterval)
+		r.metricsConn.currTime = r.blockTillNextTick(time.Now(), agentMetricsTickInterval)
 		// We still need to populate bson messages even if status is not OK.
 		// populate and send metricsConn
 		r.sendMetrics()
@@ -248,13 +249,11 @@ func (r *grpcReporter) periodic() {
 		// retrieve new settings
 		r.getSettings()
 		// invalidate outdated settings
-		// TODO: save time.Now() as a variable, don't call it too many times
-		InvalidateOutdatedSettings(&checkTTLTimeout, time.Now())
+		InvalidateOutdatedSettings(&checkTTLTimeout, r.metricsConn.currTime)
 		// exit as per the request from the other (main) goroutine
 		select {
 		case <-r.exit:
 			r.metricsConn.status = CLOSING
-			break
 		default:
 		}
 
@@ -303,7 +302,7 @@ func (r *grpcReporter) reconnect() {
 			return
 		}
 
-		if r.metricsConn.nextRetryTime.After(time.Now()) {
+		if r.metricsConn.nextRetryTime.After(r.metricsConn.currTime) {
 			// do nothing
 		} else { // reconnect
 			// TODO: close the old connection first, as we are redirecting ...
@@ -315,14 +314,14 @@ func (r *grpcReporter) reconnect() {
 				if nextInterval > maxRetryInterval {
 					nextInterval = maxRetryInterval
 				}
-				r.metricsConn.nextRetryTime = time.Now().Add(nextInterval) // TODO: round up?
+				r.metricsConn.nextRetryTime = r.metricsConn.currTime.Add(nextInterval) // TODO: round up?
 				r.metricsConn.retries += 1
 			} else { // reconnected
 				r.metricsConn.client = collector.NewTraceCollectorClient(conn)
 				r.metricsConn.retries = 0
 				r.metricsConn.nextRetryTime = time.Time{}
 				r.metricsConn.status = OK
-				r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
+				r.metricsConn.nextKeepAliveTime = getNextTime(r.metricsConn.currTime, metricsConnKeepAliveInterval)
 			}
 
 		}
@@ -350,16 +349,17 @@ func (r *grpcReporter) closeMetricsConn() {
 
 // blockTillNextTick blocks the caller and will return at the next wake up time, which
 // is the nearest multiple of interval (since the zero time)
-func (r *grpcReporter) blockTillNextTick(interval time.Duration) {
+func (r *grpcReporter) blockTillNextTick(now time.Time, interval time.Duration) (curr time.Time) {
 	// skip it if metricsConn connection is not working.
 	if r.metricsConn.status != OK {
-		return
+		return now
 	}
-	<-time.After(getNextTime(interval).Sub(time.Now()))
+	afterBlock := getNextTime(now, interval)
+	<-time.After(afterBlock.Sub(now))
+	return afterBlock
 }
 
-func getNextTime(interval time.Duration) time.Time {
-	now := time.Now()
+func getNextTime(now time.Time, interval time.Duration) time.Time {
 	nextTime := now.Round(interval)
 	if nextTime.Before(now) {
 		nextTime = nextTime.Add(interval)
@@ -372,8 +372,8 @@ func getNextTime(interval time.Duration) time.Time {
 func (r *grpcReporter) sendMetrics() {
 	// Still need to fetch raw data from channel to avoid channels being filled with old data
 	// (and possibly blocks the sender)
-	if r.metrics.nextTime.Before(time.Now()) {
-		r.metrics.nextTime = getNextTime(agentMetricsInterval) // TODO: change to a value configured by settings.args
+	if r.metrics.nextTime.Before(r.metricsConn.currTime) {
+		r.metrics.nextTime = getNextTime(r.metricsConn.currTime, agentMetricsInterval) // TODO: change to a value configured by settings.args
 
 		message, err := r.mAgg.FlushBSON()
 		if err == nil {
@@ -384,7 +384,7 @@ func (r *grpcReporter) sendMetrics() {
 		}
 	}
 	// return if in retry state but it's not time for retry
-	if r.metrics.retryActive && r.metrics.retryTime.After(time.Now()) {
+	if r.metrics.retryActive && r.metrics.retryTime.After(r.metricsConn.currTime) {
 		return
 	}
 	// return if connection is not OK or we have no message to send
@@ -404,7 +404,7 @@ func (r *grpcReporter) sendMetrics() {
 		return
 	}
 	// Update connection keep alive time
-	r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
+	r.metricsConn.nextKeepAliveTime = getNextTime(r.metricsConn.currTime, metricsConnKeepAliveInterval)
 
 	switch result := mres.GetResult(); result {
 	case collector.ResultCode_OK:
@@ -416,7 +416,7 @@ func (r *grpcReporter) sendMetrics() {
 	case collector.ResultCode_TRY_LATER, collector.ResultCode_LIMIT_EXCEEDED:
 		msg := fmt.Sprintf("sendMetrics(): got %s from server", collector.ResultCode_name[int32(result)])
 		OboeLog(INFO, msg)
-		if r.metrics.setRetryDelay() {
+		if r.metrics.setRetryDelay(r.metricsConn.currTime) {
 			r.metrics.messages = r.metrics.messages[1:] // TODO: correct?
 		}
 	case collector.ResultCode_INVALID_API_KEY:
@@ -452,7 +452,7 @@ func (r *grpcReporter) sendStatus() {
 		return
 	}
 	// return if we're retrying and it's not time for retry
-	if r.status.retryActive && r.status.retryTime.After(time.Now()) { // TODO: double check
+	if r.status.retryActive && r.status.retryTime.After(r.metricsConn.currTime) { // TODO: double check
 		return
 	}
 
@@ -469,7 +469,7 @@ func (r *grpcReporter) sendStatus() {
 			return
 		}
 		// Update connection keep alive time
-		r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
+		r.metricsConn.nextKeepAliveTime = getNextTime(r.metricsConn.currTime, metricsConnKeepAliveInterval)
 
 		switch result := mres.GetResult(); result {
 		case collector.ResultCode_OK:
@@ -480,7 +480,7 @@ func (r *grpcReporter) sendStatus() {
 		case collector.ResultCode_TRY_LATER, collector.ResultCode_LIMIT_EXCEEDED:
 			msg := fmt.Sprintf("sendMetrics(): got %s from server", collector.ResultCode_name[int32(result)])
 			OboeLog(INFO, msg)
-			if r.status.setRetryDelay() {
+			if r.status.setRetryDelay(r.metricsConn.currTime) {
 				r.status.messages = make([][]byte, 0, 1)
 			}
 		case collector.ResultCode_INVALID_API_KEY:
@@ -535,7 +535,7 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 		return
 	}
 
-	tn := time.Now()
+	tn := r.metricsConn.currTime
 	if (!r.settings.retryActive &&
 		(r.settings.nextTime.Before(tn) || r.metricsConn.nextKeepAliveTime.Before(tn))) ||
 		r.settings.retryTime.Before(tn) {
@@ -565,20 +565,20 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 			r.metricsConn.status = DISCONNECTED // TODO: is this process correct?
 			return
 		}
-		r.metricsConn.nextKeepAliveTime = getNextTime(metricsConnKeepAliveInterval)
+		r.metricsConn.nextKeepAliveTime = getNextTime(r.metricsConn.currTime, metricsConnKeepAliveInterval)
 
 		switch result := sres.GetResult(); result {
 		case collector.ResultCode_OK:
 			OboeLog(DEBUG, "getSettings(): got new settings from server")
 			storeSettings(sres)
-			r.settings.nextTime = getNextTime(agentSettingsInterval)
+			r.settings.nextTime = getNextTime(r.metricsConn.currTime, agentSettingsInterval)
 			r.settings.retryActive = false
 			r.metricsConn.redirects = 0
 		case collector.ResultCode_TRY_LATER, collector.ResultCode_LIMIT_EXCEEDED:
 			msg := fmt.Sprintf("sendMetrics(): got %s from server", collector.ResultCode_name[int32(result)])
 			OboeLog(INFO, msg)
 			r.settings.retries = 0 // retry infinitely
-			r.settings.setRetryDelay()
+			r.settings.setRetryDelay(r.metricsConn.currTime)
 
 		case collector.ResultCode_INVALID_API_KEY:
 			OboeLog(DEBUG, "sendMetrics(): got INVALID_API_KEY, exiting")
@@ -600,7 +600,7 @@ func storeSettings(r *collector.SettingsResult) {
 func InvalidateOutdatedSettings(timeout *time.Time, curr time.Time) {
 	if timeout.Before(curr) {
 		// TODO: delete outdated settings
-		*timeout = getNextTime(agentCheckSettingsTTLInterval)
+		*timeout = getNextTime(curr, agentCheckSettingsTTLInterval)
 	}
 }
 
@@ -623,6 +623,7 @@ func newGRPC(conn *grpc.ClientConn) gRPC {
 		nextRetryTime:     time.Time{},
 		redirects:         0,
 		nextKeepAliveTime: time.Time{},
+		currTime:          time.Time{},
 	}
 }
 
