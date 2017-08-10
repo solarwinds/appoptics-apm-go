@@ -31,7 +31,7 @@ const (
 	grpcReporterFlushTimeout      = 100 * time.Millisecond
 	agentMetricsInterval          = time.Minute
 	agentMetricsTickInterval      = time.Millisecond * 500
-	retryAmplifier                = 1.5
+	retryAmplifier                = 2
 	intialRetryInterval           = time.Millisecond * 500
 	maxRetryInterval              = time.Minute
 	maxMetricsRetries             = 20
@@ -260,7 +260,7 @@ func (r *grpcReporter) periodic() {
 		r.healthCheck()
 		if r.metricsConnClosed() {
 			// closed after health check, resources have been released.
-			break
+			break // break the for loop
 		}
 	}
 }
@@ -309,7 +309,6 @@ func (r *grpcReporter) reconnect() {
 			conn, err := grpc.Dial(r.serverAddr) // TODO: correct way to reconnect? change addr to struct attribtue
 			if err != nil {
 				// TODO: retry time better to be exponential
-				// TODO: use a generic func for this and the retry func
 				nextInterval := time.Second * time.Duration((r.metricsConn.retries+1)*retryAmplifier)
 				if nextInterval > maxRetryInterval {
 					nextInterval = maxRetryInterval
@@ -335,10 +334,13 @@ func (r *grpcReporter) RequestToClose() {
 
 // close closes the channels and gRPC connections owned by a reporter
 func (r *grpcReporter) closeMetricsConn() {
+	if r.metricsConn.client == nil {
+		OboeLog(WARNING, "closeMetricsConn(): closing a closed connection.")
+		return
+	}
 	// close channels and connections
-	OboeLog(INFO, "periodic() metricsConn goroutine is exiting")
+	OboeLog(INFO, "closeMetricsConn() closing metrics gRPC connection.")
 	// Finally set toe reporter to nil to avoid repeated closing
-	// TODO: handle errors if it's already closed, print err log but don't panic
 	close(r.mAgg.GetExitChan())
 
 	// TODO: close gRPC client
@@ -435,7 +437,7 @@ func (r *grpcReporter) setServerAddr(host string) bool {
 		OboeLog(WARNING, fmt.Sprintf("Invalid reporter server address: %s", host))
 		return false
 	} else {
-		// TODO: mutext protection
+		// TODO: mutex protection
 		// TODO: further IP validity check.
 		r.serverAddr = host
 		return true
@@ -517,12 +519,13 @@ func (r *grpcReporter) processRedirect(host string) {
 // messages slice, the messages will be sent out in current loop
 func (r *grpcReporter) loadStatusMsgs() bool {
 	var sMsg []byte
+loop:
 	for {
 		select {
 		case sMsg = <-r.sMsgs:
 			r.status.messages = append(r.status.messages, sMsg)
 		case <-time.After(loadStatusMsgsShortBlock):
-			break
+			break loop
 		}
 	}
 	return len(r.status.messages) > 0

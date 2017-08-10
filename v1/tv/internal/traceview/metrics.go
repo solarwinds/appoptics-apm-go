@@ -168,6 +168,7 @@ func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw) []byte {
 // FlushBSON to generate the final message in BSON format.
 func (am *metricsAggregator) ProcessMetrics() {
 	OboeLog(INFO, "ProcessMetrics(): goroutine started.")
+loop:
 	for {
 		select {
 		case record := <-am.records:
@@ -179,7 +180,7 @@ func (am *metricsAggregator) ProcessMetrics() {
 			close(am.raw)
 			for range am.records {
 			} // drops all unprocessed records
-			break
+			break loop
 		}
 	}
 }

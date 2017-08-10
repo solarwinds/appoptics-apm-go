@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"fmt"
 )
 
 type DebugLevel uint8
