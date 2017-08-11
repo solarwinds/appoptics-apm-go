@@ -389,17 +389,17 @@ func (hist *Histogram) encode() string {
 }
 
 func (bh *baseHistogram) Copy() baseHistogram {
-	return baseHistogram{} //TODO: remove it
+	return baseHistogram{} //TODO: copy base histogram
 }
 
 func newBaseHistogram(precision int) baseHistogram {
-	return baseHistogram{} //TODO: remove it
+	return baseHistogram{} //TODO: new base histogram
 }
 
 // encode is a wrapper of hdr's function with (probably) the same name
 func (h *baseHistogram) encode() (str string) {
 	// TODO
-	return str //TODO remove it
+	return str //TODO: call base HDR library's encode function
 }
 
 // newHistogram creates a Histogram object with tags and precision

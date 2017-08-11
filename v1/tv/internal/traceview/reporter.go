@@ -154,7 +154,7 @@ func (r *grpcReporter) WritePacket(buf []byte) (int, error) {
 
 func (r *grpcReporter) reportEvents() {
 	// TODO: update reporterCounters in mAgg (numSent, numFailed, etc.) for MetricsMessage
-	// TODO: e.g., r.mAgg.IncrementReporterCounter()
+	// TODO: e.g., r.mAgg.IncrementReporterCounter(); don't update mAgg in reportEvents
 	batches := make(chan [][]byte)
 	results := r.postEvents(batches)
 

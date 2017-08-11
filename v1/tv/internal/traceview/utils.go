@@ -4,8 +4,11 @@ package traceview
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -18,15 +21,27 @@ const (
 	ERROR
 )
 
+var dbgLevels = map[DebugLevel]string{
+	DEBUG:   "DEBUG",
+	INFO:    "INFO",
+	WARNING: "WARNING",
+	ERROR:   "ERROR",
+}
+
 // OboeLog print logs based on the debug level.
 func OboeLog(level DebugLevel, msg string, args ...interface{}) {
-	// TODO: print caller's name inside this function.
-	if !debugLog { // remove it
+	if !debugLog || level < debugLevel {
 		return
 	}
-	if level >= debugLevel {
-		log.Printf("%s %v", msg, args)
+	var p string
+	pc, f, l, ok := runtime.Caller(1)
+	if ok {
+		name := runtime.FuncForPC(pc).Name()
+		p = fmt.Sprintf("%s#%d %s %s(): ", filepath.Base(f), l, dbgLevels[level], name)
+	} else {
+		p = fmt.Sprintf("%s#%s %s %s(): ", "na", "na", level, "na")
 	}
+	log.Printf("%s%s %v", p, msg, args)
 }
 
 // getLineByKeword reads a file, searches for the keyword and returns the matched line.

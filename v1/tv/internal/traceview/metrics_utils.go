@@ -505,7 +505,7 @@ func metricsAppendMeasurements(bbuf *bsonBuffer, raw *MetricsRaw) {
 
 // metricsAppendGlobalCounters appends global reporterCounters to mAgg message
 func metricsAppendGlobalCounters(bbuf *bsonBuffer, raw *MetricsRaw, index *int) {
-	// TODO: update global counters recorded in entry_layer_t, after the settings part is done.
+	// TODO: update global counters recorded in entry_layer_t (or better to put it somewhere else)
 }
 
 // metricsAppendReporterStats appends reporter reporterCounters
