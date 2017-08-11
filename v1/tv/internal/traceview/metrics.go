@@ -4,6 +4,7 @@ package traceview
 
 import (
 	"errors"
+	"github.com/uluyol/hdrhist"
 	"strconv"
 	"time"
 )
@@ -107,13 +108,13 @@ type MetricsRaw struct {
 
 // baseHistogram is a the base HDR histogram, an external library.
 type baseHistogram struct {
-	// TODO: use the hdr library
+	hist *hdrhist.Hist
 }
 
 // Histogram contains the data of base histogram and a map of tags
 type Histogram struct {
 	tags map[string]string
-	data baseHistogram
+	data *baseHistogram
 }
 
 // Measurement keeps the tags map, count and sum of the matched request
@@ -247,7 +248,7 @@ func (am *metricsAggregator) recordHistogram(transaction string, duration time.D
 	if _, ok := am.metrics.histograms[transaction]; !ok {
 		am.metrics.histograms[transaction] = newHistogram(&tags, DefaultHistogramPrecision)
 	}
-	am.metrics.histograms[transaction].recordValue(uint64(duration.Seconds() * 1e6))
+	am.metrics.histograms[transaction].recordValue(int64(duration.Seconds() * 1e6))
 }
 
 // processMeasurements updates the measurements struct based on the new MetricsRecord
@@ -379,21 +380,27 @@ func (am *metricsAggregator) PushMetricsRecord(record *MetricsRecord) bool {
 }
 
 // recordValue records the duration to the histogram
-func (hist *Histogram) recordValue(duration uint64) {
-	// TODO: use the API from hdr library
+func (h *Histogram) recordValue(duration int64) {
+	h.data.hist.Record(duration)
 }
 
 // encode is used to encode the histogram into a string
-func (hist *Histogram) encode() string {
-	return hist.data.encode()
+func (h *Histogram) encode() string {
+	return h.data.encode()
 }
 
-func (bh *baseHistogram) Copy() baseHistogram {
-	return baseHistogram{} //TODO: copy base histogram
+func (bh *baseHistogram) Copy() *baseHistogram {
+	return &baseHistogram{hist: bh.hist.Clone()}
 }
 
-func newBaseHistogram(precision int) baseHistogram {
-	return baseHistogram{} //TODO: new base histogram
+func newBaseHistogram(precision int32) *baseHistogram {
+	return &baseHistogram{
+		hist: hdrhist.WithConfig(hdrhist.Config{
+			LowestDiscernible: 1,
+			HighestTrackable:  3600000000,
+			SigFigs:           precision,
+		}),
+	}
 }
 
 // encode is a wrapper of hdr's function with (probably) the same name
@@ -403,7 +410,7 @@ func (h *baseHistogram) encode() (str string) {
 }
 
 // newHistogram creates a Histogram object with tags and precision
-func newHistogram(inTags *map[string]string, precision int) *Histogram {
+func newHistogram(inTags *map[string]string, precision int32) *Histogram {
 	var histogram = Histogram{
 		tags: make(map[string]string),
 		data: newBaseHistogram(precision),

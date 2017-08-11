@@ -224,7 +224,6 @@ func (r *grpcReporter) PushMetricsRecord(record MetricsRecord) bool {
 	return r.mAgg.PushMetricsRecord(&record)
 }
 
-// TODO: add err print in critical paths -
 // periodic is executed in a separate goroutine to encode messages and push them to the gRPC server
 // This function is not concurrency-safe, don't run it in multiple goroutines.
 func (r *grpcReporter) periodic() {
