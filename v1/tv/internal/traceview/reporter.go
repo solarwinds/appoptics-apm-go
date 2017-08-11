@@ -32,7 +32,7 @@ const (
 	agentMetricsInterval          = time.Minute
 	agentMetricsTickInterval      = time.Millisecond * 500
 	retryAmplifier                = 2
-	intialRetryInterval           = time.Millisecond * 500
+	initialRetryInterval          = time.Millisecond * 500
 	maxRetryInterval              = time.Minute
 	maxMetricsRetries             = 20
 	maxConnRedirects              = 20
@@ -612,7 +612,7 @@ func newSender() Sender {
 		messages:       make([][]byte, 0, 1),
 		nextTime:       time.Time{},
 		retryActive:    false,
-		nextRetryDelay: intialRetryInterval,
+		nextRetryDelay: initialRetryInterval,
 		retryTime:      time.Time{},
 		retries:        0,
 	}
