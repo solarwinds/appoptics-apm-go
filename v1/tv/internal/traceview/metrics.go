@@ -4,7 +4,7 @@ package traceview
 
 import (
 	"errors"
-	"github.com/uluyol/hdrhist"
+	"github.com/uluyol/hdrhist" // TODO: replace it with librato's fork
 	"strconv"
 	"time"
 )

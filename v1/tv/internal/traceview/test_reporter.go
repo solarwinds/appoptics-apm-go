@@ -87,3 +87,8 @@ func (r *TestReporter) WritePacket(buf []byte) (int, error) {
 
 // IsOpen is always true.
 func (r *TestReporter) IsOpen() bool { return true }
+
+func (r *TestReporter) IsMetricsConnOpen() bool { return true}
+
+// PushMetricsRecord is invoked by a trace to push the mAgg record
+func (r *TestReporter) PushMetricsRecord(record MetricsRecord) bool { return true } // TODO: process metrics record
