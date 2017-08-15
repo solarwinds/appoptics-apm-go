@@ -582,9 +582,10 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 		(r.settings.nextTime.Before(tn) || r.metricsConn.nextKeepAliveTime.Before(tn))) ||
 		r.settings.retryTime.Before(tn) {
 		OboeLog(DEBUG, "getSettings(): updating settings")
-		mAgg, ok := r.mAgg.(metricsAggregator)
 		var ipAddrs []string
 		var uuid string
+
+		mAgg, ok := r.mAgg.(*metricsAggregator)
 		if ok {
 			ipAddrs = mAgg.getIPList()
 			uuid = mAgg.getHostId()

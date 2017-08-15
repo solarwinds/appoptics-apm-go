@@ -77,7 +77,7 @@ func getStrByKeyword(path string, keyword string) string {
 // getStrByKeywordFiles does the same thing as getStrByKeyword but searches for a list
 // of files and returns the first matched files and line
 func getStrByKeywordFiles(pathes []string, keyword string) (path string, line string) {
-	for path = range pathes {
+	for _, path = range pathes {
 		line = getStrByKeyword(path, keyword)
 		if line != "" {
 			return path, line

@@ -359,7 +359,7 @@ func (am *metricsAggregator) getMACList() (macs []string) {
 		return
 	}
 	for _, iface := range ifaces {
-		if iface.Flags & net.FlagLoopback {
+		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
 		if mac := iface.HardwareAddr.String(); mac != "" {
@@ -519,14 +519,14 @@ func metricsAppendReporterStats(bbuf *bsonBuffer, raw *MetricsRaw, index *int) {
 // metricsAddNumObj adds a integer value of various length to the reporter. This function changes
 // the value of index.
 func metricsAddNumObj(bbuf *bsonBuffer, index *int, name string, value interface{}) {
-	start := bsonAppendStartObject(bbuf, string(index))
+	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
 
 	bsonAppendString(bbuf, BSON_KEY_NAME, name)
 	switch value.(type) {
 	case int64:
-		bsonAppendInt64(bbuf, BSON_KEY_VALUE, int64(value))
+		bsonAppendInt64(bbuf, BSON_KEY_VALUE, value.(int64))
 	case float32, float64:
-		bsonAppendFloat64(bbuf, BSON_KEY_VALUE, float64(value))
+		bsonAppendFloat64(bbuf, BSON_KEY_VALUE, value.(float64))
 	default:
 		return // Don't support other types, don't increase the index either.
 	}
@@ -540,7 +540,10 @@ func metricsAddNumObj(bbuf *bsonBuffer, index *int, name string, value interface
 func metricsAppendSystemLoad(bbuf *bsonBuffer, raw *MetricsRaw, idx *int) {
 	// system load of last minute
 	if s := getStrByKeyword("/proc/loadavg", ""); s != "" {
-		metricsAddNumObj(bbuf, idx, BSON_KEY_LOAD1, float64(strings.Fields(s)[0]))
+		load, err := strconv.ParseFloat(strings.Fields(s)[0], 64)
+		if err == nil {
+			metricsAddNumObj(bbuf, idx, BSON_KEY_LOAD1, load)
+		}
 	}
 	// system total memory
 	if tStr := getStrByKeyword("/proc/meminfo", "MemTotal"); tStr != "" {
@@ -584,7 +587,7 @@ func metricsAppendTransactionMeasurements(bbuf *bsonBuffer, raw *MetricsRaw, ind
 
 // metricsAddMeasurement add a measurement to the bson message
 func metricsAddMeasurement(bbuf *bsonBuffer, idx *int, cnt int32, sum int64, tags map[string]string) {
-	start := bsonAppendStartObject(bbuf, string(idx))
+	start := bsonAppendStartObject(bbuf, strconv.Itoa(*idx))
 	bsonAppendString(bbuf, BSON_KEY_NAME, "TransactionResponseTime")
 	bsonAppendInt32(bbuf, BSON_KEY_COUNT, cnt) // A bit different from C-lib, we use int32 here
 	bsonAppendInt64(bbuf, BSON_KEY_SUM, sum)

@@ -101,15 +101,12 @@ func (r *TestReporter) PushMetricsRecord(record MetricsRecord) bool { return tru
 
 // SetGRPCTestReporter sets and returns a gRPC test reporter that captures raw event bytes
 // for making assertions about using the graphtest package.
-func SetGRPCTestReporter(args ...interface{}) *reporter {
-	if len(args) != 4 {
-		return nil
-	}
-	r := newGRPCReporterWithConfig(collector.NewTraceCollectorClient(args[0].(*grpc.ClientConn)), args[1].(settings),
-		collector.NewTraceCollectorClient(args[1].(*grpc.ClientConn)), args[2].(string))
+func SetGRPCTestReporter() reporter {
+	r := newGRPCReporterWithConfig(newTestCollectorClient(nil, nil), newDefaultSettings(),
+		newTestCollectorClient(nil, nil), "127.0.0.1:1234")
 	globalReporter = r
 	usingTestReporter = true
-	return &r
+	return r
 }
 
 type testCollectorClient struct {

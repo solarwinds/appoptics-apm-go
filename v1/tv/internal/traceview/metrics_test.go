@@ -3,13 +3,11 @@
 package traceview
 
 import (
-	"bytes"
-	"crypto/rand"
-	"errors"
-	"reflect"
-	"strings"
-	"testing"
-
-	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
+
+func TestFlushBSON(t *testing.T) {
+	r := SetGRPCTestReporter()
+	assert.IsType(t, &grpcReporter{}, r)
+}

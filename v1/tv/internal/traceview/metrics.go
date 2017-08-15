@@ -224,7 +224,7 @@ func (am *metricsAggregator) isWithinLimit(transaction string, max int) bool {
 // based on the MetricsRecord.
 func (am *metricsAggregator) updateMetricsRaw(record *MetricsRecord) {
 	am.recordHistogram("", record.Duration)
-	if record.Transaction {
+	if record.Transaction != "" {
 		if am.isWithinLimit(record.Transaction, MaxTransactionNames) {
 			am.recordHistogram(record.Transaction, record.Duration)
 			am.processMeasurements(record.Transaction, record)
@@ -241,7 +241,7 @@ func (am *metricsAggregator) updateMetricsRaw(record *MetricsRecord) {
 func (am *metricsAggregator) recordHistogram(transaction string, duration time.Duration) {
 	var tags = map[string]string{}
 
-	if transaction {
+	if transaction != "" {
 		tags[TAGS_TRANSACTION_NAME] = transaction
 	}
 
