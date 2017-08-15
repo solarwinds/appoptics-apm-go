@@ -4,9 +4,15 @@ package traceview
 
 import (
 	"errors"
+	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
 	"sync"
 	"sync/atomic"
 	"time"
+)
+
+import (
+	context "golang.org/x/net/context"
+	grpc "google.golang.org/grpc"
 )
 
 // SetTestReporter sets and returns a test reporter that captures raw event bytes
@@ -88,7 +94,67 @@ func (r *TestReporter) WritePacket(buf []byte) (int, error) {
 // IsOpen is always true.
 func (r *TestReporter) IsOpen() bool { return true }
 
-func (r *TestReporter) IsMetricsConnOpen() bool { return true}
+func (r *TestReporter) IsMetricsConnOpen() bool { return true }
 
 // PushMetricsRecord is invoked by a trace to push the mAgg record
 func (r *TestReporter) PushMetricsRecord(record MetricsRecord) bool { return true } // TODO: process metrics record
+
+// SetGRPCTestReporter sets and returns a gRPC test reporter that captures raw event bytes
+// for making assertions about using the graphtest package.
+func SetGRPCTestReporter(args ...interface{}) *reporter {
+	if len(args) != 4 {
+		return nil
+	}
+	r := newGRPCReporterWithConfig(collector.NewTraceCollectorClient(args[0].(*grpc.ClientConn)), args[1].(settings),
+		collector.NewTraceCollectorClient(args[1].(*grpc.ClientConn)), args[2].(string))
+	globalReporter = r
+	usingTestReporter = true
+	return &r
+}
+
+type testCollectorClient struct {
+	mReq chan interface{}
+	mRes interface{}
+	err  error
+}
+
+func (t *testCollectorClient) GetReq() interface{} {
+	return t.mReq
+}
+
+func (t *testCollectorClient) SetRes(res interface{}, err error) {
+	t.mRes = res
+	t.err = err
+}
+
+func (t *testCollectorClient) PostEvents(ctx context.Context, in *collector.MessageRequest,
+	opts ...grpc.CallOption) (*collector.MessageResult, error) {
+	t.mReq <- in
+	return t.mRes.(*collector.MessageResult), t.err
+}
+
+func (t *testCollectorClient) PostMetrics(ctx context.Context, in *collector.MessageRequest,
+	opts ...grpc.CallOption) (*collector.MessageResult, error) {
+	t.mReq <- in
+	return t.mRes.(*collector.MessageResult), t.err
+}
+
+func (t *testCollectorClient) PostStatus(ctx context.Context, in *collector.MessageRequest,
+	opts ...grpc.CallOption) (*collector.MessageResult, error) {
+	t.mReq <- in
+	return t.mRes.(*collector.MessageResult), t.err
+}
+
+func (t *testCollectorClient) GetSettings(ctx context.Context, in *collector.SettingsRequest,
+	opts ...grpc.CallOption) (*collector.SettingsResult, error) {
+	t.mReq <- in
+	return t.mRes.(*collector.SettingsResult), t.err
+}
+
+func newTestCollectorClient(mRes interface{}, err error) collector.TraceCollectorClient {
+	return &testCollectorClient{
+		mReq: make(chan interface{}),
+		mRes: mRes,
+		err:  err,
+	}
+}

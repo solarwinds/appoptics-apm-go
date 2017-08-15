@@ -40,7 +40,7 @@ const (
 type MetricsAggregator interface {
 	// FlushBSON requests a mAgg message from the message channel and encode
 	// it into a BSON message.
-	FlushBSON() ([]byte, error)
+	FlushBSON(s settings) ([]byte, error)
 	// ProcessMetrics consumes the mAgg records from the records channel
 	// and update the histograms and mAgg based on the records. It will
 	// send a mAgg message to the message channel on request and may reset
@@ -138,22 +138,22 @@ type MetricsRecord struct {
 // message in BSON format. It send a request to the histReq channel and
 // blocked in the hist channel. FlushBSON is called synchronous so it
 // expects to get the result in a short time.
-func (am *metricsAggregator) FlushBSON() ([]byte, error) {
+func (am *metricsAggregator) FlushBSON(s settings) ([]byte, error) {
 	am.rawReq <- struct{}{}
 	// Don't let me get blocked here too long
 	raw, ok := <-am.raw
 	if !ok {
 		return nil, errors.New("FlushBSON(): failed to read from am.raw")
 	}
-	return am.createMetricsMsg(raw), nil
+	return am.createMetricsMsg(raw, s), nil
 }
 
 // createMetricsMsg read the histogram and measurement data from MetricsRaw and build
 // the BSON message.
-func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw) []byte {
+func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw, s settings) []byte {
 	var bbuf = NewBsonBuffer()
 
-	am.metricsAppendSysMetadata(bbuf)
+	am.metricsAppendSysMetadata(bbuf, s)
 	appendTransactionNameOverflow(bbuf, raw)
 	metricsAppendMeasurements(bbuf, raw)
 	metricsAppendHistograms(bbuf, raw)

@@ -71,7 +71,7 @@ const (
 )
 
 // metricsAppendSysMetadata appends system metadata to the mAgg message
-func (am *metricsAggregator) metricsAppendSysMetadata(bbuf *bsonBuffer) {
+func (am *metricsAggregator) metricsAppendSysMetadata(bbuf *bsonBuffer, s settings) {
 	am.appendHostname(bbuf)
 	am.appendUUID(bbuf)
 	am.appendDistro(bbuf)
@@ -83,7 +83,7 @@ func (am *metricsAggregator) metricsAppendSysMetadata(bbuf *bsonBuffer) {
 	am.appendAWSInstanceZone(bbuf)
 	am.appendContainerID(bbuf)
 	am.appendTimestamp(bbuf)
-	am.appendFlushInterval(bbuf)
+	am.appendFlushInterval(bbuf, s.agentMetricsInterval)
 }
 
 // resetCounters resets the maps/lists in metricsAggregateor. It's called after each time
@@ -474,12 +474,12 @@ func (am *metricsAggregator) appendTimestamp(bbuf *bsonBuffer) {
 }
 
 // appendFlushInterval appends the flush interval to the BSON buffer
-func (am *metricsAggregator) appendFlushInterval(bbuf *bsonBuffer) {
+func (am *metricsAggregator) appendFlushInterval(bbuf *bsonBuffer, interval time.Duration) {
 	am.appendSysMetadata(
 		bbuf,
 		BSON_KEY_FLUSH_INTERVAL,
 		func(am *metricsAggregator) interface{} {
-			return int64(agentMetricsInterval / time.Second)
+			return int64(interval / time.Second)
 		})
 }
 
