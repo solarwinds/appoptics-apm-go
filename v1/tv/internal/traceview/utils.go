@@ -36,7 +36,8 @@ func OboeLog(level DebugLevel, msg string, args ...interface{}) {
 	var p string
 	pc, f, l, ok := runtime.Caller(1)
 	if ok {
-		name := runtime.FuncForPC(pc).Name()
+		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
+		name := path[len(path) - 1]
 		p = fmt.Sprintf("%s#%d %s %s(): ", filepath.Base(f), l, dbgLevels[level], name)
 	} else {
 		p = fmt.Sprintf("%s#%s %s %s(): ", "na", "na", level, "na")
@@ -53,7 +54,6 @@ func getLineByKeyword(path string, keyword string) string {
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		OboeLog(DEBUG, "Error in getLineByKeyword", err)
 		return ""
 	}
 	defer file.Close()

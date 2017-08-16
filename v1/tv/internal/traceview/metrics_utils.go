@@ -277,21 +277,22 @@ func (am *metricsAggregator) appendPID(bbuf *bsonBuffer) {
 // appendSysName appends the uname.Sysname and Version to BSON buffer
 func (am *metricsAggregator) appendUname(bbuf *bsonBuffer) {
 	// There is no syscall.Uname (as well as Utsname) on macOS
-	var uname syscall.Utsname
-	if err := syscall.Uname(&uname); err == nil {
-		am.appendSysMetadata(
-			bbuf,
-			BSON_KEY_SYSNAME,
-			func(am *metricsAggregator) interface{} {
-				return uname.Sysname
-			})
-		am.appendSysMetadata(
-			bbuf,
-			BSON_KEY_VERSION,
-			func(am *metricsAggregator) interface{} {
-				return uname.Version
-			})
-	}
+	_ = syscall.Getpagesize() // TODO: remove it and uncomment the following lines
+	//var uname syscall.Utsname
+	//if err := syscall.Uname(&uname); err == nil {
+	//	am.appendSysMetadata(
+	//		bbuf,
+	//		BSON_KEY_SYSNAME,
+	//		func(am *metricsAggregator) interface{} {
+	//			return uname.Sysname
+	//		})
+	//	am.appendSysMetadata(
+	//		bbuf,
+	//		BSON_KEY_VERSION,
+	//		func(am *metricsAggregator) interface{} {
+	//			return uname.Version
+	//		})
+	//}
 }
 
 // appendIPAddresses appends the IP addresses to the BSON buffer
@@ -403,7 +404,6 @@ func (am *metricsAggregator) getAWSInstanceMeta(key string, url string) (meta st
 	// an AWS instance.
 	resp, err := client.Get(url)
 	if err != nil {
-		OboeLog(DEBUG, "getAWSInstanceMeta(): Timeout, not on AWS?", err)
 		return
 	}
 
