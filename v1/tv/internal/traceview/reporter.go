@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 	"strings"
 	"sync"
+	"strconv"
 )
 
 // Reporter status
@@ -726,12 +727,12 @@ var grpcReporterVersion = "golang-v2"
 
 // Don't access _globalReporter directly, use globalReporter() and setGlobalReporter() instead
 var _globalReporter reporter = &nullReporter{} // TODO: remove it, use closure
-
 var initGlobalReporterOnce sync.Once
-var reportingDisabled bool
+var reportingDisabled bool = false
+
 var usingTestReporter bool
 var cachedHostname string
-var debugLog bool
+var debugLog bool = true
 var debugLevel DebugLevel = ERROR
 var latestSettings []*collector.OboeSetting
 
@@ -752,7 +753,16 @@ func setGlobalReporter(r reporter) {
 // initReporter initializes the event and metrics reporters. This function should be called
 // only once, which is usually invoked by sync.Once.Do()
 func initReporter() {
-	// TODO: Read environment variables and initialize the global variables. e.g., debugLevel
+	if l := os.Getenv("APPOPTICS_DEBUG_LEVEL"); l != "" {
+		if i, err := strconv.Atoi(l); err == nil {
+			debugLevel = DebugLevel(i)
+		} else {
+			OboeLog(WARNING, "The debug level should be an integer.")
+		}
+	} else {
+		debugLevel = ERROR
+	}
+
 	rType := strings.ToLower(os.Getenv("APPOPTICS_REPORTER"))
 	if rType == "udp" {
 		_globalReporter = newUDPReporter()
