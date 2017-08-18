@@ -28,7 +28,7 @@ func SetTestReporter(args ...interface{}) *TestReporter {
 		done:        make(chan int),
 		bufChan:     make(chan []byte),
 	}
-	globalReporter = r
+	setGlobalReporter(r)
 	usingTestReporter = true
 	go r.resultWriter()
 	return r
@@ -104,7 +104,7 @@ func (r *TestReporter) PushMetricsRecord(record MetricsRecord) bool { return tru
 func SetGRPCTestReporter() reporter {
 	r := newGRPCReporterWithConfig(newTestCollectorClient(nil, nil), newDefaultSettings(),
 		newTestCollectorClient(nil, nil), "127.0.0.1:1234")
-	globalReporter = r
+	setGlobalReporter(r)
 	usingTestReporter = true
 	return r
 }

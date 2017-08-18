@@ -29,8 +29,8 @@ func TestSampleRequest(t *testing.T) {
 }
 
 func TestNullReporter(t *testing.T) {
-	globalReporter = &nullReporter{}
-	assert.False(t, globalReporter.IsOpen())
+	setGlobalReporter(&nullReporter{})
+	assert.False(t, globalReporter().IsOpen())
 
 	// The nullReporter should seem like a regular reporter and not break
 	assert.NotPanics(t, func() {
@@ -40,7 +40,7 @@ func TestNullReporter(t *testing.T) {
 	})
 
 	buf := []byte("xxx")
-	cnt, err := globalReporter.WritePacket(buf)
+	cnt, err := globalReporter().WritePacket(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, len(buf), cnt)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
 	"google.golang.org/grpc"
 	"strings"
+	"sync"
 )
 
 // Reporter status
@@ -677,21 +678,25 @@ func newGRPCReporter() reporter {
 	if reportingDisabled {
 		return &nullReporter{}
 	}
-	conn, err := grpc.Dial(grpcReporterAddr)
+	var reporterAddr string
+	if str := os.Getenv("APPOPTICS_COLLECTOR"); str != "" {
+		reporterAddr = str
+	} else { // else use the default one
+		reporterAddr = grpcReporterAddr
+	}
+	conn, err := grpc.Dial(reporterAddr)
 	if err != nil {
-		if os.Getenv("TRACEVIEW_DEBUG") != "" { // TODO: use OboeLog
-			log.Printf("TraceView failed to initialize gRPC reporter: %v", err)
-		}
+		OboeLog(WARNING, "TraceView failed to initialize gRPC reporter: %v", err)
 		return &nullReporter{}
 	}
-	mConn, err := grpc.Dial(grpcReporterAddr) // TODO: can we have two connections?
+	mConn, err := grpc.Dial(reporterAddr) // TODO: can we have two connections?
 	if err != nil {
 		OboeLog(ERROR, "Failed to intialize gRPC metrics reporter")
 		// TODO: close conn connection
 		return &nullReporter{}
 	}
 	return newGRPCReporterWithConfig(collector.NewTraceCollectorClient(conn), newDefaultSettings(),
-		collector.NewTraceCollectorClient(mConn), grpcReporterAddr)
+		collector.NewTraceCollectorClient(mConn), reporterAddr)
 }
 
 // newGRPCReporterWithConfig creates a new gRPC reporter with provided config arguments
@@ -718,13 +723,51 @@ func newGRPCReporterWithConfig(eClient collector.TraceCollectorClient, s setting
 var udpReporterAddr = "127.0.0.1:7831"
 var grpcReporterAddr = "collector.librato.com:443"
 var grpcReporterVersion = "golang-v2"
-var globalReporter reporter = &nullReporter{}
+
+// Don't access _globalReporter directly, use globalReporter() and setGlobalReporter() instead
+var _globalReporter reporter = &nullReporter{} // TODO: remove it, use closure
+
+var initGlobalReporterOnce sync.Once
 var reportingDisabled bool
 var usingTestReporter bool
 var cachedHostname string
 var debugLog bool
 var debugLevel DebugLevel = ERROR
 var latestSettings []*collector.OboeSetting
+
+// globalReporter returns the reporter of the current process, it will call initReporter if
+// it's not yet done.
+func globalReporter() reporter {
+	// TODO: A problem of this lazy initialization is that it makes the first HTTP request wait
+	// TODO: for the gRPC connection before moving forward -- is it acceptable?
+	initGlobalReporterOnce.Do(initReporter)
+	return _globalReporter //TODO: mutex (add it into reporter struct
+}
+
+// setGlobalReporter set _globalReporter to a provided value
+func setGlobalReporter(r reporter) {
+	_globalReporter = r //TODO: mutex
+}
+
+// initReporter initializes the event and metrics reporters. This function should be called
+// only once, which is usually invoked by sync.Once.Do()
+func initReporter() {
+	// TODO: Read environment variables and initialize the global variables. e.g., debugLevel
+	rType := strings.ToLower(os.Getenv("APPOPTICS_REPORTER"))
+	if rType == "udp" {
+		_globalReporter = newUDPReporter()
+	} else if rType == "ssl" {
+		_globalReporter = newGRPCReporter()
+	} else {
+		_globalReporter = &nullReporter{}
+	}
+
+	if _, ok := _globalReporter.(nullReporter); !ok {
+		reportingDisabled = true
+	} else {
+		reportingDisabled = false
+	}
+}
 
 type hostnamer interface {
 	Hostname() (name string, err error)
@@ -746,7 +789,7 @@ func cacheHostname(hn hostnamer) {
 		if debugLog {
 			log.Printf("Unable to get hostname, TraceView tracing disabled: %v", err)
 		}
-		globalReporter = &nullReporter{} // disable reporting
+		setGlobalReporter() // disable reporting
 		reportingDisabled = true
 	}
 	cachedHostname = h
@@ -797,5 +840,5 @@ func shouldTraceRequest(layer, xtraceHeader string) (sampled bool, sampleRate, s
 
 // PushMetricsRecord push the mAgg record into a channel using the global reporter.
 func PushMetricsRecord(record MetricsRecord) bool {
-	return globalReporter.PushMetricsRecord(record)
+	return globalReporter().PushMetricsRecord(record)
 }

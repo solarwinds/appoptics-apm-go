@@ -230,7 +230,7 @@ func (e *event) AddKV(key, value interface{}) error {
 func (e *event) ReportUsing(c *oboeContext, r reporter) error { return reportEvent(r, c, e) }
 
 // Reports event using default (UDP) Reporter
-func (e *event) Report(c *oboeContext) error { return e.ReportUsing(c, globalReporter) }
+func (e *event) Report(c *oboeContext) error { return e.ReportUsing(c, globalReporter()) }
 
 // Report event using Context interface
 func (e *event) ReportContext(c Context, addCtxEdge bool, args ...interface{}) error {

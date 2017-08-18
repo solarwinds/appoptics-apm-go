@@ -105,8 +105,8 @@ func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) chan struct
 	done := make(chan struct{})
 	// set up UDP listener on alternate listen address
 	reporterAddr = "127.0.0.1:7832"
-	globalReporter = newReporter()
-	assert.IsType(t, &udpReporter{}, globalReporter)
+	_ := globalReporter()
+	assert.IsType(t, &udpReporter{}, globalReporter())
 
 	addr, err := net.ResolveUDPAddr("udp4", reporterAddr)
 	assert.NoError(t, err)
@@ -141,7 +141,7 @@ func init() {
 func TestRateSampleRequest(t *testing.T) {
 	var bufs [][]byte
 	done := startTestUDPListener(t, &bufs, 2)
-	sendMetricsMessage(globalReporter)
+	sendMetricsMessage(globalReporter())
 	<-done
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
@@ -176,7 +176,7 @@ func TestRateSampleRequest(t *testing.T) {
 	// send UDP message & assert
 	bufs = nil
 	done = startTestUDPListener(t, &bufs, 2)
-	sendMetricsMessage(globalReporter)
+	sendMetricsMessage(globalReporter())
 	<-done
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
@@ -194,7 +194,7 @@ func TestRateSampleRequest(t *testing.T) {
 
 	bufs = nil
 	done = startTestUDPListener(t, &bufs, 2)
-	sendMetricsMessage(globalReporter)
+	sendMetricsMessage(globalReporter())
 	<-done
 	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
 		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
