@@ -762,7 +762,7 @@ func initReporter() {
 		_globalReporter = &nullReporter{}
 	}
 
-	if _, ok := _globalReporter.(nullReporter); !ok {
+	if _, ok := _globalReporter.(*nullReporter); !ok {
 		reportingDisabled = true
 	} else {
 		reportingDisabled = false
@@ -789,7 +789,7 @@ func cacheHostname(hn hostnamer) {
 		if debugLog {
 			log.Printf("Unable to get hostname, TraceView tracing disabled: %v", err)
 		}
-		setGlobalReporter() // disable reporting
+		setGlobalReporter(&nullReporter{}) // disable reporting
 		reportingDisabled = true
 	}
 	cachedHostname = h
