@@ -323,47 +323,47 @@ func (r *grpcReporter) healthCheck() {
 		r.closeMetricsConn()
 		return
 	} else { // disconnected or reconnecting (check retry timeout)
-		r.reconnect()
+		r.metricsConn.reconnect(r.serverAddr, r.s)
 	}
 
 }
 
 // reconnect is used to reconnect to the grpc server when the status is DISCONNECTED
 // Consider using mutex as multiple goroutines will access the status parallelly
-func (r *grpcReporter) reconnect() {
+func (g *gRPC) reconnect(addr string, s settings) {
 	// TODO: gRPC supports auto-reconnection, need to make sure what happens to the sending API then,
 	// TODO: does it wait for the reconnection, or it returns an error immediately?
 	// TODO: parameterize it: need to support both event and metrics connections.
-	if r.metricsConn.status == OK || r.metricsConn.status == CLOSING {
+	if g.status == OK || g.status == CLOSING {
 		return
 	} else {
-		if r.metricsConn.retries > r.s.maxConnRetries { // infinitely retry
-			OboeLog(ERROR, fmt.Sprintf("Reached retries limit: %v, exiting", r.s.maxConnRetries))
-			r.metricsConn.status = CLOSING // set it to CLOSING, it will be closed in the next loop
+		if g.retries > s.maxConnRetries { // infinitely retry
+			OboeLog(ERROR, fmt.Sprintf("Reached retries limit: %v, exiting", s.maxConnRetries))
+			g.status = CLOSING // set it to CLOSING, it will be closed in the next loop
 			return
 		}
 
-		if r.metricsConn.nextRetryTime.After(r.metricsConn.currTime) {
+		if g.nextRetryTime.After(g.currTime) {
 			// do nothing
 		} else { // reconnect
 			OboeLog(DEBUG, "Reconnecting to gRPC server")
 			// TODO: close the old connection first, as we are redirecting ...
 
-			conn, err := grpc.Dial(r.serverAddr, grpc.WithInsecure()) // TODO: workaround WithInsecure
+			conn, err := grpc.Dial(addr, grpc.WithInsecure()) // TODO: workaround WithInsecure
 			if err != nil {
 				// TODO: retry time better to be exponential
-				nextInterval := time.Second * time.Duration((r.metricsConn.retries+1)*r.s.retryAmplifier)
-				if nextInterval > r.s.maxRetryInterval {
-					nextInterval = r.s.maxRetryInterval
+				nextInterval := time.Second * time.Duration((g.retries+1)*s.retryAmplifier)
+				if nextInterval > s.maxRetryInterval {
+					nextInterval = s.maxRetryInterval
 				}
-				r.metricsConn.nextRetryTime = r.metricsConn.currTime.Add(nextInterval) // TODO: round up?
-				r.metricsConn.retries += 1
+				g.nextRetryTime = g.currTime.Add(nextInterval) // TODO: round up?
+				g.retries += 1
 			} else { // reconnected
-				r.metricsConn.client = collector.NewTraceCollectorClient(conn)
-				r.metricsConn.retries = 0
-				r.metricsConn.nextRetryTime = time.Time{}
-				r.metricsConn.status = OK
-				r.metricsConn.nextKeepAliveTime = getNextTime(r.metricsConn.currTime, r.s.metricsConnKeepAliveInterval)
+				g.client = collector.NewTraceCollectorClient(conn)
+				g.retries = 0
+				g.nextRetryTime = time.Time{}
+				g.status = OK
+				g.nextKeepAliveTime = getNextTime(g.currTime, s.metricsConnKeepAliveInterval)
 			}
 
 		}
@@ -606,9 +606,7 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 				Uuid:        uuid,
 			},
 		}
-		OboeLog(ERROR, fmt.Sprintf("Before: %v", sreq))
 		sres, err := r.metricsConn.client.GetSettings(context.TODO(), sreq)
-		OboeLog(ERROR, "After")
 		if err != nil {
 			OboeLog(INFO, "Error in retrieving settings", err)
 			r.metricsConn.status = DISCONNECTED // TODO: is this process correct?
