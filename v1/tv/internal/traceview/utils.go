@@ -23,8 +23,8 @@ const (
 
 var dbgLevels = map[DebugLevel]string{
 	DEBUG:   "DEBUG",
-	INFO:    "INFO",
-	WARNING: "WARNING",
+	INFO:    "INFO ",
+	WARNING: "WARN ",
 	ERROR:   "ERROR",
 }
 
@@ -38,11 +38,15 @@ func OboeLog(level DebugLevel, msg string, args ...interface{}) {
 	if ok {
 		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
 		name := path[len(path) - 1]
-		p = fmt.Sprintf("%s#%d %s %s(): ", filepath.Base(f), l, dbgLevels[level], name)
+		p = fmt.Sprintf("%s %s#%d %s(): ", dbgLevels[level], filepath.Base(f), l, name)
 	} else {
-		p = fmt.Sprintf("%s#%s %s %s(): ", "na", "na", level, "na")
+		p = fmt.Sprintf("%s %s#%s %s(): ", level, "na", "na", "na")
 	}
-	log.Printf("%s%s %v", p, msg, args)
+	if len(args) == 0 {
+		log.Printf("%s%s", p, msg)
+	} else {
+		log.Printf("%s%s %v", p, msg, args)
+	}
 }
 
 // getLineByKeword reads a file, searches for the keyword and returns the matched line.

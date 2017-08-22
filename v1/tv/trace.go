@@ -160,7 +160,7 @@ func (t *tvTrace) finalizeMetrics() {
 			continue
 		}
 		if k == "Status" {
-			t.metrics.mr.Status = t.endArgs[i+1].(int)
+			t.metrics.mr.Status = *(t.endArgs[i+1].(*int))
 			num--
 		} else if k == "Controller" {
 			transaction += t.endArgs[i+1].(string) + "."

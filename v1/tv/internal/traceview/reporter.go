@@ -347,7 +347,7 @@ func (r *grpcReporter) reconnect() {
 			// do nothing
 		} else { // reconnect
 			// TODO: close the old connection first, as we are redirecting ...
-			conn, err := grpc.Dial(r.serverAddr) // TODO: correct way to reconnect? change addr to struct attribtue
+			conn, err := grpc.Dial(r.serverAddr) // TODO: correct way to reconnect?
 			if err != nil {
 				// TODO: retry time better to be exponential
 				nextInterval := time.Second * time.Duration((r.metricsConn.retries+1)*r.s.retryAmplifier)
@@ -766,10 +766,8 @@ func initReporter() {
 	rType := strings.ToLower(os.Getenv("APPOPTICS_REPORTER"))
 	if rType == "udp" {
 		_globalReporter = newUDPReporter()
-	} else if rType == "ssl" {
-		_globalReporter = newGRPCReporter()
 	} else {
-		_globalReporter = &nullReporter{}
+		_globalReporter = newGRPCReporter()
 	}
 
 	if _, ok := _globalReporter.(*nullReporter); !ok {
@@ -787,10 +785,10 @@ type osHostnamer struct{}
 func (h osHostnamer) Hostname() (string, error) { return os.Hostname() }
 
 func init() {
-	debugLog = (os.Getenv("TRACEVIEW_DEBUG") != "")
-	if addr := os.Getenv("TRACEVIEW_GRPC_COLLECTOR_ADDR"); addr != "" {
-		grpcReporterAddr = addr
-	}
+	//debugLog = (os.Getenv("TRACEVIEW_DEBUG") != "")
+	//if addr := os.Getenv("TRACEVIEW_GRPC_COLLECTOR_ADDR"); addr != "" {
+	//	grpcReporterAddr = addr
+	//}
 	cacheHostname(osHostnamer{})
 }
 func cacheHostname(hn hostnamer) {
