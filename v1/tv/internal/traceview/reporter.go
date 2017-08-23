@@ -11,12 +11,16 @@ import (
 	"os"
 	"time"
 
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"io/ioutil"
+	"strconv"
 	"strings"
 	"sync"
-	"strconv"
 )
 
 // Reporter status
@@ -152,6 +156,7 @@ func newDefaultSettings() settings {
 type grpcReporter struct {
 	client     collector.TraceCollectorClient
 	serverAddr string // server address in string format: host:port
+	certPath   string
 	exit       chan struct{}
 	apiKey     string
 	s          settings
@@ -323,14 +328,14 @@ func (r *grpcReporter) healthCheck() {
 		r.closeMetricsConn()
 		return
 	} else { // disconnected or reconnecting (check retry timeout)
-		r.metricsConn.reconnect(r.serverAddr, r.s)
+		r.metricsConn.reconnect(r.serverAddr, r.certPath, r.s)
 	}
 
 }
 
 // reconnect is used to reconnect to the grpc server when the status is DISCONNECTED
 // Consider using mutex as multiple goroutines will access the status parallelly
-func (g *gRPC) reconnect(addr string, s settings) {
+func (g *gRPC) reconnect(addr string, certPath string, s settings) {
 	// TODO: gRPC supports auto-reconnection, need to make sure what happens to the sending API then,
 	// TODO: does it wait for the reconnection, or it returns an error immediately?
 	// TODO: parameterize it: need to support both event and metrics connections.
@@ -349,7 +354,7 @@ func (g *gRPC) reconnect(addr string, s settings) {
 			OboeLog(DEBUG, "Reconnecting to gRPC server")
 			// TODO: close the old connection first, as we are redirecting ...
 
-			conn, err := grpc.Dial(addr, grpc.WithInsecure()) // TODO: workaround WithInsecure
+			conn, err := dialGRPC(certPath, addr) // TODO: workaround WithInsecure
 			if err != nil {
 				// TODO: retry time better to be exponential
 				nextInterval := time.Second * time.Duration((g.retries+1)*s.retryAmplifier)
@@ -368,6 +373,27 @@ func (g *gRPC) reconnect(addr string, s settings) {
 
 		}
 	}
+}
+
+func dialGRPC(certPath string, addr string) (*grpc.ClientConn, error) {
+	certPool := x509.NewCertPool()
+	ca, err := ioutil.ReadFile(certPath)
+	if err != nil {
+		OboeLog(INFO, "No cert file found, using the default one.")
+		ca = cert
+	}
+
+	if ok := certPool.AppendCertsFromPEM(ca); !ok {
+		OboeLog(WARNING, "Unable to append the certificate to pool.")
+	}
+
+	creds := credentials.NewTLS(&tls.Config{
+		ServerName:         addr,
+		RootCAs:            certPool,
+		InsecureSkipVerify: true, // TODO: a workaround, don't turn it on for production.
+	})
+
+	return grpc.Dial(addr, grpc.WithTransportCredentials(creds))
 }
 
 // Close request the reporter to quit from its goroutine by setting the exit flag
@@ -584,7 +610,7 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 	tn := r.metricsConn.currTime
 	if (!r.settings.retryActive &&
 		(r.settings.nextTime.Before(tn) || r.metricsConn.nextKeepAliveTime.Before(tn))) ||
-		r.settings.retryTime.Before(tn) {
+		(r.settings.retryActive && r.settings.retryTime.Before(tn)) {
 		OboeLog(DEBUG, "Updating settings")
 		var ipAddrs []string
 		var uuid string
@@ -693,28 +719,30 @@ func newGRPCReporter() reporter {
 	} else { // else use the default one
 		reporterAddr = grpcReporterAddr
 	}
-	conn, err := grpc.Dial(reporterAddr, grpc.WithInsecure()) //TODO: workaround WithInsecure
+	certPath := os.Getenv("GRPC_CERT_PATH")
+	conn, err := dialGRPC(certPath, reporterAddr)
 	if err != nil {
 		OboeLog(WARNING, fmt.Sprintf("AppOptics failed to initialize gRPC reporter: %v %v", reporterAddr, err))
 		return &nullReporter{}
 	}
-	mConn, err := grpc.Dial(reporterAddr, grpc.WithInsecure()) // TODO: workaround WithInsecure
+	mConn, err := dialGRPC(certPath, reporterAddr)
 	if err != nil {
 		OboeLog(ERROR, fmt.Sprintf("AppOptics failed to intialize gRPC metrics reporter: %v %v", reporterAddr, err))
 		conn.Close()
 		return &nullReporter{}
 	}
 	return newGRPCReporterWithConfig(collector.NewTraceCollectorClient(conn), newDefaultSettings(),
-		collector.NewTraceCollectorClient(mConn), reporterAddr, key)
+		collector.NewTraceCollectorClient(mConn), reporterAddr, certPath, key)
 }
 
 // newGRPCReporterWithConfig creates a new gRPC reporter with provided config arguments
 func newGRPCReporterWithConfig(eClient collector.TraceCollectorClient, s settings,
-	mClient collector.TraceCollectorClient, reporterAddr string, key string) reporter {
+	mClient collector.TraceCollectorClient, reporterAddr string, certPath string, apiKey string) reporter {
 	r := &grpcReporter{
 		client:      eClient,
 		serverAddr:  reporterAddr,
-		apiKey: key,
+		certPath:    certPath,
+		apiKey:      apiKey,
 		metricsConn: newGRPC(mClient),
 		metrics:     newSender(s.initialRetryInterval),
 		status:      newSender(s.initialRetryInterval),
@@ -859,3 +887,37 @@ func shouldTraceRequest(layer, xtraceHeader string) (sampled bool, sampleRate, s
 func PushMetricsRecord(record MetricsRecord) bool {
 	return globalReporter().PushMetricsRecord(record)
 }
+
+var cert []byte = []byte(`+-----BEGIN CERTIFICATE-----
+ +MIIFwzCCA6ugAwIBAgIJALoZp8WrcwHdMA0GCSqGSIb3DQEBCwUAMHgxCzAJBgNV
+ +BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
+ +aWRnaXRzIFB0eSBMdGQxMTAvBgNVBAMMKGVjMi01NC0xNzUtNDYtMzQuY29tcHV0
+ +ZS0xLmFtYXpvbmF3cy5jb20wHhcNMTcwNzI2MTk1NDM1WhcNMjcwNzI0MTk1NDM1
+ +WjB4MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwY
+ +SW50ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMTEwLwYDVQQDDChlYzItNTQtMTc1LTQ2
+ +LTM0LmNvbXB1dGUtMS5hbWF6b25hd3MuY29tMIICIjANBgkqhkiG9w0BAQEFAAOC
+ +Ag8AMIICCgKCAgEAvGpDSGIr3KW7VQfLevKS7Ff4YSecBOk3d9f8+ZV6YsvmSwVK
+ +jVJ0c19/2GnAWmohRELcJw5pNMWXWQVOqiblAwIQ2sb79ToxFSEL6m0fSxoB/q1k
+ +qR+5T6EXSOEpFFomDvKiFMPxZ2pVlhv94Xs6LvMyd7UqZ2XjOtjFolLcfqTdpLXg
+ +He6ZgdeDFdDuupDAS4zv2VpODiKomZxAm+dPxqUQ+x4utaFqOTMAzMZV8nXeTxAI
+ +6QpbSUlB2DqSjjIR5SoTi1zAI0e+rYH/L49ff633fC265sMVpnXgE8JPYb7YXtJ1
+ +fDebTJJ9Uv21HrJd2LpX31kb6UGvZoVK5gQglAKylY3px67I1XkO1TyvZjXLVynp
+ +7GXM+i8q/hmnHCkXxpgST8lO1TJyn6Z8HRDqnpxF+d266cxwcnTK9u0s+o/5Lp8E
+ +699FOviPkRtpIGF/JEBWfV14DnziJuqXlEZvmSVVTdhfFXZopfn4qUeIFfys1s1N
+ +16j3FirkG2GPKzA7+JKtTI9EGUAMXcwjYDlxPJiyfIRX02HRwUFHgfxWQ1RX8F2i
+ +uEyLNrTPHNGWQwdAyWRburG8WkAsaufrQTQZjuCJJSzmpX4r3ZCzt8nEGVIICV/V
+ +kaou/seOYRlRRST1JrwvOCg/3dHjPciixNIsMValv0095jCAfKC1wvhdRNUCAwEA
+ +AaNQME4wHQYDVR0OBBYEFDQPWYnBJXeLr2K8OM7TxXBwVreTMB8GA1UdIwQYMBaA
+ +FDQPWYnBJXeLr2K8OM7TxXBwVreTMAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQEL
+ +BQADggIBAHY92Qexzg9hY8CmE6NSQljlLvuA/QvtOkT0TLC7oW2ykkQsnfe0LIBf
+ +oKRCm1p8MRMuvA+Dco6HJMq/IGO5I0AagGOoAMcmJzbVmyIE5IfJL8Kp229K59hW
+ +o7y6icrwgTvZ9Blu4h+vkDLoINOF/0qtsLJIFUUEFK1EW80WtPrffdK01kXvcbJH
+ +wq+SP6wyDau3uJiAaEqEMt++mYlTEkVFGvgTSsiKXaoMSBoATdBejnkOlCy+43cJ
+ +TM9kW5id+2lAi9Et+t7JD3lCmxbH6OnWgyJM6AqqTAchQy4of609x1S7CmVBzJ4h
+ +U0d2QdopCmt6HB4+msuBNWaIDJbMxTvjrax3Ivpk4jv4Tqvtc1ht4U7PBVMjyrua
+ +l0sLgESq8UtfQg/Bgb/Pc3YSV3jUZn4E0e7h3vF5xAkZ4rkc/t30QEq5BzMeoSsy
+ +Vi01K7Fo6YwWmrRIX7XYMoFeTp5Rw1HsIfcxUIY0N9yAYZzD0vDo8Elda/gyUgjC
+ +K0Xe0rBRSKtdTLBshcsrR3b6w8zdTwganCmen8N9hrM5gQl1vgKsHWs0up6z/d+Y
+ +yb02Yqe/JldI+autdjabvRAkByFTJE2EQNHABmOoFCu9sYea+Zp+84zL55f8k1P1
+ +GuNi/IICdAHEjCSiqfNpdjLSidSrHTa6PDsKsJ/39OXja2bmg4F4
+ +-----END CERTIFICATE-----`)
