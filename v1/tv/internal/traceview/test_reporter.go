@@ -103,7 +103,7 @@ func (r *TestReporter) PushMetricsRecord(record MetricsRecord) bool { return tru
 // for making assertions about using the graphtest package.
 func SetGRPCTestReporter() reporter {
 	r := newGRPCReporterWithConfig(newTestCollectorClient(nil, nil), newDefaultSettings(),
-		newTestCollectorClient(nil, nil), "127.0.0.1:1234", "test-key:Go")
+		newTestCollectorClient(nil, nil), "127.0.0.1:1234", "", "test-key:Go")
 	setGlobalReporter(r)
 	usingTestReporter = true
 	return r
