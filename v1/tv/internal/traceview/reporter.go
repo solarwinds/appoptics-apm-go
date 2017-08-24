@@ -642,7 +642,7 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 
 		switch result := sres.GetResult(); result {
 		case collector.ResultCode_OK:
-			OboeLog(DEBUG, "Got new settings from server")
+			OboeLog(DEBUG, fmt.Sprintf("Got new settings from server %v", r.serverAddr))
 			storeSettings(sres)
 			r.settings.nextTime = getNextTime(r.metricsConn.currTime, r.s.agentSettingsInterval)
 			r.settings.retryActive = false
@@ -793,6 +793,11 @@ func globalReporter() reporter {
 	} else {
 		return _globalReporter
 	}
+}
+
+// setGloblReporter assigns a value to the global reporter
+func setGlobalReporter(r reporter) {
+	_globalReporter = r //TODO: mutex
 }
 
 // initReporter initializes the event and metrics reporters. This function should be called
