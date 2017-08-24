@@ -338,7 +338,6 @@ func (r *grpcReporter) healthCheck() {
 func (g *gRPC) reconnect(addr string, certPath string, s settings) {
 	// TODO: gRPC supports auto-reconnection, need to make sure what happens to the sending API then,
 	// TODO: does it wait for the reconnection, or it returns an error immediately?
-	// TODO: parameterize it: need to support both event and metrics connections.
 	if g.status == OK || g.status == CLOSING {
 		return
 	} else {
@@ -354,7 +353,7 @@ func (g *gRPC) reconnect(addr string, certPath string, s settings) {
 			OboeLog(DEBUG, "Reconnecting to gRPC server")
 			// TODO: close the old connection first, as we are redirecting ...
 
-			conn, err := dialGRPC(certPath, addr) // TODO: workaround WithInsecure
+			conn, err := dialGRPC(certPath, addr)
 			if err != nil {
 				OboeLog(WARNING, fmt.Sprintf("Failed to reconnect gRPC reporter: %v %v", addr, err))
 				// TODO: retry time better to be exponential
@@ -412,10 +411,11 @@ func (r *grpcReporter) closeMetricsConn() {
 	// Finally set toe reporter to nil to avoid repeated closing
 	close(r.mAgg.GetExitChan())
 
-	// TODO: close gRPC client
+	// TODO: we should close the gRPC client but seems we don't have this method.
 	r.metricsConn.client = nil
 	r.metrics.messages = nil
-	// TODO: set status/settings messages (if any) to nil
+	r.status.messages = nil
+	r.settings.messages = nil
 }
 
 // blockTillNextTick blocks the caller and will return at the next wake up time, which
@@ -471,7 +471,7 @@ func (r *grpcReporter) sendMetrics() {
 	mres, err := r.metricsConn.client.PostMetrics(context.TODO(), mreq)
 	if err != nil {
 		OboeLog(INFO, "Error in sending metrics", err)
-		r.metricsConn.status = DISCONNECTED // TODO: is this process correct?
+		r.metricsConn.status = DISCONNECTED
 		return
 	}
 	// Update connection keep alive time
@@ -500,14 +500,14 @@ func (r *grpcReporter) sendMetrics() {
 	return
 }
 
+// setServerAddr set the server address for grpcReporter as a string. It is not goroutine-safe
+// as it is supposed to have only one goroutine to call it at any time.
 func (r *grpcReporter) setServerAddr(host string) bool {
-	//TODO: create a new attribute 'server' for grpcReporter
 	if strings.Contains(host, ":") {
 		OboeLog(WARNING, fmt.Sprintf("Invalid reporter server address: %s", host))
 		return false
 	} else {
-		// TODO: mutex protection
-		// TODO: further IP validity check.
+		// we trust what we have got from the collector is a real/legitimate IP address
 		r.serverAddr = host
 		return true
 	}
@@ -536,7 +536,7 @@ func (r *grpcReporter) sendStatus() {
 		mres, err := r.metricsConn.client.PostStatus(context.TODO(), mreq)
 		if err != nil {
 			OboeLog(INFO, "Error in sending metrics", err)
-			r.metricsConn.status = DISCONNECTED // TODO: is this process correct?
+			r.metricsConn.status = DISCONNECTED
 			return
 		}
 		// Update connection keep alive time
@@ -635,7 +635,7 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 		sres, err := r.metricsConn.client.GetSettings(context.TODO(), sreq)
 		if err != nil {
 			OboeLog(INFO, "Error in retrieving settings", err)
-			r.metricsConn.status = DISCONNECTED // TODO: is this process correct?
+			r.metricsConn.status = DISCONNECTED
 			return
 		}
 		r.metricsConn.nextKeepAliveTime = getNextTime(r.metricsConn.currTime, r.s.metricsConnKeepAliveInterval)
@@ -704,6 +704,7 @@ func newGRPC(client collector.TraceCollectorClient) gRPC {
 
 func newGRPCReporter() reporter {
 	// TODO: fetch data and release channel space even when gRPC is disconnected
+	// We don't have the chance to reenable it then.
 	if reportingDisabled {
 		return &nullReporter{}
 	}
@@ -764,7 +765,14 @@ var grpcReporterVersion = "golang-v2"
 
 // Don't access _globalReporter directly, use globalReporter() and setGlobalReporter() instead
 var _globalReporter reporter = &nullReporter{}
+
+// initGlobalReporterOnce is used to make sure the reporter is only initialized once for each process
 var initGlobalReporterOnce sync.Once
+
+// initGlobalReporterChan is used to block the threads/goroutines waiting for the initialization
+var initGlobalReporterChan = make(chan struct{})
+
+// reportingDisabled is used to disable the reporting
 var reportingDisabled bool = false
 
 var usingTestReporter bool
@@ -776,20 +784,24 @@ var latestSettings []*collector.OboeSetting
 // globalReporter returns the reporter of the current process, it will call initReporter if
 // it's not yet done.
 func globalReporter() reporter {
-	// TODO: A problem of this lazy initialization is that it makes the first HTTP request wait
-	// TODO: for the gRPC connection before moving forward -- is it acceptable?
 	initGlobalReporterOnce.Do(initReporter)
-	return _globalReporter //TODO: mutex (add it into reporter struct
-}
-
-// setGlobalReporter set _globalReporter to a provided value
-func setGlobalReporter(r reporter) {
-	_globalReporter = r //TODO: mutex
+	// Only the first thread/goroutine enters initReporter, all others are blocked here
+	// before the initialization is done.
+	<-initGlobalReporterChan
+	if reportingDisabled {
+		return &nullReporter{}
+	} else {
+		return _globalReporter
+	}
 }
 
 // initReporter initializes the event and metrics reporters. This function should be called
 // only once, which is usually invoked by sync.Once.Do()
 func initReporter() {
+	// close this channel after initialization is done, other goroutines/threads will be
+	// released and able to get the initialized reporter.
+	defer close(initGlobalReporterChan)
+
 	if l := os.Getenv("APPOPTICS_DEBUG_LEVEL"); l != "" {
 		if i, err := strconv.Atoi(l); err == nil {
 			debugLevel = DebugLevel(i)
@@ -834,7 +846,6 @@ func cacheHostname(hn hostnamer) {
 		if debugLog {
 			log.Printf("Unable to get hostname, TraceView tracing disabled: %v", err)
 		}
-		setGlobalReporter(&nullReporter{}) // disable reporting
 		reportingDisabled = true
 	}
 	cachedHostname = h
