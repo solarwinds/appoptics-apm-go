@@ -4,15 +4,13 @@ package traceview
 
 import (
 	"errors"
-	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
 	"sync"
 	"sync/atomic"
 	"time"
-)
 
-import (
-	context "golang.org/x/net/context"
-	grpc "google.golang.org/grpc"
+	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 // SetTestReporter sets and returns a test reporter that captures raw event bytes
@@ -28,6 +26,7 @@ func SetTestReporter(args ...interface{}) *TestReporter {
 		done:        make(chan int),
 		bufChan:     make(chan []byte),
 	}
+	_ = globalReporter() // XXX workaround for initReporter setting nullReporter
 	setGlobalReporter(r)
 	usingTestReporter = true
 	go r.resultWriter()
