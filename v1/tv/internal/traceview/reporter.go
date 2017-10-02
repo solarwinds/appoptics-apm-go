@@ -4,23 +4,23 @@ package traceview
 
 import (
 	"bytes"
-	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
-	"time"
-
-	"crypto/tls"
-	"crypto/x509"
-	"fmt"
-	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"io/ioutil"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // Reporter status
