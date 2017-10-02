@@ -22,9 +22,9 @@ import (
 )
 
 // Global configuration settings
-type settings struct{ settingsCfg C.oboe_settings_cfg_t }
+type oboeSettings struct{ settingsCfg C.oboe_settings_cfg_t }
 
-var globalSettings settings
+var globalSettings oboeSettings
 var emptyCString, inXTraceCString *C.char
 var oboeVersion string
 var layerCache *cStringCache
