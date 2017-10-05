@@ -37,7 +37,7 @@ func OboeLog(level DebugLevel, msg string, args ...interface{}) {
 	pc, f, l, ok := runtime.Caller(1)
 	if ok {
 		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
-		name := path[len(path) - 1]
+		name := path[len(path)-1]
 		p = fmt.Sprintf("%s %s#%d %s(): ", dbgLevels[level], filepath.Base(f), l, name)
 	} else {
 		p = fmt.Sprintf("%s %s#%s %s(): ", level, "na", "na", "na")
@@ -88,4 +88,18 @@ func getStrByKeywordFiles(pathes []string, keyword string) (path string, line st
 		}
 	}
 	return "", ""
+}
+
+func Min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+func Max(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
 }

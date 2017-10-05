@@ -14,7 +14,6 @@ import (
 	"math"
 	"os"
 	"runtime"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,7 +31,7 @@ var layerCache *cStringCache
 // Initialize Traceview C instrumentation library ("oboe"):
 func init() {
 	C.oboe_init()
-	_ := globalReporter()
+	_ = globalReporter()
 	readEnvSettings()
 
 	// To save on malloc/free, preallocate empty & "non-empty" CStrings
@@ -73,9 +72,6 @@ func sendInitMessage() {
 			"Oboe.Version", oboeVersion,
 		)
 		c.ReportEvent(LabelExit, initLayer)
-	}
-	if !disableMetrics {
-		go sendMetrics(globalReporter())
 	}
 }
 
@@ -150,74 +146,6 @@ func getNextInterval(now time.Time) time.Duration {
 	return time.Duration(counterIntervalSecs)*time.Second -
 		(time.Duration(now.Second()%counterIntervalSecs)*time.Second +
 			time.Duration(now.Nanosecond())*time.Nanosecond)
-}
-
-var stopMetrics = make(chan struct{})
-var disableMetrics bool
-
-func sendMetrics(r reporter) {
-	for {
-		select {
-		case <-stopMetrics:
-			break
-		case <-time.After(getNextInterval(time.Now())):
-			sendMetricsMessage(r)
-		}
-	}
-}
-
-var metricsLayerName = "JMX"
-var metricsPrefix = metricsLayerName + "."
-
-func sendMetricsMessage(r reporter) {
-	ctx, ok := newContext().(*oboeContext)
-	if !ok {
-		return
-	}
-	ev, err := ctx.newEvent(LabelEntry, metricsLayerName)
-	if err != nil {
-		return
-	}
-	// runtime metricsConn
-	ev.AddString("ProcessName", initLayer)
-	ev.AddInt64(metricsPrefix+"type=threadcount,name=NumGoroutine", int64(runtime.NumGoroutine()))
-
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Alloc", int64(mem.Alloc))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.TotalAlloc", int64(mem.TotalAlloc))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Sys", int64(mem.Sys))
-	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Lookups", int64(mem.Lookups))
-	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Mallocs", int64(mem.Mallocs))
-	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Frees", int64(mem.Frees))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Alloc", int64(mem.HeapAlloc))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Sys", int64(mem.HeapSys))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Idle", int64(mem.HeapIdle))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Inuse", int64(mem.HeapInuse))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Released", int64(mem.HeapReleased))
-	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Heap.Objects", int64(mem.HeapObjects))
-
-	var gc debug.GCStats
-	debug.ReadGCStats(&gc)
-	ev.AddInt64(metricsPrefix+"type=count,name=GCStats.NumGC", gc.NumGC)
-
-	// layer counts
-	counts := make(map[string]*rateCounts)
-	if layerCache != nil {
-		for _, layer := range layerCache.Keys() {
-			if i := layerCache.Has(layer); i != nil && i.counter != nil {
-				counts[layer] = i.counter.Flush()
-			}
-		}
-	}
-	appendCount(ev, counts, "RequestCount", func(c *rateCounts) int64 { return c.requested })
-	appendCount(ev, counts, "TraceCount", func(c *rateCounts) int64 { return c.traced })
-	appendCount(ev, counts, "TokenBucketExhaustionCount", func(c *rateCounts) int64 { return c.limited })
-	appendCount(ev, counts, "SampleCount", func(c *rateCounts) int64 { return c.sampled })
-	appendCount(ev, counts, "ThroughCount", func(c *rateCounts) int64 { return c.through })
-
-	ev.ReportUsing(ctx, r)
-	ctx.ReportEvent(LabelExit, metricsLayerName)
 }
 
 func appendCount(e *event, counts map[string]*rateCounts, name string, f func(*rateCounts) int64) {

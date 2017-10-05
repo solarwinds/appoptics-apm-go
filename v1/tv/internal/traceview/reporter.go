@@ -34,7 +34,7 @@ const (
 const (
 	maxEventBytes                 = 64 * 1024 * 1024
 	grpcReporterFlushTimeout      = 100 * time.Millisecond
-	agentMetricsInterval          = time.Minute
+	agentMetricsInterval          = time.Second * 30
 	agentMetricsTickInterval      = time.Millisecond * 500
 	retryAmplifier                = 2
 	initialRetryInterval          = time.Millisecond * 500
@@ -156,7 +156,7 @@ func newDefaultSettings() settings {
 type grpcReporter struct {
 	client     collector.TraceCollectorClient
 	serverAddr string // server address in string format: host:port
-	certPath   string
+	ca         []byte
 	exit       chan struct{}
 	apiKey     string
 	s          settings
@@ -328,14 +328,14 @@ func (r *grpcReporter) healthCheck() {
 		r.closeMetricsConn()
 		return
 	} else { // disconnected or reconnecting (check retry timeout)
-		r.metricsConn.reconnect(r.serverAddr, r.certPath, r.s)
+		r.metricsConn.reconnect(r.serverAddr, r.ca, r.s)
 	}
 
 }
 
 // reconnect is used to reconnect to the grpc server when the status is DISCONNECTED
 // Consider using mutex as multiple goroutines will access the status parallelly
-func (g *gRPC) reconnect(addr string, certPath string, s settings) {
+func (g *gRPC) reconnect(addr string, ca []byte, s settings) {
 	// TODO: gRPC supports auto-reconnection, need to make sure what happens to the sending API then,
 	// TODO: does it wait for the reconnection, or it returns an error immediately?
 	if g.status == OK || g.status == CLOSING {
@@ -353,7 +353,7 @@ func (g *gRPC) reconnect(addr string, certPath string, s settings) {
 			OboeLog(DEBUG, "Reconnecting to gRPC server")
 			// TODO: close the old connection first, as we are redirecting ...
 
-			conn, err := dialGRPC(certPath, addr)
+			conn, err := dialGRPC(ca, addr)
 			if err != nil {
 				OboeLog(WARNING, fmt.Sprintf("Failed to reconnect gRPC reporter: %v %v", addr, err))
 				// TODO: retry time better to be exponential
@@ -375,12 +375,8 @@ func (g *gRPC) reconnect(addr string, certPath string, s settings) {
 	}
 }
 
-func dialGRPC(certPath string, addr string) (*grpc.ClientConn, error) {
+func dialGRPC(ca []byte, addr string) (*grpc.ClientConn, error) {
 	certPool := x509.NewCertPool()
-	ca, err := ioutil.ReadFile(certPath)
-	if err != nil {
-		return nil, errors.New("No cert file found")
-	}
 
 	if ok := certPool.AppendCertsFromPEM(ca); !ok {
 		return nil, errors.New("Unable to append the certificate to pool.")
@@ -720,29 +716,41 @@ func newGRPCReporter() reporter {
 	} else { // else use the default one
 		reporterAddr = grpcReporterAddr
 	}
-	certPath := os.Getenv("GRPC_CERT_PATH")
-	conn, err := dialGRPC(certPath, reporterAddr)
+
+	var ca []byte
+	if certPath := os.Getenv("GRPC_CERT_PATH"); certPath != "" {
+		var err error
+		ca, err = ioutil.ReadFile(certPath)
+		if err != nil {
+			OboeLog(ERROR, fmt.Sprintf("Error reading cert file %s: %v", certPath, err))
+			return &nullReporter{}
+		}
+	} else {
+		ca = []byte(grpcReporterCert)
+	}
+
+	conn, err := dialGRPC(ca, reporterAddr)
 	if err != nil {
-		OboeLog(WARNING, fmt.Sprintf("AppOptics failed to initialize gRPC reporter: %v %v", reporterAddr, err))
+		OboeLog(ERROR, fmt.Sprintf("AppOptics failed to initialize gRPC reporter: %v %v", reporterAddr, err))
 		return &nullReporter{}
 	}
-	mConn, err := dialGRPC(certPath, reporterAddr)
+	mConn, err := dialGRPC(ca, reporterAddr)
 	if err != nil {
 		OboeLog(ERROR, fmt.Sprintf("AppOptics failed to intialize gRPC metrics reporter: %v %v", reporterAddr, err))
 		conn.Close()
 		return &nullReporter{}
 	}
 	return newGRPCReporterWithConfig(collector.NewTraceCollectorClient(conn), newDefaultSettings(),
-		collector.NewTraceCollectorClient(mConn), reporterAddr, certPath, key)
+		collector.NewTraceCollectorClient(mConn), reporterAddr, ca, key)
 }
 
 // newGRPCReporterWithConfig creates a new gRPC reporter with provided config arguments
 func newGRPCReporterWithConfig(eClient collector.TraceCollectorClient, s settings,
-	mClient collector.TraceCollectorClient, reporterAddr string, certPath string, apiKey string) reporter {
+	mClient collector.TraceCollectorClient, reporterAddr string, ca []byte, apiKey string) reporter {
 	r := &grpcReporter{
 		client:      eClient,
 		serverAddr:  reporterAddr,
-		certPath:    certPath,
+		ca:          ca,
 		apiKey:      apiKey,
 		metricsConn: newGRPC(mClient),
 		metrics:     newSender(s.initialRetryInterval),
@@ -760,7 +768,32 @@ func newGRPCReporterWithConfig(eClient collector.TraceCollectorClient, s setting
 }
 
 var udpReporterAddr = "127.0.0.1:7831"
-var grpcReporterAddr = "collector.librato.com:443"
+var grpcReporterAddr = "ec2-54-175-46-34.compute-1.amazonaws.com:5555"
+var grpcReporterCert = `-----BEGIN CERTIFICATE-----
+MIID8TCCAtmgAwIBAgIJAMoDz7Npas2/MA0GCSqGSIb3DQEBCwUAMIGOMQswCQYD
+VQQGEwJVUzETMBEGA1UECAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNU2FuIEZyYW5j
+aXNjbzEVMBMGA1UECgwMTGlicmF0byBJbmMuMRUwEwYDVQQDDAxBcHBPcHRpY3Mg
+Q0ExJDAiBgkqhkiG9w0BCQEWFXN1cHBvcnRAYXBwb3B0aWNzLmNvbTAeFw0xNzA5
+MTUyMjAxMzlaFw0yNzA5MTMyMjAxMzlaMIGOMQswCQYDVQQGEwJVUzETMBEGA1UE
+CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNU2FuIEZyYW5jaXNjbzEVMBMGA1UECgwM
+TGlicmF0byBJbmMuMRUwEwYDVQQDDAxBcHBPcHRpY3MgQ0ExJDAiBgkqhkiG9w0B
+CQEWFXN1cHBvcnRAYXBwb3B0aWNzLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEP
+ADCCAQoCggEBAOxO0wsGba3iI4r3L5BMST0rAO/gGaUhpQre6nRwVTmPCnLw1bmn
+GdiFgYv/oRRwU+VieumHSQqoOmyFrg+ajGmvUDp2WqQ0It+XhcbaHFiAp2H7+mLf
+cUH6S43/em0WUxZHeRzRupRDyO1bX6Hh2jgxykivlFrn5HCIQD5Hx1/SaZoW9v2n
+oATCbgFOiPW6kU/AVs4R0VBujon13HCehVelNKkazrAEBT1i6RvdOB6aQQ32seW+
+gLV5yVWSPEJvA9ZJqad/nQ8EQUMSSlVN191WOjp4bGpkJE1svs7NmM+Oja50W56l
+qOH5eWermr/8qWjdPlDJ+I0VkgN0UyHVuRECAwEAAaNQME4wHQYDVR0OBBYEFOuL
+KDTFhRQXwlBRxhPqhukrNYeRMB8GA1UdIwQYMBaAFOuLKDTFhRQXwlBRxhPqhukr
+NYeRMAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAJQtH446NZhjusy6
+iCyvmnD95ybfNPDpjHmNx5n9Y6w9n+9y1o3732HUJE+WjvbLS3h1o7wujGKMcRJn
+7I7eTDd26ZhLvnh5/AitYjdxrtUkQDgyxwLFJKhZu0ik2vXqj0fL961/quJL8Gyp
+hNj3Nf7WMohQMSohEmCCX2sHyZGVGYmQHs5omAtkH/NNySqmsWNcpgd3M0aPDRBZ
+5VFreOSGKBTJnoLNqods/S9RV0by84hm3j6aQ/tMDIVE9VCJtrE6evzC0MWyVFwR
+ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
+7tsqAxw=
+-----END CERTIFICATE-----`
+
 var grpcReporterVersion = "golang-v2"
 
 // Don't access _globalReporter directly, use globalReporter() and setGlobalReporter() instead
@@ -824,7 +857,7 @@ func initReporter() {
 		_globalReporter = newGRPCReporter()
 	}
 
-	if _, ok := _globalReporter.(*nullReporter); !ok {
+	if _, ok := _globalReporter.(*nullReporter); ok {
 		reportingDisabled = true
 	} else {
 		reportingDisabled = false

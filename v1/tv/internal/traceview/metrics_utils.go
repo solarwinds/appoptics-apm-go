@@ -594,8 +594,8 @@ func metricsAddMeasurement(bbuf *bsonBuffer, idx *int, cnt int32, sum int64, tag
 
 	subStart := bsonAppendStartObject(bbuf, BSON_KEY_TAGS)
 	for k, v := range tags {
-		k = k[:MaxTagNameLength]
-		v = v[:MaxTagValueLength]
+		k = k[:Min(len(k), MaxTagNameLength)]
+		v = v[:Min(len(v), MaxTagValueLength)]
 		bsonAppendString(bbuf, k, v)
 	}
 	bsonAppendFinishObject(bbuf, subStart)
@@ -627,8 +627,8 @@ func addHistogram(bbuf *bsonBuffer, idx int, data string, tags map[string]string
 
 	tagsStart := bsonAppendStartObject(bbuf, BSON_KEY_HIST_TAGS)
 	for k, v := range tags {
-		k = k[:MaxTagNameLength]
-		v = v[:MaxTagValueLength]
+		k = k[:Min(len(k), MaxTagNameLength)]
+		v = v[:Min(len(v), MaxTagValueLength)]
 		bsonAppendString(bbuf, k, v)
 	}
 	bsonAppendFinishObject(bbuf, tagsStart)
