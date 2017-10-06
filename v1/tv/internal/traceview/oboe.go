@@ -14,6 +14,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,7 +32,7 @@ var layerCache *cStringCache
 // Initialize Traceview C instrumentation library ("oboe"):
 func init() {
 	C.oboe_init()
-	_ = globalReporter()
+	globalReporter()
 	readEnvSettings()
 
 	// To save on malloc/free, preallocate empty & "non-empty" CStrings
@@ -54,6 +55,14 @@ func readEnvSettings() {
 		globalSettings.settingsCfg.tracing_mode = C.OBOE_TRACE_THROUGH
 	case "never":
 		globalSettings.settingsCfg.tracing_mode = C.OBOE_TRACE_NEVER
+	}
+
+	if level := os.Getenv("APPOPTICS_DEBUG_LEVEL"); level != "" {
+		if i, err := strconv.Atoi(level); err == nil {
+			debugLevel = DebugLevel(i)
+		} else {
+			OboeLog(WARNING, "The debug level should be an integer.")
+		}
 	}
 }
 

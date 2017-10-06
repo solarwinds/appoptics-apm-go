@@ -812,7 +812,6 @@ var reportingDisabled bool = false
 var usingTestReporter bool
 var cachedHostname string
 var debugLog bool = true
-var debugLevel DebugLevel = ERROR
 var latestSettings []*collector.OboeSetting
 
 // globalReporter returns the reporter of the current process, it will call initReporter if
