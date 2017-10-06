@@ -632,6 +632,7 @@ func (r *grpcReporter) getSettings() { // TODO: use it as keep alive msg
 		if err != nil {
 			OboeLog(INFO, "Error in retrieving settings", err)
 			r.metricsConn.status = DISCONNECTED
+			// TODO implement backoff
 			return
 		}
 		r.metricsConn.nextKeepAliveTime = getNextTime(r.metricsConn.currTime, r.s.metricsConnKeepAliveInterval)
