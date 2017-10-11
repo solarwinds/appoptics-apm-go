@@ -2,7 +2,12 @@
 
 package tv
 
-import "github.com/librato/go-traceview/v1/tv/internal/traceview"
+import (
+	"time"
+
+	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	"strings"
+)
 
 // Trace represents a distributed trace for this request that reports
 // events to TraceView.
@@ -30,6 +35,12 @@ type Trace interface {
 	// response header (e.g. the HTTP Header "X-Trace"). Call this
 	// method to set a response header in advance of calling End().
 	ExitMetadata() string
+
+	// SetStartTime sets the start time of a trace.
+	SetStartTime(start time.Time)
+
+	// SetMethod sets the request's HTTP method of the trace, if any
+	SetMethod(method string)
 }
 
 // KVMap is a map of additional key-value pairs to report along with the event data provided
@@ -39,9 +50,17 @@ type Trace interface {
 // details on the key names that TraceView looks for.
 type KVMap map[string]interface{}
 
+// traceMetrics is a struct of the metrics of a trace. It is used for generating the overall
+// metrics of an agent periodically.
+type traceMetrics struct {
+	mr traceview.MetricsRecord
+	start time.Time
+}
+
 type tvTrace struct {
 	layerSpan
 	exitEvent traceview.Event
+	metrics traceMetrics
 }
 
 func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
@@ -100,6 +119,16 @@ func (t *tvTrace) EndCallback(cb func() KVMap) {
 	}
 }
 
+// SetStartTime sets the start time of a trace
+func (t *tvTrace) SetStartTime(start time.Time) {
+	t.metrics.start = start
+}
+
+// SetMethod sets the request's HTTP method, if any
+func (t *tvTrace) SetMethod(method string) {
+	t.metrics.mr.Method = method
+}
+
 func (t *tvTrace) reportExit() {
 	if t.ok() {
 		t.lock.Lock()
@@ -112,10 +141,37 @@ func (t *tvTrace) reportExit() {
 		} else {
 			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), t.endArgs...)
 		}
+		t.recordMetrics()
 		t.childEdges = nil // clear child edge list
 		t.endArgs = nil
 		t.ended = true
 	}
+}
+
+// finalizeMetrics extract http status, controller and action from the deferred endArgs
+// and fill them into trace's metrics struct. The data is then used to send the metrics
+// record to the metrics channel.
+func (t *tvTrace) finalizeMetrics() {
+	var transaction string
+	num := len([]string{"Status", "Controller", "Action"})
+	for i := 0; (i+1 < len(t.endArgs)) && (num > 0); i += 2 {
+		k, isStr := t.endArgs[i].(string)
+		if !isStr {
+			continue
+		}
+		if k == "Status" {
+			t.metrics.mr.Status = *(t.endArgs[i+1].(*int))
+			num--
+		} else if k == "Controller" {
+			transaction += t.endArgs[i+1].(string) + "."
+			num--
+		} else if k == "Action" {
+			transaction += t.endArgs[i+1].(string) + "."
+			num--
+		}
+	}
+	t.metrics.mr.Transaction = strings.TrimSuffix(transaction, ".")
+	t.metrics.mr.Duration = time.Now().Sub(t.metrics.start)
 }
 
 func (t *tvTrace) IsTracing() bool { return t != nil && t.tvCtx.IsTracing() }
@@ -134,11 +190,21 @@ func (t *tvTrace) ExitMetadata() (mdHex string) {
 	return
 }
 
+// RecordMetrics records the metrics of a trace, which is used to generate the overall metrics
+// periodically by the agent.
+func (t *tvTrace) recordMetrics() {
+	t.finalizeMetrics()
+	traceview.PushMetricsRecord(t.metrics.mr)
+}
+
 // A nullTrace is not tracing.
 type nullTrace struct{ nullSpan }
 
 func (t *nullTrace) EndCallback(f func() KVMap) {}
-func (t *nullTrace) ExitMetadata() string       { return "" }
+func (t *nullTrace) ExitMetadata() string { return "" }
+func (t *nullTrace) SetStartTime(start time.Time) {}
+func (t *nullTrace) SetMethod(method string) {}
+func (t *nullTrace) recordMetrics() {}
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }

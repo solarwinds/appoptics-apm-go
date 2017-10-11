@@ -8,6 +8,14 @@ type bsonBuffer struct {
 	buf []byte
 }
 
+func (bbuf *bsonBuffer) GetBuf() []byte { return bbuf.buf }
+
+func NewBsonBuffer() *bsonBuffer {
+	var bbuf = &bsonBuffer{}
+	bsonBufferInit(bbuf)
+	return bbuf
+}
+
 // Conforms to C interface to simplify port
 
 func bsonBufferInit(b *bsonBuffer) {
@@ -64,6 +72,12 @@ func bsonAppendBool(b *bsonBuffer, k string, v bool) {
 
 func bsonAppendStartObject(b *bsonBuffer, k string) (start int) {
 	b.addElemName('\x03', k)
+	start = b.reserveInt32()
+	return
+}
+
+func bsonAppendStartArray(b *bsonBuffer, k string) (start int) {
+	b.addElemName('\x04', k)
 	start = b.reserveInt32()
 	return
 }

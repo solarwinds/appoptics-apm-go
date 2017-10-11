@@ -22,9 +22,9 @@ import (
 )
 
 // Global configuration settings
-type settings struct{ settingsCfg C.oboe_settings_cfg_t }
+type oboeSettings struct{ settingsCfg C.oboe_settings_cfg_t }
 
-var globalSettings settings
+var globalSettings oboeSettings
 var emptyCString, inXTraceCString *C.char
 var oboeVersion string
 var layerCache *cStringCache
@@ -32,7 +32,7 @@ var layerCache *cStringCache
 // Initialize Traceview C instrumentation library ("oboe"):
 func init() {
 	C.oboe_init()
-	globalReporter = newReporter()
+	_ := globalReporter()
 	readEnvSettings()
 
 	// To save on malloc/free, preallocate empty & "non-empty" CStrings
@@ -75,7 +75,7 @@ func sendInitMessage() {
 		c.ReportEvent(LabelExit, initLayer)
 	}
 	if !disableMetrics {
-		go sendMetrics(globalReporter)
+		go sendMetrics(globalReporter())
 	}
 }
 
@@ -178,7 +178,7 @@ func sendMetricsMessage(r reporter) {
 	if err != nil {
 		return
 	}
-	// runtime metrics
+	// runtime metricsConn
 	ev.AddString("ProcessName", initLayer)
 	ev.AddInt64(metricsPrefix+"type=threadcount,name=NumGoroutine", int64(runtime.NumGoroutine()))
 
@@ -233,7 +233,7 @@ func appendCount(e *event, counts map[string]*rateCounts, name string, f func(*r
 
 func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
 	if usingTestReporter {
-		if r, ok := globalReporter.(*TestReporter); ok {
+		if r, ok := globalReporter().(*TestReporter); ok {
 			return r.ShouldTrace, 1000000, 2 // trace tests
 		}
 	}

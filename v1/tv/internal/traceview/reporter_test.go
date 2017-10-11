@@ -29,8 +29,8 @@ func TestSampleRequest(t *testing.T) {
 }
 
 func TestNullReporter(t *testing.T) {
-	globalReporter = &nullReporter{}
-	assert.False(t, globalReporter.IsOpen())
+	setGlobalReporter(&nullReporter{})
+	assert.False(t, globalReporter().IsOpen())
 
 	// The nullReporter should seem like a regular reporter and not break
 	assert.NotPanics(t, func() {
@@ -40,17 +40,17 @@ func TestNullReporter(t *testing.T) {
 	})
 
 	buf := []byte("xxx")
-	cnt, err := globalReporter.WritePacket(buf)
+	cnt, err := globalReporter().WritePacket(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, len(buf), cnt)
 }
 
 func TestNewReporter(t *testing.T) {
-	assert.IsType(t, &udpReporter{}, newReporter())
+	assert.IsType(t, &udpReporter{}, newUDPReporter())
 	t.Logf("Forcing UDP listen error for invalid port 7777831")
-	reporterAddr = "127.0.0.1:777831"
-	assert.IsType(t, &nullReporter{}, newReporter())
-	reporterAddr = "127.0.0.1:7831"
+	udpReporterAddr = "127.0.0.1:777831"
+	assert.IsType(t, &nullReporter{}, newUDPReporter())
+	udpReporterAddr = "127.0.0.1:7831"
 }
 
 // dependency injection for os.Hostname and net.{ResolveUDPAddr/DialUDP}
@@ -60,10 +60,10 @@ func (h failHostnamer) Hostname() (string, error) {
 	return "", errors.New("couldn't resolve hostname")
 }
 func TestCacheHostname(t *testing.T) {
-	assert.IsType(t, &udpReporter{}, newReporter())
+	assert.IsType(t, &udpReporter{}, newUDPReporter())
 	t.Logf("Forcing hostname error: 'Unable to get hostname' log message expected")
 	cacheHostname(failHostnamer{})
-	assert.IsType(t, &nullReporter{}, newReporter())
+	assert.IsType(t, &nullReporter{}, newUDPReporter())
 }
 
 func TestReportEvent(t *testing.T) {
