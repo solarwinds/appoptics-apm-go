@@ -4,13 +4,28 @@ package traceview
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
+
+	"gopkg.in/mgo.v2/bson"
 )
+
+// for testing only
+
+func printBson(message []byte) {
+	m := make(map[string]interface{})
+	bson.Unmarshal(message, m)
+	b, _ := json.MarshalIndent(m, "", "  ")
+	fmt.Println(time.Now().Format("15:04:05"), string(b))
+}
+
+///////////////////////
 
 type DebugLevel uint8
 
@@ -29,6 +44,7 @@ var dbgLevels = map[DebugLevel]string{
 }
 
 var debugLevel DebugLevel = ERROR
+var debugLog bool = true
 
 // OboeLog print logs based on the debug level.
 func OboeLog(level DebugLevel, msg string, args ...interface{}) {
@@ -105,3 +121,18 @@ func Max(x, y int) int {
 	}
 	return y
 }
+
+func Byte2String(bs []int8) string {
+	b := make([]byte, len(bs))
+	for i, v := range bs {
+		b[i] = byte(v)
+	}
+	return string(b)
+}
+
+type hostnamer interface {
+	Hostname() (name string, err error)
+}
+type osHostnamer struct{}
+
+func (h osHostnamer) Hostname() (string, error) { return os.Hostname() }

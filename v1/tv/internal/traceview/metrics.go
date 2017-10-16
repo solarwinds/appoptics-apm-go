@@ -1,453 +1,307 @@
-// Copyright (C) 2017 Librato, Inc. All rights reserved.
-
 package traceview
 
 import (
-	"errors"
-	"github.com/uluyol/hdrhist" // TODO: replace it with librato's fork
+	"io/ioutil"
+	"net"
+	"net/http"
+	"os"
+	"runtime"
 	"strconv"
+	"strings"
+	"syscall"
 	"time"
 )
 
-// Some default parameters which may be subject to change.
+// Linux distributions
 const (
-	MetricsRecordMaxSize      = 100
-	MaxTransactionNames       = 200
-	DefaultHistogramPrecision = 2
-	MaxTagNameLength          = 64
-	MaxTagValueLength         = 255
+	REDHAT    = "/etc/redhat-release"
+	AMAZON    = "/etc/release-cpe"
+	UBUNTU    = "/etc/lsb-release"
+	DEBIAN    = "/etc/debian_version"
+	SUSE      = "/etc/SuSE-release"
+	SLACKWARE = "/etc/slackware-version"
+	GENTOO    = "/etc/gentoo-release"
+	OTHER     = "/etc/issue"
 )
 
-// Tags definition
-const (
-	TAGS_TRANSACTION_NAME = "TransactionName"
-	TAGS_HTTP_METHOD      = "HttpMethod"
-	TAG_HTTP_STATUS       = "HttpStatus"
-	TAGS_ERRORS           = "Errors"
-)
+var cachedDistro string
+var cachedMACAddresses = "uninitialized"
+var cachedAWSInstanceId = "uninitialized"
+var cachedAWSInstanceZone = "uninitialized"
+var cachedContainerID = "uninitialized"
 
-// Reporter counters
-const (
-	NUM_SENT          = "NumSent"
-	NUM_OVERFLOWED    = "NumOverflowed"
-	NUM_FAILED        = "NumFailed"
-	NUM_TOTAL_EVENTS  = "TotalEvents"
-	NUM_QUEUE_LARGEST = "QueueLargest"
-)
+func generateMetricsMessage(metricsFlushInterval int) []byte {
+	bbuf := NewBsonBuffer()
 
-// MetricsAggregator processes the mAgg records and calculate the mAgg and
-// histograms message from them.
-type MetricsAggregator interface {
-	// FlushBSON requests a mAgg message from the message channel and encode
-	// it into a BSON message.
-	FlushBSON(s settings) ([]byte, error)
-	// ProcessMetrics consumes the mAgg records from the records channel
-	// and update the histograms and mAgg based on the records. It will
-	// send a mAgg message to the message channel on request and may reset
-	// the histograms and mAgg. It is started as a separate goroutine.
-	ProcessMetrics()
-	// PushMetricsRecord push a mAgg record to the records channel and return
-	// immediately if the channel is full.
-	// It passes into the function a pointer but will make a dereference to that
-	// pointer when passing into the channel. So it is a separate copy on the other
-	// side of the channel.
-	PushMetricsRecord(record *MetricsRecord) bool
-	// GetReporterCounter returns the current value of the counter
-	GetReporterCounter(counter string) int64
-	// IncrementReporterCounter increase the value of counter by one
-	IncrementReporterCounter(counter string) int64
-	// GetExitChan returns the exit channel of the aggregator
-	GetExitChan() chan struct{}
-}
+	bsonAppendString(bbuf, "Hostname", cachedHostname)
+	bsonAppendString(bbuf, "Distro", getDistro())
+	bsonAppendInt(bbuf, "PID", cachedPid)
+	appendUname(bbuf)
+	appendIPAddresses(bbuf)
+	appendMACAddresses(bbuf)
 
-// metricsAggregator is a struct obeying the MetricsAggregator interface.
-type metricsAggregator struct {
-	// Receive the MetricsRecord sent by traces and update the MetricsRaw.
-	// It seems to cost less if we use pointer instead of object here but it's difficult
-	// to track/know what will happen to the object itself if the aggregator shares it
-	// with the outside caller through a channel, so let's be conservative.
-	records chan MetricsRecord
-	// Data got from this channel means there is a request from periodic goroutine
-	// for a new MetricsRaw struct
-	rawReq chan struct{}
-	// Send the MetricsRaw through this channel to periodic goroutine
-	// It's a chan of struct pointer here as this struct may be big.
-	// Make sure to make a deep copy (so not shared with the source end of the chan)
-	// before push it into the channel.
-	raw chan *MetricsRaw
-	// Used to notify the ProcessMetrics goroutine to exit
-	exit chan struct{}
-	// Stores the seen transaction names, the limit is defined by MaxTransactionNames
-	transNames map[string]bool
-	// The raw struct of histograms and measurements, it's consumed by FlushBSON to
-	// create the mAgg message
-	// The main goroutine is responsible for updating the mAgg in this struct, while
-	// the other goroutine requests a **deep copy** of this struct from the main goroutine
-	// and encodes the mAgg message. The main goroutine needs to reset/clear this
-	// struct immediately after send a copy to the mAgg-message-encoding goroutine.
-	metrics MetricsRaw
-	// System metadata cache for mAgg messages, which is usually expensive to calculate.
-	// The metadata is unlikely to change and is only updated by BSON encoder goroutine, so
-	// we don't need to pass it through a channel.
-	cachedSysMeta map[string]string
-}
-
-// MetricsRaw defines the histograms and measurements maintained by the main goroutine
-// which are pushed to the BSON encoding/sending goroutine through a channel, and get reset.
-type MetricsRaw struct {
-	// Stores the transaction based histograms, the size of the map is defined by
-	// MaxTransactionNames
-	histograms map[string]*Histogram
-	// Stores the transaction based measurement.
-	measurements map[string]*Measurement
-	// A flag to indicate whether the transaction names map is overflow.
-	transNamesOverflow bool
-	// Counters of the reporter
-	reporterCounters map[string]int64
-}
-
-// baseHistogram is a the base HDR histogram, an external library.
-type baseHistogram struct {
-	hist *hdrhist.Hist
-}
-
-// Histogram contains the data of base histogram and a map of tags
-type Histogram struct {
-	tags map[string]string
-	data *baseHistogram
-}
-
-// Measurement keeps the tags map, count and sum of the matched request
-type Measurement struct {
-	tags  map[string]string
-	count int32
-	sum   int64
-}
-
-// MetricsRecord is used to collect and transfer the mAgg record (http span) by the
-// trace agent.
-type MetricsRecord struct {
-	Transaction string
-	Duration    time.Duration
-	Status      int
-	Method      string
-	HasError    bool
-}
-
-// FlushBSON is called by the reporter to generate the histograms/mAgg
-// message in BSON format. It send a request to the histReq channel and
-// blocked in the hist channel. FlushBSON is called synchronous so it
-// expects to get the result in a short time.
-func (am *metricsAggregator) FlushBSON(s settings) ([]byte, error) {
-	am.rawReq <- struct{}{}
-	// Don't let me get blocked here too long
-	raw, ok := <-am.raw
-	if !ok {
-		return nil, errors.New("FlushBSON(): failed to read from am.raw")
+	if getAWSInstanceID() != "" {
+		bsonAppendString(bbuf, "EC2InstanceID", getAWSInstanceID())
 	}
-	return am.createMetricsMsg(raw, s), nil
-}
+	if getAWSInstanceZone() != "" {
+		bsonAppendString(bbuf, "EC2AvailabilityZone", getAWSInstanceZone())
+	}
+	if getContainerId() != "" {
+		bsonAppendString(bbuf, "DockerContainerID", getContainerId())
+	}
 
-// createMetricsMsg read the histogram and measurement data from MetricsRaw and build
-// the BSON message.
-func (am *metricsAggregator) createMetricsMsg(raw *MetricsRaw, s settings) []byte {
-	var bbuf = NewBsonBuffer()
+	bsonAppendInt64(bbuf, "Timestamp_u", int64(time.Now().UnixNano()/1000))
+	bsonAppendInt(bbuf, "MetricsFlushInterval", metricsFlushInterval)
 
-	am.metricsAppendSysMetadata(bbuf, s)
-	appendTransactionNameOverflow(bbuf, raw)
-	metricsAppendMeasurements(bbuf, raw)
-	metricsAppendHistograms(bbuf, raw)
+	// measurements
+	// ==========================================
+	start := bsonAppendStartArray(bbuf, "measurements")
+	index := 0
 
-	// We don't reset metricAggregator's internal reporterCounters (maps or lists) here as it has
-	// been done in ProcessMetrics goroutine in a synchronous way for reporterCounters consistency.
+	// TODO add request counters
+
+	// TODO add event queue stats
+
+	// system load of last minute
+	if s := getStrByKeyword("/proc/loadavg", ""); s != "" {
+		load, err := strconv.ParseFloat(strings.Fields(s)[0], 64)
+		if err == nil {
+			addMetricsValue(bbuf, &index, "Load1", load)
+		}
+	}
+
+	// system total memory
+	if s := getStrByKeyword("/proc/meminfo", "MemTotal"); s != "" {
+		memTotal := strings.Fields(s) // MemTotal: 7657668 kB
+		if len(memTotal) == 3 {
+			if total, err := strconv.Atoi(memTotal[1]); err == nil {
+				addMetricsValue(bbuf, &index, "TotalRAM", total*1024)
+			}
+		}
+	}
+
+	// free memory
+	if s := getStrByKeyword("/proc/meminfo", "MemFree"); s != "" {
+		memFree := strings.Fields(s) // MemFree: 161396 kB
+		if len(memFree) == 3 {
+			if free, err := strconv.Atoi(memFree[1]); err == nil {
+				addMetricsValue(bbuf, &index, "FreeRAM", free*1024) // bytes
+			}
+		}
+	}
+
+	// process memory
+	if s := getStrByKeyword("/proc/self/statm", ""); s != "" {
+		processRAM := strings.Fields(s)
+		if len(processRAM) != 0 {
+			for _, ps := range processRAM {
+				if p, err := strconv.Atoi(ps); err == nil {
+					addMetricsValue(bbuf, &index, "ProcessRAM", p*os.Getpagesize())
+					break
+				}
+			}
+		}
+	}
+
+	bsonAppendFinishObject(bbuf, start)
+	// ==========================================
+
 	bsonBufferFinish(bbuf)
-	return bbuf.GetBuf()
+	return bbuf.buf
 }
 
-// ProcessMetrics consumes the records sent by traces and update the histograms.
-// It also generate and push the mAgg event to the hist channel which is consumed by
-// FlushBSON to generate the final message in BSON format.
-func (am *metricsAggregator) ProcessMetrics() {
-	OboeLog(INFO, "ProcessMetrics(): goroutine started.")
-loop:
-	for {
-		select {
-		case record := <-am.records:
-			am.updateMetricsRaw(&record)
-		case <-am.rawReq:
-			am.pushMetricsRaw()
-		case <-am.exit:
-			OboeLog(INFO, "ProcessMetrics(): Closing ProcessMetrics goroutine.")
-			close(am.raw)
-			for range am.records {
-			} // drops all unprocessed records
-			break loop
-		}
+func getDistro() string {
+	if cachedDistro != "" {
+		return cachedDistro
 	}
-}
 
-// GetReporterCounter returns the current value of counter. It's not goroutine-safe, use channel
-// to transfer owner if you need modify it concurrently.
-func (am *metricsAggregator) GetReporterCounter(counter string) int64 {
-	return am.metrics.reporterCounters[counter] // Returns 0 if not exist
-}
+	var ds []string // distro slice
 
-// IncrementReporterCounter increase the value of counter by one. It's not goroutine-safe, use channel
-// to transfer owner if you need modify it concurrently.
-func (am *metricsAggregator) IncrementReporterCounter(counter string) int64 {
-	am.metrics.reporterCounters[counter] += 1
-	return am.metrics.reporterCounters[counter]
-}
+	// Note: Order of checking is important because some distros share same file names
+	// but with different function.
+	// Keep this order: redhat based -> ubuntu -> debian
 
-// GetExitChan returns the aggregator's exit channel
-func (am *metricsAggregator) GetExitChan() chan struct{} {
-	return am.exit
-}
-
-// isWithinLimit stores the transaction name into a internal set and returns true, before
-// that it checks if the number of transaction names stored inside metricsAggregator is
-// still within the limit. If not it returns false and does not store the transaction name.
-func (am *metricsAggregator) isWithinLimit(transaction string, max int) bool {
-	if _, ok := am.transNames[transaction]; !ok {
-		if len(am.transNames) < max {
-			am.transNames[transaction] = true
-			return true
-		} else {
-			am.metrics.transNamesOverflow = true
-			return false
-		}
+	// redhat
+	if cachedDistro = getStrByKeyword(REDHAT, ""); cachedDistro != "" {
+		return cachedDistro
 	}
-	return true
-}
-
-// metricsAggregator updates the Metrics (histograms and measurements) raw data structs
-// based on the MetricsRecord.
-func (am *metricsAggregator) updateMetricsRaw(record *MetricsRecord) {
-	am.recordHistogram("", record.Duration)
-	if record.Transaction != "" {
-		if am.isWithinLimit(record.Transaction, MaxTransactionNames) {
-			am.recordHistogram(record.Transaction, record.Duration)
-			am.processMeasurements(record.Transaction, record)
+	// amazon linux
+	cachedDistro = getStrByKeyword(AMAZON, "")
+	ds = strings.Split(cachedDistro, ":")
+	cachedDistro = ds[len(ds)-1]
+	if cachedDistro != "" {
+		cachedDistro = "Amzn Linux " + cachedDistro
+		return cachedDistro
+	}
+	// ubuntu
+	cachedDistro = getStrByKeyword(UBUNTU, "DISTRIB_DESCRIPTION")
+	if cachedDistro != "" {
+		ds = strings.Split(cachedDistro, "=")
+		cachedDistro = ds[len(ds)-1]
+		if cachedDistro != "" {
+			cachedDistro = strings.Trim(cachedDistro, "\"")
 		} else {
-			am.processMeasurements("other", record)
+			cachedDistro = "Ubuntu unknown"
+		}
+		return cachedDistro
+	}
+
+	pathes := []string{DEBIAN, SUSE, SLACKWARE, GENTOO, OTHER}
+	if path, line := getStrByKeywordFiles(pathes, ""); path != "" && line != "" {
+		cachedDistro = line
+		if path == "Debian" {
+			cachedDistro = "Debian " + cachedDistro
 		}
 	} else {
-		am.processMeasurements("unknown", record)
+		cachedDistro = "Unknown"
 	}
+	return cachedDistro
 }
 
-// recordHistogram updates the histogram based on the new MetricsRecord (transaction name and
-// the duration).
-func (am *metricsAggregator) recordHistogram(transaction string, duration time.Duration) {
-	var tags = map[string]string{}
-
-	if transaction != "" {
-		tags[TAGS_TRANSACTION_NAME] = transaction
-	}
-
-	if _, ok := am.metrics.histograms[transaction]; !ok {
-		am.metrics.histograms[transaction] = newHistogram(&tags, DefaultHistogramPrecision)
-	}
-	am.metrics.histograms[transaction].recordValue(int64(duration.Seconds() * 1e6))
-}
-
-// processMeasurements updates the measurements struct based on the new MetricsRecord
-func (am *metricsAggregator) processMeasurements(transaction string, record *MetricsRecord) {
-	// primary ID: TransactionName
-	var primaryTags = map[string]string{}
-	primaryTags[TAGS_TRANSACTION_NAME] = transaction
-	am.recordMeasurement(&primaryTags, record.Duration)
-
-	// secondary keys: HttpMethod
-	var withMethodTags = map[string]string{}
-	for k, v := range primaryTags {
-		withMethodTags[k] = v
-	}
-	withMethodTags[TAGS_HTTP_METHOD] = record.Method
-	am.recordMeasurement(&withMethodTags, record.Duration)
-
-	// secondary keys: HttpStatus
-	var withStatusTags = map[string]string{}
-	for k, v := range primaryTags {
-		withStatusTags[k] = v
-	}
-	withStatusTags[TAG_HTTP_STATUS] = strconv.Itoa(record.Status)
-	am.recordMeasurement(&withStatusTags, record.Duration)
-
-	// secondary keys: Errors
-	if record.HasError {
-		var withErrorTags = map[string]string{}
-		for k, v := range primaryTags {
-			withErrorTags[k] = v
+func appendUname(bbuf *bsonBuffer) {
+	if runtime.GOOS == "linux" {
+		var uname syscall.Utsname
+		if err := syscall.Uname(&uname); err == nil {
+			sysname := Byte2String(uname.Sysname[:])
+			version := Byte2String(uname.Version[:])
+			bsonAppendString(bbuf, "UnameSysName", strings.TrimRight(sysname, "\x00"))
+			bsonAppendString(bbuf, "UnameVersion", strings.TrimRight(version, "\x00"))
 		}
-		withErrorTags[TAGS_ERRORS] = "true"
-		am.recordMeasurement(&withErrorTags, record.Duration)
 	}
 }
 
-// recordMeasurement updates a particular measurement based on the tags and duration
-func (am *metricsAggregator) recordMeasurement(tags *map[string]string, duration time.Duration) {
-	var id string
-	for k, v := range *tags {
-		id += k + ":" + v + "&"
+func appendIPAddresses(bbuf *bsonBuffer) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return
 	}
-	if _, ok := am.metrics.measurements[id]; !ok {
-		am.metrics.measurements[id] = newMeasurement(tags)
+
+	start := bsonAppendStartArray(bbuf, "IPAddresses")
+	for _, addr := range addrs {
+		i := 0
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			bsonAppendString(bbuf, strconv.Itoa(i), ipnet.IP.String())
+			i++
+		}
 	}
-	am.metrics.measurements[id].count++
-	am.metrics.measurements[id].sum += int64(duration.Seconds() * 1e6)
+	bsonAppendFinishObject(bbuf, start)
 }
 
-// pushMetricsRaw is called when FlushBSON requires a new histograms message
-// for encoding. It pushes the newest values of the histograms to the raw channel
-// which will be consumed by FlushBSON.
-func (am *metricsAggregator) pushMetricsRaw() {
-	// Make a deep copy of mAgg and reset it immediately, otherwise it will be
-	// updated while encoding the message.
-	// The following two methods (Copy and resetCounters) should not take too much time,
-	// otherwise the records buffered channel may be full in extreme workload.
-	var m *MetricsRaw = am.metrics.Copy()
-	// Reset the reporterCounters for each interval
-	am.resetCounters()
-	OboeLog(DEBUG, "pushMetricsRaw(): pushing MetricsRaw as per request")
-	am.raw <- m
+func appendMACAddresses(bbuf *bsonBuffer) {
+	macs := strings.Split(getMACAddressList(), ",")
+
+	start := bsonAppendStartArray(bbuf, "MACAddresses")
+	for _, mac := range macs {
+		i := 0
+		bsonAppendString(bbuf, strconv.Itoa(i), mac)
+		i++
+	}
+	bsonAppendFinishObject(bbuf, start)
 }
 
-// Copy makes a copy of this struct and its internal data.
-// Don't make the MetricsRaw object too big.
-func (m *MetricsRaw) Copy() *MetricsRaw {
-	mr := &MetricsRaw{
-		histograms:         make(map[string]*Histogram),
-		measurements:       make(map[string]*Measurement),
-		transNamesOverflow: m.transNamesOverflow,
-		reporterCounters:   make(map[string]int64),
+func getMACAddressList() string {
+	if cachedMACAddresses != "uninitialized" {
+		return cachedMACAddresses
 	}
 
-	for k, v := range m.histograms {
-		mr.histograms[k] = v.Copy()
+	cachedMACAddresses = ""
+	ifaces, err := net.Interfaces()
+	if err == nil {
+		for _, iface := range ifaces {
+			if iface.Flags&net.FlagLoopback != 0 {
+				continue
+			}
+			if mac := iface.HardwareAddr.String(); mac != "" {
+				cachedMACAddresses += iface.HardwareAddr.String() + ","
+			}
+		}
 	}
+	cachedMACAddresses = strings.TrimSuffix(cachedMACAddresses, ",") // trim the final one
 
-	for k, v := range m.measurements {
-		mr.measurements[k] = v.Copy()
-	}
-
-	for k, v := range m.reporterCounters {
-		mr.reporterCounters[k] = v
-	}
-
-	return mr
+	return cachedMACAddresses
 }
 
-func (h *Histogram) Copy() *Histogram {
-	hCopy := &Histogram{
-		tags: make(map[string]string),
-		data: h.data.Copy(),
+func getAWSInstanceID() string {
+	if cachedAWSInstanceId != "uninitialized" {
+		return cachedAWSInstanceId
 	}
 
-	for k, v := range h.tags {
-		hCopy.tags[k] = v
+	cachedAWSInstanceId = ""
+	if isEC2Instance() {
+		url := "http://169.254.169.254/latest/meta-data/instance-id"
+		client := http.Client{Timeout: time.Second}
+		resp, err := client.Get(url)
+		if err == nil {
+			defer resp.Body.Close()
+			body, err := ioutil.ReadAll(resp.Body)
+			if err == nil {
+				cachedAWSInstanceId = string(body)
+			}
+		}
 	}
 
-	return hCopy
+	return cachedAWSInstanceId
 }
 
-func (m *Measurement) Copy() *Measurement {
-	mCopy := &Measurement{
-		tags: make(map[string]string),
+func getAWSInstanceZone() string {
+	if cachedAWSInstanceZone != "uninitialized" {
+		return cachedAWSInstanceZone
 	}
 
-	for k, v := range m.tags {
-		mCopy.tags[k] = v
+	cachedAWSInstanceZone = ""
+	if isEC2Instance() {
+		url := "http://169.254.169.254/latest/meta-data/placement/availability-zone"
+		client := http.Client{Timeout: time.Second}
+		resp, err := client.Get(url)
+		if err == nil {
+			defer resp.Body.Close()
+			body, err := ioutil.ReadAll(resp.Body)
+			if err == nil {
+				cachedAWSInstanceZone = string(body)
+			}
+		}
 	}
-	mCopy.count = m.count
-	mCopy.sum = m.sum
 
-	return mCopy
+	return cachedAWSInstanceZone
 }
 
-// PushMetricsRecord is called by the Trace to record the metadata of a call, e.g., call duration,
-// transaction name, status code. It returns false if the buffered channel is full.
-func (am *metricsAggregator) PushMetricsRecord(record *MetricsRecord) bool {
-	// Push the records to metricsConn records channel, or returns false if the channel is full.
-	select {
-	// It makes a copy when *record is passed into the channel, there is no reference types
-	// inside MetricsRecord so we don't need a deep copy.
-	case am.records <- *record:
-		return true
+func isEC2Instance() bool {
+	match := getLineByKeyword("/sys/hypervisor/uuid", "ec2")
+	return match != "" && strings.HasPrefix(match, "ec2")
+}
+
+func getContainerId() string {
+	if cachedContainerID != "uninitialized" {
+		return cachedContainerID
+	}
+
+	cachedContainerID = ""
+	line := getLineByKeyword("/proc/self/cgroup", "docker")
+	if line != "" {
+		tokens := strings.Split(line, "/")
+		// A typical line returned by cat /proc/self/cgroup (that's why we expect 3 tokens):
+		// 9:devices:/docker/40188af19439697187e3f60b933e7e37c5c41035f4c0b266a51c86c5a0074b25
+		if len(tokens) == 3 {
+			cachedContainerID = tokens[2]
+		}
+	}
+
+	return cachedContainerID
+}
+
+func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{}) {
+	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
+
+	bsonAppendString(bbuf, "name", name)
+	switch value.(type) {
+	case int:
+		bsonAppendInt(bbuf, "value", value.(int))
+	case float32, float64:
+		bsonAppendFloat64(bbuf, "value", value.(float64))
 	default:
-		return false
+		bsonAppendString(bbuf, "value", "unknown")
 	}
-}
 
-// recordValue records the duration to the histogram
-func (h *Histogram) recordValue(duration int64) {
-	h.data.hist.Record(duration)
-}
-
-// encode is used to encode the histogram into a string
-func (h *Histogram) encode() string {
-	return h.data.encode()
-}
-
-func (bh *baseHistogram) Copy() *baseHistogram {
-	return &baseHistogram{hist: bh.hist.Clone()}
-}
-
-func newBaseHistogram(precision int32) *baseHistogram {
-	return &baseHistogram{
-		hist: hdrhist.WithConfig(hdrhist.Config{
-			LowestDiscernible: 1,
-			HighestTrackable:  3600000000,
-			SigFigs:           precision,
-		}),
-	}
-}
-
-// encode is a wrapper of hdr's function with (probably) the same name
-func (h *baseHistogram) encode() (str string) {
-	// TODO
-	return str //TODO: call base HDR library's encode function
-}
-
-// newHistogram creates a Histogram object with tags and precision
-func newHistogram(inTags *map[string]string, precision int32) *Histogram {
-	var histogram = Histogram{
-		tags: make(map[string]string),
-		data: newBaseHistogram(precision),
-	}
-	for k, v := range *inTags {
-		histogram.tags[k] = v
-	}
-	return &histogram
-}
-
-// newMeasurement creates a Measurement object with tags
-func newMeasurement(inTags *map[string]string) *Measurement {
-	var measurement = Measurement{
-		tags: make(map[string]string),
-	}
-	for k, v := range *inTags {
-		measurement.tags[k] = v
-	}
-	return &measurement
-}
-
-// newMetricsAggregator is the newMetricsAggregator initializer. Note: You still need to
-// initialize the Hisogram.data each time you add a new key/value to it, as by default
-// it's a nil map pointer.
-func newMetricsAggregator() MetricsAggregator {
-	return &metricsAggregator{
-		records:    make(chan MetricsRecord, MetricsRecordMaxSize), // buffered
-		rawReq:     make(chan struct{}),
-		raw:        make(chan *MetricsRaw),
-		exit:       make(chan struct{}),
-		transNames: make(map[string]bool),
-		metrics: MetricsRaw{
-			histograms:         make(map[string]*Histogram),
-			measurements:       make(map[string]*Measurement),
-			transNamesOverflow: false,
-			reporterCounters:   make(map[string]int64),
-		},
-		cachedSysMeta: make(map[string]string),
-	}
+	bsonAppendFinishObject(bbuf, start)
+	*index += 1
 }
