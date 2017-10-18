@@ -41,7 +41,7 @@ type HttpSpanMessage struct {
 	hasError    bool
 }
 
-type Measurement struct {
+type measurement struct {
 	name        string
 	tags        map[string]string
 	count       int
@@ -49,8 +49,8 @@ type Measurement struct {
 	reportValue bool
 }
 
-type Measurements struct {
-	measurements            map[string]*Measurement
+type measurements struct {
+	measurements            map[string]*measurement
 	transactionNameOverflow bool
 	lock                    sync.Mutex
 }
@@ -63,7 +63,7 @@ var cachedContainerID = "uninitialized"
 
 var metricsURLRegex = regexp.MustCompile(`^(https?://)?[^/]+(/([^/\?]+))?(/([^/\?]+))?`)
 var metricsHTTPTransactions = make(map[string]bool)
-var metricsHTTPMeasurements = &Measurements{measurements: make(map[string]*Measurement)}
+var metricsHTTPMeasurements = &measurements{measurements: make(map[string]*measurement)}
 
 func generateMetricsMessage(metricsFlushInterval int) []byte {
 	bbuf := NewBsonBuffer()
@@ -145,7 +145,7 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 	for _, m := range metricsHTTPMeasurements.measurements {
 		addMeasurementToBSON(bbuf, &index, m)
 	}
-	metricsHTTPMeasurements.measurements = make(map[string]*Measurement)
+	metricsHTTPMeasurements.measurements = make(map[string]*measurement)
 	metricsHTTPMeasurements.lock.Unlock()
 
 	bsonAppendFinishObject(bbuf, start)
@@ -412,7 +412,7 @@ func processHttpMeasurements(transactionName string, httpSpan *HttpSpanMessage) 
 	metricsHTTPMeasurements.lock.Unlock()
 }
 
-func recordMeasurement(m *Measurements, name string, tags *map[string]string,
+func recordMeasurement(m *measurements, name string, tags *map[string]string,
 	value float64, count int, reportValue bool) {
 
 	measurements := m.measurements
@@ -421,21 +421,21 @@ func recordMeasurement(m *Measurements, name string, tags *map[string]string,
 		id += k + ":" + v + "&"
 	}
 
-	var measurement *Measurement
+	var newM *measurement
 	var ok bool
 
 	// create a new measurement if it doesn't exist
-	if measurement, ok = measurements[id]; !ok {
-		measurement = &Measurement{
+	if newM, ok = measurements[id]; !ok {
+		newM = &measurement{
 			name:        name,
 			tags:        *tags,
 			reportValue: reportValue,
 		}
-		measurements[id] = measurement
+		measurements[id] = newM
 	}
 
-	measurement.count += count
-	measurement.sum += value
+	newM.count += count
+	newM.sum += value
 }
 
 func setTransactionNameOverflow(flag bool) {
@@ -444,7 +444,7 @@ func setTransactionNameOverflow(flag bool) {
 	metricsHTTPMeasurements.lock.Unlock()
 }
 
-func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
+func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *measurement) {
 	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
 
 	bsonAppendString(bbuf, "name", m.name)

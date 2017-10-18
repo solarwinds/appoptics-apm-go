@@ -52,25 +52,25 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 	grpcRedirectMax                = 20
 )
 
-type ReconnectAuthority int
+type reconnectAuthority int
 
 const (
-	UNSET ReconnectAuthority = iota
+	UNSET reconnectAuthority = iota
 	POSTMETRICS
 	GETSETTINGS
 )
 
-type Connection struct {
+type connection struct {
 	client             collector.TraceCollectorClient
 	connection         *grpc.ClientConn
 	address            string
 	certificate        []byte
 	lock               sync.Mutex
-	reconnectAuthority ReconnectAuthority
+	reconnectAuthority reconnectAuthority
 }
 
 type grpcReporter struct {
-	metricConnection      Connection
+	metricConnection      connection
 	serviceKey            string
 	collectMetricInterval int
 	getSettingsInterval   int
@@ -110,7 +110,7 @@ func grpcNewReporter() Reporter {
 	}
 
 	reporter := &grpcReporter{
-		metricConnection: Connection{
+		metricConnection: connection{
 			client:      collector.NewTraceCollectorClient(conn),
 			connection:  conn,
 			address:     collectorAddress,
@@ -143,7 +143,7 @@ func grpcCreateClientConnection(cert []byte, addr string) (*grpc.ClientConn, err
 	return grpc.Dial(addr, grpc.WithTransportCredentials(creds))
 }
 
-func (r *grpcReporter) reconnect(c *Connection, authority ReconnectAuthority) {
+func (r *grpcReporter) reconnect(c *connection, authority reconnectAuthority) {
 	if c.reconnectAuthority == UNSET {
 		c.lock.Lock()
 		if c.reconnectAuthority == UNSET {
@@ -164,7 +164,7 @@ func (r *grpcReporter) reconnect(c *Connection, authority ReconnectAuthority) {
 	}
 }
 
-func (r *grpcReporter) redirect(c *Connection, authority ReconnectAuthority, address string) {
+func (r *grpcReporter) redirect(c *connection, authority reconnectAuthority, address string) {
 	conn, err := grpcCreateClientConnection(c.certificate, address)
 	if err != nil {
 		OboeLog(ERROR, fmt.Sprintf("Failed redirect to: %v %v", address, err))
