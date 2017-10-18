@@ -7,6 +7,7 @@ import (
 )
 
 type Reporter interface {
+	SendSpan(span *HttpSpanMessage) bool
 }
 
 type nullReporter struct{}
@@ -17,6 +18,8 @@ var reportingDisabled bool = false
 
 var cachedHostname string
 var cachedPid = os.Getpid()
+
+func (r *nullReporter) SendSpan(span *HttpSpanMessage) bool { return true }
 
 func init() {
 	cacheHostname(osHostnamer{})

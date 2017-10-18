@@ -5,9 +5,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -24,11 +26,44 @@ const (
 	OTHER     = "/etc/issue"
 )
 
+const (
+	metricsHTTPTransactionsMax = 200
+	metricsTagNameLenghtMax    = 64
+	metricsTagValueLenghtMax   = 255
+)
+
+type HttpSpanMessage struct {
+	transaction string
+	url         string
+	duration    int64
+	status      int
+	method      string
+	hasError    bool
+}
+
+type Measurement struct {
+	name        string
+	tags        map[string]string
+	count       int
+	sum         float64
+	reportValue bool
+}
+
+type Measurements struct {
+	measurements            map[string]*Measurement
+	transactionNameOverflow bool
+	lock                    sync.Mutex
+}
+
 var cachedDistro string
 var cachedMACAddresses = "uninitialized"
 var cachedAWSInstanceId = "uninitialized"
 var cachedAWSInstanceZone = "uninitialized"
 var cachedContainerID = "uninitialized"
+
+var metricsURLRegex = regexp.MustCompile(`^(https?://)?[^/]+(/([^/\?]+))?(/([^/\?]+))?`)
+var metricsHTTPTransactions = make(map[string]bool)
+var metricsHTTPMeasurements = &Measurements{measurements: make(map[string]*Measurement)}
 
 func generateMetricsMessage(metricsFlushInterval int) []byte {
 	bbuf := NewBsonBuffer()
@@ -103,8 +138,22 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 		}
 	}
 
+	// service / transaction measurements
+	metricsHTTPMeasurements.lock.Lock()
+	transactionNameOverflow := metricsHTTPMeasurements.transactionNameOverflow
+
+	for _, m := range metricsHTTPMeasurements.measurements {
+		addMeasurementToBSON(bbuf, &index, m)
+	}
+	metricsHTTPMeasurements.measurements = make(map[string]*Measurement)
+	metricsHTTPMeasurements.lock.Unlock()
+
 	bsonAppendFinishObject(bbuf, start)
 	// ==========================================
+
+	if transactionNameOverflow {
+		bsonAppendBool(bbuf, "TransactionNameOverflow", true)
+	}
 
 	bsonBufferFinish(bbuf)
 	return bbuf.buf
@@ -300,6 +349,122 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 		bsonAppendFloat64(bbuf, "value", value.(float64))
 	default:
 		bsonAppendString(bbuf, "value", "unknown")
+	}
+
+	bsonAppendFinishObject(bbuf, start)
+	*index += 1
+}
+
+func getTransactionFromURL(url string) string {
+	matches := metricsURLRegex.FindStringSubmatch(url)
+	var ret string
+	if matches[3] != "" {
+		ret += "/" + matches[3]
+		if matches[5] != "" {
+			ret += "/" + matches[5]
+		}
+	} else {
+		ret = "/"
+	}
+
+	return ret
+}
+
+func isWithinLimit(m *map[string]bool, element string, max int) bool {
+	if _, ok := (*m)[element]; !ok {
+		// only record if we haven't reached the limits yet
+		if len(*m) < max {
+			(*m)[element] = true
+			return true
+		}
+		return false
+	} else {
+		return true
+	}
+}
+
+func processHttpMeasurements(transactionName string, httpSpan *HttpSpanMessage) {
+	name := "TransactionResponseTime"
+	duration := float64((*httpSpan).duration)
+
+	metricsHTTPMeasurements.lock.Lock()
+
+	// primary ID: TransactionName
+	primaryTags := make(map[string]string)
+	primaryTags["TransactionName"] = transactionName
+	recordMeasurement(metricsHTTPMeasurements, name, &primaryTags, duration, 1, true)
+
+	// secondary keys: HttpMethod, HttpStatus, Errors
+	withMethodTags := copyMap(&primaryTags)
+	withMethodTags["HttpMethod"] = httpSpan.method
+	recordMeasurement(metricsHTTPMeasurements, name, &withMethodTags, duration, 1, true)
+
+	withStatusTags := copyMap(&primaryTags)
+	withStatusTags["HttpStatus"] = strconv.Itoa(httpSpan.status)
+	recordMeasurement(metricsHTTPMeasurements, name, &withStatusTags, duration, 1, true)
+
+	if httpSpan.hasError {
+		withErrorTags := copyMap(&primaryTags)
+		withErrorTags["Errors"] = "true"
+		recordMeasurement(metricsHTTPMeasurements, name, &withErrorTags, duration, 1, true)
+	}
+
+	metricsHTTPMeasurements.lock.Unlock()
+}
+
+func recordMeasurement(m *Measurements, name string, tags *map[string]string,
+	value float64, count int, reportValue bool) {
+
+	measurements := m.measurements
+	id := name + "&" + strconv.FormatBool(reportValue) + "&"
+	for k, v := range *tags {
+		id += k + ":" + v + "&"
+	}
+
+	var measurement *Measurement
+	var ok bool
+
+	// create a new measurement if it doesn't exist
+	if measurement, ok = measurements[id]; !ok {
+		measurement = &Measurement{
+			name:        name,
+			tags:        *tags,
+			reportValue: reportValue,
+		}
+		measurements[id] = measurement
+	}
+
+	measurement.count += count
+	measurement.sum += value
+}
+
+func setTransactionNameOverflow(flag bool) {
+	metricsHTTPMeasurements.lock.Lock()
+	metricsHTTPMeasurements.transactionNameOverflow = flag
+	metricsHTTPMeasurements.lock.Unlock()
+}
+
+func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
+	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
+
+	bsonAppendString(bbuf, "name", m.name)
+	bsonAppendInt(bbuf, "count", m.count)
+	if m.reportValue {
+		bsonAppendFloat64(bbuf, "sum", m.sum)
+	}
+
+	if len(m.tags) > 0 {
+		start := bsonAppendStartObject(bbuf, "tags")
+		for k, v := range m.tags {
+			if len(k) > metricsTagNameLenghtMax {
+				k = k[0:metricsTagNameLenghtMax]
+			}
+			if len(v) > metricsTagValueLenghtMax {
+				v = v[0:metricsTagValueLenghtMax]
+			}
+			bsonAppendString(bbuf, k, v)
+		}
+		bsonAppendFinishObject(bbuf, start)
 	}
 
 	bsonAppendFinishObject(bbuf, start)

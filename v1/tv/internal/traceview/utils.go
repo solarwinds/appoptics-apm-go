@@ -136,3 +136,12 @@ type hostnamer interface {
 type osHostnamer struct{}
 
 func (h osHostnamer) Hostname() (string, error) { return os.Hostname() }
+
+func copyMap(from *map[string]string) map[string]string {
+	to := make(map[string]string)
+	for k, v := range *from {
+		to[k] = v
+	}
+
+	return to
+}

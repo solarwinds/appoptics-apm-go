@@ -49,6 +49,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 	grpcRetryDelayInitial          = 500 // miliseconds
 	grpcRetryDelayMultiplier       = 1.5 //
 	grpcRetryDelayMax              = 60  //seconds
+	grpcRedirectMax                = 20
 )
 
 type ReconnectAuthority int
@@ -60,21 +61,23 @@ const (
 )
 
 type Connection struct {
-	client     collector.TraceCollectorClient
-	connection *grpc.ClientConn
+	client             collector.TraceCollectorClient
+	connection         *grpc.ClientConn
+	address            string
+	certificate        []byte
+	lock               sync.Mutex
+	reconnectAuthority ReconnectAuthority
 }
 
 type grpcReporter struct {
 	metricConnection      Connection
 	serviceKey            string
-	collectorAddress      string
 	collectMetricInterval int
 	getSettingsInterval   int
-	lock                  sync.Mutex
-	reconnectAuthority    ReconnectAuthority
 }
 
-var grpcMetricMessages = make(chan []byte, 2)
+var grpcMetricMessages = make(chan []byte, 1024)
+var grpcSpanMessages = make(chan HttpSpanMessage, 1024)
 
 func grpcNewReporter() Reporter {
 	serviceKey := os.Getenv("APPOPTICS_SERVICE_KEY")
@@ -108,17 +111,19 @@ func grpcNewReporter() Reporter {
 
 	reporter := &grpcReporter{
 		metricConnection: Connection{
-			client:     collector.NewTraceCollectorClient(conn),
-			connection: conn,
+			client:      collector.NewTraceCollectorClient(conn),
+			connection:  conn,
+			address:     collectorAddress,
+			certificate: cert,
 		},
-		serviceKey:       serviceKey,
-		collectorAddress: collectorAddress,
+		serviceKey: serviceKey,
 
 		collectMetricInterval: grpcMetricIntervalDefault,
 		getSettingsInterval:   grpcGetSettingsIntervalDefault,
 	}
 
 	go reporter.metricSender()
+	go reporter.spanMessageAggregator()
 	return reporter
 }
 
@@ -138,25 +143,38 @@ func grpcCreateClientConnection(cert []byte, addr string) (*grpc.ClientConn, err
 	return grpc.Dial(addr, grpc.WithTransportCredentials(creds))
 }
 
-func (r *grpcReporter) reconnect(authority ReconnectAuthority) {
-	if r.reconnectAuthority == UNSET {
-		r.lock.Lock()
-		if r.reconnectAuthority == UNSET {
-			r.reconnectAuthority = authority
+func (r *grpcReporter) reconnect(c *Connection, authority ReconnectAuthority) {
+	if c.reconnectAuthority == UNSET {
+		c.lock.Lock()
+		if c.reconnectAuthority == UNSET {
+			c.reconnectAuthority = authority
 		}
-		r.lock.Unlock()
+		c.lock.Unlock()
 	}
 
-	if r.reconnectAuthority == authority {
-		r.lock.Lock()
+	if c.reconnectAuthority == authority {
+		c.lock.Lock()
 		OboeLog(INFO, "Lost connection -- attempting reconnect...")
-		r.metricConnection.client = collector.NewTraceCollectorClient(r.metricConnection.connection)
-		r.lock.Unlock()
+		c.client = collector.NewTraceCollectorClient(c.connection)
+		c.lock.Unlock()
 	} else {
-		for r.reconnectAuthority != UNSET {
+		for c.reconnectAuthority != UNSET {
 			time.Sleep(time.Second)
 		}
 	}
+}
+
+func (r *grpcReporter) redirect(c *Connection, authority ReconnectAuthority, address string) {
+	conn, err := grpcCreateClientConnection(c.certificate, address)
+	if err != nil {
+		OboeLog(ERROR, fmt.Sprintf("Failed redirect to: %v %v", address, err))
+	}
+
+	c.lock.Lock()
+	c.connection = conn
+	c.lock.Unlock()
+
+	r.reconnect(c, authority)
 }
 
 func (r *grpcReporter) metricSender() {
@@ -193,6 +211,15 @@ func (r *grpcReporter) metricSender() {
 	}
 }
 
+func (r *grpcReporter) setRetryDelay(delay *int) {
+	*delay = int(float64(*delay) * grpcRetryDelayMultiplier)
+	if *delay > grpcRetryDelayMax*1000 {
+		*delay = grpcRetryDelayMax * 1000
+	}
+}
+
+// ================================ Metrics Handling ====================================
+
 func (r *grpcReporter) collectMetricsNextInterval() time.Duration {
 	interval := r.collectMetricInterval - (time.Now().Second() % r.collectMetricInterval)
 	return time.Duration(interval) * time.Second
@@ -202,7 +229,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool, sendReady chan boo
 	defer func() { collectReady <- true }()
 
 	message := generateMetricsMessage(r.collectMetricInterval)
-	printBson(message)
+	//	printBson(message)
 
 	select {
 	case grpcMetricMessages <- message:
@@ -239,39 +266,49 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 	}
 
 	delay := grpcRetryDelayInitial
+	redirects := 0
 
 	resultOk := false
 	for !resultOk {
-		r.lock.Lock()
+		r.metricConnection.lock.Lock()
 		response, err := r.metricConnection.client.PostMetrics(context.TODO(), request)
-		r.lock.Unlock()
+		r.metricConnection.lock.Unlock()
 
 		if err != nil {
-			r.reconnect(POSTMETRICS)
+			r.reconnect(&r.metricConnection, POSTMETRICS)
 		} else {
-			r.reconnectAuthority = UNSET
-
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
 				OboeLog(DEBUG, "Sent metrics")
 				resultOk = true
+				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
 				OboeLog(DEBUG, "Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
 				OboeLog(DEBUG, "Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
 				OboeLog(DEBUG, "Server responded: Invalid API key")
+			case collector.ResultCode_REDIRECT:
+				if redirects > grpcRedirectMax {
+					OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+				} else {
+					r.redirect(&r.metricConnection, POSTMETRICS, response.Arg)
+					delay = grpcRetryDelayInitial
+					redirects++
+				}
 			default:
 				OboeLog(DEBUG, "Unknown Server response")
 			}
 		}
 
 		if !resultOk {
-			r.setRetryDelay(&delay)
 			time.Sleep(time.Duration(delay) * time.Millisecond)
+			r.setRetryDelay(&delay)
 		}
 	}
 }
+
+// ================================ Settings Handling ====================================
 
 func (r *grpcReporter) getSettings(ready chan bool) {
 	defer func() { ready <- true }()
@@ -292,37 +329,45 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	}
 
 	delay := grpcRetryDelayInitial
+	redirects := 0
 
 	resultOK := false
 	for !resultOK {
-		r.lock.Lock()
+		r.metricConnection.lock.Lock()
 		response, err := r.metricConnection.client.GetSettings(context.TODO(), request)
-		r.lock.Unlock()
+		r.metricConnection.lock.Unlock()
 
 		if err != nil {
-			r.reconnect(GETSETTINGS)
+			r.reconnect(&r.metricConnection, GETSETTINGS)
 		} else {
-			r.reconnectAuthority = UNSET
-
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
-				OboeLog(DEBUG, fmt.Sprintf("Got new settings from server %v", r.collectorAddress))
+				OboeLog(DEBUG, fmt.Sprintf("Got new settings from server %v", r.metricConnection.address))
 				r.updateSettings(response)
 				resultOK = true
+				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
 				OboeLog(DEBUG, "Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
 				OboeLog(DEBUG, "Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
 				OboeLog(DEBUG, "Server responded: Invalid API key")
+			case collector.ResultCode_REDIRECT:
+				if redirects > grpcRedirectMax {
+					OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+				} else {
+					r.redirect(&r.metricConnection, GETSETTINGS, response.Arg)
+					delay = grpcRetryDelayInitial
+					redirects++
+				}
 			default:
 				OboeLog(DEBUG, "Unknown Server response")
 			}
 		}
 
 		if !resultOK {
-			r.setRetryDelay(&delay)
 			time.Sleep(time.Duration(delay) * time.Millisecond)
+			r.setRetryDelay(&delay)
 		}
 	}
 
@@ -335,9 +380,37 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	}
 }
 
-func (r *grpcReporter) setRetryDelay(delay *int) {
-	*delay = int(float64(*delay) * grpcRetryDelayMultiplier)
-	if *delay > grpcRetryDelayMax*1000 {
-		*delay = grpcRetryDelayMax * 1000
+// ========================= Span Message Handling =============================
+
+func (r *grpcReporter) SendSpan(span *HttpSpanMessage) bool {
+	select {
+	case grpcSpanMessages <- *span:
+		return true
+	default:
+		return false
+	}
+}
+
+func (r *grpcReporter) spanMessageAggregator() {
+	for {
+		select {
+		case span := <-grpcSpanMessages:
+			if span.transaction == "" && span.url != "" {
+				span.transaction = getTransactionFromURL(span.url)
+			}
+			if span.transaction != "" {
+				transactionWithinLimit := isWithinLimit(
+					&metricsHTTPTransactions, span.transaction, metricsHTTPTransactionsMax)
+
+				if transactionWithinLimit {
+					processHttpMeasurements(span.transaction, &span)
+				} else {
+					processHttpMeasurements("other", &span)
+					setTransactionNameOverflow(true)
+				}
+			} else {
+				processHttpMeasurements("unknown", &span)
+			}
+		}
 	}
 }
