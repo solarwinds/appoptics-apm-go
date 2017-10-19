@@ -1,6 +1,7 @@
 package traceview
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/librato/go-traceview/v1/tv/internal/hdrhist"
 )
 
 // Linux distributions
@@ -30,6 +33,7 @@ const (
 	metricsHTTPTransactionsMax = 200
 	metricsTagNameLenghtMax    = 64
 	metricsTagValueLenghtMax   = 255
+	metricsHistPrecision       = 2
 )
 
 type HttpSpanMessage struct {
@@ -55,6 +59,16 @@ type measurements struct {
 	lock                    sync.Mutex
 }
 
+type histogram struct {
+	hist *hdrhist.Hist
+	tags map[string]string
+}
+
+type histograms struct {
+	histograms map[string]*histogram
+	lock       sync.Mutex
+}
+
 var cachedDistro string
 var cachedMACAddresses = "uninitialized"
 var cachedAWSInstanceId = "uninitialized"
@@ -64,6 +78,7 @@ var cachedContainerID = "uninitialized"
 var metricsURLRegex = regexp.MustCompile(`^(https?://)?[^/]+(/([^/\?]+))?(/([^/\?]+))?`)
 var metricsHTTPTransactions = make(map[string]bool)
 var metricsHTTPMeasurements = &measurements{measurements: make(map[string]*measurement)}
+var metricsHTTPHistograms = &histograms{histograms: make(map[string]*histogram)}
 
 func generateMetricsMessage(metricsFlushInterval int) []byte {
 	bbuf := NewBsonBuffer()
@@ -148,6 +163,22 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 	metricsHTTPMeasurements.measurements = make(map[string]*measurement)
 	metricsHTTPMeasurements.lock.Unlock()
 
+	bsonAppendFinishObject(bbuf, start)
+	// ==========================================
+
+	// histograms
+	// ==========================================
+	start = bsonAppendStartArray(bbuf, "histograms")
+	index = 0
+
+	metricsHTTPHistograms.lock.Lock()
+
+	for _, h := range metricsHTTPHistograms.histograms {
+		addHistogramToBSON(bbuf, &index, h)
+	}
+	metricsHTTPHistograms.histograms = make(map[string]*histogram)
+
+	metricsHTTPHistograms.lock.Unlock()
 	bsonAppendFinishObject(bbuf, start)
 	// ==========================================
 
@@ -412,30 +443,62 @@ func processHttpMeasurements(transactionName string, httpSpan *HttpSpanMessage) 
 	metricsHTTPMeasurements.lock.Unlock()
 }
 
-func recordMeasurement(m *measurements, name string, tags *map[string]string,
+func recordMeasurement(me *measurements, name string, tags *map[string]string,
 	value float64, count int, reportValue bool) {
 
-	measurements := m.measurements
+	measurements := me.measurements
 	id := name + "&" + strconv.FormatBool(reportValue) + "&"
 	for k, v := range *tags {
 		id += k + ":" + v + "&"
 	}
 
-	var newM *measurement
+	var m *measurement
 	var ok bool
 
 	// create a new measurement if it doesn't exist
-	if newM, ok = measurements[id]; !ok {
-		newM = &measurement{
+	if m, ok = measurements[id]; !ok {
+		m = &measurement{
 			name:        name,
 			tags:        *tags,
 			reportValue: reportValue,
 		}
-		measurements[id] = newM
+		measurements[id] = m
 	}
 
-	newM.count += count
-	newM.sum += value
+	m.count += count
+	m.sum += value
+}
+
+func recordHistogram(hi *histograms, name string, duration int64) {
+	hi.lock.Lock()
+
+	histograms := hi.histograms
+	id := name
+
+	tags := make(map[string]string)
+	if name != "" {
+		tags["TransactionName"] = name
+	}
+
+	var h *histogram
+	var ok bool
+
+	// create a new histogram if it doesn't exist
+	if h, ok = histograms[id]; !ok {
+		h = &histogram{
+			hist: hdrhist.WithConfig(hdrhist.Config{
+				LowestDiscernible: 1,
+				HighestTrackable:  3600000000,
+				SigFigs:           metricsHistPrecision,
+			}),
+			tags: tags,
+		}
+		histograms[id] = h
+	}
+
+	h.hist.Record(duration)
+
+	hi.lock.Unlock()
 }
 
 func setTransactionNameOverflow(flag bool) {
@@ -469,4 +532,33 @@ func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *measurement) {
 
 	bsonAppendFinishObject(bbuf, start)
 	*index += 1
+}
+
+func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
+	data, err := hdrhist.EncodeCompressed(h.hist)
+	if err != nil {
+		OboeLog(ERROR, fmt.Sprintf("Failed to encode histogram: %v", err))
+		return
+	}
+
+	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
+
+	bsonAppendString(bbuf, "name", "TransactionResponseTime")
+	bsonAppendBinary(bbuf, "value", data)
+
+	if len(h.tags) > 0 {
+		start := bsonAppendStartObject(bbuf, "tags")
+		for k, v := range h.tags {
+			if len(k) > metricsTagNameLenghtMax {
+				k = k[0:metricsTagNameLenghtMax]
+			}
+			if len(v) > metricsTagValueLenghtMax {
+				v = v[0:metricsTagValueLenghtMax]
+			}
+			bsonAppendString(bbuf, k, v)
+		}
+		bsonAppendFinishObject(bbuf, start)
+	}
+
+	bsonAppendFinishObject(bbuf, start)
 }

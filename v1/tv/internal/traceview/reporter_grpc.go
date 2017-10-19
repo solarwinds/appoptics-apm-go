@@ -395,6 +395,8 @@ func (r *grpcReporter) spanMessageAggregator() {
 	for {
 		select {
 		case span := <-grpcSpanMessages:
+			recordHistogram(metricsHTTPHistograms, "", span.duration)
+
 			if span.transaction == "" && span.url != "" {
 				span.transaction = getTransactionFromURL(span.url)
 			}
@@ -403,6 +405,7 @@ func (r *grpcReporter) spanMessageAggregator() {
 					&metricsHTTPTransactions, span.transaction, metricsHTTPTransactionsMax)
 
 				if transactionWithinLimit {
+					recordHistogram(metricsHTTPHistograms, span.transaction, span.duration)
 					processHttpMeasurements(span.transaction, &span)
 				} else {
 					processHttpMeasurements("other", &span)
