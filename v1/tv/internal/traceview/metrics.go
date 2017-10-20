@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -177,6 +178,26 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 			}
 		}
 	}
+
+	// runtime stats
+	addMetricsValue(bbuf, &index, "JMX.type=threadcount,name=NumGoroutine", runtime.NumGoroutine())
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Alloc", int64(mem.Alloc))
+	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.TotalAlloc", int64(mem.TotalAlloc))
+	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Sys", int64(mem.Sys))
+	addMetricsValue(bbuf, &index, "JMX.Memory:type=count,name=MemStats.Lookups", int64(mem.Lookups))
+	addMetricsValue(bbuf, &index, "JMX.Memory:type=count,name=MemStats.Mallocs", int64(mem.Mallocs))
+	addMetricsValue(bbuf, &index, "JMX.Memory:type=count,name=MemStats.Frees", int64(mem.Frees))
+	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Alloc", int64(mem.HeapAlloc))
+	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Sys", int64(mem.HeapSys))
+	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Idle", int64(mem.HeapIdle))
+	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Inuse", int64(mem.HeapInuse))
+	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Released", int64(mem.HeapReleased))
+	addMetricsValue(bbuf, &index, "JMX.Memory:type=count,name=MemStats.Heap.Objects", int64(mem.HeapObjects))
+	var gc debug.GCStats
+	debug.ReadGCStats(&gc)
+	addMetricsValue(bbuf, &index, "JMX.type=count,name=GCStats.NumGC", gc.NumGC)
 
 	// service / transaction measurements
 	metricsHTTPMeasurements.lock.Lock()
@@ -446,6 +467,7 @@ func processHttpMeasurements(transactionName string, httpSpan *HttpSpanMessage) 
 	duration := float64((*httpSpan).Duration)
 
 	metricsHTTPMeasurements.lock.Lock()
+	defer metricsHTTPMeasurements.lock.Unlock()
 
 	// primary ID: TransactionName
 	primaryTags := make(map[string]string)
@@ -466,8 +488,6 @@ func processHttpMeasurements(transactionName string, httpSpan *HttpSpanMessage) 
 		withErrorTags["Errors"] = "true"
 		recordMeasurement(metricsHTTPMeasurements, name, &withErrorTags, duration, 1, true)
 	}
-
-	metricsHTTPMeasurements.lock.Unlock()
 }
 
 func recordMeasurement(me *measurements, name string, tags *map[string]string,
@@ -498,6 +518,12 @@ func recordMeasurement(me *measurements, name string, tags *map[string]string,
 
 func recordHistogram(hi *histograms, name string, duration time.Duration) {
 	hi.lock.Lock()
+	defer func() {
+		hi.lock.Unlock()
+		if err := recover(); err != nil {
+			OboeLog(ERROR, fmt.Sprintf("Failed to record histogram: %v", err))
+		}
+	}()
 
 	histograms := hi.histograms
 	id := name
@@ -524,8 +550,6 @@ func recordHistogram(hi *histograms, name string, duration time.Duration) {
 	}
 
 	h.hist.Record(int64(duration / time.Microsecond))
-
-	hi.lock.Unlock()
 }
 
 func setTransactionNameOverflow(flag bool) {
