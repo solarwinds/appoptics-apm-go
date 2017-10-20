@@ -39,6 +39,10 @@ func init() {
 	}
 }
 
+func ReportHTTPSpan(httpSpan *HttpSpanMessage) error {
+	return reporter.ReportSpan(httpSpan)
+}
+
 func cacheHostname(hn hostnamer) {
 	h, err := hn.Hostname()
 	if err != nil {

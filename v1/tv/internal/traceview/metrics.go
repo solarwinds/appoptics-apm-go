@@ -37,12 +37,12 @@ const (
 )
 
 type HttpSpanMessage struct {
-	transaction string
-	url         string
-	duration    int64
-	status      int
-	method      string
-	hasError    bool
+	Transaction string
+	Url         string
+	Duration    time.Duration
+	Status      int
+	Method      string
+	HasError    bool
 }
 
 type measurement struct {
@@ -443,7 +443,7 @@ func isWithinLimit(m *map[string]bool, element string, max int) bool {
 
 func processHttpMeasurements(transactionName string, httpSpan *HttpSpanMessage) {
 	name := "TransactionResponseTime"
-	duration := float64((*httpSpan).duration)
+	duration := float64((*httpSpan).Duration)
 
 	metricsHTTPMeasurements.lock.Lock()
 
@@ -454,14 +454,14 @@ func processHttpMeasurements(transactionName string, httpSpan *HttpSpanMessage) 
 
 	// secondary keys: HttpMethod, HttpStatus, Errors
 	withMethodTags := copyMap(&primaryTags)
-	withMethodTags["HttpMethod"] = httpSpan.method
+	withMethodTags["HttpMethod"] = httpSpan.Method
 	recordMeasurement(metricsHTTPMeasurements, name, &withMethodTags, duration, 1, true)
 
 	withStatusTags := copyMap(&primaryTags)
-	withStatusTags["HttpStatus"] = strconv.Itoa(httpSpan.status)
+	withStatusTags["HttpStatus"] = strconv.Itoa(httpSpan.Status)
 	recordMeasurement(metricsHTTPMeasurements, name, &withStatusTags, duration, 1, true)
 
-	if httpSpan.hasError {
+	if httpSpan.HasError {
 		withErrorTags := copyMap(&primaryTags)
 		withErrorTags["Errors"] = "true"
 		recordMeasurement(metricsHTTPMeasurements, name, &withErrorTags, duration, 1, true)
@@ -496,7 +496,7 @@ func recordMeasurement(me *measurements, name string, tags *map[string]string,
 	m.sum += value
 }
 
-func recordHistogram(hi *histograms, name string, duration int64) {
+func recordHistogram(hi *histograms, name string, duration time.Duration) {
 	hi.lock.Lock()
 
 	histograms := hi.histograms
@@ -523,7 +523,7 @@ func recordHistogram(hi *histograms, name string, duration int64) {
 		histograms[id] = h
 	}
 
-	h.hist.Record(duration)
+	h.hist.Record(int64(duration / time.Microsecond))
 
 	hi.lock.Unlock()
 }

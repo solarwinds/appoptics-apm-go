@@ -106,22 +106,30 @@ func grpcNewReporter() Reporter {
 		cert = []byte(grpcCertDefault)
 	}
 
-	conn, err := grpcCreateClientConnection(cert, collectorAddress)
-	if err != nil {
+	conn1, err1 := grpcCreateClientConnection(cert, collectorAddress)
+	conn2, err2 := grpcCreateClientConnection(cert, collectorAddress)
+	if err1 != nil || err2 != nil {
+		var err error
+		switch {
+		case err1 != nil:
+			err = err1
+		case err2 != nil:
+			err = err2
+		}
 		OboeLog(ERROR, fmt.Sprintf("Failed to initialize gRPC reporter: %v %v", collectorAddress, err))
 		return &nullReporter{}
 	}
 
 	reporter := &grpcReporter{
 		eventConnection: connection{
-			client:      collector.NewTraceCollectorClient(conn),
-			connection:  conn,
+			client:      collector.NewTraceCollectorClient(conn1),
+			connection:  conn1,
 			address:     collectorAddress,
 			certificate: cert,
 		},
 		metricConnection: connection{
-			client:      collector.NewTraceCollectorClient(conn),
-			connection:  conn,
+			client:      collector.NewTraceCollectorClient(conn2),
+			connection:  conn2,
 			address:     collectorAddress,
 			certificate: cert,
 		},
@@ -500,18 +508,18 @@ func (r *grpcReporter) spanMessageAggregator() {
 	for {
 		select {
 		case span := <-grpcSpanMessages:
-			recordHistogram(metricsHTTPHistograms, "", span.duration)
+			recordHistogram(metricsHTTPHistograms, "", span.Duration)
 
-			if span.transaction == "" && span.url != "" {
-				span.transaction = getTransactionFromURL(span.url)
+			if span.Transaction == "" && span.Url != "" {
+				span.Transaction = getTransactionFromURL(span.Url)
 			}
-			if span.transaction != "" {
+			if span.Transaction != "" {
 				transactionWithinLimit := isWithinLimit(
-					&metricsHTTPTransactions, span.transaction, metricsHTTPTransactionsMax)
+					&metricsHTTPTransactions, span.Transaction, metricsHTTPTransactionsMax)
 
 				if transactionWithinLimit {
-					recordHistogram(metricsHTTPHistograms, span.transaction, span.duration)
-					processHttpMeasurements(span.transaction, &span)
+					recordHistogram(metricsHTTPHistograms, span.Transaction, span.Duration)
+					processHttpMeasurements(span.Transaction, &span)
 				} else {
 					processHttpMeasurements("other", &span)
 					setTransactionNameOverflow(true)
