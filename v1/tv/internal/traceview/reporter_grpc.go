@@ -80,9 +80,9 @@ type grpcReporter struct {
 
 var grpcEventMessages = make(chan []byte, 1024)
 var grpcMetricMessages = make(chan []byte, 1024)
-var grpcSpanMessages = make(chan HttpSpanMessage, 1024)
+var grpcSpanMessages = make(chan SpanMessage, 1024)
 
-func grpcNewReporter() Reporter {
+func grpcNewReporter() reporter {
 	serviceKey := os.Getenv("APPOPTICS_SERVICE_KEY")
 	if serviceKey == "" {
 		OboeLog(WARNING, "No service key found, check environment variable APPOPTICS_SERVICE_KEY.")
@@ -238,7 +238,7 @@ func (r *grpcReporter) setRetryDelay(delay *int) {
 
 // ================================ Event Handling ====================================
 
-func (r *grpcReporter) ReportEvent(ctx *oboeContext, e *event) error {
+func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 	if err := prepareEvent(ctx, e); err != nil {
 		return err
 	}
@@ -495,7 +495,7 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 
 // ========================= Span Message Handling =============================
 
-func (r *grpcReporter) ReportSpan(span *HttpSpanMessage) error {
+func (r *grpcReporter) reportSpan(span *SpanMessage) error {
 	select {
 	case grpcSpanMessages <- *span:
 		return nil
@@ -508,25 +508,7 @@ func (r *grpcReporter) spanMessageAggregator() {
 	for {
 		select {
 		case span := <-grpcSpanMessages:
-			recordHistogram(metricsHTTPHistograms, "", span.Duration)
-
-			if span.Transaction == "" && span.Url != "" {
-				span.Transaction = getTransactionFromURL(span.Url)
-			}
-			if span.Transaction != "" {
-				transactionWithinLimit := isWithinLimit(
-					&metricsHTTPTransactions, span.Transaction, metricsHTTPTransactionsMax)
-
-				if transactionWithinLimit {
-					recordHistogram(metricsHTTPHistograms, span.Transaction, span.Duration)
-					processHttpMeasurements(span.Transaction, &span)
-				} else {
-					processHttpMeasurements("other", &span)
-					setTransactionNameOverflow(true)
-				}
-			} else {
-				processHttpMeasurements("unknown", &span)
-			}
+			span.process()
 		}
 	}
 }

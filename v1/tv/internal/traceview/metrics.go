@@ -37,13 +37,21 @@ const (
 	metricsHistPrecision       = 2
 )
 
+type SpanMessage interface {
+	process()
+}
+
+type BaseSpanMessage struct {
+	Duration time.Duration
+	HasError bool
+}
+
 type HttpSpanMessage struct {
+	BaseSpanMessage
 	Transaction string
 	Url         string
-	Duration    time.Duration
 	Status      int
 	Method      string
-	HasError    bool
 }
 
 type measurement struct {
@@ -462,7 +470,29 @@ func isWithinLimit(m *map[string]bool, element string, max int) bool {
 	}
 }
 
-func processHttpMeasurements(transactionName string, httpSpan *HttpSpanMessage) {
+func (httpSpan *HttpSpanMessage) process() {
+	recordHistogram(metricsHTTPHistograms, "", httpSpan.Duration)
+
+	if httpSpan.Transaction == "" && httpSpan.Url != "" {
+		httpSpan.Transaction = getTransactionFromURL(httpSpan.Url)
+	}
+	if httpSpan.Transaction != "" {
+		transactionWithinLimit := isWithinLimit(
+			&metricsHTTPTransactions, httpSpan.Transaction, metricsHTTPTransactionsMax)
+
+		if transactionWithinLimit {
+			recordHistogram(metricsHTTPHistograms, httpSpan.Transaction, httpSpan.Duration)
+			httpSpan.processMeasurements(httpSpan.Transaction)
+		} else {
+			httpSpan.processMeasurements("other")
+			setTransactionNameOverflow(true)
+		}
+	} else {
+		httpSpan.processMeasurements("unknown")
+	}
+}
+
+func (httpSpan *HttpSpanMessage) processMeasurements(transactionName string) {
 	name := "TransactionResponseTime"
 	duration := float64((*httpSpan).Duration)
 

@@ -187,7 +187,7 @@ func (t *tvTrace) recordHTTPSpan() {
 	t.httpSpan.span.Transaction = strings.TrimSuffix(transaction, ".")
 	t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)
 
-	traceview.ReportHTTPSpan(&t.httpSpan.span)
+	traceview.ReportSpan(&t.httpSpan.span)
 }
 
 // A nullTrace is not tracing.

@@ -9,22 +9,22 @@ import (
 	"time"
 )
 
-type Reporter interface {
-	ReportEvent(ctx *oboeContext, e *event) error
-	ReportSpan(span *HttpSpanMessage) error
+type reporter interface {
+	reportEvent(ctx *oboeContext, e *event) error
+	reportSpan(span *SpanMessage) error
 }
 
 type nullReporter struct{}
 
-var reporter Reporter = &nullReporter{}
+var thisReporter reporter = &nullReporter{}
 
 var reportingDisabled bool = false
 
 var cachedHostname string
 var cachedPid = os.Getpid()
 
-func (r *nullReporter) ReportEvent(ctx *oboeContext, e *event) error { return nil }
-func (r *nullReporter) ReportSpan(span *HttpSpanMessage) error       { return nil }
+func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error { return nil }
+func (r *nullReporter) reportSpan(span *SpanMessage) error           { return nil }
 
 func init() {
 	cacheHostname(osHostnamer{})
@@ -33,14 +33,14 @@ func init() {
 	case "ssl":
 		fallthrough
 	default:
-		reporter = grpcNewReporter()
+		thisReporter = grpcNewReporter()
 	case "udp":
 		//TODO
 	}
 }
 
-func ReportHTTPSpan(httpSpan *HttpSpanMessage) error {
-	return reporter.ReportSpan(httpSpan)
+func ReportSpan(span SpanMessage) error {
+	return thisReporter.reportSpan(&span)
 }
 
 func cacheHostname(hn hostnamer) {
