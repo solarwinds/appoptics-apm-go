@@ -56,6 +56,7 @@ type reconnectAuthority int
 
 const (
 	UNSET reconnectAuthority = iota
+	POSTEVENTS
 	POSTMETRICS
 	GETSETTINGS
 )
@@ -70,12 +71,14 @@ type connection struct {
 }
 
 type grpcReporter struct {
+	eventConnection       connection
 	metricConnection      connection
 	serviceKey            string
 	collectMetricInterval int
 	getSettingsInterval   int
 }
 
+var grpcEventMessages = make(chan []byte, 1024)
 var grpcMetricMessages = make(chan []byte, 1024)
 var grpcSpanMessages = make(chan HttpSpanMessage, 1024)
 
@@ -110,6 +113,12 @@ func grpcNewReporter() Reporter {
 	}
 
 	reporter := &grpcReporter{
+		eventConnection: connection{
+			client:      collector.NewTraceCollectorClient(conn),
+			connection:  conn,
+			address:     collectorAddress,
+			certificate: cert,
+		},
 		metricConnection: connection{
 			client:      collector.NewTraceCollectorClient(conn),
 			connection:  conn,
@@ -122,7 +131,8 @@ func grpcNewReporter() Reporter {
 		getSettingsInterval:   grpcGetSettingsIntervalDefault,
 	}
 
-	go reporter.metricSender()
+	go reporter.eventSender()
+	go reporter.periodicTasks()
 	go reporter.spanMessageAggregator()
 	return reporter
 }
@@ -177,7 +187,7 @@ func (r *grpcReporter) redirect(c *connection, authority reconnectAuthority, add
 	r.reconnect(c, authority)
 }
 
-func (r *grpcReporter) metricSender() {
+func (r *grpcReporter) periodicTasks() {
 	//	collectMetricsTicker := time.NewTimer(r.getMetricsNextInterval())
 	collectMetricsTicker := time.NewTimer(0)
 	getSettingsTicker := time.NewTimer(0)
@@ -218,6 +228,102 @@ func (r *grpcReporter) setRetryDelay(delay *int) {
 	}
 }
 
+// ================================ Event Handling ====================================
+
+func (r *grpcReporter) ReportEvent(ctx *oboeContext, e *event) error {
+	if err := prepareEvent(ctx, e); err != nil {
+		return err
+	}
+
+	select {
+	case grpcEventMessages <- (*e).bbuf.GetBuf():
+		go incrementTotalEvents(1) // use goroutine so this won't block on the critical path
+		return nil
+	default:
+		go incrementNumOverflowed(1) // use goroutine so this won't block on the critical path
+		return errors.New("Event message queue is full")
+	}
+}
+
+func (r *grpcReporter) eventSender() {
+	for {
+		var messages [][]byte
+
+		for len(messages) == 0 {
+			done := false
+			for !done {
+				select {
+				case e := <-grpcEventMessages:
+					messages = append(messages, e)
+				default:
+					done = true
+				}
+			}
+
+			if len(messages) == 0 {
+				time.Sleep(time.Duration(500) * time.Millisecond)
+			}
+		}
+
+		setQueueLargest(len(messages))
+
+		//		for _, aaa := range messages {
+		//			printBson(aaa)
+		//		}
+
+		request := &collector.MessageRequest{
+			ApiKey:   r.serviceKey,
+			Messages: messages,
+			Encoding: collector.EncodingType_BSON,
+		}
+
+		delay := grpcRetryDelayInitial
+		redirects := 0
+
+		resultOk := false
+		for !resultOk {
+			r.eventConnection.lock.Lock()
+			response, err := r.eventConnection.client.PostEvents(context.TODO(), request)
+			r.eventConnection.lock.Unlock()
+
+			if err != nil {
+				r.reconnect(&r.eventConnection, POSTEVENTS)
+			} else {
+				switch result := response.GetResult(); result {
+				case collector.ResultCode_OK:
+					OboeLog(DEBUG, "Sent events")
+					resultOk = true
+					r.eventConnection.reconnectAuthority = UNSET
+					incrementNumSent(len(messages))
+				case collector.ResultCode_TRY_LATER:
+					OboeLog(DEBUG, "Server responded: Try later")
+					incrementNumFailed(len(messages))
+				case collector.ResultCode_LIMIT_EXCEEDED:
+					OboeLog(DEBUG, "Server responded: Limit exceeded")
+					incrementNumFailed(len(messages))
+				case collector.ResultCode_INVALID_API_KEY:
+					OboeLog(DEBUG, "Server responded: Invalid API key")
+				case collector.ResultCode_REDIRECT:
+					if redirects > grpcRedirectMax {
+						OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+					} else {
+						r.redirect(&r.eventConnection, POSTEVENTS, response.Arg)
+						delay = grpcRetryDelayInitial
+						redirects++
+					}
+				default:
+					OboeLog(DEBUG, "Unknown Server response")
+				}
+			}
+
+			if !resultOk {
+				time.Sleep(time.Duration(delay) * time.Millisecond)
+				r.setRetryDelay(&delay)
+			}
+		}
+	}
+}
+
 // ================================ Metrics Handling ====================================
 
 func (r *grpcReporter) collectMetricsNextInterval() time.Duration {
@@ -241,7 +347,6 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool, sendReady chan boo
 		go r.sendMetrics(sendReady)
 	default:
 	}
-
 }
 
 func (r *grpcReporter) sendMetrics(ready chan bool) {
@@ -382,12 +487,12 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 
 // ========================= Span Message Handling =============================
 
-func (r *grpcReporter) SendSpan(span *HttpSpanMessage) bool {
+func (r *grpcReporter) ReportSpan(span *HttpSpanMessage) error {
 	select {
 	case grpcSpanMessages <- *span:
-		return true
+		return nil
 	default:
-		return false
+		return errors.New("Span message queue is full")
 	}
 }
 

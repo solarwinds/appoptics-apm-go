@@ -1,13 +1,17 @@
 package traceview
 
 import (
+	"bytes"
+	"errors"
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 type Reporter interface {
-	SendSpan(span *HttpSpanMessage) bool
+	ReportEvent(ctx *oboeContext, e *event) error
+	ReportSpan(span *HttpSpanMessage) error
 }
 
 type nullReporter struct{}
@@ -19,7 +23,8 @@ var reportingDisabled bool = false
 var cachedHostname string
 var cachedPid = os.Getpid()
 
-func (r *nullReporter) SendSpan(span *HttpSpanMessage) bool { return true }
+func (r *nullReporter) ReportEvent(ctx *oboeContext, e *event) error { return nil }
+func (r *nullReporter) ReportSpan(span *HttpSpanMessage) error       { return nil }
 
 func init() {
 	cacheHostname(osHostnamer{})
@@ -45,7 +50,32 @@ func cacheHostname(hn hostnamer) {
 	cachedHostname = h
 }
 
-func reportEvent(r Reporter, ctx *oboeContext, e *event) error {
+func prepareEvent(ctx *oboeContext, e *event) error {
+	if ctx == nil || e == nil {
+		return errors.New("Invalid context, event")
+	}
+
+	// The context metadata must have the same task_id as the event.
+	if !bytes.Equal(ctx.metadata.ids.taskID, e.metadata.ids.taskID) {
+		return errors.New("Invalid event, different task_id from context")
+	}
+
+	// The context metadata must have a different op_id than the event.
+	if bytes.Equal(ctx.metadata.ids.opID, e.metadata.ids.opID) {
+		return errors.New("Invalid event, same as context")
+	}
+
+	us := time.Now().UnixNano() / 1000
+	e.AddInt64("Timestamp_u", us)
+
+	// Add cached syscalls for Hostname & PID
+	e.AddString("Hostname", cachedHostname)
+	e.AddInt("PID", cachedPid)
+
+	// Update the context's op_id to that of the event
+	ctx.metadata.ids.setOpID(e.metadata.ids.opID)
+
+	bsonBufferFinish(&e.bbuf)
 	return nil
 }
 

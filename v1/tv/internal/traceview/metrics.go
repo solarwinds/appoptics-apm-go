@@ -69,6 +69,15 @@ type histograms struct {
 	lock       sync.Mutex
 }
 
+type eventQueueStats struct {
+	numSent       int64
+	numOverflowed int64
+	numFailed     int64
+	totalEvents   int64
+	queueLargest  int64
+	lock          sync.Mutex
+}
+
 var cachedDistro string
 var cachedMACAddresses = "uninitialized"
 var cachedAWSInstanceId = "uninitialized"
@@ -79,6 +88,7 @@ var metricsURLRegex = regexp.MustCompile(`^(https?://)?[^/]+(/([^/\?]+))?(/([^/\
 var metricsHTTPTransactions = make(map[string]bool)
 var metricsHTTPMeasurements = &measurements{measurements: make(map[string]*measurement)}
 var metricsHTTPHistograms = &histograms{histograms: make(map[string]*histogram)}
+var metricsEventQueueStats = &eventQueueStats{}
 
 func generateMetricsMessage(metricsFlushInterval int) []byte {
 	bbuf := NewBsonBuffer()
@@ -110,7 +120,22 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 
 	// TODO add request counters
 
-	// TODO add event queue stats
+	// event queue stats
+	metricsEventQueueStats.lock.Lock()
+
+	addMetricsValue(bbuf, &index, "NumSent", metricsEventQueueStats.numSent)
+	addMetricsValue(bbuf, &index, "NumOverflowed", metricsEventQueueStats.numOverflowed)
+	addMetricsValue(bbuf, &index, "NumFailed", metricsEventQueueStats.numFailed)
+	addMetricsValue(bbuf, &index, "TotalEvents", metricsEventQueueStats.totalEvents)
+	addMetricsValue(bbuf, &index, "QueueLargest", metricsEventQueueStats.queueLargest)
+
+	metricsEventQueueStats.numSent = 0
+	metricsEventQueueStats.numOverflowed = 0
+	metricsEventQueueStats.numFailed = 0
+	metricsEventQueueStats.totalEvents = 0
+	metricsEventQueueStats.queueLargest = 0
+
+	metricsEventQueueStats.lock.Unlock()
 
 	// system load of last minute
 	if s := getStrByKeyword("/proc/loadavg", ""); s != "" {
@@ -376,6 +401,8 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 	switch value.(type) {
 	case int:
 		bsonAppendInt(bbuf, "value", value.(int))
+	case int64:
+		bsonAppendInt64(bbuf, "value", value.(int64))
 	case float32, float64:
 		bsonAppendFloat64(bbuf, "value", value.(float64))
 	default:
@@ -561,4 +588,36 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	}
 
 	bsonAppendFinishObject(bbuf, start)
+}
+
+func incrementNumSent(count int) {
+	metricsEventQueueStats.lock.Lock()
+	metricsEventQueueStats.numSent += int64(count)
+	metricsEventQueueStats.lock.Unlock()
+}
+
+func incrementNumOverflowed(count int) {
+	metricsEventQueueStats.lock.Lock()
+	metricsEventQueueStats.numOverflowed += int64(count)
+	metricsEventQueueStats.lock.Unlock()
+}
+
+func incrementNumFailed(count int) {
+	metricsEventQueueStats.lock.Lock()
+	metricsEventQueueStats.numFailed += int64(count)
+	metricsEventQueueStats.lock.Unlock()
+}
+
+func incrementTotalEvents(count int) {
+	metricsEventQueueStats.lock.Lock()
+	metricsEventQueueStats.totalEvents += int64(count)
+	metricsEventQueueStats.lock.Unlock()
+}
+
+func setQueueLargest(count int) {
+	metricsEventQueueStats.lock.Lock()
+	if int64(count) > metricsEventQueueStats.queueLargest {
+		metricsEventQueueStats.queueLargest = int64(count)
+	}
+	metricsEventQueueStats.lock.Unlock()
 }
