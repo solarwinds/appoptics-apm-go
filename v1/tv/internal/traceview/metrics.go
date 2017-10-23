@@ -1,3 +1,5 @@
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
+
 package traceview
 
 import (
@@ -18,7 +20,7 @@ import (
 	"github.com/librato/go-traceview/v1/tv/internal/hdrhist"
 )
 
-// Linux distributions
+// Linux distributions and their identifying files
 const (
 	REDHAT    = "/etc/redhat-release"
 	AMAZON    = "/etc/release-cpe"
@@ -31,74 +33,97 @@ const (
 )
 
 const (
-	metricsHTTPTransactionsMax = 200
-	metricsTagNameLenghtMax    = 64
-	metricsTagValueLenghtMax   = 255
-	metricsHistPrecision       = 2
+	metricsTransactionsMaxDefault = 200 // default max amount of transaction names we allow per cycle
+	metricsHistPrecisionDefault   = 2   // default histogram precision
+
+	metricsTagNameLenghtMax  = 64  // max number of characters for tag names
+	metricsTagValueLenghtMax = 255 // max number of characters for tag values
 )
 
+// defines a span message
 type SpanMessage interface {
+	// called for message processing
 	process()
 }
 
+// base span message with properties found in all types of span messages
 type BaseSpanMessage struct {
-	Duration time.Duration
-	HasError bool
+	Duration time.Duration // duration of the span (nanoseconds)
+	HasError bool          // boolean flag whether this transaction contains an error or not
 }
 
+// HTTP span message used for inbound metrics
 type HttpSpanMessage struct {
 	BaseSpanMessage
-	Transaction string
-	Url         string
-	Status      int
-	Method      string
+	Transaction string // transaction name (e.g. controller.action)
+	Url         string // the raw url which will be processed and used as transaction (if Transaction is empty)
+	Status      int    // HTTP status code (e.g. 200, 500, ...)
+	Method      string // HTTP method (e.g. GET, POST, ...)
 }
 
+// a single measurement
 type measurement struct {
-	name        string
-	tags        map[string]string
-	count       int
-	sum         float64
-	reportValue bool
+	name      string            // the name of the measurement (e.g. TransactionResponseTime)
+	tags      map[string]string // map of KVs
+	count     int               // count of this measurement
+	sum       float64           // sum for this measurement
+	reportSum bool              // include the sum in the report?
 }
 
+// a collection of measurements
 type measurements struct {
 	measurements            map[string]*measurement
-	transactionNameOverflow bool
-	lock                    sync.Mutex
+	transactionNameOverflow bool       // have we hit the limit of allowable transaction names?
+	lock                    sync.Mutex // protect access to this collection
 }
 
+// a single histogram
 type histogram struct {
-	hist *hdrhist.Hist
-	tags map[string]string
+	hist *hdrhist.Hist     // internal representation of a histogram (see hdrhist package)
+	tags map[string]string // map of KVs
 }
 
+// a collection of histograms
 type histograms struct {
 	histograms map[string]*histogram
-	lock       sync.Mutex
+	lock       sync.Mutex // protect access to this collection
 }
 
+// counters of the event queue stats
 type eventQueueStats struct {
-	numSent       int64
-	numOverflowed int64
-	numFailed     int64
-	totalEvents   int64
-	queueLargest  int64
-	lock          sync.Mutex
+	numSent       int64      // number of messages that were successfully sent
+	numOverflowed int64      // number of messages that overflowed the queue
+	numFailed     int64      // number of messages that failed to send
+	totalEvents   int64      // number of messages queued to send
+	queueLargest  int64      // maximum number of messages that were in the queue at one time
+	lock          sync.Mutex // protect access to the counters
 }
 
-var cachedDistro string
-var cachedMACAddresses = "uninitialized"
-var cachedAWSInstanceId = "uninitialized"
-var cachedAWSInstanceZone = "uninitialized"
-var cachedContainerID = "uninitialized"
+var cachedDistro string                     // cached distribution name
+var cachedMACAddresses = "uninitialized"    // cached list MAC addresses
+var cachedAWSInstanceId = "uninitialized"   // cached EC2 instance ID (if applicable)
+var cachedAWSInstanceZone = "uninitialized" // cached EC2 instance zone (if applicable)
+var cachedContainerID = "uninitialized"     // cached docker container ID (if applicable)
 
+// regular expression used for URL fingerprinting
 var metricsURLRegex = regexp.MustCompile(`^(https?://)?[^/]+(/([^/\?]+))?(/([^/\?]+))?`)
+
+// list of currently stored unique HTTP transaction names (flushed on each metrics report cycle)
 var metricsHTTPTransactions = make(map[string]bool)
+
+// collection of currently stored measurements (flushed on each metrics report cycle)
 var metricsHTTPMeasurements = &measurements{measurements: make(map[string]*measurement)}
+
+// collection of currently stored histograms (flushed on each metrics report cycle)
 var metricsHTTPHistograms = &histograms{histograms: make(map[string]*histogram)}
+
+// event queue stats (reset on each metrics report cycle)
 var metricsEventQueueStats = &eventQueueStats{}
 
+// generates a metrics message in BSON format with all the currently available values
+// metricsFlushInterval	current metrics flush interval
+//
+// return				metrics message in BSON format
 func generateMetricsMessage(metricsFlushInterval int) []byte {
 	bbuf := NewBsonBuffer()
 
@@ -244,6 +269,7 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 	return bbuf.buf
 }
 
+// gets distribution identification
 func getDistro() string {
 	if cachedDistro != "" {
 		return cachedDistro
@@ -292,6 +318,8 @@ func getDistro() string {
 	return cachedDistro
 }
 
+// gets and appends UnameSysName/UnameVersion to a BSON buffer
+// bbuf	the BSON buffer to append the KVs to
 func appendUname(bbuf *bsonBuffer) {
 	if runtime.GOOS == "linux" {
 		var uname syscall.Utsname
@@ -304,6 +332,8 @@ func appendUname(bbuf *bsonBuffer) {
 	}
 }
 
+// gets and appends IP addresses to a BSON buffer
+// bbuf	the BSON buffer to append the KVs to
 func appendIPAddresses(bbuf *bsonBuffer) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -321,6 +351,8 @@ func appendIPAddresses(bbuf *bsonBuffer) {
 	bsonAppendFinishObject(bbuf, start)
 }
 
+// gets and appends MAC addresses to a BSON buffer
+// bbuf	the BSON buffer to append the KVs to
 func appendMACAddresses(bbuf *bsonBuffer) {
 	macs := strings.Split(getMACAddressList(), ",")
 
@@ -333,6 +365,7 @@ func appendMACAddresses(bbuf *bsonBuffer) {
 	bsonAppendFinishObject(bbuf, start)
 }
 
+// gets a comma-separated list of MAC addresses
 func getMACAddressList() string {
 	if cachedMACAddresses != "uninitialized" {
 		return cachedMACAddresses
@@ -355,6 +388,7 @@ func getMACAddressList() string {
 	return cachedMACAddresses
 }
 
+// gets the AWS instance ID (or empty string if not an AWS instance)
 func getAWSInstanceID() string {
 	if cachedAWSInstanceId != "uninitialized" {
 		return cachedAWSInstanceId
@@ -377,6 +411,7 @@ func getAWSInstanceID() string {
 	return cachedAWSInstanceId
 }
 
+// gets the AWS instance zone (or empty string if not an AWS instance)
 func getAWSInstanceZone() string {
 	if cachedAWSInstanceZone != "uninitialized" {
 		return cachedAWSInstanceZone
@@ -399,11 +434,13 @@ func getAWSInstanceZone() string {
 	return cachedAWSInstanceZone
 }
 
+// check if this an EC2 instance
 func isEC2Instance() bool {
 	match := getLineByKeyword("/sys/hypervisor/uuid", "ec2")
 	return match != "" && strings.HasPrefix(match, "ec2")
 }
 
+// gets the docker container ID (or empty string if not a docker container)
 func getContainerId() string {
 	if cachedContainerID != "uninitialized" {
 		return cachedContainerID
@@ -423,6 +460,15 @@ func getContainerId() string {
 	return cachedContainerID
 }
 
+// appends a metric to a BSON buffer, the form will be:
+// {
+//   "name":"myName",
+//   "value":0
+// }
+// bbuf		the BSON buffer to append the metric to
+// index	a running integer (0,1,2,...) which is needed for BSON arrays
+// name		key name
+// value	value (type: int, int64, float32, float64)
 func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{}) {
 	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
 
@@ -442,6 +488,8 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 	*index += 1
 }
 
+// performs URL fingerprinting on a given URL to extract the transaction name
+// e.g. https://github.com/librato/go-traceview/blob/metrics becomes /librato/go-traceview
 func getTransactionFromURL(url string) string {
 	matches := metricsURLRegex.FindStringSubmatch(url)
 	var ret string
@@ -457,6 +505,12 @@ func getTransactionFromURL(url string) string {
 	return ret
 }
 
+// check if an element is found in a list, add if the list limit hasn't been reached yet
+// m		list of elements
+// element	element to look up or add
+// max		max allowable elements in the list
+//
+// return	true if element has been found or has been added to the list successfully, false otherwise
 func isWithinLimit(m *map[string]bool, element string, max int) bool {
 	if _, ok := (*m)[element]; !ok {
 		// only record if we haven't reached the limits yet
@@ -470,28 +524,37 @@ func isWithinLimit(m *map[string]bool, element string, max int) bool {
 	}
 }
 
+// processes an HttpSpanMessage
 func (httpSpan *HttpSpanMessage) process() {
+	// always add to overall histogram
 	recordHistogram(metricsHTTPHistograms, "", httpSpan.Duration)
 
+	// check if we need to perform URL fingerprinting (no transaction name passed in)
 	if httpSpan.Transaction == "" && httpSpan.Url != "" {
 		httpSpan.Transaction = getTransactionFromURL(httpSpan.Url)
 	}
 	if httpSpan.Transaction != "" {
 		transactionWithinLimit := isWithinLimit(
-			&metricsHTTPTransactions, httpSpan.Transaction, metricsHTTPTransactionsMax)
+			&metricsHTTPTransactions, httpSpan.Transaction, metricsTransactionsMaxDefault)
 
+		// only record the transaction-specific histogram and measurements if we are still within the limit
+		// otherwise report it as an 'other' measurement
 		if transactionWithinLimit {
 			recordHistogram(metricsHTTPHistograms, httpSpan.Transaction, httpSpan.Duration)
 			httpSpan.processMeasurements(httpSpan.Transaction)
 		} else {
 			httpSpan.processMeasurements("other")
+			// indicate we have overrun the transaction name limit
 			setTransactionNameOverflow(true)
 		}
 	} else {
+		// no transaction/url name given, record as 'unknown'
 		httpSpan.processMeasurements("unknown")
 	}
 }
 
+// processes HTTP measurements, record one for primary key, and one for each secondary key
+// transactionName	the transaction name to be used for these measurements
 func (httpSpan *HttpSpanMessage) processMeasurements(transactionName string) {
 	name := "TransactionResponseTime"
 	duration := float64((*httpSpan).Duration)
@@ -499,7 +562,7 @@ func (httpSpan *HttpSpanMessage) processMeasurements(transactionName string) {
 	metricsHTTPMeasurements.lock.Lock()
 	defer metricsHTTPMeasurements.lock.Unlock()
 
-	// primary ID: TransactionName
+	// primary key: TransactionName
 	primaryTags := make(map[string]string)
 	primaryTags["TransactionName"] = transactionName
 	recordMeasurement(metricsHTTPMeasurements, name, &primaryTags, duration, 1, true)
@@ -520,10 +583,19 @@ func (httpSpan *HttpSpanMessage) processMeasurements(transactionName string) {
 	}
 }
 
+// records a measurement
+// me			collection of measurements that this measurement should be added to
+// name			key name
+// tags			additional tags
+// value		measurement value
+// count		measurement count
+// reportValue	should the sum of all values be reported?
 func recordMeasurement(me *measurements, name string, tags *map[string]string,
 	value float64, count int, reportValue bool) {
 
 	measurements := me.measurements
+
+	// assemble the ID for this measurement (a combination of different values)
 	id := name + "&" + strconv.FormatBool(reportValue) + "&"
 	for k, v := range *tags {
 		id += k + ":" + v + "&"
@@ -535,17 +607,22 @@ func recordMeasurement(me *measurements, name string, tags *map[string]string,
 	// create a new measurement if it doesn't exist
 	if m, ok = measurements[id]; !ok {
 		m = &measurement{
-			name:        name,
-			tags:        *tags,
-			reportValue: reportValue,
+			name:      name,
+			tags:      *tags,
+			reportSum: reportValue,
 		}
 		measurements[id] = m
 	}
 
+	// add count and value
 	m.count += count
 	m.sum += value
 }
 
+// records a histogram
+// hi		collection of histograms that this histogram should be added to
+// name		key name
+// duration	span duration
 func recordHistogram(hi *histograms, name string, duration time.Duration) {
 	hi.lock.Lock()
 	defer func() {
@@ -572,28 +649,34 @@ func recordHistogram(hi *histograms, name string, duration time.Duration) {
 			hist: hdrhist.WithConfig(hdrhist.Config{
 				LowestDiscernible: 1,
 				HighestTrackable:  3600000000,
-				SigFigs:           metricsHistPrecision,
+				SigFigs:           metricsHistPrecisionDefault,
 			}),
 			tags: tags,
 		}
 		histograms[id] = h
 	}
 
+	// record histogram
 	h.hist.Record(int64(duration / time.Microsecond))
 }
 
+// sets the transactionNameOverflow flag
 func setTransactionNameOverflow(flag bool) {
 	metricsHTTPMeasurements.lock.Lock()
 	metricsHTTPMeasurements.transactionNameOverflow = flag
 	metricsHTTPMeasurements.lock.Unlock()
 }
 
+// adds a measurement to a BSON buffer
+// bbuf		the BSON buffer to append the metric to
+// index	a running integer (0,1,2,...) which is needed for BSON arrays
+// m		measurement to be added
 func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *measurement) {
 	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
 
 	bsonAppendString(bbuf, "name", m.name)
 	bsonAppendInt(bbuf, "count", m.count)
-	if m.reportValue {
+	if m.reportSum {
 		bsonAppendFloat64(bbuf, "sum", m.sum)
 	}
 
@@ -615,7 +698,12 @@ func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *measurement) {
 	*index += 1
 }
 
+// adds a histogram to a BSON buffer
+// bbuf		the BSON buffer to append the metric to
+// index	a running integer (0,1,2,...) which is needed for BSON arrays
+// h		histogram to be added
 func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
+	// get 64-base encoded representation of the histogram
 	data, err := hdrhist.EncodeCompressed(h.hist)
 	if err != nil {
 		OboeLog(ERROR, fmt.Sprintf("Failed to encode histogram: %v", err))
@@ -627,6 +715,7 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	bsonAppendString(bbuf, "name", "TransactionResponseTime")
 	bsonAppendBinary(bbuf, "value", data)
 
+	// append tags
 	if len(h.tags) > 0 {
 		start := bsonAppendStartObject(bbuf, "tags")
 		for k, v := range h.tags {

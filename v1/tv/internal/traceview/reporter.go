@@ -1,3 +1,5 @@
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
+
 package traceview
 
 import (
@@ -9,29 +11,39 @@ import (
 	"time"
 )
 
+// defines what methods a reporter should offer (internal to traceview package)
 type reporter interface {
+	// called when an event should be reported
 	reportEvent(ctx *oboeContext, e *event) error
+	// called when a Span message should be reported
 	reportSpan(span *SpanMessage) error
 }
 
-type nullReporter struct{}
-
+// currently used reporter
 var thisReporter reporter = &nullReporter{}
 
+// is tracing disabled?
 var reportingDisabled bool = false
 
+// cached hostname and PID since they don't change (only one system call each)
 var cachedHostname string
 var cachedPid = os.Getpid()
+
+// a noop reporter
+type nullReporter struct{}
 
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error { return nil }
 func (r *nullReporter) reportSpan(span *SpanMessage) error           { return nil }
 
+// init() is called only once on program startup. Here we create the reporter
+// that will be used throughout the runtime of the app. Default is 'ssl' but
+// can be overridden via APPOPTICS_REPORTER
 func init() {
 	cacheHostname(osHostnamer{})
 
 	switch strings.ToLower(os.Getenv("APPOPTICS_REPORTER")) {
 	case "ssl":
-		fallthrough
+		fallthrough // using fallthrough since the SSL reporter (GRPC) is our default reporter
 	default:
 		thisReporter = grpcNewReporter()
 	case "udp":
@@ -39,10 +51,15 @@ func init() {
 	}
 }
 
+// called from the app when a span message is available
+// span	span message to be put on the channel
+//
+// returns	error if channel is full
 func ReportSpan(span SpanMessage) error {
 	return thisReporter.reportSpan(&span)
 }
 
+// cache hostname
 func cacheHostname(hn hostnamer) {
 	h, err := hn.Hostname()
 	if err != nil {
@@ -54,6 +71,11 @@ func cacheHostname(hn hostnamer) {
 	cachedHostname = h
 }
 
+// check if context and event are valid, add general keys like Timestamp, or Hostname
+// ctx		oboe context
+// e		event to be prepared for sending
+//
+// returns	error if invalid context or event
 func prepareEvent(ctx *oboeContext, e *event) error {
 	if ctx == nil || e == nil {
 		return errors.New("Invalid context, event")

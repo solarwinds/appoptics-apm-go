@@ -1,3 +1,5 @@
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
+
 package traceview
 
 import (
@@ -18,8 +20,14 @@ import (
 
 const (
 	grpcReporterVersion = "golang-v2"
-	grpcAddressDefault  = "ec2-54-175-46-34.compute-1.amazonaws.com:5555"
-	grpcCertDefault     = `-----BEGIN CERTIFICATE-----
+
+	// default collector endpoint address and port,
+	// can be overridded via APPOPTICS_COLLECTOR
+	grpcAddressDefault = "ec2-54-175-46-34.compute-1.amazonaws.com:5555"
+
+	// default certificate used to verify the collector endpoint,
+	// can be overridden via APPOPTICS_TRUSTEDPATH
+	grpcCertDefault = `-----BEGIN CERTIFICATE-----
 MIID8TCCAtmgAwIBAgIJAMoDz7Npas2/MA0GCSqGSIb3DQEBCwUAMIGOMQswCQYD
 VQQGEwJVUzETMBEGA1UECAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNU2FuIEZyYW5j
 aXNjbzEVMBMGA1UECgwMTGlicmF0byBJbmMuMRUwEwYDVQQDDAxBcHBPcHRpY3Mg
@@ -44,56 +52,73 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 7tsqAxw=
 -----END CERTIFICATE-----`
 
-	grpcMetricIntervalDefault      = 5   // seconds
-	grpcGetSettingsIntervalDefault = 30  // seconds
-	grpcRetryDelayInitial          = 500 // miliseconds
-	grpcRetryDelayMultiplier       = 1.5 //
-	grpcRetryDelayMax              = 60  //seconds
-	grpcRedirectMax                = 20
+	grpcMetricIntervalDefault      = 5   // default metrics flush interval in seconds
+	grpcGetSettingsIntervalDefault = 30  // default settings retrieval interval in seconds
+	grpcRetryDelayInitial          = 500 // initial connection/send retry delay in milliseconds
+	grpcRetryDelayMultiplier       = 1.5 // backoff multiplier for unsuccessful retries
+	grpcRetryDelayMax              = 60  // max connection/send retry delay in seconds
+	grpcRedirectMax                = 20  // max allowed collector redirects
 )
 
+// ID of first goroutine that attempts to reconnect a given GRPC client (eventConnection
+// or metricConnection). This is to prevent multiple goroutines from messing with the same
+// client connection (e.g. sendMetrics() and getSettings() both use the metricConnection)
 type reconnectAuthority int
 
+// possible IDs for reconnectAuthority.
+// UNSET means no goroutine is attempting a reconnect
 const (
-	UNSET reconnectAuthority = iota
-	POSTEVENTS
-	POSTMETRICS
-	GETSETTINGS
+	UNSET       reconnectAuthority = iota
+	POSTEVENTS                     // eventSender() routine
+	POSTMETRICS                    // sendMetrics() routine
+	GETSETTINGS                    // getSettings() routine
 )
 
-type connection struct {
-	client             collector.TraceCollectorClient
-	connection         *grpc.ClientConn
-	address            string
-	certificate        []byte
-	lock               sync.Mutex
-	reconnectAuthority reconnectAuthority
+// everything needed for a GRPC connection
+type grpcConnection struct {
+	client             collector.TraceCollectorClient // GRPC client instance
+	connection         *grpc.ClientConn               //GRPC connection object
+	address            string                         // collector address
+	certificate        []byte                         // collector certificate
+	lock               sync.Mutex                     // lock to ensure sequential access (in case of connection loss)
+	reconnectAuthority reconnectAuthority             // ID of the goroutine attempting a reconnect on this connection
 }
 
 type grpcReporter struct {
-	eventConnection       connection
-	metricConnection      connection
-	serviceKey            string
-	collectMetricInterval int
-	getSettingsInterval   int
+	eventConnection       grpcConnection // used for events only
+	metricConnection      grpcConnection // used for everything else (postMetrics, postStatus, getSettings)
+	serviceKey            string         // service key
+	collectMetricInterval int            // metrics flush interval in seconds
+	getSettingsInterval   int            // settings retrieval interval in seconds
 }
 
+// channel for event messages (sent from agent)
 var grpcEventMessages = make(chan []byte, 1024)
-var grpcMetricMessages = make(chan []byte, 1024)
+
+// channel for span messages (sent from agent)
 var grpcSpanMessages = make(chan SpanMessage, 1024)
 
+// channel for metrics messages (internal to reporter)
+var grpcMetricMessages = make(chan []byte, 1024)
+
+// initializes a new GRPC reporter from scratch (called once on program startup)
+//
+// returns	GRPC reporter object
 func grpcNewReporter() reporter {
+	// service key is required, so bail out if not found
 	serviceKey := os.Getenv("APPOPTICS_SERVICE_KEY")
 	if serviceKey == "" {
 		OboeLog(WARNING, "No service key found, check environment variable APPOPTICS_SERVICE_KEY.")
 		return &nullReporter{}
 	}
 
+	// collector address override
 	collectorAddress := os.Getenv("APPOPTICS_COLLECTOR")
 	if collectorAddress == "" {
 		collectorAddress = grpcAddressDefault
 	}
 
+	// certificate override
 	var cert []byte
 	if certPath := os.Getenv("APPOPTICS_TRUSTEDPATH"); certPath != "" {
 		var err error
@@ -106,8 +131,9 @@ func grpcNewReporter() reporter {
 		cert = []byte(grpcCertDefault)
 	}
 
-	conn1, err1 := grpcCreateClientConnection(cert, collectorAddress)
-	conn2, err2 := grpcCreateClientConnection(cert, collectorAddress)
+	// create connection object for events client and metrics client
+	eventConn, err1 := grpcCreateClientConnection(cert, collectorAddress)
+	metricConn, err2 := grpcCreateClientConnection(cert, collectorAddress)
 	if err1 != nil || err2 != nil {
 		var err error
 		switch {
@@ -120,16 +146,17 @@ func grpcNewReporter() reporter {
 		return &nullReporter{}
 	}
 
+	// construct the reporter object which handles two connections
 	reporter := &grpcReporter{
-		eventConnection: connection{
-			client:      collector.NewTraceCollectorClient(conn1),
-			connection:  conn1,
+		eventConnection: grpcConnection{
+			client:      collector.NewTraceCollectorClient(eventConn),
+			connection:  eventConn,
 			address:     collectorAddress,
 			certificate: cert,
 		},
-		metricConnection: connection{
-			client:      collector.NewTraceCollectorClient(conn2),
-			connection:  conn2,
+		metricConnection: grpcConnection{
+			client:      collector.NewTraceCollectorClient(metricConn),
+			connection:  metricConn,
 			address:     collectorAddress,
 			certificate: cert,
 		},
@@ -139,12 +166,27 @@ func grpcNewReporter() reporter {
 		getSettingsInterval:   grpcGetSettingsIntervalDefault,
 	}
 
+	// start up long-running goroutine eventSender() which listens on the events message channel
+	// and reports incoming events to the collector using GRPC
 	go reporter.eventSender()
+
+	// start up long-running goroutine periodicTasks() which kicks off periodic tasks like
+	// collectMetrics() and getSettings()
 	go reporter.periodicTasks()
+
+	// start up long-running goroutine spanMessageAggregator() which listens on the span message
+	// channel and processes incoming span messages
 	go reporter.spanMessageAggregator()
+
 	return reporter
 }
 
+// creates a new client connection object which is used by GRPC
+// cert		certificate used to verify the collector endpoint
+// addr		collector endpoint address and port
+//
+// returns	client connection object
+//			possible error during AppendCertsFromPEM() and Dial()
 func grpcCreateClientConnection(cert []byte, addr string) (*grpc.ClientConn, error) {
 	certPool := x509.NewCertPool()
 
@@ -161,45 +203,62 @@ func grpcCreateClientConnection(cert []byte, addr string) (*grpc.ClientConn, err
 	return grpc.Dial(addr, grpc.WithTransportCredentials(creds))
 }
 
-func (r *grpcReporter) reconnect(c *connection, authority reconnectAuthority) {
+// attempts to restore a lost client connection
+// c			client connection to perform the reconnect
+// authority	ID of the goroutine attempting a reconnect
+func (r *grpcReporter) reconnect(c *grpcConnection, authority reconnectAuthority) {
 	if c.reconnectAuthority == UNSET {
+		// we might be the first goroutine attempting a reconnect, lock and check again
 		c.lock.Lock()
 		if c.reconnectAuthority == UNSET {
+			// yes, we are indeed the first, so take ownership of the reconnecting procedure
 			c.reconnectAuthority = authority
 		}
 		c.lock.Unlock()
 	}
 
 	if c.reconnectAuthority == authority {
+		// we are authorized to attempt a reconnect
 		c.lock.Lock()
 		OboeLog(INFO, "Lost connection -- attempting reconnect...")
 		c.client = collector.NewTraceCollectorClient(c.connection)
 		c.lock.Unlock()
 	} else {
+		// we are not authorized to attempt a reconnect, so simply
+		// wait until the connection has been restored
 		for c.reconnectAuthority != UNSET {
 			time.Sleep(time.Second)
 		}
 	}
 }
 
-func (r *grpcReporter) redirect(c *connection, authority reconnectAuthority, address string) {
+// redirect to a different collector
+// c			client connection to perform the redirect
+// authority	ID of the goroutine attempting a redirect
+// address		redirect address
+func (r *grpcReporter) redirect(c *grpcConnection, authority reconnectAuthority, address string) {
+	// create a new connection object for this client
 	conn, err := grpcCreateClientConnection(c.certificate, address)
 	if err != nil {
 		OboeLog(ERROR, fmt.Sprintf("Failed redirect to: %v %v", address, err))
 	}
 
+	// set new connection (need to be protected)
 	c.lock.Lock()
 	c.connection = conn
 	c.lock.Unlock()
 
+	// attempt reconnect using the new connection
 	r.reconnect(c, authority)
 }
 
+// long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
 func (r *grpcReporter) periodicTasks() {
-	//	collectMetricsTicker := time.NewTimer(r.getMetricsNextInterval())
-	collectMetricsTicker := time.NewTimer(0)
+	// set up tickers
+	collectMetricsTicker := time.NewTimer(r.collectMetricsNextInterval())
 	getSettingsTicker := time.NewTimer(0)
 
+	// set up 'ready' channels to indicate if a goroutine has terminated
 	collectMetricsReady := make(chan bool, 1)
 	sendMetricsReady := make(chan bool, 1)
 	getSettingsReady := make(chan bool, 1)
@@ -209,19 +268,21 @@ func (r *grpcReporter) periodicTasks() {
 
 	for {
 		select {
-
 		case <-collectMetricsTicker.C:
+			// set up ticker for next round
 			collectMetricsTicker.Reset(r.collectMetricsNextInterval())
 			select {
 			case <-collectMetricsReady:
+				// only kick off a new goroutine if the previous one has terminated
 				go r.collectMetrics(collectMetricsReady, sendMetricsReady)
 			default:
 			}
-
 		case <-getSettingsTicker.C:
+			// set up ticker for next round
 			getSettingsTicker.Reset(time.Duration(r.getSettingsInterval) * time.Second)
 			select {
 			case <-getSettingsReady:
+				// only kick off a new goroutine if the previous one has terminated
 				go r.getSettings(getSettingsReady)
 			default:
 			}
@@ -229,17 +290,29 @@ func (r *grpcReporter) periodicTasks() {
 	}
 }
 
-func (r *grpcReporter) setRetryDelay(delay *int) {
-	*delay = int(float64(*delay) * grpcRetryDelayMultiplier)
-	if *delay > grpcRetryDelayMax*1000 {
-		*delay = grpcRetryDelayMax * 1000
+// backoff strategy to slowly increase the retry delay up to a max delay
+// oldDelay	the old delay in milliseconds
+//
+// returns	the new delay in milliseconds
+func (r *grpcReporter) setRetryDelay(oldDelay int) int {
+	newDelay := int(float64(oldDelay) * grpcRetryDelayMultiplier)
+	if newDelay > grpcRetryDelayMax*1000 {
+		newDelay = grpcRetryDelayMax * 1000
 	}
+	return newDelay
 }
 
 // ================================ Event Handling ====================================
 
+// prepares the given event and puts in on the channel so it can be consumed by the
+// eventSender() goroutine
+// ctx		oboe context
+// e		event to be put on the channel
+//
+// returns	error if something goes wrong during preparation or if channel is full
 func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 	if err := prepareEvent(ctx, e); err != nil {
+		// don't continue if preparation failed
 		return err
 	}
 
@@ -253,12 +326,16 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 	}
 }
 
+// long-running goroutine that listens on the events message channel, collects all messages
+// on that channel and attempts to send them to the collector using the GRPC method PostEvents()
 func (r *grpcReporter) eventSender() {
 	for {
 		var messages [][]byte
 
+		// while there's no message, just wait here in a loop
 		for len(messages) == 0 {
 			done := false
+			// messages detected, get them all!
 			for !done {
 				select {
 				case e := <-grpcEventMessages:
@@ -268,6 +345,7 @@ func (r *grpcReporter) eventSender() {
 				}
 			}
 
+			// avoid consuming too much CPU so wait for a bit
 			if len(messages) == 0 {
 				time.Sleep(time.Duration(500) * time.Millisecond)
 			}
@@ -285,18 +363,25 @@ func (r *grpcReporter) eventSender() {
 			Encoding: collector.EncodingType_BSON,
 		}
 
+		// initial retry delay in milliseconds
 		delay := grpcRetryDelayInitial
+		// counter for redirects so we know when the limit has been reached
 		redirects := 0
 
+		// we'll stay in this loop until the call to PostEvents() succeeds
 		resultOk := false
 		for !resultOk {
+			// protect the call to the client object or we could run into problems if
+			// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 			r.eventConnection.lock.Lock()
 			response, err := r.eventConnection.client.PostEvents(context.TODO(), request)
 			r.eventConnection.lock.Unlock()
 
 			if err != nil {
+				// some server connection error, attempt reconnect
 				r.reconnect(&r.eventConnection, POSTEVENTS)
 			} else {
+				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
 					OboeLog(DEBUG, "Sent events")
@@ -316,6 +401,7 @@ func (r *grpcReporter) eventSender() {
 						OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
 					} else {
 						r.redirect(&r.eventConnection, POSTEVENTS, response.Arg)
+						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++
 					}
@@ -325,8 +411,9 @@ func (r *grpcReporter) eventSender() {
 			}
 
 			if !resultOk {
+				// wait a little before retrying
 				time.Sleep(time.Duration(delay) * time.Millisecond)
-				r.setRetryDelay(&delay)
+				delay = r.setRetryDelay(delay)
 			}
 		}
 	}
@@ -334,30 +421,43 @@ func (r *grpcReporter) eventSender() {
 
 // ================================ Metrics Handling ====================================
 
+// calculates the interval from now until the next time we need to collect metrics
+//
+// returns	the interval (nanoseconds)
 func (r *grpcReporter) collectMetricsNextInterval() time.Duration {
 	interval := r.collectMetricInterval - (time.Now().Second() % r.collectMetricInterval)
 	return time.Duration(interval) * time.Second
 }
 
+// collects the current metrics, puts them on the channel, and kicks off sendMetrics()
+// collectReady	a 'ready' channel to indicate if this routine has terminated
+// sendReady	another 'ready' channel to indicate if the sendMetrics() goroutine has terminated
 func (r *grpcReporter) collectMetrics(collectReady chan bool, sendReady chan bool) {
+	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { collectReady <- true }()
-
+	// generate a new metrics message
 	message := generateMetricsMessage(r.collectMetricInterval)
 	//	printBson(message)
 
 	select {
+	// put metrics message onto the channel
 	case grpcMetricMessages <- message:
 	default:
 	}
 
 	select {
 	case <-sendReady:
+		// only kick off a new goroutine if the previous one has terminated
 		go r.sendMetrics(sendReady)
 	default:
 	}
 }
 
+// listens on the metrics message channel, collects all messages on that channel and
+// attempts to send them to the collector using the GRPC method PostMetrics()
+// ready	a 'ready' channel to indicate if this routine has terminated
 func (r *grpcReporter) sendMetrics(ready chan bool) {
+	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { ready <- true }()
 
 	var messages [][]byte
@@ -372,24 +472,36 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		}
 	}
 
+	// no messages on the channel so nothing to send, return
+	if len(messages) == 0 {
+		return
+	}
+
 	request := &collector.MessageRequest{
 		ApiKey:   r.serviceKey,
 		Messages: messages,
 		Encoding: collector.EncodingType_BSON,
 	}
 
+	// initial retry delay in milliseconds
 	delay := grpcRetryDelayInitial
+	// counter for redirects so we know when the limit has been reached
 	redirects := 0
 
+	// we'll stay in this loop until the call to PostMetrics() succeeds
 	resultOk := false
 	for !resultOk {
+		// protect the call to the client object or we could run into problems if
+		// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 		r.metricConnection.lock.Lock()
 		response, err := r.metricConnection.client.PostMetrics(context.TODO(), request)
 		r.metricConnection.lock.Unlock()
 
 		if err != nil {
+			// some server connection error, attempt reconnect
 			r.reconnect(&r.metricConnection, POSTMETRICS)
 		} else {
+			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
 				OboeLog(DEBUG, "Sent metrics")
@@ -406,6 +518,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 					OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
 				} else {
 					r.redirect(&r.metricConnection, POSTMETRICS, response.Arg)
+					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
 				}
@@ -415,15 +528,19 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		}
 
 		if !resultOk {
+			// wait a little before retrying
 			time.Sleep(time.Duration(delay) * time.Millisecond)
-			r.setRetryDelay(&delay)
+			delay = r.setRetryDelay(delay)
 		}
 	}
 }
 
 // ================================ Settings Handling ====================================
 
+// retrieves the settings from the collector
+// ready	a 'ready' channel to indicate if this routine has terminated
 func (r *grpcReporter) getSettings(ready chan bool) {
+	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { ready <- true }()
 
 	var ipAddrs []string
@@ -441,18 +558,25 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		},
 	}
 
+	// initial retry delay in milliseconds
 	delay := grpcRetryDelayInitial
+	// counter for redirects so we know when the limit has been reached
 	redirects := 0
 
+	// we'll stay in this loop until the call to GetSettings() succeeds
 	resultOK := false
 	for !resultOK {
+		// protect the call to the client object or we could run into problems if
+		// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 		r.metricConnection.lock.Lock()
 		response, err := r.metricConnection.client.GetSettings(context.TODO(), request)
 		r.metricConnection.lock.Unlock()
 
 		if err != nil {
+			// some server connection error, attempt reconnect
 			r.reconnect(&r.metricConnection, GETSETTINGS)
 		} else {
+			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
 				OboeLog(DEBUG, fmt.Sprintf("Got new settings from server %v", r.metricConnection.address))
@@ -470,6 +594,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 					OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
 				} else {
 					r.redirect(&r.metricConnection, GETSETTINGS, response.Arg)
+					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
 				}
@@ -479,13 +604,16 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		}
 
 		if !resultOK {
+			// wait a little before retrying
 			time.Sleep(time.Duration(delay) * time.Millisecond)
-			r.setRetryDelay(&delay)
+			delay = r.setRetryDelay(delay)
 		}
 	}
 
 }
 
+// updates the existing settings with the newly received
+// settings	new settings
 func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	for _, s := range settings.Settings {
 		//TODO save new settings
@@ -495,6 +623,11 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 
 // ========================= Span Message Handling =============================
 
+// puts the given span messages on the channel so it can be consumed by the spanMessageAggregator()
+// goroutine
+// span		span message to be put on the channel
+//
+// returns	error if channel is full
 func (r *grpcReporter) reportSpan(span *SpanMessage) error {
 	select {
 	case grpcSpanMessages <- *span:
@@ -504,6 +637,8 @@ func (r *grpcReporter) reportSpan(span *SpanMessage) error {
 	}
 }
 
+// long-running goroutine that listens on the span message channel and processes (aggregates)
+// incoming span messages
 func (r *grpcReporter) spanMessageAggregator() {
 	for {
 		select {
