@@ -32,7 +32,6 @@ var layerCache *cStringCache
 // Initialize Traceview C instrumentation library ("oboe"):
 func init() {
 	C.oboe_init()
-	globalReporter()
 	readEnvSettings()
 
 	// To save on malloc/free, preallocate empty & "non-empty" CStrings
@@ -169,11 +168,11 @@ func appendCount(e *event, counts map[string]*rateCounts, name string, f func(*r
 }
 
 func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
-	if usingTestReporter {
-		if r, ok := globalReporter().(*TestReporter); ok {
-			return r.ShouldTrace, 1000000, 2 // trace tests
-		}
-	}
+	//	if usingTestReporter {
+	//		if r, ok := globalReporter().(*TestReporter); ok {
+	//			return r.ShouldTrace, 1000000, 2 // trace tests
+	//		}
+	//	}
 	initMessageOnce.Do(sendInitMessage)
 
 	var sampleRate, sampleSource C.int
