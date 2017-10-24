@@ -73,8 +73,11 @@ type measurement struct {
 // a collection of measurements
 type measurements struct {
 	measurements            map[string]*measurement
-	transactionNameOverflow bool       // have we hit the limit of allowable transaction names?
-	lock                    sync.Mutex // protect access to this collection
+	transactionNameMax      int            // max transaction names
+	transactionNameOverflow bool           // have we hit the limit of allowable transaction names?
+	uRLRegex                *regexp.Regexp // regular expression used for URL fingerprinting
+	lock                    sync.Mutex     // protect access to this collection
+	transactionNameMaxLock  sync.RWMutex   // lock to ensure sequential access
 }
 
 // a single histogram
@@ -86,6 +89,7 @@ type histogram struct {
 // a collection of histograms
 type histograms struct {
 	histograms map[string]*histogram
+	precision  int        // histogram precision (a value between 0-5)
 	lock       sync.Mutex // protect access to this collection
 }
 
@@ -105,20 +109,43 @@ var cachedAWSInstanceId = "uninitialized"   // cached EC2 instance ID (if applic
 var cachedAWSInstanceZone = "uninitialized" // cached EC2 instance zone (if applicable)
 var cachedContainerID = "uninitialized"     // cached docker container ID (if applicable)
 
-// regular expression used for URL fingerprinting
-var metricsURLRegex = regexp.MustCompile(`^(https?://)?[^/]+(/([^/\?]+))?(/([^/\?]+))?`)
-
 // list of currently stored unique HTTP transaction names (flushed on each metrics report cycle)
 var metricsHTTPTransactions = make(map[string]bool)
 
 // collection of currently stored measurements (flushed on each metrics report cycle)
-var metricsHTTPMeasurements = &measurements{measurements: make(map[string]*measurement)}
+var metricsHTTPMeasurements = &measurements{
+	measurements:       make(map[string]*measurement),
+	transactionNameMax: metricsTransactionsMaxDefault,
+	uRLRegex:           regexp.MustCompile(`^(https?://)?[^/]+(/([^/\?]+))?(/([^/\?]+))?`),
+}
 
 // collection of currently stored histograms (flushed on each metrics report cycle)
-var metricsHTTPHistograms = &histograms{histograms: make(map[string]*histogram)}
+var metricsHTTPHistograms = &histograms{
+	histograms: make(map[string]*histogram),
+	precision:  metricsHistPrecisionDefault,
+}
 
 // event queue stats (reset on each metrics report cycle)
 var metricsEventQueueStats = &eventQueueStats{}
+
+// initialize values according to env variables
+func init() {
+	pEnv := "APPOPTICS_HISTOGRAM_PRECISION"
+	precision := os.Getenv(pEnv)
+	if precision != "" {
+		if p, err := strconv.Atoi(precision); err == nil {
+			if p >= 0 && p <= 5 {
+				metricsHTTPHistograms.precision = p
+			} else {
+				OboeLog(ERROR, fmt.Sprintf(
+					"value of %v must be between 0 and 5: %v", pEnv, precision))
+			}
+		} else {
+			OboeLog(ERROR, fmt.Sprintf(
+				"value of %v is not an int: %v", pEnv, precision))
+		}
+	}
+}
 
 // generates a metrics message in BSON format with all the currently available values
 // metricsFlushInterval	current metrics flush interval
@@ -335,20 +362,35 @@ func appendUname(bbuf *bsonBuffer) {
 // gets and appends IP addresses to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
 func appendIPAddresses(bbuf *bsonBuffer) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
+	addrs := getIPAddresses()
+	if addrs == nil {
 		return
 	}
 
+	i := 0
 	start := bsonAppendStartArray(bbuf, "IPAddresses")
-	for _, addr := range addrs {
-		i := 0
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			bsonAppendString(bbuf, strconv.Itoa(i), ipnet.IP.String())
-			i++
-		}
+	for _, address := range addrs {
+		bsonAppendString(bbuf, strconv.Itoa(i), address)
+		i++
 	}
 	bsonAppendFinishObject(bbuf, start)
+}
+
+// gets the system's IP addresses
+func getIPAddresses() []string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+
+	var addresses []string
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			addresses = append(addresses, ipnet.IP.String())
+		}
+	}
+
+	return addresses
 }
 
 // gets and appends MAC addresses to a BSON buffer
@@ -491,7 +533,7 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 // performs URL fingerprinting on a given URL to extract the transaction name
 // e.g. https://github.com/librato/go-traceview/blob/metrics becomes /librato/go-traceview
 func getTransactionFromURL(url string) string {
-	matches := metricsURLRegex.FindStringSubmatch(url)
+	matches := metricsHTTPMeasurements.uRLRegex.FindStringSubmatch(url)
 	var ret string
 	if matches[3] != "" {
 		ret += "/" + matches[3]
@@ -534,8 +576,13 @@ func (httpSpan *HttpSpanMessage) process() {
 		httpSpan.Transaction = getTransactionFromURL(httpSpan.Url)
 	}
 	if httpSpan.Transaction != "" {
+		// access transactionNameMax protected since it can be updated in updateSettings()
+		metricsHTTPMeasurements.transactionNameMaxLock.RLock()
+		max := metricsHTTPMeasurements.transactionNameMax
+		metricsHTTPMeasurements.transactionNameMaxLock.RUnlock()
+
 		transactionWithinLimit := isWithinLimit(
-			&metricsHTTPTransactions, httpSpan.Transaction, metricsTransactionsMaxDefault)
+			&metricsHTTPTransactions, httpSpan.Transaction, max)
 
 		// only record the transaction-specific histogram and measurements if we are still within the limit
 		// otherwise report it as an 'other' measurement
@@ -649,7 +696,7 @@ func recordHistogram(hi *histograms, name string, duration time.Duration) {
 			hist: hdrhist.WithConfig(hdrhist.Config{
 				LowestDiscernible: 1,
 				HighestTrackable:  3600000000,
-				SigFigs:           metricsHistPrecisionDefault,
+				SigFigs:           int32(hi.precision),
 			}),
 			tags: tags,
 		}
