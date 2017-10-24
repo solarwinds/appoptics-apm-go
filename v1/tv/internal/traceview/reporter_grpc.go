@@ -53,9 +53,10 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 7tsqAxw=
 -----END CERTIFICATE-----`
 
-	grpcMetricIntervalDefault               = 5   // default metrics flush interval in seconds
+	grpcMetricIntervalDefault               = 30  // default metrics flush interval in seconds
 	grpcGetSettingsIntervalDefault          = 30  // default settings retrieval interval in seconds
 	grpcSettingsTimeoutCheckIntervalDefault = 10  // default check interval for timed out settings in seconds
+	grpcPingIntervalDefault                 = 20  // default interval for keep alive pings in seconds
 	grpcRetryDelayInitial                   = 500 // initial connection/send retry delay in milliseconds
 	grpcRetryDelayMultiplier                = 1.5 // backoff multiplier for unsuccessful retries
 	grpcRetryDelayMax                       = 60  // max connection/send retry delay in seconds
@@ -83,14 +84,16 @@ type grpcConnection struct {
 	connection         *grpc.ClientConn               //GRPC connection object
 	address            string                         // collector address
 	certificate        []byte                         // collector certificate
-	lock               sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
+	serviceKey         string                         // service key
 	reconnectAuthority reconnectAuthority             // ID of the goroutine attempting a reconnect on this connection
+	pingTicker         *time.Timer                    // timer for keep alive pings in seconds
+	pingTickerLock     sync.Mutex                     // lock to ensure sequential access of pingTicker
+	lock               sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
 }
 
 type grpcReporter struct {
 	eventConnection              grpcConnection // used for events only
 	metricConnection             grpcConnection // used for everything else (postMetrics, postStatus, getSettings)
-	serviceKey                   string         // service key
 	collectMetricInterval        int            // metrics flush interval in seconds
 	getSettingsInterval          int            // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int            // check interval for timed out settings in seconds
@@ -161,14 +164,15 @@ func grpcNewReporter() reporter {
 			connection:  eventConn,
 			address:     collectorAddress,
 			certificate: cert,
+			serviceKey:  serviceKey,
 		},
 		metricConnection: grpcConnection{
 			client:      collector.NewTraceCollectorClient(metricConn),
 			connection:  metricConn,
 			address:     collectorAddress,
 			certificate: cert,
+			serviceKey:  serviceKey,
 		},
-		serviceKey: serviceKey,
 
 		collectMetricInterval:        grpcMetricIntervalDefault,
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
@@ -271,6 +275,8 @@ func (r *grpcReporter) periodicTasks() {
 	collectMetricsTicker := time.NewTimer(r.collectMetricsNextInterval())
 	getSettingsTicker := time.NewTimer(0)
 	settingsTimeoutCheckTicker := time.NewTimer(time.Duration(r.settingsTimeoutCheckInterval) * time.Second)
+	r.eventConnection.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
+	r.metricConnection.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
 
 	// set up 'ready' channels to indicate if a goroutine has terminated
 	collectMetricsReady := make(chan bool, 1)
@@ -311,6 +317,14 @@ func (r *grpcReporter) periodicTasks() {
 				go r.checkSettingsTimeout(settingsTimeoutCheckReady)
 			default:
 			}
+		case <-r.eventConnection.pingTicker.C: // ping on event connection (keep alive)
+			// set up ticker for next round
+			r.eventConnection.resetPing()
+			go r.eventConnection.ping()
+		case <-r.metricConnection.pingTicker.C: // ping on metrics connection (keep alive)
+			// set up ticker for next round
+			r.metricConnection.resetPing()
+			go r.metricConnection.ping()
 		}
 	}
 }
@@ -384,7 +398,7 @@ func (r *grpcReporter) eventSender() {
 		//		}
 
 		request := &collector.MessageRequest{
-			ApiKey:   r.serviceKey,
+			ApiKey:   r.eventConnection.serviceKey,
 			Messages: messages,
 			Encoding: collector.EncodingType_BSON,
 		}
@@ -402,6 +416,9 @@ func (r *grpcReporter) eventSender() {
 			r.eventConnection.lock.RLock()
 			response, err := r.eventConnection.client.PostEvents(context.TODO(), request)
 			r.eventConnection.lock.RUnlock()
+
+			// we sent something, or at least tried to, so we're not idle - reset the keepalive timer
+			r.eventConnection.resetPing()
 
 			if err != nil {
 				// some server connection error, attempt reconnect
@@ -512,7 +529,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 	}
 
 	request := &collector.MessageRequest{
-		ApiKey:   r.serviceKey,
+		ApiKey:   r.metricConnection.serviceKey,
 		Messages: messages,
 		Encoding: collector.EncodingType_BSON,
 	}
@@ -530,6 +547,9 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		r.metricConnection.lock.RLock()
 		response, err := r.metricConnection.client.PostMetrics(context.TODO(), request)
 		r.metricConnection.lock.RUnlock()
+
+		// we sent something, or at least tried to, so we're not idle - reset the keepalive timer
+		r.metricConnection.resetPing()
 
 		if err != nil {
 			// some server connection error, attempt reconnect
@@ -578,7 +598,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	defer func() { ready <- true }()
 
 	request := &collector.SettingsRequest{
-		ApiKey:        r.serviceKey,
+		ApiKey:        r.metricConnection.serviceKey,
 		ClientVersion: grpcReporterVersion,
 		Identity: &collector.HostID{
 			Hostname:    cachedHostname,
@@ -599,6 +619,9 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		r.metricConnection.lock.RLock()
 		response, err := r.metricConnection.client.GetSettings(context.TODO(), request)
 		r.metricConnection.lock.RUnlock()
+
+		// we sent something, or at least tried to, so we're not idle - reset the keepalive timer
+		r.metricConnection.resetPing()
 
 		if err != nil {
 			// some server connection error, attempt reconnect
@@ -729,7 +752,7 @@ func (r *grpcReporter) statusSender() {
 		//		}
 
 		request := &collector.MessageRequest{
-			ApiKey:   r.serviceKey,
+			ApiKey:   r.metricConnection.serviceKey,
 			Messages: messages,
 			Encoding: collector.EncodingType_BSON,
 		}
@@ -747,6 +770,9 @@ func (r *grpcReporter) statusSender() {
 			r.metricConnection.lock.RLock()
 			response, err := r.metricConnection.client.PostStatus(context.TODO(), request)
 			r.metricConnection.lock.RUnlock()
+
+			// we sent something, or at least tried to, so we're not idle - reset the keepalive timer
+			r.metricConnection.resetPing()
 
 			if err != nil {
 				// some server connection error, attempt reconnect
@@ -812,4 +838,24 @@ func (r *grpcReporter) spanMessageAggregator() {
 			span.process()
 		}
 	}
+}
+
+// ========================= Ping Handling =============================
+
+// reset keep alive timer on a given GRPC connection
+func (c *grpcConnection) resetPing() {
+	c.pingTickerLock.Lock()
+	c.pingTicker.Reset(time.Duration(grpcPingIntervalDefault) * time.Second)
+	c.pingTickerLock.Unlock()
+}
+
+// send a keep alive (ping) request on a given GRPC connection
+func (c *grpcConnection) ping() {
+	request := &collector.PingRequest{
+		ApiKey: c.serviceKey,
+	}
+
+	c.lock.RLock()
+	c.client.Ping(context.TODO(), request)
+	c.lock.RUnlock()
 }
