@@ -4,6 +4,8 @@ package traceview
 
 import (
 	"errors"
+	"log"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -21,6 +23,7 @@ const (
 var _ = func() (_ struct{}) {
 	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
 	os.Setenv("APPOPTICS_COLLECTOR", collectorAddress)
+	os.Setenv("APPOPTICS_REPORTER_UDP", "127.0.0.1:7832")
 	return
 }()
 
@@ -103,11 +106,37 @@ func TestTestReporter(t *testing.T) {
 
 func TestNullReporter(t *testing.T) {
 	nullR := &nullReporter{}
-	assert.Equal(t, nil, nullR.reportEvent(nil, nil))
-	assert.Equal(t, nil, nullR.reportSpan(nil))
+	assert.NoError(t, nullR.reportEvent(nil, nil))
+	assert.NoError(t, nullR.reportStatus(nil, nil))
+	assert.NoError(t, nullR.reportSpan(nil))
 }
 
 // ========================= UDP Reporter =============================
+func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) chan struct{} {
+	done := make(chan struct{})
+	assert.IsType(t, &udpReporter{}, thisReporter)
+
+	addr, err := net.ResolveUDPAddr("udp4", os.Getenv("APPOPTICS_REPORTER_UDP"))
+	assert.NoError(t, err)
+	conn, err := net.ListenUDP("udp4", addr)
+	assert.NoError(t, err)
+	go func(numBufs int) {
+		defer conn.Close()
+		for i := 0; i < numBufs; i++ {
+			buf := make([]byte, 128*1024)
+			n, _, err := conn.ReadFromUDP(buf)
+			t.Logf("Got UDP buf len %v err %v", n, err)
+			if err != nil {
+				log.Printf("UDP listener got err, quitting %v", err)
+				break
+			}
+			*bufs = append(*bufs, buf[0:n])
+		}
+		close(done)
+		t.Logf("Closing UDP listener, got %d bufs", numBufs)
+	}(numbufs)
+	return done
+}
 
 func assertUDPMode(t *testing.T) {
 	// for UDP mode run test like this:
@@ -120,7 +149,23 @@ func assertUDPMode(t *testing.T) {
 
 func TestUDPReporter(t *testing.T) {
 	assertUDPMode(t)
-	// TODO implement
+	assert.IsType(t, &udpReporter{}, thisReporter)
+
+	r := thisReporter.(*udpReporter)
+	ctx := newTestContext(t)
+	ev1, _ := ctx.newEvent(LabelInfo, testLayer)
+	ev2, _ := ctx.newEvent(LabelInfo, testLayer)
+
+	var bufs [][]byte
+	startTestUDPListener(t, &bufs, 2)
+
+	assert.Error(t, r.reportEvent(nil, nil))
+	assert.Error(t, r.reportEvent(ctx, nil))
+	assert.NoError(t, r.reportEvent(ctx, ev1))
+
+	assert.Error(t, r.reportStatus(nil, nil))
+	assert.Error(t, r.reportStatus(ctx, nil))
+	assert.NoError(t, r.reportStatus(ctx, ev2))
 }
 
 // ========================= GRPC Reporter =============================
@@ -136,6 +181,17 @@ func TestGRPCReporter(t *testing.T) {
 	assert.IsType(t, &grpcReporter{}, thisReporter)
 
 	r := thisReporter.(*grpcReporter)
+	ctx := newTestContext(t)
+	ev1, _ := ctx.newEvent(LabelInfo, testLayer)
+	ev2, _ := ctx.newEvent(LabelInfo, testLayer)
+
+	assert.Error(t, r.reportEvent(nil, nil))
+	assert.Error(t, r.reportEvent(ctx, nil))
+	assert.NoError(t, r.reportEvent(ctx, ev1))
+
+	assert.Error(t, r.reportStatus(nil, nil))
+	assert.Error(t, r.reportStatus(ctx, nil))
+	assert.NoError(t, r.reportStatus(ctx, ev2))
 
 	assert.Equal(t, collectorAddress, r.eventConnection.address)
 	assert.Equal(t, collectorAddress, r.metricConnection.address)

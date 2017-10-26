@@ -116,6 +116,10 @@ var grpcMetricMessages = make(chan []byte, 1024)
 //
 // returns	GRPC reporter object
 func grpcNewReporter() reporter {
+	if reportingDisabled {
+		return &nullReporter{}
+	}
+
 	// service key is required, so bail out if not found
 	serviceKey := os.Getenv("APPOPTICS_SERVICE_KEY")
 	if serviceKey == "" {

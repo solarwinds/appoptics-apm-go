@@ -36,13 +36,15 @@ func assertInitMessage(t *testing.T, bufs [][]byte) {
 	})
 }
 
-//func TestInitMessageUDP(t *testing.T) {
-//	var bufs [][]byte
-//	done := startTestUDPListener(t, &bufs, 2)
-//	sendInitMessage()
-//	<-done
-//	assertInitMessage(t, bufs)
-//}
+func TestInitMessageUDP(t *testing.T) {
+	assertUDPMode(t)
+
+	var bufs [][]byte
+	done := startTestUDPListener(t, &bufs, 2)
+	sendInitMessage()
+	<-done
+	assertInitMessage(t, bufs)
+}
 
 func TestOboeRateCounter(t *testing.T) {
 	b := newRateCounter(5, 2)
@@ -96,35 +98,6 @@ func TestOboeRateCounterTime(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	assert.True(t, b.consume(1)) // another token available
 }
-
-//func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) chan struct{} {
-//	done := make(chan struct{})
-//	// set up UDP listener on alternate listen address
-//	reporterAddr = "127.0.0.1:7832"
-//	_ := globalReporter()
-//	assert.IsType(t, &udpReporter{}, globalReporter())
-//
-//	addr, err := net.ResolveUDPAddr("udp4", reporterAddr)
-//	assert.NoError(t, err)
-//	conn, err := net.ListenUDP("udp4", addr)
-//	assert.NoError(t, err)
-//	go func(numBufs int) {
-//		defer conn.Close()
-//		for i := 0; i < numBufs; i++ {
-//			buf := make([]byte, 128*1024)
-//			n, _, err := conn.ReadFromUDP(buf)
-//			t.Logf("Got UDP buf len %v err %v", n, err)
-//			if err != nil {
-//				log.Printf("UDP listener got err, quitting %v", err)
-//				break
-//			}
-//			*bufs = append(*bufs, buf[0:n])
-//		}
-//		close(done)
-//		t.Logf("Closing UDP listener, got %d bufs", numBufs)
-//	}(numbufs)
-//	return done
-//}
 
 func testLayerCount(count int64) interface{} {
 	return bson.D{bson.DocElem{Name: testLayer, Value: count}}

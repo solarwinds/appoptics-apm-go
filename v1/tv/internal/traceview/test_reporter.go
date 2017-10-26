@@ -92,7 +92,7 @@ func (r *TestReporter) Close(numBufs int) {
 	}
 }
 
-func (r *TestReporter) reportEvent(ctx *oboeContext, e *event) error {
+func (r *TestReporter) report(ctx *oboeContext, e *event) error {
 	if err := prepareEvent(ctx, e); err != nil {
 		// don't continue if preparation failed
 		return err
@@ -105,6 +105,14 @@ func (r *TestReporter) reportEvent(ctx *oboeContext, e *event) error {
 	}
 	r.bufChan <- (*e).bbuf.GetBuf() // a send to a closed channel panics.
 	return nil
+}
+
+func (r *TestReporter) reportEvent(ctx *oboeContext, e *event) error {
+	return r.report(ctx, e)
+}
+
+func (r *TestReporter) reportStatus(ctx *oboeContext, e *event) error {
+	return r.report(ctx, e)
 }
 
 func (r *TestReporter) reportSpan(span *SpanMessage) error { return nil }
