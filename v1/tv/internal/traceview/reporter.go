@@ -48,6 +48,7 @@ func init() {
 		thisReporter = grpcNewReporter()
 	case "udp":
 		//TODO
+		log.Printf("UDP reporter not implemented")
 	}
 }
 

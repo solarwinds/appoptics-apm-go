@@ -12,11 +12,7 @@ import (
 
 func TestNoboe(t *testing.T) {
 	// no tracing if build tag not enabled
-	setGlobalReporter(&nullReporter{})
 	sampled, _, _ := shouldTraceRequest("test", "")
-	assert.False(t, sampled)
-	setGlobalReporter(newUDPReporter())
-	sampled, _, _ = shouldTraceRequest("test", "")
 	assert.False(t, sampled)
 
 	r := SetTestReporter()

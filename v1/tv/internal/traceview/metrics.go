@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -513,6 +514,11 @@ func getContainerId() string {
 // value	value (type: int, int64, float32, float64)
 func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{}) {
 	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
+	defer func() {
+		if err := recover(); err != nil {
+			OboeLog(ERROR, fmt.Sprintf("%v", err))
+		}
+	}()
 
 	bsonAppendString(bbuf, "name", name)
 	switch value.(type) {
@@ -520,7 +526,11 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 		bsonAppendInt(bbuf, "value", value.(int))
 	case int64:
 		bsonAppendInt64(bbuf, "value", value.(int64))
-	case float32, float64:
+	case float32:
+		v32 := value.(float32)
+		v64 := float64(v32)
+		bsonAppendFloat64(bbuf, "value", v64)
+	case float64:
 		bsonAppendFloat64(bbuf, "value", value.(float64))
 	default:
 		bsonAppendString(bbuf, "value", "unknown")
@@ -644,8 +654,18 @@ func recordMeasurement(me *measurements, name string, tags *map[string]string,
 
 	// assemble the ID for this measurement (a combination of different values)
 	id := name + "&" + strconv.FormatBool(reportValue) + "&"
+
+	// tags are part of the ID but since there's no guarantee that the map items
+	// are always iterated in the same order, we need to sort them ourselves
+	var tagsSorted []string
 	for k, v := range *tags {
-		id += k + ":" + v + "&"
+		tagsSorted = append(tagsSorted, k+":"+v)
+	}
+	sort.Strings(tagsSorted)
+
+	// tags are all sorted now, append them to the ID
+	for _, t := range tagsSorted {
+		id += t + "&"
 	}
 
 	var m *measurement
@@ -778,6 +798,7 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	}
 
 	bsonAppendFinishObject(bbuf, start)
+	*index += 1
 }
 
 func incrementNumSent(count int) {
