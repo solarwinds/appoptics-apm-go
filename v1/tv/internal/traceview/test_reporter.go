@@ -3,14 +3,10 @@
 package traceview
 
 import (
-	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
-	"google.golang.org/grpc"
 )
 
 // TestReporter appends reported events to Bufs if ShouldTrace is true.
@@ -116,56 +112,3 @@ func (r *TestReporter) reportStatus(ctx *oboeContext, e *event) error {
 }
 
 func (r *TestReporter) reportSpan(span *SpanMessage) error { return nil }
-
-type testCollectorClient struct {
-	mReq chan interface{}
-	mRes interface{}
-	err  error
-}
-
-func (t *testCollectorClient) GetReq() interface{} {
-	return t.mReq
-}
-
-func (t *testCollectorClient) SetRes(res interface{}, err error) {
-	t.mRes = res
-	t.err = err
-}
-
-func (t *testCollectorClient) PostEvents(ctx context.Context, in *collector.MessageRequest,
-	opts ...grpc.CallOption) (*collector.MessageResult, error) {
-	t.mReq <- in
-	return t.mRes.(*collector.MessageResult), t.err
-}
-
-func (t *testCollectorClient) PostMetrics(ctx context.Context, in *collector.MessageRequest,
-	opts ...grpc.CallOption) (*collector.MessageResult, error) {
-	t.mReq <- in
-	return t.mRes.(*collector.MessageResult), t.err
-}
-
-func (t *testCollectorClient) PostStatus(ctx context.Context, in *collector.MessageRequest,
-	opts ...grpc.CallOption) (*collector.MessageResult, error) {
-	t.mReq <- in
-	return t.mRes.(*collector.MessageResult), t.err
-}
-
-func (t *testCollectorClient) GetSettings(ctx context.Context, in *collector.SettingsRequest,
-	opts ...grpc.CallOption) (*collector.SettingsResult, error) {
-	t.mReq <- in
-	return t.mRes.(*collector.SettingsResult), t.err
-}
-
-func (t *testCollectorClient) Ping(ctx context.Context, in *collector.PingRequest,
-	opts ...grpc.CallOption) (*collector.MessageResult, error) {
-	t.mReq <- in
-	return t.mRes.(*collector.MessageResult), t.err
-}
-
-func newTestCollectorClient(mRes interface{}, err error) collector.TraceCollectorClient {
-	return &testCollectorClient{
-		mReq: make(chan interface{}),
-		mRes: mRes,
-		err:  err,
-	}
-}
