@@ -26,6 +26,9 @@ type TestReporter struct {
 	Timeout     time.Duration
 }
 
+var usingTestReporter = false
+var oldReporter reporter = &nullReporter{}
+
 // SetTestReporter sets and returns a test reporter that captures raw event bytes
 // for making assertions about using the graphtest package.
 func SetTestReporter(args ...interface{}) *TestReporter {
@@ -40,6 +43,13 @@ func SetTestReporter(args ...interface{}) *TestReporter {
 		bufChan:     make(chan []byte),
 	}
 	go r.resultWriter()
+
+	if _, ok := oldReporter.(*nullReporter); ok {
+		oldReporter = thisReporter
+	}
+	thisReporter = r
+	usingTestReporter = true
+
 	return r
 }
 
@@ -74,6 +84,12 @@ func (r *TestReporter) Close(numBufs int) {
 	// wait for reader goroutine to receive numBufs events, or timeout.
 	r.wg.Wait()
 	close(r.bufChan)
+
+	usingTestReporter = false
+	if _, ok := oldReporter.(*nullReporter); !ok {
+		thisReporter = oldReporter
+		oldReporter = &nullReporter{}
+	}
 }
 
 func (r *TestReporter) reportEvent(ctx *oboeContext, e *event) error {

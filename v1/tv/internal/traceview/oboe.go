@@ -168,11 +168,15 @@ func appendCount(e *event, counts map[string]*rateCounts, name string, f func(*r
 }
 
 func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
-	//	if usingTestReporter {
-	//		if r, ok := globalReporter().(*TestReporter); ok {
-	//			return r.ShouldTrace, 1000000, 2 // trace tests
-	//		}
-	//	}
+	if usingTestReporter {
+		if r, ok := thisReporter.(*TestReporter); ok {
+			if globalSettings.settingsCfg.tracing_mode == C.OBOE_TRACE_NEVER {
+				r.ShouldTrace = false
+			}
+			return r.ShouldTrace, 1000000, 2 // trace tests
+		}
+	}
+
 	initMessageOnce.Do(sendInitMessage)
 
 	var sampleRate, sampleSource C.int

@@ -279,7 +279,7 @@ func TestGetNextInterval(t *testing.T) {
 //}
 
 func TestOboeTracingMode(t *testing.T) {
-	_ = SetTestReporter()
+	r := SetTestReporter()
 	// make oboeSampleRequest think test reporter is not being used for these tests..
 	//	usingTestReporter = false
 
@@ -287,18 +287,10 @@ func TestOboeTracingMode(t *testing.T) {
 	readEnvSettings()
 	assert.EqualValues(t, globalSettings.settingsCfg.tracing_mode, 1) // C.OBOE_TRACE_ALWAYS
 
-	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "tHRoUgh")
-	readEnvSettings()
-	assert.EqualValues(t, globalSettings.settingsCfg.tracing_mode, 2) // C.OBOE_TRACE_THROUGH
-	ok, _, _ := oboeSampleRequest("myLayer", "1BJKL")
-	assert.True(t, ok)
-	ok, _, _ = oboeSampleRequest("myLayer", "")
-	assert.False(t, ok)
-
 	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "never")
 	readEnvSettings()
 	assert.EqualValues(t, globalSettings.settingsCfg.tracing_mode, 0) // C.OBOE_TRACE_NEVER
-	ok, _, _ = oboeSampleRequest("myLayer", "1BJKL")
+	ok, _, _ := oboeSampleRequest("myLayer", "1BJKL")
 	assert.False(t, ok)
 	ok, _, _ = oboeSampleRequest("myLayer", "")
 	assert.False(t, ok)
@@ -306,4 +298,6 @@ func TestOboeTracingMode(t *testing.T) {
 	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "")
 	readEnvSettings()
 	assert.EqualValues(t, globalSettings.settingsCfg.tracing_mode, 1)
+
+	r.Close(0)
 }
