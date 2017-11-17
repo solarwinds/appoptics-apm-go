@@ -5,6 +5,7 @@
 package traceview
 
 import (
+	"encoding/binary"
 	"math"
 	"os"
 	"runtime"
@@ -15,37 +16,64 @@ import (
 	"time"
 )
 
-// Global configuration settings
-const (
-	oboeTraceAlways = 0
-	oboeTraceNever  = 1
-)
-
+// Current settings configuration
+type oboeSettingsCfg struct {
+	tracingMode        tracingMode
+	sampleRate         int
+	settings           map[oboeSettingKey]*oboeSettings
+	lastAutoSampleRate int
+	lastAutoFlags      uint16
+	lastAutoTimestamp  time.Time
+	lastRefresh        time.Time
+	entryLayer         int //TODO
+	lock               sync.RWMutex
+}
 type oboeSettings struct {
-	tracingMode int
-	sync.RWMutex
-	// TODO put settings here for lookup from oboeSampleRequest
+	magic            uint32
+	timestamp        int64
+	sType            int32
+	flags            []byte
+	value            int64
+	ttl              int64
+	layer            string
+	bucketCapacity   float64
+	bucketRatePerSec float64
 }
 
-var globalSettings oboeSettings
+// The identifying keys for a setting
+type oboeSettingKey struct {
+	sType int32
+	layer string
+}
+
+type tracingMode int
+
+const (
+	TRACE_ALWAYS tracingMode = iota
+	TRACE_NEVER
+)
+
+// Global configuration settings
+var globalSettingsCfg = &oboeSettingsCfg{
+	settings: make(map[oboeSettingKey]*oboeSettings),
+}
 
 // Initialize Traceview C instrumentation library ("oboe"):
 func init() {
-	//C.oboe_init()
 	readEnvSettings()
+	sendInitMessage()
 }
 
 func readEnvSettings() {
 	// Configure tracing mode setting using environment variable
-	//C.oboe_settings_cfg_init(&globalSettings.settingsCfg)
 	mode := strings.ToLower(os.Getenv("GO_TRACEVIEW_TRACING_MODE"))
 	switch mode {
 	case "always":
 		fallthrough
 	default:
-		globalSettings.tracingMode = oboeTraceAlways
+		globalSettingsCfg.tracingMode = TRACE_ALWAYS
 	case "never":
-		globalSettings.tracingMode = oboeTraceNever
+		globalSettingsCfg.tracingMode = TRACE_NEVER
 	}
 
 	if level := os.Getenv("APPOPTICS_DEBUG_LEVEL"); level != "" {
@@ -56,8 +84,6 @@ func readEnvSettings() {
 		}
 	}
 }
-
-var initMessageOnce sync.Once
 
 const initVersion = 1
 const initLayer = "go"
@@ -161,18 +187,69 @@ func appendCount(e *event, counts map[string]*rateCounts, name string, f func(*r
 func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
 	if usingTestReporter {
 		if r, ok := thisReporter.(*TestReporter); ok {
-			if globalSettings.tracingMode == oboeTraceNever {
+			if globalSettingsCfg.tracingMode == TRACE_NEVER {
 				r.ShouldTrace = false
 			}
 			return r.ShouldTrace, 1000000, 2 // trace tests
 		}
 	}
 
-	initMessageOnce.Do(sendInitMessage)
-
+	//	var sampleRate, sampleSource C.int
+	//	cachedLayer := layerCache.Get(layer)
+	//	var cxt *C.char
+	//	if xtraceHeader == "" {
+	//		// common case, where we are the entry layer
+	//		cxt = emptyCString
+	//	} else {
+	//		// use const "in_xtrace" arg, oboe_sample_request only checks if it is non-empty
+	//		cxt = inXTraceCString
+	//	}
+	//
+	//	sample := int(C.oboe_sample_request(cachedLayer.name, cxt, &globalSettings.settingsCfg, &sampleRate, &sampleSource))
+	//	sampled := cachedLayer.counter.Count(sample != 0, xtraceHeader != "")
+	//	return sampled, int(sampleRate), int(sampleSource)
 	// TODO look up settings / make sample rate decision
-	// var sampleRate, sampleSource int
-	// sample := int(C.oboe_sample_request(cachedLayer.name, cxt, &globalSettings, &sampleRate, &sampleSource))
-	// return sampled, int(sampleRate), int(sampleSource)
 	return true, 1000000, 2
+}
+
+func updateSetting(sType int32, layer string, flags []byte, timestamp int64,
+	value int64, ttl int64, arguments *map[string][]byte) {
+	globalSettingsCfg.lock.Lock()
+	defer globalSettingsCfg.lock.Unlock()
+
+	var bucketCapacity float64
+	if c, ok := (*arguments)["BucketCapacity"]; ok {
+		bits := binary.LittleEndian.Uint64(c)
+		bucketCapacity = math.Float64frombits(bits)
+	} else {
+		bucketCapacity = 0
+	}
+	var bucketRatePerSec float64
+	if c, ok := (*arguments)["BucketRate"]; ok {
+		bits := binary.LittleEndian.Uint64(c)
+		bucketRatePerSec = math.Float64frombits(bits)
+	} else {
+		bucketRatePerSec = 0
+	}
+
+	key := oboeSettingKey{
+		sType: sType,
+		layer: layer,
+	}
+	var setting *oboeSettings
+	var ok bool
+	if setting, ok = globalSettingsCfg.settings[key]; !ok {
+		setting = &oboeSettings{
+			magic: 0x6f626f65,
+		}
+		globalSettingsCfg.settings[key] = setting
+	}
+	setting.timestamp = timestamp
+	setting.sType = sType
+	setting.flags = flags
+	setting.value = value
+	setting.ttl = ttl
+	setting.layer = layer
+	setting.bucketCapacity = bucketCapacity
+	setting.bucketRatePerSec = bucketRatePerSec
 }
