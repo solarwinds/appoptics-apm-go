@@ -29,7 +29,6 @@ func assertInitMessage(t *testing.T, bufs [][]byte) {
 		{"go", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, 1, n.Map["__Init"])
 			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
-			assert.NotEmpty(t, n.Map["Oboe.Version"])
 			assert.NotEmpty(t, n.Map["Go.Version"])
 		}},
 		{"go", "exit"}: {Edges: g.Edges{{"go", "entry"}}},

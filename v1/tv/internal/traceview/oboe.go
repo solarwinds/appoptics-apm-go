@@ -49,8 +49,8 @@ type oboeSettingKey struct {
 type tracingMode int
 
 const (
-	TRACE_ALWAYS tracingMode = iota
-	TRACE_NEVER
+	TRACE_NEVER tracingMode = iota
+	TRACE_ALWAYS
 )
 
 // Global configuration settings
