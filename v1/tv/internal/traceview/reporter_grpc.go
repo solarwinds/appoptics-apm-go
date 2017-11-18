@@ -3,7 +3,6 @@
 package traceview
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
