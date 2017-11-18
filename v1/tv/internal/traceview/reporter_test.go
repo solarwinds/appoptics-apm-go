@@ -27,6 +27,10 @@ var _ = func() (_ struct{}) {
 	return
 }()
 
+func init() {
+	periodicTasksDisabled = true
+}
+
 // dependency injection for os.Hostname and net.{ResolveUDPAddr/DialUDP}
 type failHostnamer struct{}
 

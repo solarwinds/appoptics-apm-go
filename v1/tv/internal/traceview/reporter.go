@@ -24,8 +24,10 @@ type reporter interface {
 // currently used reporter
 var thisReporter reporter = &nullReporter{}
 
-// is tracing disabled?
-var reportingDisabled bool = false
+var (
+	reportingDisabled     = false // reporting disabled due to error
+	periodicTasksDisabled = false // disable periodic tasks, for testing
+)
 
 // cached hostname and PID since they don't change (only one system call each)
 var cachedHostname string

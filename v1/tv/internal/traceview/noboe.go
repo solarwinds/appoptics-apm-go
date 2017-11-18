@@ -12,3 +12,7 @@ func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
 	}
 	return false, 0, 6
 }
+
+func updateSetting(sType int32, layer string, flags []byte, timestamp int64,
+	value int64, ttl int64, arguments *map[string][]byte) {
+}

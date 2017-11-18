@@ -198,46 +198,7 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 
 	metricsEventQueueStats.lock.Unlock()
 
-	// system load of last minute
-	if s := getStrByKeyword("/proc/loadavg", ""); s != "" {
-		load, err := strconv.ParseFloat(strings.Fields(s)[0], 64)
-		if err == nil {
-			addMetricsValue(bbuf, &index, "Load1", load)
-		}
-	}
-
-	// system total memory
-	if s := getStrByKeyword("/proc/meminfo", "MemTotal"); s != "" {
-		memTotal := strings.Fields(s) // MemTotal: 7657668 kB
-		if len(memTotal) == 3 {
-			if total, err := strconv.Atoi(memTotal[1]); err == nil {
-				addMetricsValue(bbuf, &index, "TotalRAM", total*1024)
-			}
-		}
-	}
-
-	// free memory
-	if s := getStrByKeyword("/proc/meminfo", "MemFree"); s != "" {
-		memFree := strings.Fields(s) // MemFree: 161396 kB
-		if len(memFree) == 3 {
-			if free, err := strconv.Atoi(memFree[1]); err == nil {
-				addMetricsValue(bbuf, &index, "FreeRAM", free*1024) // bytes
-			}
-		}
-	}
-
-	// process memory
-	if s := getStrByKeyword("/proc/self/statm", ""); s != "" {
-		processRAM := strings.Fields(s)
-		if len(processRAM) != 0 {
-			for _, ps := range processRAM {
-				if p, err := strconv.Atoi(ps); err == nil {
-					addMetricsValue(bbuf, &index, "ProcessRAM", p*os.Getpagesize())
-					break
-				}
-			}
-		}
-	}
+	addHostMetrics(bbuf, &index)
 
 	// runtime stats
 	addMetricsValue(bbuf, &index, "JMX.type=threadcount,name=NumGoroutine", runtime.NumGoroutine())
@@ -353,11 +314,9 @@ func appendIPAddresses(bbuf *bsonBuffer) {
 		return
 	}
 
-	i := 0
 	start := bsonAppendStartArray(bbuf, "IPAddresses")
-	for _, address := range addrs {
+	for i, address := range addrs {
 		bsonAppendString(bbuf, strconv.Itoa(i), address)
-		i++
 	}
 	bsonAppendFinishObject(bbuf, start)
 }

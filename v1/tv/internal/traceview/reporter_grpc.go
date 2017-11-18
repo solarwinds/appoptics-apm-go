@@ -193,7 +193,9 @@ func grpcNewReporter() reporter {
 
 	// start up long-running goroutine periodicTasks() which kicks off periodic tasks like
 	// collectMetrics() and getSettings()
-	go reporter.periodicTasks()
+	if !periodicTasksDisabled {
+		go reporter.periodicTasks()
+	}
 
 	// start up long-running goroutine spanMessageAggregator() which listens on the span message
 	// channel and processes incoming span messages
