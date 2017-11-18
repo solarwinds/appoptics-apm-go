@@ -433,55 +433,47 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	assert.True(t, m["Timestamp_u"].(int64) > 1509053785684891)
 	assert.Equal(t, 15, m["MetricsFlushInterval"])
 
-	me := m["measurements"].([]interface{})
+	mts := m["measurements"].([]interface{})
 
-	type rec struct {
-		i int
-		n string
-		t interface{}
+	type testCase struct {
+		name  string
+		value interface{}
 	}
-	var test = []rec{
-		rec{0, "NumSent", int64(1)},
-		rec{1, "NumOverflowed", int64(1)},
-		rec{2, "NumFailed", int64(1)},
-		rec{3, "TotalEvents", int64(1)},
-		rec{4, "QueueLargest", int64(1)},
-
-		rec{5, "Load1", float64(1)},
-
-		rec{6, "TotalRAM", int64(1)},
-		rec{7, "FreeRAM", int64(1)},
-		rec{8, "ProcessRAM", int(1)},
-
-		rec{9, "JMX.type=threadcount,name=NumGoroutine", int(1)},
-		rec{10, "JMX.Memory:MemStats.Alloc", int64(1)},
-		rec{11, "JMX.Memory:MemStats.TotalAlloc", int64(1)},
-		rec{12, "JMX.Memory:MemStats.Sys", int64(1)},
-		rec{13, "JMX.Memory:type=count,name=MemStats.Lookups", int64(1)},
-		rec{14, "JMX.Memory:type=count,name=MemStats.Mallocs", int64(1)},
-		rec{15, "JMX.Memory:type=count,name=MemStats.Frees", int64(1)},
-		rec{16, "JMX.Memory:MemStats.Heap.Alloc", int64(1)},
-		rec{17, "JMX.Memory:MemStats.Heap.Sys", int64(1)},
-		rec{18, "JMX.Memory:MemStats.Heap.Idle", int64(1)},
-		rec{19, "JMX.Memory:MemStats.Heap.Inuse", int64(1)},
-		rec{20, "JMX.Memory:MemStats.Heap.Released", int64(1)},
-		rec{21, "JMX.Memory:type=count,name=MemStats.Heap.Objects", int64(1)},
-		rec{22, "JMX.type=count,name=GCStats.NumGC", int64(1)},
+	testCases := []testCase{
+		{"NumSent", int64(1)},
+		{"NumOverflowed", int64(1)},
+		{"NumFailed", int64(1)},
+		{"TotalEvents", int64(1)},
+		{"QueueLargest", int64(1)},
 	}
+	if runtime.GOOS == "linux" {
+		testCases = append(testCases, []testCase{
+			{"Load1", float64(1)},
+			{"TotalRAM", int64(1)},
+			{"FreeRAM", int64(1)},
+			{"ProcessRAM", int(1)},
+		}...)
+	}
+	testCases = append(testCases, []testCase{
+		{"JMX.type=threadcount,name=NumGoroutine", int(1)},
+		{"JMX.Memory:MemStats.Alloc", int64(1)},
+		{"JMX.Memory:MemStats.TotalAlloc", int64(1)},
+		{"JMX.Memory:MemStats.Sys", int64(1)},
+		{"JMX.Memory:type=count,name=MemStats.Lookups", int64(1)},
+		{"JMX.Memory:type=count,name=MemStats.Mallocs", int64(1)},
+		{"JMX.Memory:type=count,name=MemStats.Frees", int64(1)},
+		{"JMX.Memory:MemStats.Heap.Alloc", int64(1)},
+		{"JMX.Memory:MemStats.Heap.Sys", int64(1)},
+		{"JMX.Memory:MemStats.Heap.Idle", int64(1)},
+		{"JMX.Memory:MemStats.Heap.Inuse", int64(1)},
+		{"JMX.Memory:MemStats.Heap.Released", int64(1)},
+		{"JMX.Memory:type=count,name=MemStats.Heap.Objects", int64(1)},
+		{"JMX.type=count,name=GCStats.NumGC", int64(1)},
+	}...)
 
-	for _, a := range test {
-		assert.Equal(t, a.n, me[a.i].(map[string]interface{})["name"])
-
-		switch a.t.(type) {
-		case int64:
-			assert.True(t, me[a.i].(map[string]interface{})["value"].(int64) >= 0, a.n)
-		case int:
-			assert.True(t, me[a.i].(map[string]interface{})["value"].(int) >= 0, a.n)
-		case float64:
-			assert.True(t, me[a.i].(map[string]interface{})["value"].(float64) >= 0, a.n)
-		default:
-			t.Fatal("Unknown type for record", a.i)
-		}
+	for i, tc := range testCases {
+		assert.Equal(t, tc.name, mts[i].(map[string]interface{})["name"])
+		assert.IsType(t, mts[i].(map[string]interface{})["value"], tc.value)
 	}
 
 	assert.Nil(t, m["TransactionNameOverflow"])
