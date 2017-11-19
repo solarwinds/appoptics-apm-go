@@ -54,31 +54,6 @@ func TestDistro(t *testing.T) {
 	}
 }
 
-func TestAppendUname(t *testing.T) {
-	// bbuf := NewBsonBuffer()
-	// appendUname(bbuf)
-	// bsonBufferFinish(bbuf)
-	// m := bsonToMap(bbuf)
-
-	// var sysname, version string
-
-	// if runtime.GOOS == "linux" {
-	// 	var uname syscall.Utsname
-	// 	if err := syscall.Uname(&uname); err == nil {
-	// 		sysname = Byte2String(uname.Sysname[:])
-	// 		version = Byte2String(uname.Version[:])
-	// 		sysname = strings.TrimRight(sysname, "\x00")
-	// 		version = strings.TrimRight(version, "\x00")
-	// 	}
-
-	// 	assert.Equal(t, sysname, m["UnameSysName"])
-	// 	assert.Equal(t, version, m["UnameVersion"])
-	// } else {
-	// 	assert.Nil(t, m["UnameSysName"])
-	// 	assert.Nil(t, m["UnameVersion"])
-	// }
-}
-
 func TestAppendIPAddresses(t *testing.T) {
 	bbuf := NewBsonBuffer()
 	appendIPAddresses(bbuf)
