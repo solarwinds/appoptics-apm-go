@@ -18,7 +18,7 @@ import (
 
 	"github.com/librato/go-traceview/v1/tv/internal/hdrhist"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/net/context"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -152,6 +152,9 @@ func TestGetAWSMetadata(t *testing.T) {
 	})
 
 	addr := "localhost:8880"
+	ln, err := net.Listen("tcp", addr)
+	require.NoError(t, err)
+
 	s := &http.Server{Addr: addr, Handler: sm}
 	// change EC2 MD URLs
 	origIsEC2 := cachedIsEC2Instance
@@ -159,9 +162,9 @@ func TestGetAWSMetadata(t *testing.T) {
 	cachedIsEC2Instance = &True
 	ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, "169.254.169.254", addr, 1)
 	ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, "169.254.169.254", addr, 1)
-	go s.ListenAndServe()
+	go s.Serve(ln)
 	defer func() { // restore old URLs
-		s.Shutdown(context.TODO())
+		ln.Close()
 		ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, addr, "169.254.169.254", 1)
 		ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, addr, "169.254.169.254", 1)
 		cachedIsEC2Instance = origIsEC2
