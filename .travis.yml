@@ -36,5 +36,4 @@ script:
   - gocovmerge cov.out covtv.out internal/traceview/cov.out internal/traceview/covtv.out ottv/cov.out ottv/covtv.out > coverage.txt
 
 after_success:
-  - bash <(curl -s https://codecov.io/bash)
-#  - travis_retry $GOPATH/bin/goveralls -coverprofile=coverage.txt -service=travis-ci -repotoken $COVERALLS_TOKEN
+  - if [[ $TRAVIS_GO_VERSION == 1.9* ]]; then bash <(curl -s https://codecov.io/bash); fi
