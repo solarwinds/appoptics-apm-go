@@ -1,64 +1,89 @@
-// +build traceview
+// +build !disable_tracing
 
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 
 package traceview
 
-/*
-#cgo LDFLAGS: -loboe
-#include <stdlib.h>
-#include <oboe/oboe.h>
-*/
-import "C"
 import (
+	"encoding/binary"
 	"math"
 	"os"
 	"runtime"
-	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// Global configuration settings
-type oboeSettings struct{ settingsCfg C.oboe_settings_cfg_t }
+// Current settings configuration
+type oboeSettingsCfg struct {
+	tracingMode        tracingMode
+	sampleRate         int
+	settings           map[oboeSettingKey]*oboeSettings
+	lastAutoSampleRate int
+	lastAutoFlags      uint16
+	lastAutoTimestamp  time.Time
+	lastRefresh        time.Time
+	entryLayer         int //TODO
+	lock               sync.RWMutex
+}
+type oboeSettings struct {
+	magic            uint32
+	timestamp        int64
+	sType            int32
+	flags            []byte
+	value            int64
+	ttl              int64
+	layer            string
+	bucketCapacity   float64
+	bucketRatePerSec float64
+}
 
-var globalSettings oboeSettings
-var emptyCString, inXTraceCString *C.char
-var oboeVersion string
-var layerCache *cStringCache
+// The identifying keys for a setting
+type oboeSettingKey struct {
+	sType int32
+	layer string
+}
+
+type tracingMode int
+
+const (
+	TRACE_NEVER tracingMode = iota
+	TRACE_ALWAYS
+)
+
+// Global configuration settings
+var globalSettingsCfg = &oboeSettingsCfg{
+	settings: make(map[oboeSettingKey]*oboeSettings),
+}
 
 // Initialize Traceview C instrumentation library ("oboe"):
 func init() {
-	C.oboe_init()
-	_ := globalReporter()
 	readEnvSettings()
-
-	// To save on malloc/free, preallocate empty & "non-empty" CStrings
-	emptyCString = C.CString("")
-	inXTraceCString = C.CString("in_xtrace")
-	oboeVersion = C.GoString(C.oboe_config_get_version_string())
-	layerCache = newCStringCache()
+	sendInitMessage()
 }
 
 func readEnvSettings() {
 	// Configure tracing mode setting using environment variable
-	C.oboe_settings_cfg_init(&globalSettings.settingsCfg)
 	mode := strings.ToLower(os.Getenv("GO_TRACEVIEW_TRACING_MODE"))
 	switch mode {
 	case "always":
 		fallthrough
 	default:
-		globalSettings.settingsCfg.tracing_mode = C.OBOE_TRACE_ALWAYS
-	case "through":
-		globalSettings.settingsCfg.tracing_mode = C.OBOE_TRACE_THROUGH
+		globalSettingsCfg.tracingMode = TRACE_ALWAYS
 	case "never":
-		globalSettings.settingsCfg.tracing_mode = C.OBOE_TRACE_NEVER
+		globalSettingsCfg.tracingMode = TRACE_NEVER
+	}
+
+	if level := os.Getenv("APPOPTICS_DEBUG_LEVEL"); level != "" {
+		if i, err := strconv.Atoi(level); err == nil {
+			debugLevel = DebugLevel(i)
+		} else {
+			OboeLog(WARNING, "The debug level should be an integer.")
+		}
 	}
 }
-
-var initMessageOnce sync.Once
 
 const initVersion = 1
 const initLayer = "go"
@@ -70,12 +95,8 @@ func sendInitMessage() {
 			"__Init", 1,
 			"Go.Version", runtime.Version(),
 			"Go.Oboe.Version", initVersion,
-			"Oboe.Version", oboeVersion,
 		)
 		c.ReportEvent(LabelExit, initLayer)
-	}
-	if !disableMetrics {
-		go sendMetrics(globalReporter())
 	}
 }
 
@@ -152,74 +173,6 @@ func getNextInterval(now time.Time) time.Duration {
 			time.Duration(now.Nanosecond())*time.Nanosecond)
 }
 
-var stopMetrics = make(chan struct{})
-var disableMetrics bool
-
-func sendMetrics(r reporter) {
-	for {
-		select {
-		case <-stopMetrics:
-			break
-		case <-time.After(getNextInterval(time.Now())):
-			sendMetricsMessage(r)
-		}
-	}
-}
-
-var metricsLayerName = "JMX"
-var metricsPrefix = metricsLayerName + "."
-
-func sendMetricsMessage(r reporter) {
-	ctx, ok := newContext().(*oboeContext)
-	if !ok {
-		return
-	}
-	ev, err := ctx.newEvent(LabelEntry, metricsLayerName)
-	if err != nil {
-		return
-	}
-	// runtime metricsConn
-	ev.AddString("ProcessName", initLayer)
-	ev.AddInt64(metricsPrefix+"type=threadcount,name=NumGoroutine", int64(runtime.NumGoroutine()))
-
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Alloc", int64(mem.Alloc))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.TotalAlloc", int64(mem.TotalAlloc))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Sys", int64(mem.Sys))
-	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Lookups", int64(mem.Lookups))
-	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Mallocs", int64(mem.Mallocs))
-	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Frees", int64(mem.Frees))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Alloc", int64(mem.HeapAlloc))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Sys", int64(mem.HeapSys))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Idle", int64(mem.HeapIdle))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Inuse", int64(mem.HeapInuse))
-	ev.AddInt64(metricsPrefix+"Memory:MemStats.Heap.Released", int64(mem.HeapReleased))
-	ev.AddInt64(metricsPrefix+"Memory:type=count,name=MemStats.Heap.Objects", int64(mem.HeapObjects))
-
-	var gc debug.GCStats
-	debug.ReadGCStats(&gc)
-	ev.AddInt64(metricsPrefix+"type=count,name=GCStats.NumGC", gc.NumGC)
-
-	// layer counts
-	counts := make(map[string]*rateCounts)
-	if layerCache != nil {
-		for _, layer := range layerCache.Keys() {
-			if i := layerCache.Has(layer); i != nil && i.counter != nil {
-				counts[layer] = i.counter.Flush()
-			}
-		}
-	}
-	appendCount(ev, counts, "RequestCount", func(c *rateCounts) int64 { return c.requested })
-	appendCount(ev, counts, "TraceCount", func(c *rateCounts) int64 { return c.traced })
-	appendCount(ev, counts, "TokenBucketExhaustionCount", func(c *rateCounts) int64 { return c.limited })
-	appendCount(ev, counts, "SampleCount", func(c *rateCounts) int64 { return c.sampled })
-	appendCount(ev, counts, "ThroughCount", func(c *rateCounts) int64 { return c.through })
-
-	ev.ReportUsing(ctx, r)
-	ctx.ReportEvent(LabelExit, metricsLayerName)
-}
-
 func appendCount(e *event, counts map[string]*rateCounts, name string, f func(*rateCounts) int64) {
 	if len(counts) == 0 {
 		return
@@ -233,24 +186,70 @@ func appendCount(e *event, counts map[string]*rateCounts, name string, f func(*r
 
 func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
 	if usingTestReporter {
-		if r, ok := globalReporter().(*TestReporter); ok {
+		if r, ok := thisReporter.(*TestReporter); ok {
+			if globalSettingsCfg.tracingMode == TRACE_NEVER {
+				r.ShouldTrace = false
+			}
 			return r.ShouldTrace, 1000000, 2 // trace tests
 		}
 	}
-	initMessageOnce.Do(sendInitMessage)
 
-	var sampleRate, sampleSource C.int
-	cachedLayer := layerCache.Get(layer)
-	var cxt *C.char
-	if xtraceHeader == "" {
-		// common case, where we are the entry layer
-		cxt = emptyCString
+	//	var sampleRate, sampleSource C.int
+	//	cachedLayer := layerCache.Get(layer)
+	//	var cxt *C.char
+	//	if xtraceHeader == "" {
+	//		// common case, where we are the entry layer
+	//		cxt = emptyCString
+	//	} else {
+	//		// use const "in_xtrace" arg, oboe_sample_request only checks if it is non-empty
+	//		cxt = inXTraceCString
+	//	}
+	//
+	//	sample := int(C.oboe_sample_request(cachedLayer.name, cxt, &globalSettings.settingsCfg, &sampleRate, &sampleSource))
+	//	sampled := cachedLayer.counter.Count(sample != 0, xtraceHeader != "")
+	//	return sampled, int(sampleRate), int(sampleSource)
+	// TODO look up settings / make sample rate decision
+	return true, 1000000, 2
+}
+
+func updateSetting(sType int32, layer string, flags []byte, timestamp int64,
+	value int64, ttl int64, arguments *map[string][]byte) {
+	globalSettingsCfg.lock.Lock()
+	defer globalSettingsCfg.lock.Unlock()
+
+	var bucketCapacity float64
+	if c, ok := (*arguments)["BucketCapacity"]; ok {
+		bits := binary.LittleEndian.Uint64(c)
+		bucketCapacity = math.Float64frombits(bits)
 	} else {
-		// use const "in_xtrace" arg, oboe_sample_request only checks if it is non-empty
-		cxt = inXTraceCString
+		bucketCapacity = 0
+	}
+	var bucketRatePerSec float64
+	if c, ok := (*arguments)["BucketRate"]; ok {
+		bits := binary.LittleEndian.Uint64(c)
+		bucketRatePerSec = math.Float64frombits(bits)
+	} else {
+		bucketRatePerSec = 0
 	}
 
-	sample := int(C.oboe_sample_request(cachedLayer.name, cxt, &globalSettings.settingsCfg, &sampleRate, &sampleSource))
-	sampled := cachedLayer.counter.Count(sample != 0, xtraceHeader != "")
-	return sampled, int(sampleRate), int(sampleSource)
+	key := oboeSettingKey{
+		sType: sType,
+		layer: layer,
+	}
+	var setting *oboeSettings
+	var ok bool
+	if setting, ok = globalSettingsCfg.settings[key]; !ok {
+		setting = &oboeSettings{
+			magic: 0x6f626f65,
+		}
+		globalSettingsCfg.settings[key] = setting
+	}
+	setting.timestamp = timestamp
+	setting.sType = sType
+	setting.flags = flags
+	setting.value = value
+	setting.ttl = ttl
+	setting.layer = layer
+	setting.bucketCapacity = bucketCapacity
+	setting.bucketRatePerSec = bucketRatePerSec
 }

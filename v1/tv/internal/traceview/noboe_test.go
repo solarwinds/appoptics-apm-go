@@ -1,4 +1,4 @@
-// +build !traceview
+// +build disable_tracing
 
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 
@@ -12,11 +12,7 @@ import (
 
 func TestNoboe(t *testing.T) {
 	// no tracing if build tag not enabled
-	setGlobalReporter(&nullReporter{})
 	sampled, _, _ := shouldTraceRequest("test", "")
-	assert.False(t, sampled)
-	setGlobalReporter(newUDPReporter())
-	sampled, _, _ = shouldTraceRequest("test", "")
 	assert.False(t, sampled)
 
 	r := SetTestReporter()

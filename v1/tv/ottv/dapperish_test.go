@@ -10,15 +10,16 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 
+	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
+	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
-	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 	"golang.org/x/net/context"
 )
 
@@ -31,7 +32,7 @@ const (
 	testBaggageVal = "BaggageUser"
 )
 
-func client(t *testing.T, port int) {
+func client(t *testing.T, port int, wg *sync.WaitGroup) {
 	span := opentracing.StartSpan("getInput")
 	ctx := opentracing.ContextWithSpan(context.Background(), span)
 	// Make sure that global baggage propagation works.
@@ -55,6 +56,7 @@ func client(t *testing.T, port int) {
 	}
 
 	span.Finish()
+	wg.Done() // signal to TestReporter that reporting is done
 }
 
 func server(t *testing.T, list net.Listener) {
@@ -93,9 +95,12 @@ func TestTracer(t *testing.T) {
 	assert.NoError(t, err)
 	port := ln.Addr().(*net.TCPAddr).Port
 
+	var wg sync.WaitGroup
 	go server(t, ln)
-	go client(t, port)
+	wg.Add(1)
+	go client(t, port, &wg)
 
+	wg.Wait()
 	r.Close(4)
 	g.AssertGraph(t, r.Bufs, 4, g.AssertNodeMap{
 		{"getInput", "entry"}: {},

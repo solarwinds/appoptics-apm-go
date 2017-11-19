@@ -4,13 +4,28 @@ package traceview
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
+
+	"gopkg.in/mgo.v2/bson"
 )
+
+// for testing only
+
+func printBson(message []byte) {
+	m := make(map[string]interface{})
+	bson.Unmarshal(message, m)
+	b, _ := json.MarshalIndent(m, "", "  ")
+	fmt.Println(time.Now().Format("15:04:05"), string(b))
+}
+
+///////////////////////
 
 type DebugLevel uint8
 
@@ -28,6 +43,9 @@ var dbgLevels = map[DebugLevel]string{
 	ERROR:   "ERROR",
 }
 
+var debugLevel DebugLevel = ERROR
+var debugLog bool = true
+
 // OboeLog print logs based on the debug level.
 func OboeLog(level DebugLevel, msg string, args ...interface{}) {
 	if !debugLog || level < debugLevel {
@@ -37,7 +55,7 @@ func OboeLog(level DebugLevel, msg string, args ...interface{}) {
 	pc, f, l, ok := runtime.Caller(1)
 	if ok {
 		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
-		name := path[len(path) - 1]
+		name := path[len(path)-1]
 		p = fmt.Sprintf("%s %s#%d %s(): ", dbgLevels[level], filepath.Base(f), l, name)
 	} else {
 		p = fmt.Sprintf("%s %s#%s %s(): ", level, "na", "na", "na")
@@ -88,4 +106,42 @@ func getStrByKeywordFiles(pathes []string, keyword string) (path string, line st
 		}
 	}
 	return "", ""
+}
+
+func Min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+func Max(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
+}
+
+func Byte2String(bs []int8) string {
+	b := make([]byte, len(bs))
+	for i, v := range bs {
+		b[i] = byte(v)
+	}
+	return string(b)
+}
+
+type hostnamer interface {
+	Hostname() (name string, err error)
+}
+type osHostnamer struct{}
+
+func (h osHostnamer) Hostname() (string, error) { return os.Hostname() }
+
+func copyMap(from *map[string]string) map[string]string {
+	to := make(map[string]string)
+	for k, v := range *from {
+		to[k] = v
+	}
+
+	return to
 }

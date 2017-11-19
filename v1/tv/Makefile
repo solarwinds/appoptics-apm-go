@@ -9,11 +9,11 @@ test_args=-race
 test: export TRACEVIEW_DEBUG=1
 test:
 	go test $(test_args) $(cov_args) -v $(cov_out)
-	go test $(test_args) $(cov_args) -v $(covtv_out) -tags traceview
+	go test $(test_args) $(cov_args) -v $(covtv_out) -tags disable_tracing
 	cd internal/traceview && go test $(test_args) $(cov_args) $(cov_out) -v
-	cd internal/traceview && go test $(test_args) $(cov_args) $(covtv_out) -v -tags tracevie
+	cd internal/traceview && go test $(test_args) $(cov_args) $(covtv_out) -v -tags disable_tracing
 	cd ottv && go test $(test_args) $(cov_args) $(cov_out) -v
-	cd ottv && go test $(test_args) $(cov_args) $(covtv_out) -v -tags traceview
+	cd ottv && go test $(test_args) $(cov_args) $(covtv_out) -v -tags disable_tracing
 
 $(cov_merge): test $(cov_files)
 	gocovmerge $(cov_files) > $(cov_merge)

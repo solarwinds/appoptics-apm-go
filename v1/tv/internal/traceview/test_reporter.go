@@ -1,4 +1,4 @@
-// Copyright (C) 2016 Librato, Inc. All rights reserved.
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
 
 package traceview
 
@@ -7,11 +7,23 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 )
+
+// TestReporter appends reported events to Bufs if ShouldTrace is true.
+type TestReporter struct {
+	Bufs        [][]byte
+	ShouldTrace bool
+	ShouldError bool
+	ErrorEvents map[int]bool // whether to drop an event
+	eventCount  int64
+	done        chan int
+	wg          sync.WaitGroup
+	bufChan     chan []byte
+	Timeout     time.Duration
+}
+
+var usingTestReporter = false
+var oldReporter reporter = &nullReporter{}
 
 // SetTestReporter sets and returns a test reporter that captures raw event bytes
 // for making assertions about using the graphtest package.
@@ -26,24 +38,15 @@ func SetTestReporter(args ...interface{}) *TestReporter {
 		done:        make(chan int),
 		bufChan:     make(chan []byte),
 	}
-	_ = globalReporter() // XXX workaround for initReporter setting nullReporter
-	setGlobalReporter(r)
-	usingTestReporter = true
 	go r.resultWriter()
-	return r
-}
 
-// TestReporter appends reported events to Bufs if ShouldTrace is true.
-type TestReporter struct {
-	Bufs        [][]byte
-	ShouldTrace bool
-	ShouldError bool
-	ErrorEvents map[int]bool // whether to drop an event
-	eventCount  int64
-	done        chan int
-	wg          sync.WaitGroup
-	bufChan     chan []byte
-	Timeout     time.Duration
+	if _, ok := oldReporter.(*nullReporter); ok {
+		oldReporter = thisReporter
+	}
+	thisReporter = r
+	usingTestReporter = true
+
+	return r
 }
 
 func (r *TestReporter) resultWriter() {
@@ -77,80 +80,35 @@ func (r *TestReporter) Close(numBufs int) {
 	// wait for reader goroutine to receive numBufs events, or timeout.
 	r.wg.Wait()
 	close(r.bufChan)
+
+	usingTestReporter = false
+	if _, ok := oldReporter.(*nullReporter); !ok {
+		thisReporter = oldReporter
+		oldReporter = &nullReporter{}
+	}
 }
 
-// WritePacket appends buf to Bufs; if TestReporter.Close() was called it will panic.
-func (r *TestReporter) WritePacket(buf []byte) (int, error) {
+func (r *TestReporter) report(ctx *oboeContext, e *event) error {
+	if err := prepareEvent(ctx, e); err != nil {
+		// don't continue if preparation failed
+		return err
+	}
+
 	atomic.AddInt64(&r.eventCount, 1)
 	if r.ShouldError || // error all events
 		(r.ErrorEvents != nil && r.ErrorEvents[(int(r.eventCount)-1)]) { // error certain specified events
-		return 0, errors.New("TestReporter error")
+		return errors.New("TestReporter error")
 	}
-	r.bufChan <- buf // a send to a closed channel panics.
-	return len(buf), nil
+	r.bufChan <- (*e).bbuf.GetBuf() // a send to a closed channel panics.
+	return nil
 }
 
-// IsOpen is always true.
-func (r *TestReporter) IsOpen() bool { return true }
-
-func (r *TestReporter) IsMetricsConnOpen() bool { return true }
-
-// PushMetricsRecord is invoked by a trace to push the mAgg record
-func (r *TestReporter) PushMetricsRecord(record MetricsRecord) bool { return true } // TODO: process metrics record
-
-// SetGRPCTestReporter sets and returns a gRPC test reporter that captures raw event bytes
-// for making assertions about using the graphtest package.
-func SetGRPCTestReporter() reporter {
-	r := newGRPCReporterWithConfig(newTestCollectorClient(nil, nil), newDefaultSettings(),
-		newTestCollectorClient(nil, nil), "127.0.0.1:1234", "", "test-key:Go")
-	setGlobalReporter(r)
-	usingTestReporter = true
-	return r
+func (r *TestReporter) reportEvent(ctx *oboeContext, e *event) error {
+	return r.report(ctx, e)
 }
 
-type testCollectorClient struct {
-	mReq chan interface{}
-	mRes interface{}
-	err  error
+func (r *TestReporter) reportStatus(ctx *oboeContext, e *event) error {
+	return r.report(ctx, e)
 }
 
-func (t *testCollectorClient) GetReq() interface{} {
-	return t.mReq
-}
-
-func (t *testCollectorClient) SetRes(res interface{}, err error) {
-	t.mRes = res
-	t.err = err
-}
-
-func (t *testCollectorClient) PostEvents(ctx context.Context, in *collector.MessageRequest,
-	opts ...grpc.CallOption) (*collector.MessageResult, error) {
-	t.mReq <- in
-	return t.mRes.(*collector.MessageResult), t.err
-}
-
-func (t *testCollectorClient) PostMetrics(ctx context.Context, in *collector.MessageRequest,
-	opts ...grpc.CallOption) (*collector.MessageResult, error) {
-	t.mReq <- in
-	return t.mRes.(*collector.MessageResult), t.err
-}
-
-func (t *testCollectorClient) PostStatus(ctx context.Context, in *collector.MessageRequest,
-	opts ...grpc.CallOption) (*collector.MessageResult, error) {
-	t.mReq <- in
-	return t.mRes.(*collector.MessageResult), t.err
-}
-
-func (t *testCollectorClient) GetSettings(ctx context.Context, in *collector.SettingsRequest,
-	opts ...grpc.CallOption) (*collector.SettingsResult, error) {
-	t.mReq <- in
-	return t.mRes.(*collector.SettingsResult), t.err
-}
-
-func newTestCollectorClient(mRes interface{}, err error) collector.TraceCollectorClient {
-	return &testCollectorClient{
-		mReq: make(chan interface{}),
-		mRes: mRes,
-		err:  err,
-	}
-}
+func (r *TestReporter) reportSpan(span *SpanMessage) error { return nil }
