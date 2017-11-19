@@ -4,9 +4,11 @@ package traceview
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"math"
 	"net"
+	"net/http"
 	"os"
 	"regexp"
 	"runtime"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/librato/go-traceview/v1/tv/internal/hdrhist"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/net/context"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -139,26 +142,40 @@ func TestAppendMACAddresses(t *testing.T) {
 	}
 }
 
-func TestGetAWSInstanceID(t *testing.T) {
+func TestGetAWSMetadata(t *testing.T) {
+	sm := http.NewServeMux()
+	sm.HandleFunc("/latest/meta-data/instance-id", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "i-12345678")
+	})
+	sm.HandleFunc("/latest/meta-data/placement/availability-zone", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "us-east-7")
+	})
+
+	addr := "localhost:8880"
+	s := &http.Server{Addr: addr, Handler: sm}
+	// change EC2 MD URLs
+	origIsEC2 := cachedIsEC2Instance
+	True := true
+	cachedIsEC2Instance = &True
+	ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, "169.254.169.254", addr, 1)
+	ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, "169.254.169.254", addr, 1)
+	go s.ListenAndServe()
+	defer func() { // restore old URLs
+		s.Shutdown(context.TODO())
+		ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, addr, "169.254.169.254", 1)
+		ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, addr, "169.254.169.254", 1)
+		cachedIsEC2Instance = origIsEC2
+	}()
+	time.Sleep(50 * time.Millisecond)
+
 	id := getAWSInstanceID()
-	if isEC2Instance() {
-		assert.NotEmpty(t, id)
-	} else {
-		assert.Empty(t, id)
-	}
-}
-
-func TestGetAWSInstanceZone(t *testing.T) {
+	assert.Equal(t, id, "i-12345678")
 	zone := getAWSInstanceZone()
-	if isEC2Instance() {
-		assert.NotEmpty(t, zone)
-	} else {
-		assert.Empty(t, zone)
-	}
+	assert.Equal(t, zone, "us-east-7")
 }
 
-func TestGetContainerId(t *testing.T) {
-	id := getContainerId()
+func TestGetContainerID(t *testing.T) {
+	id := getContainerID()
 	if getLineByKeyword("/proc/self/cgroup", "docker") != "" {
 		assert.NotEmpty(t, id)
 		assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]+$`), id)

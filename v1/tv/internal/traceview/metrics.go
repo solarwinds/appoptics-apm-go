@@ -30,14 +30,18 @@ const (
 	SLACKWARE = "/etc/slackware-version"
 	GENTOO    = "/etc/gentoo-release"
 	OTHER     = "/etc/issue"
-)
 
-const (
 	metricsTransactionsMaxDefault = 200 // default max amount of transaction names we allow per cycle
 	metricsHistPrecisionDefault   = 2   // default histogram precision
 
 	metricsTagNameLenghtMax  = 64  // max number of characters for tag names
 	metricsTagValueLenghtMax = 255 // max number of characters for tag values
+)
+
+// EC2 Metadata URLs, overridable for testing
+var (
+	ec2MetadataInstanceIDURL = "http://169.254.169.254/latest/meta-data/instance-id"
+	ec2MetadataZoneURL       = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
 )
 
 // defines a span message
@@ -103,11 +107,14 @@ type eventQueueStats struct {
 	lock          sync.Mutex // protect access to the counters
 }
 
-var cachedDistro string                     // cached distribution name
-var cachedMACAddresses = "uninitialized"    // cached list MAC addresses
-var cachedAWSInstanceId = "uninitialized"   // cached EC2 instance ID (if applicable)
-var cachedAWSInstanceZone = "uninitialized" // cached EC2 instance zone (if applicable)
-var cachedContainerID = "uninitialized"     // cached docker container ID (if applicable)
+var (
+	cachedDistro          string            // cached distribution name
+	cachedMACAddresses    = "uninitialized" // cached list MAC addresses
+	cachedIsEC2Instance   *bool             // cached EC2 instance check
+	cachedAWSInstanceID   = "uninitialized" // cached EC2 instance ID (if applicable)
+	cachedAWSInstanceZone = "uninitialized" // cached EC2 instance zone (if applicable)
+	cachedContainerID     = "uninitialized" // cached docker container ID (if applicable)
+)
 
 // list of currently stored unique HTTP transaction names (flushed on each metrics report cycle)
 var metricsHTTPTransactions = make(map[string]bool)
@@ -167,8 +174,8 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 	if getAWSInstanceZone() != "" {
 		bsonAppendString(bbuf, "EC2AvailabilityZone", getAWSInstanceZone())
 	}
-	if getContainerId() != "" {
-		bsonAppendString(bbuf, "DockerContainerID", getContainerId())
+	if getContainerID() != "" {
+		bsonAppendString(bbuf, "DockerContainerID", getContainerID())
 	}
 
 	bsonAppendInt64(bbuf, "Timestamp_u", int64(time.Now().UnixNano()/1000))
@@ -377,25 +384,24 @@ func getMACAddressList() string {
 
 // gets the AWS instance ID (or empty string if not an AWS instance)
 func getAWSInstanceID() string {
-	if cachedAWSInstanceId != "uninitialized" {
-		return cachedAWSInstanceId
+	if cachedAWSInstanceID != "uninitialized" {
+		return cachedAWSInstanceID
 	}
 
-	cachedAWSInstanceId = ""
+	cachedAWSInstanceID = ""
 	if isEC2Instance() {
-		url := "http://169.254.169.254/latest/meta-data/instance-id"
 		client := http.Client{Timeout: time.Second}
-		resp, err := client.Get(url)
+		resp, err := client.Get(ec2MetadataInstanceIDURL)
 		if err == nil {
 			defer resp.Body.Close()
 			body, err := ioutil.ReadAll(resp.Body)
 			if err == nil {
-				cachedAWSInstanceId = string(body)
+				cachedAWSInstanceID = string(body)
 			}
 		}
 	}
 
-	return cachedAWSInstanceId
+	return cachedAWSInstanceID
 }
 
 // gets the AWS instance zone (or empty string if not an AWS instance)
@@ -406,9 +412,8 @@ func getAWSInstanceZone() string {
 
 	cachedAWSInstanceZone = ""
 	if isEC2Instance() {
-		url := "http://169.254.169.254/latest/meta-data/placement/availability-zone"
 		client := http.Client{Timeout: time.Second}
-		resp, err := client.Get(url)
+		resp, err := client.Get(ec2MetadataZoneURL)
 		if err == nil {
 			defer resp.Body.Close()
 			body, err := ioutil.ReadAll(resp.Body)
@@ -423,12 +428,17 @@ func getAWSInstanceZone() string {
 
 // check if this an EC2 instance
 func isEC2Instance() bool {
+	if cachedIsEC2Instance != nil {
+		return *cachedIsEC2Instance
+	}
 	match := getLineByKeyword("/sys/hypervisor/uuid", "ec2")
-	return match != "" && strings.HasPrefix(match, "ec2")
+	isEC2 := match != "" && strings.HasPrefix(match, "ec2")
+	cachedIsEC2Instance = &isEC2
+	return isEC2
 }
 
 // gets the docker container ID (or empty string if not a docker container)
-func getContainerId() string {
+func getContainerID() string {
 	if cachedContainerID != "uninitialized" {
 		return cachedContainerID
 	}
