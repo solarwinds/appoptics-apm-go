@@ -218,9 +218,8 @@ func grpcCreateClientConnection(cert []byte, addr string) (*grpc.ClientConn, err
 	}
 
 	creds := credentials.NewTLS(&tls.Config{
-		ServerName:         addr,
-		RootCAs:            certPool,
-		InsecureSkipVerify: true, // TODO: a workaround, don't turn it on for production.
+		ServerName: addr,
+		RootCAs:    certPool,
 	})
 
 	return grpc.Dial(addr, grpc.WithTransportCredentials(creds))

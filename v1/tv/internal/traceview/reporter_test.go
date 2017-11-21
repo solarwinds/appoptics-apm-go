@@ -185,17 +185,19 @@ func assertSSLMode(t *testing.T) {
 func TestGRPCReporter(t *testing.T) {
 	// start test gRPC server
 	debugLevel = DEBUG
-	addr := "127.0.0.1:4567"
+	addr := "localhost:4567"
 	grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
 	server := StartTestGRPCServer(t, addr)
 	defer server.Stop()
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
+	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
+	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
 	thisReporter = grpcNewReporter()
 
-	assert.IsType(t, &grpcReporter{}, thisReporter)
+	require.IsType(t, &grpcReporter{}, thisReporter)
 
 	r := thisReporter.(*grpcReporter)
 	ctx := newTestContext(t)

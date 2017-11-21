@@ -14,6 +14,12 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+var (
+	testKeyPath  = path.Join(os.Getenv("GOPATH"), "src/github.com/librato/go-traceview/v1/tv/internal/traceview")
+	testKeyFile  = path.Join(testKeyPath, "localhost:4567.key")
+	testCertFile = path.Join(testKeyPath, "localhost:4567.crt")
+)
+
 type TestGRPCServer struct {
 	t          *testing.T
 	grpcServer *grpc.Server
@@ -29,10 +35,7 @@ func StartTestGRPCServer(t *testing.T, addr string) *TestGRPCServer {
 	require.NoError(t, err)
 
 	// Create the TLS credentials
-	keyPath := path.Join(os.Getenv("GOPATH"), "src/github.com/librato/go-traceview/v1/tv/internal/traceview")
-	keyFile := path.Join(keyPath, "test_server.key")
-	crtFile := path.Join(keyPath, "test_server.crt")
-	creds, err := credentials.NewServerTLSFromFile(crtFile, keyFile)
+	creds, err := credentials.NewServerTLSFromFile(testCertFile, testKeyFile)
 	require.NoError(t, err, "could not load TLS keys")
 	assert.NotNil(t, creds)
 
