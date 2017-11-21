@@ -53,6 +53,7 @@ func init() {
 		thisReporter = grpcNewReporter()
 	case "udp":
 		thisReporter = udpNewReporter()
+	case "none":
 	}
 }
 

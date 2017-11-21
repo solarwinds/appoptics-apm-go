@@ -24,7 +24,7 @@ const (
 
 	// default collector endpoint address and port,
 	// can be overridded via APPOPTICS_COLLECTOR
-	grpcAddressDefault = "ec2-54-175-46-34.compute-1.amazonaws.com:5555"
+	grpcAddressDefault = "collector.appoptics.com:443"
 
 	// default certificate used to verify the collector endpoint,
 	// can be overridden via APPOPTICS_TRUSTEDPATH
@@ -433,7 +433,7 @@ func (r *grpcReporter) eventSender() {
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
-					OboeLog(DEBUG, "Sent events")
+					OboeLog(DEBUG, fmt.Sprintf("Sent %d events", len(messages)))
 					resultOk = true
 					r.eventConnection.reconnectAuthority = UNSET
 					incrementNumSent(len(messages))
@@ -849,6 +849,9 @@ func (r *grpcReporter) spanMessageAggregator() {
 
 // reset keep alive timer on a given GRPC connection
 func (c *grpcConnection) resetPing() {
+	if c.pingTicker == nil {
+		return
+	}
 	c.pingTickerLock.Lock()
 	c.pingTicker.Reset(time.Duration(grpcPingIntervalDefault) * time.Second)
 	c.pingTickerLock.Unlock()
