@@ -50,7 +50,7 @@ func init() {
 	case "ssl":
 		fallthrough // using fallthrough since the SSL reporter (GRPC) is our default reporter
 	default:
-		thisReporter = grpcNewReporter()
+		thisReporter = newGRPCReporter()
 	case "udp":
 		thisReporter = udpNewReporter()
 	case "none":

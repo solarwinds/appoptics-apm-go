@@ -98,24 +98,19 @@ type grpcReporter struct {
 	getSettingsInterval          int            // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int            // check interval for timed out settings in seconds
 	collectMetricIntervalLock    sync.RWMutex   // lock to ensure sequential access of collectMetricInterval
+
+	eventMessages  chan []byte      // channel for event messages (sent from agent)
+	spanMessages   chan SpanMessage // channel for span messages (sent from agent)
+	statusMessages chan []byte      // channel for status messages (sent from agent)
+	metricMessages chan []byte      // channel for metrics messages (internal to reporter)
+	done           chan struct{}    // channel to stop the reporter
+
 }
-
-// channel for event messages (sent from agent)
-var grpcEventMessages = make(chan []byte, 1024)
-
-// channel for span messages (sent from agent)
-var grpcSpanMessages = make(chan SpanMessage, 1024)
-
-// channel for status messages (sent from agent)
-var grpcStatusMessages = make(chan []byte, 1024)
-
-// channel for metrics messages (internal to reporter)
-var grpcMetricMessages = make(chan []byte, 1024)
 
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
-func grpcNewReporter() reporter {
+func newGRPCReporter() reporter {
 	if reportingDisabled {
 		return &nullReporter{}
 	}
@@ -181,6 +176,11 @@ func grpcNewReporter() reporter {
 		collectMetricInterval:        grpcMetricIntervalDefault,
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
 		settingsTimeoutCheckInterval: grpcSettingsTimeoutCheckIntervalDefault,
+
+		eventMessages:  make(chan []byte, 1024),
+		spanMessages:   make(chan SpanMessage, 1024),
+		statusMessages: make(chan []byte, 1024),
+		metricMessages: make(chan []byte, 1024),
 	}
 
 	// start up long-running goroutine eventSender() which listens on the events message channel
@@ -361,7 +361,7 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 	}
 
 	select {
-	case grpcEventMessages <- (*e).bbuf.GetBuf():
+	case r.eventMessages <- (*e).bbuf.GetBuf():
 		go incrementTotalEvents(1) // use goroutine so this won't block on the critical path
 		return nil
 	default:
@@ -370,37 +370,76 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 	}
 }
 
+type grpcResult struct {
+	ret collector.ResultCode
+	err error
+}
+
+var eventSenderPollTimeout = 100 * time.Millisecond
+
+// eventBatcher batches pending events into a list of messages for a GRPC request.
+func (r *grpcReporter) eventSender() {
+	batches := make(chan [][]byte)
+	results := r.eventBatchSender(batches)
+	inProgress := false
+	var messages [][]byte
+
+	for {
+		select {
+		// block until a message arrives, or done
+		case e := <-r.eventMessages:
+			messages = append(messages, e)
+		case result := <-results:
+			// last Log() finished
+			if result.err != nil {
+				// XXX lg.Info("Log() result %v", result)
+			}
+			_ = result // XXX check return code, reconnect
+
+			// if pending entries, make next Log()
+			if len(messages) > 0 {
+				inProgress = true
+				batches <- messages
+				messages = [][]byte{}
+			} else {
+				// remember that we need to make one
+				inProgress = false
+			}
+
+		case <-time.After(eventSenderPollTimeout):
+			if !inProgress && len(messages) > 0 {
+				// kick off Log(), none was made after last return
+				inProgress = true
+				batches <- messages
+				messages = [][]byte{}
+			}
+		case <-r.done:
+			break
+		}
+	}
+}
+
 // long-running goroutine that listens on the events message channel, collects all messages
 // on that channel and attempts to send them to the collector using the GRPC method PostEvents()
-func (r *grpcReporter) eventSender() {
+func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan grpcResult {
+	results := make(chan grpcResult)
+	go func() {
+		r.eventRetrySender(batches)
+	}()
+	return results
+}
+
+func (r *grpcReporter) eventRetrySender(batches chan [][]byte) {
 	for {
 		var messages [][]byte
 
 		select {
 		// this will block until a message arrives
-		case e := <-grpcEventMessages:
-			messages = append(messages, e)
-		}
-		// one message detected, see if there are more and get them all!
-		done := false
-		for !done {
-			select {
-			case e := <-grpcEventMessages:
-				messages = append(messages, e)
-			default:
-				done = true
-			}
-		}
-		// if for some reason there's no message go back to top
-		if len(messages) == 0 {
-			continue
+		case b := <-batches:
+			messages = b
 		}
 
 		setQueueLargest(len(messages))
-
-		//		for _, aaa := range messages {
-		//			printBson(aaa)
-		//		}
 
 		request := &collector.MessageRequest{
 			ApiKey:   r.eventConnection.serviceKey,
@@ -497,7 +536,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool, sendReady chan boo
 
 	select {
 	// put metrics message onto the channel
-	case grpcMetricMessages <- message:
+	case r.metricMessages <- message:
 	default:
 	}
 
@@ -521,7 +560,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 	done := false
 	for !done {
 		select {
-		case m := <-grpcMetricMessages:
+		case m := <-r.metricMessages:
 			messages = append(messages, m)
 		default:
 			done = true
@@ -718,7 +757,7 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 	}
 
 	select {
-	case grpcStatusMessages <- (*e).bbuf.GetBuf():
+	case r.statusMessages <- (*e).bbuf.GetBuf():
 		return nil
 	default:
 		return errors.New("Status message queue is full")
@@ -733,14 +772,14 @@ func (r *grpcReporter) statusSender() {
 
 		select {
 		// this will block until a message arrives
-		case e := <-grpcStatusMessages:
+		case e := <-r.statusMessages:
 			messages = append(messages, e)
 		}
 		// one message detected, see if there are more and get them all!
 		done := false
 		for !done {
 			select {
-			case e := <-grpcStatusMessages:
+			case e := <-r.statusMessages:
 				messages = append(messages, e)
 			default:
 				done = true
@@ -826,7 +865,7 @@ func (r *grpcReporter) statusSender() {
 // returns	error if channel is full
 func (r *grpcReporter) reportSpan(span *SpanMessage) error {
 	select {
-	case grpcSpanMessages <- *span:
+	case r.spanMessages <- *span:
 		return nil
 	default:
 		return errors.New("Span message queue is full")
@@ -838,7 +877,7 @@ func (r *grpcReporter) reportSpan(span *SpanMessage) error {
 func (r *grpcReporter) spanMessageAggregator() {
 	for {
 		select {
-		case span := <-grpcSpanMessages:
+		case span := <-r.spanMessages:
 			span.process()
 		}
 	}

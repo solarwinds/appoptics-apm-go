@@ -188,14 +188,14 @@ func TestGRPCReporter(t *testing.T) {
 	addr := "localhost:4567"
 	grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
 	server := StartTestGRPCServer(t, addr)
-	defer server.Stop()
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	thisReporter = grpcNewReporter()
+	oldReporter := thisReporter
+	thisReporter = newGRPCReporter()
 
 	require.IsType(t, &grpcReporter{}, thisReporter)
 
@@ -224,7 +224,11 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
 	assert.Equal(t, grpcSettingsTimeoutCheckIntervalDefault, r.settingsTimeoutCheckInterval)
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
+
+	// stop test reporter
+	server.Stop()
+	thisReporter = oldReporter
 
 	// assert data received
 	require.Len(t, server.events, 1)
