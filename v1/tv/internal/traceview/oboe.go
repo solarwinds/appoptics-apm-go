@@ -201,7 +201,20 @@ func oboeSampleRequest(layer, xtraceHeader string) (bool, int, sampleSource) {
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
 
-	// TODO check xtraceHeader
+	if xtraceHeader != "" {
+		md := &oboeMetadata{}
+		md.Init()
+		if err := md.FromString(xtraceHeader); err != nil {
+			OboeLog(INFO, "passed in x-trace seems invalid, ignoring")
+			return false, 0, SAMPLE_SOURCE_NONE
+		} else if md.version != xtrCurrentVersion {
+			OboeLog(INFO, "passed in x-trace has wrong version, ignoring")
+			return false, 0, SAMPLE_SOURCE_NONE
+		} else if !md.isSampled() {
+			OboeLog(INFO, "passed in x-trace indicates that request is not being sampled")
+			return false, 0, SAMPLE_SOURCE_NONE
+		}
+	}
 
 	var setting *oboeSettings
 	var ok bool

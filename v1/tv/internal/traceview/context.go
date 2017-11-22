@@ -11,25 +11,32 @@ import (
 )
 
 const (
-	oboeMetadataStringLen = 58
+	oboeMetadataStringLen = 60
 	maskTaskIDLen         = 0x03
 	maskOpIDLen           = 0x08
 	maskHasOptions        = 0x04
 	maskVersion           = 0xF0
 
-	xtrCurrentVersion      = 1
+	xtrCurrentVersion      = 2
 	oboeMaxTaskIDLen       = 20
 	oboeMaxOpIDLen         = 8
 	oboeMaxMetadataPackLen = 512
+)
+
+const (
+	XTR_FLAGS_NOT_SAMPLED = 0x0
+	XTR_FLAGS_SAMPLED     = 0x1
 )
 
 // orchestras tune to the oboe.
 type oboeIDs struct{ taskID, opID []byte }
 
 type oboeMetadata struct {
+	version uint8
 	ids     oboeIDs
 	taskLen int
 	opLen   int
+	flags   uint8
 }
 
 type oboeContext struct {
@@ -50,6 +57,7 @@ func (md *oboeMetadata) Init() {
 	if md == nil {
 		return
 	}
+	md.version = xtrCurrentVersion
 	md.taskLen = oboeMaxTaskIDLen
 	md.opLen = oboeMaxOpIDLen
 	md.ids.taskID = make([]byte, oboeMaxTaskIDLen)
@@ -100,7 +108,7 @@ func (md *oboeMetadata) Pack(buf []byte) (int, error) {
 		return 0, errors.New("md.Pack: invalid md (0 len)")
 	}
 
-	reqLen := md.taskLen + md.opLen + 1
+	reqLen := md.taskLen + md.opLen + 2
 
 	if len(buf) < reqLen {
 		return 0, errors.New("md.Pack: buf too short to pack")
@@ -127,7 +135,7 @@ func (md *oboeMetadata) Pack(buf []byte) (int, error) {
 	 */
 	taskBits = (uint8(md.taskLen) >> 2) - 1
 
-	buf[0] = xtrCurrentVersion << 4
+	buf[0] = md.version << 4
 	if taskBits == 4 {
 		buf[0] |= 3
 	} else {
@@ -137,6 +145,7 @@ func (md *oboeMetadata) Pack(buf []byte) (int, error) {
 
 	copy(buf[1:1+md.taskLen], md.ids.taskID)
 	copy(buf[1+md.taskLen:1+md.taskLen+md.opLen], md.ids.opID)
+	buf[1+md.taskLen+md.opLen] = md.flags
 
 	return reqLen, nil
 }
@@ -152,11 +161,9 @@ func (md *oboeMetadata) Unpack(data []byte) error {
 
 	flag := data[0]
 	var taskLen, opLen int
+	var version uint8
 
-	/* don't recognize this? */
-	if (flag&maskVersion)>>4 != xtrCurrentVersion {
-		return errors.New("md.Unpack: unrecognized X-Trace version")
-	}
+	version = (flag & maskVersion) >> 4
 
 	taskLen = (int(flag&maskTaskIDLen) + 1) << 2
 	if taskLen == 16 {
@@ -165,15 +172,17 @@ func (md *oboeMetadata) Unpack(data []byte) error {
 	opLen = ((int(flag&maskOpIDLen) >> 3) + 1) << 2
 
 	/* do header lengths describe reality? */
-	if (taskLen + opLen + 1) > len(data) { // header contains more bytes than buffer
-		return errors.New("md.Unpack: header length too long")
+	if (taskLen + opLen + 2) != len(data) {
+		return errors.New("md.Unpack: wrong header length")
 	}
 
+	md.version = version
 	md.taskLen = taskLen
 	md.opLen = opLen
 
 	md.ids.taskID = data[1 : 1+taskLen]
 	md.ids.opID = data[1+taskLen : 1+taskLen+opLen]
+	md.flags = data[1+taskLen+opLen]
 
 	return nil
 }
@@ -223,6 +232,10 @@ func (md *oboeMetadata) opString() string {
 	enc := make([]byte, 2*md.opLen)
 	len := hex.Encode(enc, md.ids.opID[:md.opLen])
 	return strings.ToUpper(string(enc[:len]))
+}
+
+func (md *oboeMetadata) isSampled() bool {
+	return md.flags&XTR_FLAGS_SAMPLED != 0
 }
 
 // A Context is an oboe context that may or not be tracing.
