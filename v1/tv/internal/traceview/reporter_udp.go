@@ -34,6 +34,12 @@ func udpNewReporter() reporter {
 		OboeLog(ERROR, fmt.Sprintf("TraceView failed to initialize UDP reporter: %v", err))
 		return &nullReporter{}
 	}
+
+	// add default setting
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120, argsToMap(16, 8, -1, -1))
+
 	return &udpReporter{conn: conn}
 }
 

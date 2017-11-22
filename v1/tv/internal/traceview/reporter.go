@@ -54,6 +54,8 @@ func init() {
 	case "udp":
 		thisReporter = udpNewReporter()
 	}
+
+	sendInitMessage()
 }
 
 // called from the app when a span message is available
@@ -112,6 +114,6 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 
 // Determines if request should be traced, based on sample rate settings:
 // This is our only dependency on the liboboe C library.
-func shouldTraceRequest(layer, xtraceHeader string) (sampled bool, sampleRate, sampleSource int) {
+func shouldTraceRequest(layer, xtraceHeader string) (bool, int, sampleSource) {
 	return oboeSampleRequest(layer, xtraceHeader)
 }

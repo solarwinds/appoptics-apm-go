@@ -163,6 +163,8 @@ func (e *event) AddKV(key, value interface{}) error {
 		if k == EdgeKey {
 			e.AddEdge(v)
 		}
+	case sampleSource:
+		e.AddInt(k, int(v))
 
 	// allow reporting of pointers to basic types as well (for delayed evaluation)
 	case *string:

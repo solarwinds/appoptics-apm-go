@@ -17,6 +17,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func newRateCounter(ratePerSec, size float64) *rateCounter {
+	return &rateCounter{ratePerSec: ratePerSec, capacity: size, available: size, last: time.Now()}
+}
+
 func TestInitMessage(t *testing.T) {
 	r := SetTestReporter()
 
@@ -198,24 +202,24 @@ func testLayerCount(count int64) interface{} {
 //	randReader = rand.Reader // set back to normal
 //}
 
-func assertGetNextInterval(t *testing.T, nowTime, expectedDur string) {
-	t0, err := time.Parse(time.RFC3339Nano, nowTime)
-	assert.NoError(t, err)
-	d0 := getNextInterval(t0)
-	d0e, err := time.ParseDuration(expectedDur)
-	assert.NoError(t, err)
-	assert.Equal(t, d0e, d0)
-	assert.Equal(t, 0, t0.Add(d0).Second()%counterIntervalSecs)
-}
-
-func TestGetNextInterval(t *testing.T) {
-	assertGetNextInterval(t, "2016-01-02T15:04:05.888-04:00", "24.112s")
-	assertGetNextInterval(t, "2016-01-02T15:04:35.888-04:00", "24.112s")
-	assertGetNextInterval(t, "2016-01-02T15:04:00.00-04:00", "30s")
-	assertGetNextInterval(t, "2016-08-15T23:31:30.00-00:00", "30s")
-	assertGetNextInterval(t, "2016-01-02T15:04:59.999999999-04:00", "1ns")
-	assertGetNextInterval(t, "2016-01-07T15:04:29.999999999-00:00", "1ns")
-}
+//func assertGetNextInterval(t *testing.T, nowTime, expectedDur string) {
+//	t0, err := time.Parse(time.RFC3339Nano, nowTime)
+//	assert.NoError(t, err)
+//	d0 := getNextInterval(t0)
+//	d0e, err := time.ParseDuration(expectedDur)
+//	assert.NoError(t, err)
+//	assert.Equal(t, d0e, d0)
+//	assert.Equal(t, 0, t0.Add(d0).Second()%counterIntervalSecs)
+//}
+//
+//func TestGetNextInterval(t *testing.T) {
+//	assertGetNextInterval(t, "2016-01-02T15:04:05.888-04:00", "24.112s")
+//	assertGetNextInterval(t, "2016-01-02T15:04:35.888-04:00", "24.112s")
+//	assertGetNextInterval(t, "2016-01-02T15:04:00.00-04:00", "30s")
+//	assertGetNextInterval(t, "2016-08-15T23:31:30.00-00:00", "30s")
+//	assertGetNextInterval(t, "2016-01-02T15:04:59.999999999-04:00", "1ns")
+//	assertGetNextInterval(t, "2016-01-07T15:04:29.999999999-00:00", "1ns")
+//}
 
 //func TestSendMetrics(t *testing.T) {
 //	if testing.Short() {
