@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
@@ -89,15 +90,16 @@ type grpcConnection struct {
 	pingTicker         *time.Timer                    // timer for keep alive pings in seconds
 	pingTickerLock     sync.Mutex                     // lock to ensure sequential access of pingTicker
 	lock               sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
+	queueStats         *eventQueueStats               // queue stats (reset on each metrics report cycle)
 }
 
 type grpcReporter struct {
-	eventConnection              grpcConnection // used for events only
-	metricConnection             grpcConnection // used for everything else (postMetrics, postStatus, getSettings)
-	collectMetricInterval        int            // metrics flush interval in seconds
-	getSettingsInterval          int            // settings retrieval interval in seconds
-	settingsTimeoutCheckInterval int            // check interval for timed out settings in seconds
-	collectMetricIntervalLock    sync.RWMutex   // lock to ensure sequential access of collectMetricInterval
+	eventConnection              *grpcConnection // used for events only
+	metricConnection             *grpcConnection // used for everything else (postMetrics, postStatus, getSettings)
+	collectMetricInterval        int             // metrics flush interval in seconds
+	getSettingsInterval          int             // settings retrieval interval in seconds
+	settingsTimeoutCheckInterval int             // check interval for timed out settings in seconds
+	collectMetricIntervalLock    sync.RWMutex    // lock to ensure sequential access of collectMetricInterval
 
 	eventMessages  chan []byte      // channel for event messages (sent from agent)
 	spanMessages   chan SpanMessage // channel for span messages (sent from agent)
@@ -158,19 +160,21 @@ func newGRPCReporter() reporter {
 
 	// construct the reporter object which handles two connections
 	reporter := &grpcReporter{
-		eventConnection: grpcConnection{
+		eventConnection: &grpcConnection{
 			client:      collector.NewTraceCollectorClient(eventConn),
 			connection:  eventConn,
 			address:     collectorAddress,
 			certificate: cert,
 			serviceKey:  serviceKey,
+			queueStats:  &eventQueueStats{},
 		},
-		metricConnection: grpcConnection{
+		metricConnection: &grpcConnection{
 			client:      collector.NewTraceCollectorClient(metricConn),
 			connection:  metricConn,
 			address:     collectorAddress,
 			certificate: cert,
 			serviceKey:  serviceKey,
+			queueStats:  &eventQueueStats{},
 		},
 
 		collectMetricInterval:        grpcMetricIntervalDefault,
@@ -362,10 +366,10 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 
 	select {
 	case r.eventMessages <- (*e).bbuf.GetBuf():
-		go incrementTotalEvents(1) // use goroutine so this won't block on the critical path
+		go atomic.AddInt64(&r.eventConnection.queueStats.totalEvents, int64(1)) // use goroutine so this won't block on the critical path
 		return nil
 	default:
-		go incrementNumOverflowed(1) // use goroutine so this won't block on the critical path
+		go atomic.AddInt64(&r.eventConnection.queueStats.numOverflowed, int64(1)) // use goroutine so this won't block on the critical path
 		return errors.New("Event message queue is full")
 	}
 }
@@ -424,12 +428,16 @@ func (r *grpcReporter) eventSender() {
 func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan grpcResult {
 	results := make(chan grpcResult)
 	go func() {
-		r.eventRetrySender(batches)
+		r.eventRetrySender(batches, POSTEVENTS, r.eventConnection)
 	}()
 	return results
 }
 
-func (r *grpcReporter) eventRetrySender(batches chan [][]byte) {
+func (r *grpcReporter) eventRetrySender(
+	batches chan [][]byte,
+	authority reconnectAuthority,
+	connection *grpcConnection,
+) {
 	for {
 		var messages [][]byte
 
@@ -439,10 +447,10 @@ func (r *grpcReporter) eventRetrySender(batches chan [][]byte) {
 			messages = b
 		}
 
-		setQueueLargest(len(messages))
+		connection.queueStats.setQueueLargest(len(messages))
 
 		request := &collector.MessageRequest{
-			ApiKey:   r.eventConnection.serviceKey,
+			ApiKey:   connection.serviceKey,
 			Messages: messages,
 			Encoding: collector.EncodingType_BSON,
 		}
@@ -457,37 +465,37 @@ func (r *grpcReporter) eventRetrySender(batches chan [][]byte) {
 		for !resultOk {
 			// protect the call to the client object or we could run into problems if
 			// another goroutine is messing with it at the same time, e.g. doing a reconnect()
-			r.eventConnection.lock.RLock()
-			response, err := r.eventConnection.client.PostEvents(context.TODO(), request)
-			r.eventConnection.lock.RUnlock()
+			connection.lock.RLock()
+			response, err := connection.client.PostEvents(context.TODO(), request)
+			connection.lock.RUnlock()
 
 			// we sent something, or at least tried to, so we're not idle - reset the keepalive timer
-			r.eventConnection.resetPing()
+			connection.resetPing()
 
 			if err != nil {
 				// some server connection error, attempt reconnect
-				r.reconnect(&r.eventConnection, POSTEVENTS)
+				r.reconnect(connection, authority)
 			} else {
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
 					OboeLog(DEBUG, fmt.Sprintf("Sent %d events", len(messages)))
 					resultOk = true
-					r.eventConnection.reconnectAuthority = UNSET
-					incrementNumSent(len(messages))
+					connection.reconnectAuthority = UNSET
+					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
 				case collector.ResultCode_TRY_LATER:
 					OboeLog(DEBUG, "Server responded: Try later")
-					incrementNumFailed(len(messages))
+					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
 				case collector.ResultCode_LIMIT_EXCEEDED:
 					OboeLog(DEBUG, "Server responded: Limit exceeded")
-					incrementNumFailed(len(messages))
+					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
 				case collector.ResultCode_INVALID_API_KEY:
 					OboeLog(DEBUG, "Server responded: Invalid API key")
 				case collector.ResultCode_REDIRECT:
 					if redirects > grpcRedirectMax {
 						OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
 					} else {
-						r.redirect(&r.eventConnection, POSTEVENTS, response.GetArg())
+						r.redirect(connection, authority, response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++
@@ -531,7 +539,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool, sendReady chan boo
 	r.collectMetricIntervalLock.RUnlock()
 
 	// generate a new metrics message
-	message := generateMetricsMessage(interval)
+	message := generateMetricsMessage(interval, r.eventConnection.queueStats)
 	//	printBson(message)
 
 	select {
@@ -597,7 +605,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 
 		if err != nil {
 			// some server connection error, attempt reconnect
-			r.reconnect(&r.metricConnection, POSTMETRICS)
+			r.reconnect(r.metricConnection, POSTMETRICS)
 		} else {
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
@@ -615,7 +623,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 				if redirects > grpcRedirectMax {
 					OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
 				} else {
-					r.redirect(&r.metricConnection, POSTMETRICS, response.GetArg())
+					r.redirect(r.metricConnection, POSTMETRICS, response.GetArg())
 					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
@@ -669,7 +677,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 
 		if err != nil {
 			// some server connection error, attempt reconnect
-			r.reconnect(&r.metricConnection, GETSETTINGS)
+			r.reconnect(r.metricConnection, GETSETTINGS)
 		} else {
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
@@ -688,7 +696,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 				if redirects > grpcRedirectMax {
 					OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
 				} else {
-					r.redirect(&r.metricConnection, GETSETTINGS, response.GetArg())
+					r.redirect(r.metricConnection, GETSETTINGS, response.GetArg())
 					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
@@ -819,7 +827,7 @@ func (r *grpcReporter) statusSender() {
 
 			if err != nil {
 				// some server connection error, attempt reconnect
-				r.reconnect(&r.metricConnection, POSTSTATUS)
+				r.reconnect(r.metricConnection, POSTSTATUS)
 			} else {
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
@@ -837,7 +845,7 @@ func (r *grpcReporter) statusSender() {
 					if redirects > grpcRedirectMax {
 						OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
 					} else {
-						r.redirect(&r.metricConnection, POSTSTATUS, response.GetArg())
+						r.redirect(r.metricConnection, POSTSTATUS, response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++
