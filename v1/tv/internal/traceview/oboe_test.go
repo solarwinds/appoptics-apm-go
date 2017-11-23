@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func newRateCounter(ratePerSec, size float64) *rateCounter {
-	return &rateCounter{ratePerSec: ratePerSec, capacity: size, available: size, last: time.Now()}
+func newTokenBucket(ratePerSec, size float64) *tokenBucket {
+	return &tokenBucket{ratePerSec: ratePerSec, capacity: size, available: size, last: time.Now()}
 }
 
 func TestInitMessage(t *testing.T) {
@@ -50,7 +50,8 @@ func TestInitMessageUDP(t *testing.T) {
 }
 
 func TestOboeRateCounter(t *testing.T) {
-	b := newRateCounter(5, 2)
+	b := newTokenBucket(5, 2)
+	c := globalSettingsCfg
 	consumers := 5
 	iters := 100
 	sendRate := 30 // test request rate of 30 per second
@@ -60,10 +61,10 @@ func TestOboeRateCounter(t *testing.T) {
 	var dropped, allowed int64
 	for j := 0; j < consumers; j++ {
 		go func(id int) {
-			perConsumerRate := newRateCounter(15, 1)
+			perConsumerRate := newTokenBucket(15, 1)
 			for i := 0; i < iters; i++ {
 				sampled := perConsumerRate.consume(1)
-				ok := b.Count(sampled, true)
+				ok := b.count(sampled, true, true)
 				if ok {
 					//t.Logf("### OK   id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
 					atomic.AddInt64(&allowed, 1)
@@ -78,18 +79,18 @@ func TestOboeRateCounter(t *testing.T) {
 		time.Sleep(sleepInterval / time.Duration(consumers))
 	}
 	wg.Wait()
-	t.Logf("TB iters %d allowed %v dropped %v limited %v", iters, allowed, dropped, b.limited)
+	t.Logf("TB iters %d allowed %v dropped %v limited %v", iters, allowed, dropped, c.limited)
 	assert.True(t, (iters == 100 && consumers == 5))
-	assert.True(t, (allowed == 20 && dropped == 480 && b.limited == 230 && b.traced == 20) ||
-		(allowed == 19 && dropped == 481 && b.limited == 231 && b.traced == 19) ||
-		(allowed == 18 && dropped == 482 && b.limited == 232 && b.traced == 18))
-	assert.Equal(t, int64(500), b.requested)
-	assert.Equal(t, int64(250), b.sampled)
-	assert.Equal(t, int64(500), b.through)
+	assert.True(t, (allowed == 20 && dropped == 480 && c.limited == 230 && c.traced == 20) ||
+		(allowed == 19 && dropped == 481 && c.limited == 231 && c.traced == 19) ||
+		(allowed == 18 && dropped == 482 && c.limited == 232 && c.traced == 18))
+	assert.Equal(t, int64(500), c.requested)
+	assert.Equal(t, int64(250), c.sampled)
+	assert.Equal(t, int64(500), c.through)
 }
 
 func TestOboeRateCounterTime(t *testing.T) {
-	b := newRateCounter(5, 2)
+	b := newTokenBucket(5, 2)
 	b.consume(1)
 	assert.EqualValues(t, 1, b.available) // 1 available
 	b.last = b.last.Add(time.Second)      // simulate time going backwards
@@ -266,9 +267,7 @@ func TestOboeTracingMode(t *testing.T) {
 	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "never")
 	readEnvSettings()
 	assert.EqualValues(t, globalSettingsCfg.tracingMode, 0) // C.OBOE_TRACE_NEVER
-	ok, _, _ := oboeSampleRequest("myLayer", "1BJKL")
-	assert.False(t, ok)
-	ok, _, _ = oboeSampleRequest("myLayer", "")
+	ok, _, _ := oboeSampleRequest("myLayer", false)
 	assert.False(t, ok)
 
 	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "")

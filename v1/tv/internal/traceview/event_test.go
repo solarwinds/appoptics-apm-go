@@ -125,7 +125,7 @@ func TestEventMetadata(t *testing.T) {
 	e2, err := ctx.newEvent(LabelEntry, "bob")
 	assert.NoError(t, err)
 
-	ctx2 := newContext() // context for unassociated trace
+	ctx2 := newContext(true) // context for unassociated trace
 	assert.Len(t, ctx.MetadataString(), oboeMetadataStringLen)
 	assert.Len(t, ctx2.MetadataString(), oboeMetadataStringLen)
 	assert.NotEqual(t, ctx.MetadataString()[2:42], ctx2.MetadataString()[2:42])

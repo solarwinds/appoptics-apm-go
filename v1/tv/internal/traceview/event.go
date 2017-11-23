@@ -231,7 +231,10 @@ func (e *event) AddKV(key, value interface{}) error {
 
 // Reports event using specified Reporter
 func (e *event) ReportUsing(c *oboeContext, r reporter) error {
-	return r.reportEvent(c, e)
+	if e.metadata.isSampled() {
+		return r.reportEvent(c, e)
+	}
+	return nil
 }
 
 // Reports event using default (UDP) Reporter

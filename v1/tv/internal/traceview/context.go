@@ -163,6 +163,10 @@ func (md *oboeMetadata) Unpack(data []byte) error {
 	var taskLen, opLen int
 	var version uint8
 
+	/* don't recognize this? */
+	if (flag&maskVersion)>>4 != xtrCurrentVersion {
+		return errors.New("md.Unpack: unrecognized X-Trace version")
+	}
 	version = (flag & maskVersion) >> 4
 
 	taskLen = (int(flag&maskTaskIDLen) + 1) << 2
@@ -172,7 +176,7 @@ func (md *oboeMetadata) Unpack(data []byte) error {
 	opLen = ((int(flag&maskOpIDLen) >> 3) + 1) << 2
 
 	/* do header lengths describe reality? */
-	if (taskLen + opLen + 2) != len(data) {
+	if (taskLen + opLen + 2) > len(data) {
 		return errors.New("md.Unpack: wrong header length")
 	}
 

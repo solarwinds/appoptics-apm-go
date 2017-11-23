@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,11 +32,11 @@ type oboeSettings struct {
 	value     int
 	ttl       int64
 	layer     string
-	bucket    *rateCounter
+	bucket    *tokenBucket
 }
 
 // token bucket
-type rateCounter struct {
+type tokenBucket struct {
 	ratePerSec float64
 	capacity   float64
 	available  float64
@@ -120,19 +121,19 @@ const initVersion = 1
 const initLayer = "go"
 
 func sendInitMessage() {
-	//	ctx := newContext()
-	//	if c, ok := ctx.(*oboeContext); ok {
-	//		// TODO report as single event on the status channel
-	//		c.reportEvent(LabelEntry, initLayer, false,
-	//			"__Init", 1,
-	//			"Go.Version", runtime.Version(),
-	//			"Go.Oboe.Version", initVersion,
-	//		)
-	//		c.ReportEvent(LabelExit, initLayer)
-	//	}
+	ctx := newContext(true)
+	if c, ok := ctx.(*oboeContext); ok {
+		// TODO report as single event on the status channel
+		c.reportEvent(LabelEntry, initLayer, false,
+			"__Init", 1,
+			"Go.Version", runtime.Version(),
+			"Go.Oboe.Version", initVersion,
+		)
+		c.ReportEvent(LabelExit, initLayer)
+	}
 }
 
-func (b *rateCounter) count(sampled, hasMetadata, rateLimit bool) bool {
+func (b *tokenBucket) count(sampled, hasMetadata, rateLimit bool) bool {
 	c := globalSettingsCfg
 	atomic.AddInt64(&c.requested, 1)
 	if hasMetadata {
@@ -163,7 +164,7 @@ func flushRateCounts() *rateCounts {
 	}
 }
 
-func (b *rateCounter) consume(size float64) bool {
+func (b *tokenBucket) consume(size float64) bool {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	b.update(time.Now())
@@ -174,7 +175,7 @@ func (b *rateCounter) consume(size float64) bool {
 	return false
 }
 
-func (b *rateCounter) update(now time.Time) {
+func (b *tokenBucket) update(now time.Time) {
 	if b.available < b.capacity { // room for more tokens?
 		delta := now.Sub(b.last) // calculate duration since last check
 		b.last = now             // update time of last check
@@ -273,7 +274,7 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	var ok bool
 	if setting, ok = globalSettingsCfg.settings[key]; !ok {
 		setting = &oboeSettings{
-			bucket: &rateCounter{},
+			bucket: &tokenBucket{},
 		}
 		globalSettingsCfg.settings[key] = setting
 	}
