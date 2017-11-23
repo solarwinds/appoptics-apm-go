@@ -10,7 +10,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -121,16 +120,16 @@ const initVersion = 1
 const initLayer = "go"
 
 func sendInitMessage() {
-	ctx := newContext()
-	if c, ok := ctx.(*oboeContext); ok {
-		// TODO report as single event on the status channel
-		c.reportEvent(LabelEntry, initLayer, false,
-			"__Init", 1,
-			"Go.Version", runtime.Version(),
-			"Go.Oboe.Version", initVersion,
-		)
-		c.ReportEvent(LabelExit, initLayer)
-	}
+	//	ctx := newContext()
+	//	if c, ok := ctx.(*oboeContext); ok {
+	//		// TODO report as single event on the status channel
+	//		c.reportEvent(LabelEntry, initLayer, false,
+	//			"__Init", 1,
+	//			"Go.Version", runtime.Version(),
+	//			"Go.Oboe.Version", initVersion,
+	//		)
+	//		c.ReportEvent(LabelExit, initLayer)
+	//	}
 }
 
 func (b *rateCounter) count(sampled, hasMetadata, rateLimit bool) bool {
@@ -187,7 +186,7 @@ func (b *rateCounter) update(now time.Time) {
 	}
 }
 
-func oboeSampleRequest(layer, xtraceHeader string) (bool, int, sampleSource) {
+func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	if usingTestReporter {
 		if r, ok := thisReporter.(*TestReporter); ok {
 			if globalSettingsCfg.tracingMode == TRACE_NEVER {
@@ -199,21 +198,6 @@ func oboeSampleRequest(layer, xtraceHeader string) (bool, int, sampleSource) {
 
 	if globalSettingsCfg.tracingMode == TRACE_NEVER || reportingDisabled {
 		return false, 0, SAMPLE_SOURCE_NONE
-	}
-
-	if xtraceHeader != "" {
-		md := &oboeMetadata{}
-		md.Init()
-		if err := md.FromString(xtraceHeader); err != nil {
-			OboeLog(INFO, "passed in x-trace seems invalid, ignoring")
-			return false, 0, SAMPLE_SOURCE_NONE
-		} else if md.version != xtrCurrentVersion {
-			OboeLog(INFO, "passed in x-trace has wrong version, ignoring")
-			return false, 0, SAMPLE_SOURCE_NONE
-		} else if !md.isSampled() {
-			OboeLog(INFO, "passed in x-trace indicates that request is not being sampled")
-			return false, 0, SAMPLE_SOURCE_NONE
-		}
 	}
 
 	var setting *oboeSettings
@@ -239,7 +223,7 @@ func oboeSampleRequest(layer, xtraceHeader string) (bool, int, sampleSource) {
 		sampleSource = SAMPLE_SOURCE_NONE
 	}
 
-	if xtraceHeader == "" {
+	if !traced {
 		// A new request
 		if setting.flags&FLAG_SAMPLE_START != 0 {
 			retval = shouldSample(sampleRate)
@@ -256,7 +240,7 @@ func oboeSampleRequest(layer, xtraceHeader string) (bool, int, sampleSource) {
 		}
 	}
 
-	retval = setting.bucket.count(retval, xtraceHeader != "", doRateLimiting)
+	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
 	OboeLog(DEBUG, fmt.Sprintf("Sampling with rate=%v, source=%v", sampleRate, sampleSource))
 	return retval, sampleRate, sampleSource

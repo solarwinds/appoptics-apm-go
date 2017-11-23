@@ -24,8 +24,8 @@ const (
 )
 
 const (
-	XTR_FLAGS_NOT_SAMPLED = 0x0
-	XTR_FLAGS_SAMPLED     = 0x1
+	XTR_FLAGS_NONE    = 0x0
+	XTR_FLAGS_SAMPLED = 0x1
 )
 
 // orchestras tune to the oboe.
@@ -244,8 +244,10 @@ type Context interface {
 	ReportEventMap(label Label, layer string, keys map[string]interface{}) error
 	Copy() Context
 	IsTracing() bool
+	SetTracing(trace bool)
 	MetadataString() string
 	NewEvent(label Label, layer string, addCtxEdge bool) Event
+	GetVersion() uint8
 }
 
 // A Event is an event that may or may not be tracing, created by a Context.
@@ -266,8 +268,10 @@ func (e *nullContext) ReportEventMap(label Label, layer string, keys map[string]
 }
 func (e *nullContext) Copy() Context                                         { return &nullContext{} }
 func (e *nullContext) IsTracing() bool                                       { return false }
+func (e *nullContext) SetTracing(trace bool)                                 {}
 func (e *nullContext) MetadataString() string                                { return "" }
 func (e *nullContext) NewEvent(l Label, y string, g bool) Event              { return &nullEvent{} }
+func (e *nullContext) GetVersion() uint8                                     { return 0 }
 func (e *nullEvent) ReportContext(c Context, g bool, a ...interface{}) error { return nil }
 func (e *nullEvent) MetadataString() string                                  { return "" }
 
@@ -275,7 +279,7 @@ func (e *nullEvent) MetadataString() string                                  { r
 func NewNullContext() Context { return &nullContext{} }
 
 // newContext allocates a context with random metadata (for a new trace).
-func newContext() Context {
+func newContext(sampled bool) Context {
 	ctx := &oboeContext{}
 	ctx.metadata.Init()
 	if err := ctx.metadata.SetRandom(); err != nil {
@@ -284,6 +288,7 @@ func newContext() Context {
 		}
 		return &nullContext{}
 	}
+	ctx.SetTracing(sampled)
 	return ctx
 }
 
@@ -297,17 +302,29 @@ func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
 // NewContext starts a trace, possibly continuing one, if mdStr is provided. Setting reportEntry will
 // report an entry event before this function returns, calling cb if provided for additional KV pairs.
 func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]interface{}) (ctx Context, ok bool) {
-	if ok, rate, source := shouldTraceRequest(layer, mdStr); ok {
-		var addCtxEdge bool
-		if mdStr != "" {
-			var err error
-			if ctx, err = newContextFromMetadataString(mdStr); err != nil {
-				return &nullContext{}, false // bad incoming MD: no trace
-			}
-			addCtxEdge = true
+	traced := false
+	addCtxEdge := false
+
+	if mdStr != "" {
+		var err error
+		if ctx, err = newContextFromMetadataString(mdStr); err != nil {
+			OboeLog(INFO, "passed in x-trace seems invalid, ignoring")
+		} else if ctx.GetVersion() != xtrCurrentVersion {
+			OboeLog(INFO, "passed in x-trace has wrong version, ignoring")
+		} else if !ctx.IsTracing() {
+			OboeLog(INFO, "passed in x-trace indicates that request is not being sampled")
+			return ctx, false
 		} else {
-			ctx = newContext()
+			traced = true
+			addCtxEdge = true
 		}
+	}
+
+	if !traced {
+		ctx = newContext(true)
+	}
+
+	if ok, rate, source := shouldTraceRequest(layer, traced); ok {
 		if reportEntry {
 			var kvs map[string]interface{}
 			if cb != nil {
@@ -322,10 +339,11 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 				return &nullContext{}, false
 			}
 		}
-	} else {
-		return &nullContext{}, false
+		return ctx, true
 	}
-	return ctx, true
+
+	ctx.SetTracing(false)
+	return ctx, false
 }
 
 func (ctx *oboeContext) Copy() Context {
@@ -333,9 +351,18 @@ func (ctx *oboeContext) Copy() Context {
 	md.Init()
 	copy(md.ids.taskID, ctx.metadata.ids.taskID)
 	copy(md.ids.opID, ctx.metadata.ids.opID)
+	md.flags = ctx.metadata.flags
 	return &oboeContext{metadata: md}
 }
-func (ctx *oboeContext) IsTracing() bool { return true }
+func (ctx *oboeContext) IsTracing() bool { return ctx.metadata.isSampled() }
+
+func (ctx *oboeContext) SetTracing(trace bool) {
+	if trace {
+		ctx.metadata.flags |= XTR_FLAGS_SAMPLED // set sampled bit
+	} else {
+		ctx.metadata.flags ^= XTR_FLAGS_SAMPLED // clear sampled bit
+	}
+}
 
 func (ctx *oboeContext) newEvent(label Label, layer string) (*event, error) {
 	return newEvent(&ctx.metadata, label, layer)
@@ -350,6 +377,10 @@ func (ctx *oboeContext) NewEvent(label Label, layer string, addCtxEdge bool) Eve
 		e.AddEdge(ctx)
 	}
 	return e
+}
+
+func (ctx *oboeContext) GetVersion() uint8 {
+	return ctx.metadata.version
 }
 
 // Create and report and event using a map of KVs

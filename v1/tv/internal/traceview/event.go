@@ -50,6 +50,7 @@ func oboeEventInit(evt *event, md *oboeMetadata) error {
 	if err := evt.metadata.SetRandomOpID(); err != nil {
 		return err
 	}
+	evt.metadata.flags = md.flags
 
 	// Buffer initialization
 	bsonBufferInit(&evt.bbuf)
