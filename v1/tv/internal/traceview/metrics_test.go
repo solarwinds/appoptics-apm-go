@@ -434,6 +434,9 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		name  string
 		value interface{}
 	}
+
+	// TODO add request counters
+
 	testCases := []testCase{
 		{"NumSent", int64(1)},
 		{"NumOverflowed", int64(1)},

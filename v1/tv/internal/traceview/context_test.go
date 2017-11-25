@@ -147,7 +147,7 @@ func (r *errorReader) Read(p []byte) (n int, err error) {
 }
 
 func TestMetadataRandom(t *testing.T) {
-	r := SetTestReporter()
+	r := SetTestReporter(true)
 	// if RNG fails, don't report events/spans associated with RNG failures.
 	randReader = &errorReader{failOn: map[int]bool{0: true}}
 	ctx := newContext(true)
@@ -186,7 +186,7 @@ func newTestContext(t *testing.T) *oboeContext {
 }
 
 func TestReportEventMap(t *testing.T) {
-	r := SetTestReporter()
+	r := SetTestReporter(true)
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelEntry, "myLayer")
 	assert.NoError(t, err)
@@ -208,7 +208,7 @@ func TestReportEventMap(t *testing.T) {
 }
 
 func TestNewContext(t *testing.T) {
-	r := SetTestReporter()
+	r := SetTestReporter(true)
 	r.ShouldTrace = true
 	ctx, ok := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
 	assert.True(t, ok)                                     // bad metadata string should get ignored
@@ -218,10 +218,10 @@ func TestNewContext(t *testing.T) {
 }
 
 func TestNullContext(t *testing.T) {
-	r := SetTestReporter()
+	r := SetTestReporter(false)
 	r.ShouldTrace = false
 
-	ctx, ok := NewContext("testLayer", "", false, nil) // nullContext{}
+	ctx, ok := NewContext("testLayer", "", false, nil)
 	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
 	assert.False(t, ctx.IsTracing())
@@ -251,7 +251,7 @@ func TestNullContext(t *testing.T) {
 	r.ShouldError = true
 	ctxBad, ok := NewContext("testBadEntry", "", true, nil)
 	assert.False(t, ok)
-	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
+	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "oboeContext")
 
 	assert.Len(t, r.Bufs, 0) // no reporting
 	r.Close(0)

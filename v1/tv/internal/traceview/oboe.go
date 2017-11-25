@@ -68,18 +68,18 @@ const (
 
 const (
 	FLAG_OK                    settingFlag = 0x0
-	FLAG_INVALID                           = 0x1
-	FLAG_OVERRIDE                          = 0x2
-	FLAG_SAMPLE_START                      = 0x4
-	FLAG_SAMPLE_THROUGH                    = 0x8
-	FLAG_SAMPLE_THROUGH_ALWAYS             = 0x10
+	FLAG_INVALID               settingFlag = 0x1
+	FLAG_OVERRIDE              settingFlag = 0x2
+	FLAG_SAMPLE_START          settingFlag = 0x4
+	FLAG_SAMPLE_THROUGH        settingFlag = 0x8
+	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 0x10
 )
 
 const (
 	SAMPLE_SOURCE_NONE    sampleSource = 0
-	SAMPLE_SOURCE_FILE                 = 1
-	SAMPLE_SOURCE_DEFAULT              = 2
-	SAMPLE_SOURCE_LAYER                = 3
+	SAMPLE_SOURCE_FILE    sampleSource = 1
+	SAMPLE_SOURCE_DEFAULT sampleSource = 2
+	SAMPLE_SOURCE_LAYER   sampleSource = 3
 )
 
 const (
@@ -94,6 +94,7 @@ var globalSettingsCfg = &oboeSettingsCfg{
 // Initialize Traceview C instrumentation library ("oboe"):
 func init() {
 	readEnvSettings()
+	rand.Seed(time.Now().UnixNano())
 }
 
 func readEnvSettings() {
@@ -188,15 +189,6 @@ func (b *tokenBucket) update(now time.Time) {
 }
 
 func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
-	if usingTestReporter {
-		if r, ok := thisReporter.(*TestReporter); ok {
-			if globalSettingsCfg.tracingMode == TRACE_NEVER {
-				r.ShouldTrace = false
-			}
-			return r.ShouldTrace, 1000000, SAMPLE_SOURCE_NONE // trace tests
-		}
-	}
-
 	if globalSettingsCfg.tracingMode == TRACE_NEVER || reportingDisabled {
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
@@ -204,7 +196,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		OboeLog(ERROR, fmt.Sprintf("No valid settings found for %v.", layer))
+		OboeLog(ERROR, fmt.Sprintf("Sampling disabled for %v until valid settings are retrieved.", layer))
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
 
@@ -321,7 +313,6 @@ func getSetting(layer string) (*oboeSettings, bool) {
 }
 
 func shouldSample(sampleRate int) bool {
-	rand.Seed(time.Now().UnixNano())
 	retval := sampleRate == maxSamplingRate || rand.Intn(maxSamplingRate) <= sampleRate
 	OboeLog(DEBUG, fmt.Sprintf("shouldSample(%v) => %v", sampleRate, retval))
 	return retval

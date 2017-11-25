@@ -5,6 +5,8 @@
 package traceview
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -22,7 +24,7 @@ func newTokenBucket(ratePerSec, size float64) *tokenBucket {
 }
 
 func TestInitMessage(t *testing.T) {
-	r := SetTestReporter()
+	r := SetTestReporter(true)
 
 	sendInitMessage()
 	r.Close(2)
@@ -49,7 +51,7 @@ func TestInitMessageUDP(t *testing.T) {
 	assertInitMessage(t, bufs)
 }
 
-func TestOboeRateCounter(t *testing.T) {
+func TestTokenBucket(t *testing.T) {
 	b := newTokenBucket(5, 2)
 	c := globalSettingsCfg
 	consumers := 5
@@ -89,7 +91,7 @@ func TestOboeRateCounter(t *testing.T) {
 	assert.Equal(t, int64(500), c.through)
 }
 
-func TestOboeRateCounterTime(t *testing.T) {
+func TestTokenBucketTime(t *testing.T) {
 	b := newTokenBucket(5, 2)
 	b.consume(1)
 	assert.EqualValues(t, 1, b.available) // 1 available
@@ -107,81 +109,233 @@ func testLayerCount(count int64) interface{} {
 	return bson.D{bson.DocElem{Name: testLayer, Value: count}}
 }
 
-//func init() {
-//	disableMetrics = true
-//}
+func callShouldTraceRequest(total int, isTraced bool) (traced int) {
+	for i := 0; i < total; i++ {
+		if ok, _, _ := shouldTraceRequest(testLayer, isTraced); ok {
+			traced++
+		}
+	}
+	return traced
+}
 
-//func TestRateSampleRequest(t *testing.T) {
-//	var bufs [][]byte
-//	done := startTestUDPListener(t, &bufs, 2)
-//	sendMetricsMessage(globalReporter())
-//	<-done
-//	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
-//		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-//			assert.Equal(t, n.Map["ProcessName"], initLayer)
-//			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
-//			assert.True(t, n.Map[metricsPrefix+"type=threadcount,name=NumGoroutine"].(int64) > 0)
-//			// no layer counts yet -- should be missing from message
-//			assert.NotContains(t, "TraceCount", n.Map)
-//			assert.NotContains(t, "RequestCount", n.Map)
-//			assert.NotContains(t, "SampleCount", n.Map)
-//		}},
-//		{"JMX", "exit"}: {Edges: g.Edges{{"JMX", "entry"}}},
-//	})
-//
-//	traced := int64(0)
-//	total := 1000
-//	for i := 0; i < total; i++ {
-//		if ok, _, _ := shouldTraceRequest(testLayer, ""); ok {
-//			traced++
-//		}
-//	}
-//	assert.EqualValues(t, traced, 3)
-//	cl := layerCache.Get(testLayer)
-//	assert.EqualValues(t, 1000, cl.counter.requested)
-//	assert.EqualValues(t, 0, cl.counter.through)
-//	assert.EqualValues(t, traced, cl.counter.traced)
-//	assert.True(t, cl.counter.sampled > 0)
-//	assert.True(t, cl.counter.limited > 0)
-//	sampled := cl.counter.sampled
-//	limited := cl.counter.limited
-//
-//	// send UDP message & assert
-//	bufs = nil
-//	done = startTestUDPListener(t, &bufs, 2)
-//	sendMetricsMessage(globalReporter())
-//	<-done
-//	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
-//		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-//			assert.Equal(t, n.Map["ProcessName"], initLayer)
-//			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
-//			assert.True(t, n.Map[metricsPrefix+"type=threadcount,name=NumGoroutine"].(int64) > 0)
-//			assert.Equal(t, testLayerCount(traced), n.Map["TraceCount"])
-//			assert.Equal(t, testLayerCount(1000), n.Map["RequestCount"])
-//			assert.Equal(t, testLayerCount(sampled), n.Map["SampleCount"])
-//			assert.Equal(t, testLayerCount(traced), n.Map["TraceCount"])
-//			assert.Equal(t, testLayerCount(limited), n.Map["TokenBucketExhaustionCount"])
-//		}},
-//		{"JMX", "exit"}: {Edges: g.Edges{{"JMX", "entry"}}},
-//	})
-//
-//	bufs = nil
-//	done = startTestUDPListener(t, &bufs, 2)
-//	sendMetricsMessage(globalReporter())
-//	<-done
-//	g.AssertGraph(t, bufs, 2, g.AssertNodeMap{
-//		{"JMX", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-//			assert.Equal(t, n.Map["ProcessName"], initLayer)
-//			assert.True(t, n.Map[metricsPrefix+"Memory:MemStats.Alloc"].(int64) > 0)
-//			assert.True(t, n.Map[metricsPrefix+"type=threadcount,name=NumGoroutine"].(int64) > 0)
-//			// all 0s
-//			assert.EqualValues(t, testLayerCount(0), n.Map["TraceCount"])
-//			assert.EqualValues(t, testLayerCount(0), n.Map["RequestCount"])
-//			assert.EqualValues(t, testLayerCount(0), n.Map["SampleCount"])
-//		}},
-//		{"JMX", "exit"}: {Edges: g.Edges{{"JMX", "entry"}}},
-//	})
-//}
+func TestSamplingRate(t *testing.T) {
+	r := SetTestReporter(false)
+
+	// set 2.5% sampling rate
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		25000, 120, argsToMap(1000000, 1000000, -1, -1))
+
+	total := 1000000
+	traced := callShouldTraceRequest(total, false)
+
+	// make sure we're within 3% of our expected rate over 1,000,000 trials
+	assert.InDelta(t, 2.5, float64(traced)*100/float64(total), 0.03)
+
+	c := globalSettingsCfg
+	assert.EqualValues(t, c.requested, total)
+	assert.EqualValues(t, c.through, 0)
+	assert.EqualValues(t, c.traced, traced)
+	assert.EqualValues(t, c.sampled, traced)
+	assert.EqualValues(t, c.limited, 0)
+
+	r.Close(2)
+}
+
+func TestSampleTracingDisabled(t *testing.T) {
+	r := SetTestReporter(true)
+
+	total := 3
+	globalSettingsCfg.tracingMode = TRACE_NEVER
+	traced := callShouldTraceRequest(total, false)
+	assert.EqualValues(t, 0, traced)
+
+	globalSettingsCfg.tracingMode = TRACE_ALWAYS
+	traced = callShouldTraceRequest(total, false)
+	assert.EqualValues(t, 3, traced)
+
+	reportingDisabled = true
+	traced = callShouldTraceRequest(total, false)
+	assert.EqualValues(t, 0, traced)
+
+	r.Close(2)
+}
+
+func TestSampleNoValidSettings(t *testing.T) {
+	r := SetTestReporter(false)
+
+	total := 1
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	traced := callShouldTraceRequest(total, false)
+	log.SetOutput(os.Stderr)
+	assert.Contains(t, buf.String(), "Sampling disabled for go_test until valid settings are retrieved")
+	assert.EqualValues(t, 0, traced)
+
+	r.Close(2)
+}
+
+func TestSampleRateBoundaries(t *testing.T) {
+	r := SetTestReporter(true)
+
+	_, rate, _ := shouldTraceRequest(testLayer, false)
+	assert.Equal(t, 1000000, rate)
+
+	// check that max value doesn't go above 1000000
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000001, 120, argsToMap(1000000, 1000000, -1, -1))
+
+	_, rate, _ = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, 1000000, rate)
+
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		0, 120, argsToMap(1000000, 1000000, -1, -1))
+
+	_, rate, _ = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, 0, rate)
+
+	// check that min value doesn't go below 0
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		-1, 120, argsToMap(1000000, 1000000, -1, -1))
+
+	_, rate, _ = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, 0, rate)
+
+	r.Close(2)
+}
+
+func TestSampleSource(t *testing.T) {
+	r := SetTestReporter(true)
+
+	_, _, source := shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
+
+	r.resetSettings()
+	_, _, source = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_NONE, source)
+
+	// we're currently only looking up default settings, so this should return NONE sample source
+	updateSetting(int32(TYPE_LAYER), testLayer,
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+	_, _, source = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_NONE, source)
+
+	// as soon as we add the default settings back, we get a valid sample source
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+	_, _, source = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
+
+	r.Close(2)
+}
+
+func TestSampleFlags(t *testing.T) {
+	r := SetTestReporter(false)
+	c := globalSettingsCfg
+
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte(""),
+		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+	ok, _, _ := shouldTraceRequest(testLayer, false)
+	assert.False(t, ok)
+	assert.EqualValues(t, 0, c.through)
+	ok, _, _ = shouldTraceRequest(testLayer, true)
+	assert.False(t, ok)
+	assert.EqualValues(t, 1, c.through)
+
+	r.resetSettings()
+	c = globalSettingsCfg
+
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START"),
+		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+	ok, _, _ = shouldTraceRequest(testLayer, false)
+	assert.True(t, ok)
+	assert.EqualValues(t, 0, c.through)
+	ok, _, _ = shouldTraceRequest(testLayer, true)
+	assert.False(t, ok)
+	assert.EqualValues(t, 1, c.through)
+
+	r.resetSettings()
+	c = globalSettingsCfg
+
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+	ok, _, _ = shouldTraceRequest(testLayer, false)
+	assert.False(t, ok)
+	assert.EqualValues(t, 0, c.through)
+	ok, _, _ = shouldTraceRequest(testLayer, true)
+	assert.True(t, ok)
+	assert.EqualValues(t, 1, c.through)
+
+	r.resetSettings()
+	c = globalSettingsCfg
+
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_THROUGH"),
+		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+	ok, _, _ = shouldTraceRequest(testLayer, false)
+	assert.False(t, ok)
+	assert.EqualValues(t, 0, c.through)
+	ok, _, _ = shouldTraceRequest(testLayer, true)
+	assert.True(t, ok)
+	assert.EqualValues(t, 1, c.through)
+
+	r.Close(2)
+}
+
+func TestSampleTokenBucket(t *testing.T) {
+	r := SetTestReporter(true)
+	c := globalSettingsCfg
+
+	traced := callShouldTraceRequest(1, false)
+	assert.EqualValues(t, 1, traced)
+	assert.EqualValues(t, 1, c.traced)
+	assert.EqualValues(t, 1, c.requested)
+	assert.EqualValues(t, 0, c.limited)
+
+	r.resetSettings()
+	c = globalSettingsCfg
+
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START"),
+		1000000, 120, argsToMap(0, 0, -1, -1))
+	traced = callShouldTraceRequest(1, false)
+	assert.EqualValues(t, 0, traced)
+	assert.EqualValues(t, 0, c.traced)
+	assert.EqualValues(t, 1, c.requested)
+	assert.EqualValues(t, 1, c.limited)
+
+	r.resetSettings()
+	c = globalSettingsCfg
+
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120, argsToMap(16, 8, -1, -1))
+	traced = callShouldTraceRequest(50, false)
+	assert.EqualValues(t, 16, traced)
+	assert.EqualValues(t, 16, c.traced)
+	assert.EqualValues(t, 50, c.requested)
+	assert.EqualValues(t, 34, c.limited)
+	flushRateCounts()
+
+	time.Sleep(1 * time.Second)
+
+	traced = callShouldTraceRequest(50, false)
+	assert.EqualValues(t, 8, traced)
+	assert.EqualValues(t, 8, c.traced)
+	assert.EqualValues(t, 50, c.requested)
+	assert.EqualValues(t, 42, c.limited)
+
+	r.Close(2)
+}
 
 //func TestMetrics(t *testing.T) {
 //	// error sending metrics message: no reporting
@@ -256,7 +410,7 @@ func testLayerCount(count int64) interface{} {
 //}
 
 func TestOboeTracingMode(t *testing.T) {
-	r := SetTestReporter()
+	r := SetTestReporter(true)
 	// make oboeSampleRequest think test reporter is not being used for these tests..
 	//	usingTestReporter = false
 
