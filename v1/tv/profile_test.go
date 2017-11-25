@@ -5,10 +5,10 @@ package tv_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/librato/go-traceview/v1/tv"
 	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
 	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )
 
@@ -17,7 +17,7 @@ func testProf(ctx context.Context) {
 }
 
 func TestBeginProfile(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("testLayer"))
 	testProf(ctx)
 
@@ -42,7 +42,7 @@ func testLayerProf(ctx context.Context) {
 }
 
 func TestBeginLayerProfile(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("testLayer"))
 	testLayerProf(ctx)
 
@@ -68,7 +68,7 @@ func TestBeginLayerProfile(t *testing.T) {
 
 // ensure above tests run smoothly with no events reported when a context has no trace
 func TestNoTraceBeginProfile(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	ctx := context.Background()
 	testProf(ctx)
 	r.Close(0)
@@ -76,7 +76,7 @@ func TestNoTraceBeginProfile(t *testing.T) {
 }
 func TestTraceErrorBeginProfile(t *testing.T) {
 	// simulate reporter error on second event: prevents Layer from being reported
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	r.ErrorEvents = map[int]bool{1: true}
 	testProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
 	r.Close(1)
@@ -86,7 +86,7 @@ func TestTraceErrorBeginProfile(t *testing.T) {
 }
 
 func TestNoTraceBeginLayerProfile(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	ctx := context.Background()
 	testLayerProf(ctx)
 	r.Close(0)
@@ -94,7 +94,7 @@ func TestNoTraceBeginLayerProfile(t *testing.T) {
 }
 func TestTraceErrorBeginLayerProfile(t *testing.T) {
 	// simulate reporter error on second event: prevents nested Layer & Profile spans
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	r.ErrorEvents = map[int]bool{1: true}
 	testLayerProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
 	r.Close(2)

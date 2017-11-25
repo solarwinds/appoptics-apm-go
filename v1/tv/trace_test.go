@@ -10,14 +10,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/librato/go-traceview/v1/tv"
 	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
 	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTraceMetadata(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 
 	tr := tv.NewTrace("test")
 	md := tr.ExitMetadata()
@@ -35,7 +35,7 @@ func TestTraceMetadata(t *testing.T) {
 	})
 }
 func TestNoTraceMetadata(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(false)
 	r.ShouldTrace = false
 
 	// if trace is not sampled, metadata should be empty
@@ -49,19 +49,19 @@ func TestNoTraceMetadata(t *testing.T) {
 
 // ensure two different traces have different trace IDs
 func TestTraceMetadataDiff(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 
 	t1 := tv.NewTrace("test1")
 	md1 := t1.ExitMetadata()
-	assert.Len(t, md1, 58)
+	assert.Len(t, md1, 60)
 	t1.End()
 	r.Close(2)
 	assert.Len(t, r.Bufs, 2)
 
-	r = traceview.SetTestReporter()
+	r = traceview.SetTestReporter(true)
 	t2 := tv.NewTrace("test1")
 	md2 := t2.ExitMetadata()
-	assert.Len(t, md2, 58)
+	assert.Len(t, md2, 60)
 	md2b := t2.ExitMetadata()
 	md2c := t2.ExitMetadata()
 	t2.End()
@@ -72,8 +72,8 @@ func TestTraceMetadataDiff(t *testing.T) {
 	assert.NotEqual(t, md1[2:42], md2[2:42])
 
 	// ensure that additional calls to ExitMetadata produce the same result
-	assert.Len(t, md2b, 58)
-	assert.Len(t, md2c, 58)
+	assert.Len(t, md2b, 60)
+	assert.Len(t, md2c, 60)
 	assert.Equal(t, md2, md2b)
 	assert.Equal(t, md2b, md2c)
 
@@ -172,7 +172,7 @@ func f0Ctx(ctx context.Context) {
 }
 
 func TestTraceExample(t *testing.T) {
-	r := traceview.SetTestReporter() // enable test reporter
+	r := traceview.SetTestReporter(true) // enable test reporter
 	// create a new trace, and a context to carry it around
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
 	t.Logf("Reporting unrecognized event KV type")
@@ -182,7 +182,7 @@ func TestTraceExample(t *testing.T) {
 }
 
 func TestTraceExampleCtx(t *testing.T) {
-	r := traceview.SetTestReporter() // enable test reporter
+	r := traceview.SetTestReporter(true) // enable test reporter
 	// create a new trace, and a context to carry it around
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
 	t.Logf("Reporting unrecognized event KV type")
@@ -254,14 +254,14 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 	})
 }
 func TestNoTraceExample(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	ctx := context.Background()
 	traceExample(ctx)
 	assert.Len(t, r.Bufs, 0)
 }
 
 func BenchmarkNewTrace(b *testing.B) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	r.ShouldTrace = false
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -270,7 +270,7 @@ func BenchmarkNewTrace(b *testing.B) {
 }
 
 func BenchmarkNewTraceFromID(b *testing.B) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	r.ShouldTrace = false
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -279,17 +279,17 @@ func BenchmarkNewTraceFromID(b *testing.B) {
 }
 
 func TestTraceFromMetadata(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 
 	// emulate incoming request with X-Trace header
-	incomingID := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2198D447EA2203"
+	incomingID := "2BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2198D447EA220301"
 	tr := tv.NewTraceFromID("test", incomingID, nil)
 	tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Extra": "Arg"} })
 
 	r.Close(2)
 	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
 		// entry event should have edge to incoming opID
-		{"test", "entry"}: {Edges: g.Edges{{"Edge", incomingID[42:]}}, Callback: func(n g.Node) {
+		{"test", "entry"}: {Edges: g.Edges{{"Edge", incomingID[42:58]}}, Callback: func(n g.Node) {
 			// trace ID should match incoming ID
 			assert.Equal(t, incomingID[2:42], n.Map[tv.HTTPHeaderName].(string)[2:42])
 		}},
@@ -302,7 +302,7 @@ func TestTraceFromMetadata(t *testing.T) {
 	})
 }
 func TestNoTraceFromMetadata(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(false)
 	r.ShouldTrace = false
 	tr := tv.NewTraceFromID("test", "", nil)
 	md := tr.ExitMetadata()
@@ -312,7 +312,7 @@ func TestNoTraceFromMetadata(t *testing.T) {
 	assert.Len(t, r.Bufs, 0)
 }
 func TestTraceFromBadMetadata(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(false)
 
 	// emulate incoming request with invalad X-Trace header
 	incomingID := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2A2203"
@@ -324,7 +324,7 @@ func TestTraceFromBadMetadata(t *testing.T) {
 }
 
 func TestTraceJoin(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 
 	tr := tv.NewTrace("test")
 	l := tr.BeginLayer("L1")
@@ -342,7 +342,7 @@ func TestTraceJoin(t *testing.T) {
 }
 
 func TestNullTrace(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	r.ShouldTrace = true
 	tr := tv.NewNullTrace()
 	md := tr.ExitMetadata()

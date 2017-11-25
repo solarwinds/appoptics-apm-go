@@ -317,7 +317,7 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 			OboeLog(INFO, "passed in x-trace has wrong version, ignoring")
 		} else if !ctx.IsTracing() {
 			OboeLog(INFO, "passed in x-trace indicates that request is not being sampled")
-			return ctx, false
+			return ctx, true
 		} else {
 			traced = true
 			addCtxEdge = true
@@ -347,7 +347,7 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 	}
 
 	ctx.SetTracing(false)
-	return ctx, false
+	return ctx, true
 }
 
 func (ctx *oboeContext) Copy() Context {

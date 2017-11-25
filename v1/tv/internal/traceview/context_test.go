@@ -222,7 +222,7 @@ func TestNullContext(t *testing.T) {
 	r.ShouldTrace = false
 
 	ctx, ok := NewContext("testLayer", "", false, nil)
-	assert.False(t, ok)
+	assert.True(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
 	assert.False(t, ctx.IsTracing())
 	mdString := ctx.MetadataString()
@@ -250,8 +250,9 @@ func TestNullContext(t *testing.T) {
 	r.ShouldTrace = true
 	r.ShouldError = true
 	ctxBad, ok := NewContext("testBadEntry", "", true, nil)
-	assert.False(t, ok)
+	assert.True(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "oboeContext")
+	assert.False(t, ctx.IsTracing())
 
 	assert.Len(t, r.Bufs, 0) // no reporting
 	r.Close(0)

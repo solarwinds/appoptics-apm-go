@@ -14,7 +14,7 @@ import (
 )
 
 func TestCacheRPCLayers(t *testing.T) {
-	r := traceview.SetTestReporter() // enable test reporter
+	r := traceview.SetTestReporter(true) // enable test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
 
 	// make a cache request

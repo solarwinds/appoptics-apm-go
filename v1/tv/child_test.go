@@ -70,7 +70,7 @@ func assertTraceChild(t *testing.T, bufs [][]byte) {
 }
 
 func TestTraceChild(t *testing.T) {
-	r := traceview.SetTestReporter() // enable test reporter
+	r := traceview.SetTestReporter(true) // enable test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("childExample"))
 	childExample(ctx) // generate events
 	r.Close(6)
@@ -78,7 +78,7 @@ func TestTraceChild(t *testing.T) {
 }
 
 func TestTraceChildCtx(t *testing.T) {
-	r := traceview.SetTestReporter() // enable test reporter
+	r := traceview.SetTestReporter(true) // enable test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("childExample"))
 	childExampleCtx(ctx) // generate events
 	r.Close(6)
@@ -86,12 +86,12 @@ func TestTraceChildCtx(t *testing.T) {
 }
 
 func TestNoTraceChild(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	ctx := context.Background()
 	childExample(ctx)
 	assert.Len(t, r.Bufs, 0)
 
-	r = traceview.SetTestReporter()
+	r = traceview.SetTestReporter(true)
 	ctx = context.Background()
 	childExampleCtx(ctx)
 	assert.Len(t, r.Bufs, 0)
