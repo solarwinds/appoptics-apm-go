@@ -13,7 +13,7 @@ import (
 )
 
 func TestContext(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 
 	ctx := context.Background()
 	assert.Empty(t, MetadataString(ctx))
@@ -40,12 +40,12 @@ func TestContext(t *testing.T) {
 }
 
 func TestTraceFromContext(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	tr := NewTrace("TestTFC")
 	ctx := NewContext(context.Background(), tr)
 	trFC := TraceFromContext(ctx)
 	assert.Equal(t, tr.ExitMetadata(), trFC.ExitMetadata())
-	assert.Len(t, tr.ExitMetadata(), 58)
+	assert.Len(t, tr.ExitMetadata(), 60)
 
 	trN := TraceFromContext(context.Background()) // no trace bound to this ctx
 	assert.Len(t, trN.ExitMetadata(), 0)
@@ -56,13 +56,13 @@ func TestTraceFromContext(t *testing.T) {
 
 func TestNullSpan(t *testing.T) {
 	// enable reporting to test reporter
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 
 	ctx := NewContext(context.Background(), NewTrace("TestNullSpan")) // reports event
 	l1, ctxL := BeginLayer(ctx, "L1")                                 // reports event
 	assert.True(t, l1.IsTracing())
 	assert.Equal(t, l1.MetadataString(), MetadataString(ctxL))
-	assert.Len(t, l1.MetadataString(), 58)
+	assert.Len(t, l1.MetadataString(), 60)
 
 	l1.End() // reports event
 	assert.False(t, l1.IsTracing())

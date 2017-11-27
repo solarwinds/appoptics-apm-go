@@ -6,7 +6,9 @@ package traceview
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"runtime"
 	"strconv"
@@ -18,39 +20,70 @@ import (
 
 // Current settings configuration
 type oboeSettingsCfg struct {
-	tracingMode        tracingMode
-	sampleRate         int
-	settings           map[oboeSettingKey]*oboeSettings
-	lastAutoSampleRate int
-	lastAutoFlags      uint16
-	lastAutoTimestamp  time.Time
-	lastRefresh        time.Time
-	entryLayer         int //TODO
-	lock               sync.RWMutex
+	tracingMode tracingMode
+	settings    map[oboeSettingKey]*oboeSettings
+	lock        sync.RWMutex
+	rateCounts
 }
 type oboeSettings struct {
-	magic            uint32
-	timestamp        int64
-	sType            int32
-	flags            []byte
-	value            int64
-	ttl              int64
-	layer            string
-	bucketCapacity   float64
-	bucketRatePerSec float64
+	timestamp time.Time
+	sType     settingType
+	flags     settingFlag
+	value     int
+	ttl       int64
+	layer     string
+	bucket    *tokenBucket
 }
+
+// token bucket
+type tokenBucket struct {
+	ratePerSec float64
+	capacity   float64
+	available  float64
+	last       time.Time
+	lock       sync.Mutex
+}
+type rateCounts struct{ requested, sampled, limited, traced, through int64 }
 
 // The identifying keys for a setting
 type oboeSettingKey struct {
-	sType int32
+	sType settingType
 	layer string
 }
 
 type tracingMode int
+type settingType int
+type settingFlag uint16
+type sampleSource int
 
 const (
 	TRACE_NEVER tracingMode = iota
 	TRACE_ALWAYS
+)
+
+const (
+	TYPE_DEFAULT settingType = iota
+	TYPE_LAYER
+)
+
+const (
+	FLAG_OK                    settingFlag = 0x0
+	FLAG_INVALID               settingFlag = 0x1
+	FLAG_OVERRIDE              settingFlag = 0x2
+	FLAG_SAMPLE_START          settingFlag = 0x4
+	FLAG_SAMPLE_THROUGH        settingFlag = 0x8
+	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 0x10
+)
+
+const (
+	SAMPLE_SOURCE_NONE    sampleSource = 0
+	SAMPLE_SOURCE_FILE    sampleSource = 1
+	SAMPLE_SOURCE_DEFAULT sampleSource = 2
+	SAMPLE_SOURCE_LAYER   sampleSource = 3
+)
+
+const (
+	maxSamplingRate = 1000000
 )
 
 // Global configuration settings
@@ -61,7 +94,7 @@ var globalSettingsCfg = &oboeSettingsCfg{
 // Initialize Traceview C instrumentation library ("oboe"):
 func init() {
 	readEnvSettings()
-	sendInitMessage()
+	rand.Seed(time.Now().UnixNano())
 }
 
 func readEnvSettings() {
@@ -89,8 +122,9 @@ const initVersion = 1
 const initLayer = "go"
 
 func sendInitMessage() {
-	ctx := newContext()
+	ctx := newContext(true)
 	if c, ok := ctx.(*oboeContext); ok {
+		// TODO report as single event on the status channel
 		c.reportEvent(LabelEntry, initLayer, false,
 			"__Init", 1,
 			"Go.Version", runtime.Version(),
@@ -100,41 +134,38 @@ func sendInitMessage() {
 	}
 }
 
-var rateCounterDefaultRate = 5.0
-var rateCounterDefaultSize = 3.0
-var counterIntervalSecs = 30
-
-type rateCounter struct {
-	ratePerSec          float64
-	capacity, available float64
-	last                time.Time
-	lock                sync.Mutex
-	rateCounts
-}
-type rateCounts struct{ requested, sampled, limited, traced, through int64 }
-
-func newRateCounter(ratePerSec, size float64) *rateCounter {
-	return &rateCounter{ratePerSec: ratePerSec, capacity: size, available: size, last: time.Now()}
-}
-
-func (b *rateCounter) Count(sampled, hasMetadata bool) bool {
-	atomic.AddInt64(&b.requested, 1)
+func (b *tokenBucket) count(sampled, hasMetadata, rateLimit bool) bool {
+	c := globalSettingsCfg
+	atomic.AddInt64(&c.requested, 1)
 	if hasMetadata {
-		atomic.AddInt64(&b.through, 1)
+		atomic.AddInt64(&c.through, 1)
 	}
 	if !sampled {
 		return sampled
 	}
-	atomic.AddInt64(&b.sampled, 1)
-	if ok := b.consume(1); !ok {
-		atomic.AddInt64(&b.limited, 1)
-		return false
+	atomic.AddInt64(&c.sampled, 1)
+	if rateLimit {
+		if ok := b.consume(1); !ok {
+			atomic.AddInt64(&c.limited, 1)
+			return false
+		}
 	}
-	atomic.AddInt64(&b.traced, 1)
+	atomic.AddInt64(&c.traced, 1)
 	return sampled
 }
 
-func (b *rateCounter) consume(size float64) bool {
+func flushRateCounts() *rateCounts {
+	c := globalSettingsCfg
+	return &rateCounts{
+		requested: atomic.SwapInt64(&c.requested, 0),
+		sampled:   atomic.SwapInt64(&c.sampled, 0),
+		limited:   atomic.SwapInt64(&c.limited, 0),
+		traced:    atomic.SwapInt64(&c.traced, 0),
+		through:   atomic.SwapInt64(&c.through, 0),
+	}
+}
+
+func (b *tokenBucket) consume(size float64) bool {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	b.update(time.Now())
@@ -145,7 +176,7 @@ func (b *rateCounter) consume(size float64) bool {
 	return false
 }
 
-func (b *rateCounter) update(now time.Time) {
+func (b *tokenBucket) update(now time.Time) {
 	if b.available < b.capacity { // room for more tokens?
 		delta := now.Sub(b.last) // calculate duration since last check
 		b.last = now             // update time of last check
@@ -157,63 +188,58 @@ func (b *rateCounter) update(now time.Time) {
 	}
 }
 
-func (b *rateCounter) Flush() *rateCounts {
-	return &rateCounts{
-		requested: atomic.SwapInt64(&b.requested, 0),
-		sampled:   atomic.SwapInt64(&b.sampled, 0),
-		limited:   atomic.SwapInt64(&b.limited, 0),
-		traced:    atomic.SwapInt64(&b.traced, 0),
-		through:   atomic.SwapInt64(&b.through, 0),
+func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
+	if globalSettingsCfg.tracingMode == TRACE_NEVER || reportingDisabled {
+		return false, 0, SAMPLE_SOURCE_NONE
 	}
-}
 
-func getNextInterval(now time.Time) time.Duration {
-	return time.Duration(counterIntervalSecs)*time.Second -
-		(time.Duration(now.Second()%counterIntervalSecs)*time.Second +
-			time.Duration(now.Nanosecond())*time.Nanosecond)
-}
-
-func appendCount(e *event, counts map[string]*rateCounts, name string, f func(*rateCounts) int64) {
-	if len(counts) == 0 {
-		return
+	var setting *oboeSettings
+	var ok bool
+	if setting, ok = getSetting(layer); !ok {
+		OboeLog(ERROR, fmt.Sprintf("Sampling disabled for %v until valid settings are retrieved.", layer))
+		return false, 0, SAMPLE_SOURCE_NONE
 	}
-	for layer, c := range counts {
-		startObject := bsonAppendStartObject(&e.bbuf, name)
-		e.AddInt64(layer, f(c))
-		bsonAppendFinishObject(&e.bbuf, startObject)
-	}
-}
 
-func oboeSampleRequest(layer, xtraceHeader string) (bool, int, int) {
-	if usingTestReporter {
-		if r, ok := thisReporter.(*TestReporter); ok {
-			if globalSettingsCfg.tracingMode == TRACE_NEVER {
-				r.ShouldTrace = false
+	var sampleRate int
+	var sampleSource sampleSource
+	retval := false
+	doRateLimiting := false
+
+	sampleRate = Max(Min(setting.value, maxSamplingRate), 0)
+
+	switch setting.sType {
+	case TYPE_DEFAULT:
+		sampleSource = SAMPLE_SOURCE_DEFAULT
+	case TYPE_LAYER:
+		sampleSource = SAMPLE_SOURCE_LAYER
+	default:
+		sampleSource = SAMPLE_SOURCE_NONE
+	}
+
+	if !traced {
+		// A new request
+		if setting.flags&FLAG_SAMPLE_START != 0 {
+			retval = shouldSample(sampleRate)
+			if retval {
+				doRateLimiting = true
 			}
-			return r.ShouldTrace, 1000000, 2 // trace tests
+		}
+	} else {
+		// A traced request
+		if setting.flags&FLAG_SAMPLE_THROUGH_ALWAYS != 0 {
+			retval = true
+		} else if setting.flags&FLAG_SAMPLE_THROUGH != 0 {
+			retval = shouldSample(sampleRate)
 		}
 	}
 
-	//	var sampleRate, sampleSource C.int
-	//	cachedLayer := layerCache.Get(layer)
-	//	var cxt *C.char
-	//	if xtraceHeader == "" {
-	//		// common case, where we are the entry layer
-	//		cxt = emptyCString
-	//	} else {
-	//		// use const "in_xtrace" arg, oboe_sample_request only checks if it is non-empty
-	//		cxt = inXTraceCString
-	//	}
-	//
-	//	sample := int(C.oboe_sample_request(cachedLayer.name, cxt, &globalSettings.settingsCfg, &sampleRate, &sampleSource))
-	//	sampled := cachedLayer.counter.Count(sample != 0, xtraceHeader != "")
-	//	return sampled, int(sampleRate), int(sampleSource)
-	// TODO look up settings / make sample rate decision
-	return true, 1000000, 2
+	retval = setting.bucket.count(retval, traced, doRateLimiting)
+
+	OboeLog(DEBUG, fmt.Sprintf("Sampling with rate=%v, source=%v", sampleRate, sampleSource))
+	return retval, sampleRate, sampleSource
 }
 
-func updateSetting(sType int32, layer string, flags []byte, timestamp int64,
-	value int64, ttl int64, arguments *map[string][]byte) {
+func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int64, arguments *map[string][]byte) {
 	globalSettingsCfg.lock.Lock()
 	defer globalSettingsCfg.lock.Unlock()
 
@@ -233,23 +259,80 @@ func updateSetting(sType int32, layer string, flags []byte, timestamp int64,
 	}
 
 	key := oboeSettingKey{
-		sType: sType,
+		sType: settingType(sType),
 		layer: layer,
 	}
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = globalSettingsCfg.settings[key]; !ok {
 		setting = &oboeSettings{
-			magic: 0x6f626f65,
+			bucket: &tokenBucket{},
 		}
 		globalSettingsCfg.settings[key] = setting
 	}
-	setting.timestamp = timestamp
-	setting.sType = sType
-	setting.flags = flags
-	setting.value = value
+	setting.timestamp = time.Now()
+	setting.sType = settingType(sType)
+	setting.flags = flagStringToBin(string(flags))
+	setting.value = int(value)
 	setting.ttl = ttl
 	setting.layer = layer
-	setting.bucketCapacity = bucketCapacity
-	setting.bucketRatePerSec = bucketRatePerSec
+
+	setting.bucket.lock.Lock()
+	if bucketCapacity >= 0 {
+		setting.bucket.capacity = bucketCapacity
+	} else {
+		setting.bucket.capacity = 0
+		OboeLog(WARNING, fmt.Sprintf("Invalid bucket capacity (%v). Using %v.", bucketCapacity, 0))
+	}
+	if setting.bucket.available > setting.bucket.capacity {
+		setting.bucket.available = setting.bucket.capacity
+	}
+	if bucketRatePerSec >= 0 {
+		setting.bucket.ratePerSec = bucketRatePerSec
+	} else {
+		setting.bucket.ratePerSec = 0
+		OboeLog(WARNING, fmt.Sprintf("Invalid bucket rate (%v). Using %v.", bucketRatePerSec, 0))
+	}
+	setting.bucket.lock.Unlock()
+}
+
+func getSetting(layer string) (*oboeSettings, bool) {
+	globalSettingsCfg.lock.RLock()
+	defer globalSettingsCfg.lock.RUnlock()
+
+	// for now only look up the default settings
+	key := oboeSettingKey{
+		sType: TYPE_DEFAULT,
+		layer: "",
+	}
+	if setting, ok := globalSettingsCfg.settings[key]; ok {
+		return setting, true
+	}
+
+	return nil, false
+}
+
+func shouldSample(sampleRate int) bool {
+	retval := sampleRate == maxSamplingRate || rand.Intn(maxSamplingRate) <= sampleRate
+	OboeLog(DEBUG, fmt.Sprintf("shouldSample(%v) => %v", sampleRate, retval))
+	return retval
+}
+
+func flagStringToBin(flagString string) settingFlag {
+	flags := settingFlag(0)
+	if flagString != "" {
+		for _, s := range strings.Split(flagString, ",") {
+			switch s {
+			case "OVERRIDE":
+				flags |= FLAG_OVERRIDE
+			case "SAMPLE_START":
+				flags |= FLAG_SAMPLE_START
+			case "SAMPLE_THROUGH":
+				flags |= FLAG_SAMPLE_THROUGH
+			case "SAMPLE_THROUGH_ALWAYS":
+				flags |= FLAG_SAMPLE_THROUGH_ALWAYS
+			}
+		}
+	}
+	return flags
 }

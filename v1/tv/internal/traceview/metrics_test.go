@@ -434,6 +434,9 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		name  string
 		value interface{}
 	}
+
+	// TODO add request counters
+
 	testCases := []testCase{
 		{"NumSent", int64(1)},
 		{"NumOverflowed", int64(1)},
@@ -445,7 +448,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		testCases = append(testCases, []testCase{
 			{"Load1", float64(1)},
 			{"TotalRAM", int64(1)},
-			{"FreeRAM", int64(1)},
+			{"FreeRAM", int(1)},
 			{"ProcessRAM", int(1)},
 		}...)
 	}
@@ -468,7 +471,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 
 	for i, tc := range testCases {
 		assert.Equal(t, tc.name, mts[i].(map[string]interface{})["name"])
-		assert.IsType(t, mts[i].(map[string]interface{})["value"], tc.value)
+		assert.IsType(t, mts[i].(map[string]interface{})["value"], tc.value, tc.name)
 	}
 
 	assert.Nil(t, m["TransactionNameOverflow"])

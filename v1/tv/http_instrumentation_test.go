@@ -11,11 +11,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/librato/go-traceview/v1/tv"
 	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
 	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 )
 
@@ -34,7 +34,7 @@ func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
 }
 
 func TestHTTPHandler404(t *testing.T) {
-	r := traceview.SetTestReporter() // set up test reporter
+	r := traceview.SetTestReporter(true) // set up test reporter
 	response := httpTest(handler404)
 	assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
 
@@ -59,7 +59,7 @@ func TestHTTPHandler404(t *testing.T) {
 }
 
 func TestHTTPHandler200(t *testing.T) {
-	r := traceview.SetTestReporter() // set up test reporter
+	r := traceview.SetTestReporter(true) // set up test reporter
 	response := httpTest(handler200)
 
 	r.Close(2)
@@ -84,7 +84,7 @@ func TestHTTPHandler200(t *testing.T) {
 }
 
 func TestHTTPHandlerNoTrace(t *testing.T) {
-	r := traceview.SetTestReporter() // set up test reporter
+	r := traceview.SetTestReporter(false) // set up test reporter
 	r.ShouldTrace = false
 	httpTest(handler404)
 
@@ -271,7 +271,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 	port := ln.Addr().(*net.TCPAddr).Port
 	go server.serverFn(t, ln) // start test server
 
-	r := traceview.SetTestReporter() // set up test reporter
+	r := traceview.SetTestReporter(true) // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	// make request to URL of test server
 	url := fmt.Sprintf("http://127.0.0.1:%d/test?qs=1", port)
@@ -382,7 +382,7 @@ func TestTraceHTTPErrorBBadRequest(t *testing.T) { testTraceHTTPError(t, "GET", 
 
 // test making an HTTP request that causes http.Client.Do() to fail
 func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testClientFn) {
-	r := traceview.SetTestReporter() // set up test reporter
+	r := traceview.SetTestReporter(true) // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	url := invalidPortURL // make HTTP req to invalid port
 	if badReq {
@@ -426,7 +426,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	port := list.Addr().(*net.TCPAddr).Port
 	go testDoubleWrappedServer(t, list) // start test server
 
-	r := traceview.SetTestReporter() // set up test reporter
+	r := traceview.SetTestReporter(true) // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	url := fmt.Sprintf("http://127.0.0.1:%d/test?qs=1", port)
 	resp, err := testHTTPClient(t, ctx, "GET", url)
@@ -519,7 +519,7 @@ func BobHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestDistributedApp(t *testing.T) {
-	r := traceview.SetTestReporter() // set up test reporter
+	r := traceview.SetTestReporter(true) // set up test reporter
 
 	aliceLn, err := net.Listen("tcp", ":8080")
 	assert.NoError(t, err)
@@ -618,7 +618,7 @@ func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestConcurrentApp(t *testing.T) {
-	r := traceview.SetTestReporter() // set up test reporter
+	r := traceview.SetTestReporter(true) // set up test reporter
 
 	aliceLn, err := net.Listen("tcp", ":8082")
 	assert.NoError(t, err)
@@ -663,7 +663,7 @@ func TestConcurrentApp(t *testing.T) {
 }
 
 func TestConcurrentAppNoTrace(t *testing.T) {
-	r := traceview.SetTestReporter() // set up test reporter
+	r := traceview.SetTestReporter(false) // set up test reporter
 	r.ShouldTrace = false
 
 	aliceLn, err := net.Listen("tcp", ":8084")

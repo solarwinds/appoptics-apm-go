@@ -719,7 +719,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 // settings	new settings
 func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	for _, s := range settings.GetSettings() {
-		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Timestamp, s.Value, s.Ttl, &s.Arguments)
+		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Value, s.Ttl, &s.Arguments)
 
 		// update MetricsFlushInterval
 		r.collectMetricIntervalLock.Lock()

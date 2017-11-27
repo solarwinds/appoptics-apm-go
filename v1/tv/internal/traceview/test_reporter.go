@@ -27,7 +27,7 @@ var oldReporter reporter = &nullReporter{}
 
 // SetTestReporter sets and returns a test reporter that captures raw event bytes
 // for making assertions about using the graphtest package.
-func SetTestReporter(args ...interface{}) *TestReporter {
+func SetTestReporter(withDefaultSetting bool, args ...interface{}) *TestReporter {
 	timeout := 2 * time.Second
 	if len(args) == 1 {
 		timeout, _ = args[0].(time.Duration)
@@ -45,6 +45,14 @@ func SetTestReporter(args ...interface{}) *TestReporter {
 	}
 	thisReporter = r
 	usingTestReporter = true
+
+	// start with clean slate
+	r.resetSettings()
+
+	// set default setting with 100% sampling rate
+	if withDefaultSetting {
+		r.addDefaultSetting()
+	}
 
 	return r
 }
@@ -112,3 +120,19 @@ func (r *TestReporter) reportStatus(ctx *oboeContext, e *event) error {
 }
 
 func (r *TestReporter) reportSpan(span *SpanMessage) error { return nil }
+
+func (r *TestReporter) resetSettings() {
+	reportingDisabled = false
+	flushRateCounts()
+	globalSettingsCfg = &oboeSettingsCfg{
+		settings: make(map[oboeSettingKey]*oboeSettings),
+	}
+	readEnvSettings()
+}
+
+func (r *TestReporter) addDefaultSetting() {
+	// add default setting with 100% sampling
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+}

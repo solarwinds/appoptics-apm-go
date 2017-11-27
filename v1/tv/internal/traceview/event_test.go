@@ -13,7 +13,7 @@ import (
 var testLayer = "go_test"
 
 func TestSendEvent(t *testing.T) {
-	r := SetTestReporter()
+	r := SetTestReporter(true)
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
@@ -117,7 +117,7 @@ func TestOboeEvent(t *testing.T) {
 }
 
 func TestEventMetadata(t *testing.T) {
-	r := SetTestReporter()
+	r := SetTestReporter(true)
 
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelExit, "alice")
@@ -125,7 +125,7 @@ func TestEventMetadata(t *testing.T) {
 	e2, err := ctx.newEvent(LabelEntry, "bob")
 	assert.NoError(t, err)
 
-	ctx2 := newContext() // context for unassociated trace
+	ctx2 := newContext(true) // context for unassociated trace
 	assert.Len(t, ctx.MetadataString(), oboeMetadataStringLen)
 	assert.Len(t, ctx2.MetadataString(), oboeMetadataStringLen)
 	assert.NotEqual(t, ctx.MetadataString()[2:42], ctx2.MetadataString()[2:42])
@@ -145,7 +145,7 @@ func TestEventMetadata(t *testing.T) {
 }
 
 func TestEvent(t *testing.T) {
-	r := SetTestReporter()
+	r := SetTestReporter(true)
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
@@ -162,7 +162,7 @@ func TestEvent(t *testing.T) {
 	})
 }
 func TestEventNoEdge(t *testing.T) {
-	r := SetTestReporter()
+	r := SetTestReporter(true)
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)

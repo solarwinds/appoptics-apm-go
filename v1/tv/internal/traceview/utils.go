@@ -4,9 +4,11 @@ package traceview
 
 import (
 	"bufio"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -144,4 +146,33 @@ func copyMap(from *map[string]string) map[string]string {
 	}
 
 	return to
+}
+
+func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) *map[string][]byte {
+	args := make(map[string][]byte)
+
+	if capacity > -1 {
+		bits := math.Float64bits(capacity)
+		bytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bytes, bits)
+		args["BucketCapacity"] = bytes
+	}
+	if ratePerSec > -1 {
+		bits := math.Float64bits(ratePerSec)
+		bytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bytes, bits)
+		args["BucketRate"] = bytes
+	}
+	if metricsFlushInterval > -1 {
+		bytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bytes, uint32(metricsFlushInterval))
+		args["MetricsFlushInterval"] = bytes
+	}
+	if maxTransactions > -1 {
+		bytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bytes, uint32(maxTransactions))
+		args["MaxTransactions"] = bytes
+	}
+
+	return &args
 }

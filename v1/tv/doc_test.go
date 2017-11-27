@@ -69,13 +69,13 @@ func testDocLayerExampleCtx() {
 }
 
 func TestDocLayerExample(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	testDocLayerExample()
 	r.Close(11)
 	assertDocLayerExample(t, r.Bufs)
 }
 func TestDocLayerExampleCtx(t *testing.T) {
-	r := traceview.SetTestReporter()
+	r := traceview.SetTestReporter(true)
 	testDocLayerExampleCtx()
 	r.Close(11)
 	assertDocLayerExample(t, r.Bufs)

@@ -183,7 +183,13 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	start := bsonAppendStartArray(bbuf, "measurements")
 	index := 0
 
-	// TODO add request counters
+	// request counters
+	rc := flushRateCounts()
+	addMetricsValue(bbuf, &index, "RequestCount", rc.requested)
+	addMetricsValue(bbuf, &index, "TraceCount", rc.traced)
+	addMetricsValue(bbuf, &index, "TokenBucketExhaustionCount", rc.limited)
+	addMetricsValue(bbuf, &index, "SampleCount", rc.sampled)
+	addMetricsValue(bbuf, &index, "ThroughTraceCount", rc.through)
 
 	// event queue stats
 	queueStats.lock.Lock()
