@@ -247,8 +247,8 @@ type Context interface {
 	ReportEvent(label Label, layer string, args ...interface{}) error
 	ReportEventMap(label Label, layer string, keys map[string]interface{}) error
 	Copy() Context
-	IsTracing() bool
-	SetTracing(trace bool)
+	IsSampled() bool
+	SetSampled(trace bool)
 	MetadataString() string
 	NewEvent(label Label, layer string, addCtxEdge bool) Event
 	GetVersion() uint8
@@ -271,8 +271,8 @@ func (e *nullContext) ReportEventMap(label Label, layer string, keys map[string]
 	return nil
 }
 func (e *nullContext) Copy() Context                                         { return &nullContext{} }
-func (e *nullContext) IsTracing() bool                                       { return false }
-func (e *nullContext) SetTracing(trace bool)                                 {}
+func (e *nullContext) IsSampled() bool                                       { return false }
+func (e *nullContext) SetSampled(trace bool)                                 {}
 func (e *nullContext) MetadataString() string                                { return "" }
 func (e *nullContext) NewEvent(l Label, y string, g bool) Event              { return &nullEvent{} }
 func (e *nullContext) GetVersion() uint8                                     { return 0 }
@@ -292,7 +292,7 @@ func newContext(sampled bool) Context {
 		}
 		return &nullContext{}
 	}
-	ctx.SetTracing(sampled)
+	ctx.SetSampled(sampled)
 	return ctx
 }
 
@@ -315,7 +315,7 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 			OboeLog(INFO, "passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
 			OboeLog(INFO, "passed in x-trace has wrong version, ignoring")
-		} else if !ctx.IsTracing() {
+		} else if !ctx.IsSampled() {
 			OboeLog(INFO, "passed in x-trace indicates that request is not being sampled")
 			return ctx, true
 		} else {
@@ -346,7 +346,7 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 		return ctx, true
 	}
 
-	ctx.SetTracing(false)
+	ctx.SetSampled(false)
 	return ctx, true
 }
 
@@ -358,9 +358,9 @@ func (ctx *oboeContext) Copy() Context {
 	md.flags = ctx.metadata.flags
 	return &oboeContext{metadata: md}
 }
-func (ctx *oboeContext) IsTracing() bool { return ctx.metadata.isSampled() }
+func (ctx *oboeContext) IsSampled() bool { return ctx.metadata.isSampled() }
 
-func (ctx *oboeContext) SetTracing(trace bool) {
+func (ctx *oboeContext) SetSampled(trace bool) {
 	if trace {
 		ctx.metadata.flags |= XTR_FLAGS_SAMPLED // set sampled bit
 	} else {

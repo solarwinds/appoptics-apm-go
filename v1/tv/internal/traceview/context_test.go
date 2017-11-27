@@ -130,6 +130,20 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, len(ctx.metadata.ids.taskID), ctx.metadata.taskLen)
 	assert.Equal(t, len(ctx.metadata.ids.opID), ctx.metadata.opLen)
 	assert.Equal(t, oboeMetadataStringLen, len(cctx.MetadataString()))
+
+	// isSampled()
+	var md3 oboeMetadata
+	md3.FromString(md1Str)
+	ctx3 := &oboeContext{md3}
+	ctx3.SetSampled(true)
+	assert.True(t, ctx3.IsSampled())
+	assert.Equal(t, "01", ctx3.MetadataString()[58:])
+	ctx3.SetSampled(false)
+	assert.False(t, ctx3.IsSampled())
+	assert.Equal(t, "00", ctx3.MetadataString()[58:])
+	ctx3.SetSampled(true)
+	assert.True(t, ctx3.IsSampled())
+	assert.Equal(t, "01", ctx3.MetadataString()[58:])
 }
 
 type errorReader struct {
@@ -180,7 +194,7 @@ func TestMetadataRandom(t *testing.T) {
 // newTestContext returns a fresh random *context with no events reported for use in unit tests.
 func newTestContext(t *testing.T) *oboeContext {
 	ctx := newContext(true)
-	assert.True(t, ctx.IsTracing())
+	assert.True(t, ctx.IsSampled())
 	assert.IsType(t, ctx, &oboeContext{})
 	return ctx.(*oboeContext)
 }
@@ -224,11 +238,11 @@ func TestNullContext(t *testing.T) {
 	ctx, ok := NewContext("testLayer", "", false, nil)
 	assert.True(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
-	assert.False(t, ctx.IsTracing())
+	assert.False(t, ctx.IsSampled())
 	mdString := ctx.MetadataString()
 	assert.NotEmpty(t, mdString)
 	assert.Equal(t, mdString[len(mdString)-2:], "00")
-	assert.False(t, ctx.Copy().IsTracing())
+	assert.False(t, ctx.Copy().IsSampled())
 	// reporting shouldn't work
 	assert.NoError(t, ctx.ReportEvent(LabelEntry, "testLayer"))
 	assert.NoError(t, ctx.ReportEventMap(LabelInfo, "testLayer", map[string]interface{}{"K": "V"}))
@@ -252,7 +266,7 @@ func TestNullContext(t *testing.T) {
 	ctxBad, ok := NewContext("testBadEntry", "", true, nil)
 	assert.True(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "oboeContext")
-	assert.False(t, ctx.IsTracing())
+	assert.False(t, ctx.IsSampled())
 
 	assert.Len(t, r.Bufs, 0) // no reporting
 	r.Close(0)
