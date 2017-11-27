@@ -453,7 +453,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		testCases = append(testCases, []testCase{
 			{"Load1", float64(1)},
 			{"TotalRAM", int64(1)},
-			{"FreeRAM", int(1)},
+			{"FreeRAM", int64(1)},
 			{"ProcessRAM", int(1)},
 		}...)
 	}
