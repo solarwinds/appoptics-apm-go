@@ -54,6 +54,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 7tsqAxw=
 -----END CERTIFICATE-----`
 
+	grpcEventMaxBatchIntervalDefault        = 100 * time.Millisecond
 	grpcMetricIntervalDefault               = 30  // default metrics flush interval in seconds
 	grpcGetSettingsIntervalDefault          = 30  // default settings retrieval interval in seconds
 	grpcSettingsTimeoutCheckIntervalDefault = 10  // default check interval for timed out settings in seconds
@@ -96,6 +97,7 @@ type grpcConnection struct {
 type grpcReporter struct {
 	eventConnection              *grpcConnection // used for events only
 	metricConnection             *grpcConnection // used for everything else (postMetrics, postStatus, getSettings)
+	eventMaxBatchInterval        time.Duration   // max interval between postEvent batches
 	collectMetricInterval        int             // metrics flush interval in seconds
 	getSettingsInterval          int             // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int             // check interval for timed out settings in seconds
@@ -177,6 +179,7 @@ func newGRPCReporter() reporter {
 			queueStats:  &eventQueueStats{},
 		},
 
+		eventMaxBatchInterval:        grpcEventMaxBatchIntervalDefault,
 		collectMetricInterval:        grpcMetricIntervalDefault,
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
 		settingsTimeoutCheckInterval: grpcSettingsTimeoutCheckIntervalDefault,
@@ -379,8 +382,6 @@ type grpcResult struct {
 	err error
 }
 
-var eventSenderPollTimeout = 100 * time.Millisecond
-
 // eventBatcher batches pending events into a list of messages for a GRPC request.
 func (r *grpcReporter) eventSender() {
 	batches := make(chan [][]byte)
@@ -410,7 +411,7 @@ func (r *grpcReporter) eventSender() {
 				inProgress = false
 			}
 
-		case <-time.After(eventSenderPollTimeout):
+		case <-time.After(r.eventMaxBatchInterval):
 			if !inProgress && len(messages) > 0 {
 				// kick off Log(), none was made after last return
 				inProgress = true
