@@ -438,6 +438,11 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	// TODO add request counters
 
 	testCases := []testCase{
+		{"RequestCount", int64(1)},
+		{"TraceCount", int64(1)},
+		{"TokenBucketExhaustionCount", int64(1)},
+		{"SampleCount", int64(1)},
+		{"ThroughTraceCount", int64(1)},
 		{"NumSent", int64(1)},
 		{"NumOverflowed", int64(1)},
 		{"NumFailed", int64(1)},
