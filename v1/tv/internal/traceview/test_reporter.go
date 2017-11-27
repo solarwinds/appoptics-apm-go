@@ -47,7 +47,7 @@ func SetTestReporter(withDefaultSetting bool, args ...interface{}) *TestReporter
 	usingTestReporter = true
 
 	// start with clean slate
-	r.resetSettings()
+	resetSettings()
 
 	// set default setting with 100% sampling rate
 	if withDefaultSetting {
@@ -120,15 +120,6 @@ func (r *TestReporter) reportStatus(ctx *oboeContext, e *event) error {
 }
 
 func (r *TestReporter) reportSpan(span *SpanMessage) error { return nil }
-
-func (r *TestReporter) resetSettings() {
-	reportingDisabled = false
-	flushRateCounts()
-	globalSettingsCfg = &oboeSettingsCfg{
-		settings: make(map[oboeSettingKey]*oboeSettings),
-	}
-	readEnvSettings()
-}
 
 func (r *TestReporter) addDefaultSetting() {
 	// add default setting with 100% sampling

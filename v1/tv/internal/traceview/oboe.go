@@ -43,48 +43,12 @@ type tokenBucket struct {
 	last       time.Time
 	lock       sync.Mutex
 }
-type rateCounts struct{ requested, sampled, limited, traced, through int64 }
 
 // The identifying keys for a setting
 type oboeSettingKey struct {
 	sType settingType
 	layer string
 }
-
-type tracingMode int
-type settingType int
-type settingFlag uint16
-type sampleSource int
-
-const (
-	TRACE_NEVER tracingMode = iota
-	TRACE_ALWAYS
-)
-
-const (
-	TYPE_DEFAULT settingType = iota
-	TYPE_LAYER
-)
-
-const (
-	FLAG_OK                    settingFlag = 0x0
-	FLAG_INVALID               settingFlag = 0x1
-	FLAG_OVERRIDE              settingFlag = 0x2
-	FLAG_SAMPLE_START          settingFlag = 0x4
-	FLAG_SAMPLE_THROUGH        settingFlag = 0x8
-	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 0x10
-)
-
-const (
-	SAMPLE_SOURCE_NONE    sampleSource = 0
-	SAMPLE_SOURCE_FILE    sampleSource = 1
-	SAMPLE_SOURCE_DEFAULT sampleSource = 2
-	SAMPLE_SOURCE_LAYER   sampleSource = 3
-)
-
-const (
-	maxSamplingRate = 1000000
-)
 
 // Global configuration settings
 var globalSettingsCfg = &oboeSettingsCfg{
@@ -294,6 +258,15 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 		OboeLog(WARNING, fmt.Sprintf("Invalid bucket rate (%v). Using %v.", bucketRatePerSec, 0))
 	}
 	setting.bucket.lock.Unlock()
+}
+
+func resetSettings() {
+	reportingDisabled = false
+	flushRateCounts()
+	globalSettingsCfg = &oboeSettingsCfg{
+		settings: make(map[oboeSettingKey]*oboeSettings),
+	}
+	readEnvSettings()
 }
 
 func getSetting(layer string) (*oboeSettings, bool) {

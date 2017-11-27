@@ -107,6 +107,9 @@ type eventQueueStats struct {
 	lock          sync.Mutex // protect access to the counters
 }
 
+// rate counts reported by trace sampler
+type rateCounts struct{ requested, sampled, limited, traced, through int64 }
+
 var (
 	cachedDistro          string            // cached distribution name
 	cachedMACAddresses    = "uninitialized" // cached list MAC addresses

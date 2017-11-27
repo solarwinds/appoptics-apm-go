@@ -35,6 +35,42 @@ const (
 	eventHeader = "1"
 )
 
+// enums used by sampling and tracing settings
+type tracingMode int
+type settingType int
+type settingFlag uint16
+type sampleSource int
+
+const (
+	TRACE_NEVER tracingMode = iota
+	TRACE_ALWAYS
+)
+
+const (
+	TYPE_DEFAULT settingType = iota
+	TYPE_LAYER
+)
+
+const (
+	FLAG_OK                    settingFlag = 0x0
+	FLAG_INVALID               settingFlag = 0x1
+	FLAG_OVERRIDE              settingFlag = 0x2
+	FLAG_SAMPLE_START          settingFlag = 0x4
+	FLAG_SAMPLE_THROUGH        settingFlag = 0x8
+	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 0x10
+)
+
+const (
+	SAMPLE_SOURCE_NONE    sampleSource = 0
+	SAMPLE_SOURCE_FILE    sampleSource = 1
+	SAMPLE_SOURCE_DEFAULT sampleSource = 2
+	SAMPLE_SOURCE_LAYER   sampleSource = 3
+)
+
+const (
+	maxSamplingRate = 1000000
+)
+
 func oboeEventInit(evt *event, md *oboeMetadata) error {
 	if evt == nil || md == nil {
 		return errors.New("oboeEventInit got nil args")
