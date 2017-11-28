@@ -230,15 +230,20 @@ func (e *event) AddKV(key, value interface{}) error {
 }
 
 // Reports event using specified Reporter
-func (e *event) ReportUsing(c *oboeContext, r reporter) error {
-	if e.metadata.isSampled() {
-		return r.reportEvent(c, e)
+func (e *event) ReportUsing(c *oboeContext, r reporter, channel reporterChannel) error {
+	if channel == EVENTS {
+		if e.metadata.isSampled() {
+			return r.reportEvent(c, e)
+		}
+	} else if channel == METRICS {
+		return r.reportStatus(c, e)
 	}
 	return nil
 }
 
-// Reports event using default (UDP) Reporter
-func (e *event) Report(c *oboeContext) error { return e.ReportUsing(c, thisReporter) }
+// Reports event using default Reporter
+func (e *event) Report(c *oboeContext) error       { return e.ReportUsing(c, thisReporter, EVENTS) }
+func (e *event) ReportStatus(c *oboeContext) error { return e.ReportUsing(c, thisReporter, METRICS) }
 
 // Report event using Context interface
 func (e *event) ReportContext(c Context, addCtxEdge bool, args ...interface{}) error {
