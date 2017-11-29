@@ -11,19 +11,21 @@ import (
 	"time"
 
 	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
+	pb "github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/grpclog"
+	"gopkg.in/mgo.v2/bson"
 )
 
 const (
-	collectorAddress = "127.0.0.1"
-	serviceKey       = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
+	serviceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
 )
 
 // this runs before init()
 var _ = func() (_ struct{}) {
 	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
-	os.Setenv("APPOPTICS_COLLECTOR", collectorAddress)
-	os.Setenv("APPOPTICS_REPORTER_UDP", "127.0.0.1:7832")
+	os.Setenv("APPOPTICS_REPORTER", "none")
 	return
 }()
 
@@ -181,13 +183,28 @@ func assertSSLMode(t *testing.T) {
 }
 
 func TestGRPCReporter(t *testing.T) {
-	assertSSLMode(t)
-	assert.IsType(t, &grpcReporter{}, thisReporter)
+	// start test gRPC server
+	debugLevel = DEBUG
+	addr := "localhost:4567"
+	grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
+	server := StartTestGRPCServer(t, addr)
+	time.Sleep(100 * time.Millisecond)
+
+	// set gRPC reporter
+	reportingDisabled = false
+	os.Setenv("APPOPTICS_COLLECTOR", addr)
+	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
+	oldReporter := thisReporter
+	thisReporter = newGRPCReporter()
+
+	require.IsType(t, &grpcReporter{}, thisReporter)
 
 	r := thisReporter.(*grpcReporter)
 	ctx := newTestContext(t)
-	ev1, _ := ctx.newEvent(LabelInfo, testLayer)
-	ev2, _ := ctx.newEvent(LabelInfo, testLayer)
+	ev1, err := ctx.newEvent(LabelInfo, "layer1")
+	assert.NoError(t, err)
+	ev2, err := ctx.newEvent(LabelInfo, "layer2")
+	assert.NoError(t, err)
 
 	assert.Error(t, r.reportEvent(nil, nil))
 	assert.Error(t, r.reportEvent(ctx, nil))
@@ -197,8 +214,8 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Error(t, r.reportStatus(ctx, nil))
 	assert.NoError(t, r.reportStatus(ctx, ev2))
 
-	assert.Equal(t, collectorAddress, r.eventConnection.address)
-	assert.Equal(t, collectorAddress, r.metricConnection.address)
+	assert.Equal(t, addr, r.eventConnection.address)
+	assert.Equal(t, addr, r.metricConnection.address)
 
 	assert.Equal(t, serviceKey, r.eventConnection.serviceKey)
 	assert.Equal(t, serviceKey, r.metricConnection.serviceKey)
@@ -206,4 +223,29 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, grpcMetricIntervalDefault, r.collectMetricInterval)
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
 	assert.Equal(t, grpcSettingsTimeoutCheckIntervalDefault, r.settingsTimeoutCheckInterval)
+
+	time.Sleep(150 * time.Millisecond)
+
+	// stop test reporter
+	server.Stop()
+	thisReporter = oldReporter
+
+	// assert data received
+	require.Len(t, server.events, 1)
+	assert.Equal(t, server.events[0].Encoding, pb.EncodingType_BSON)
+	require.Len(t, server.events[0].Messages, 1)
+
+	require.Len(t, server.status, 1)
+	assert.Equal(t, server.status[0].Encoding, pb.EncodingType_BSON)
+	require.Len(t, server.status[0].Messages, 1)
+
+	dec1, dec2 := bson.M{}, bson.M{}
+	err = bson.Unmarshal(server.events[0].Messages[0], &dec1)
+	require.NoError(t, err)
+	err = bson.Unmarshal(server.status[0].Messages[0], &dec2)
+	require.NoError(t, err)
+
+	assert.Equal(t, dec1["Layer"], "layer1")
+	assert.Equal(t, dec2["Layer"], "layer2")
+
 }

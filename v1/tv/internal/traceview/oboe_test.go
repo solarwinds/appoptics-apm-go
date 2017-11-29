@@ -213,7 +213,7 @@ func TestSampleSource(t *testing.T) {
 	_, _, source := shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 
-	r.resetSettings()
+	resetSettings()
 	_, _, source = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_NONE, source)
 
@@ -248,7 +248,7 @@ func TestSampleFlags(t *testing.T) {
 	assert.False(t, ok)
 	assert.EqualValues(t, 1, c.through)
 
-	r.resetSettings()
+	resetSettings()
 	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -261,7 +261,7 @@ func TestSampleFlags(t *testing.T) {
 	assert.False(t, ok)
 	assert.EqualValues(t, 1, c.through)
 
-	r.resetSettings()
+	resetSettings()
 	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -274,7 +274,7 @@ func TestSampleFlags(t *testing.T) {
 	assert.True(t, ok)
 	assert.EqualValues(t, 1, c.through)
 
-	r.resetSettings()
+	resetSettings()
 	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -300,7 +300,7 @@ func TestSampleTokenBucket(t *testing.T) {
 	assert.EqualValues(t, 1, c.requested)
 	assert.EqualValues(t, 0, c.limited)
 
-	r.resetSettings()
+	resetSettings()
 	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -312,7 +312,7 @@ func TestSampleTokenBucket(t *testing.T) {
 	assert.EqualValues(t, 1, c.requested)
 	assert.EqualValues(t, 1, c.limited)
 
-	r.resetSettings()
+	resetSettings()
 	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",

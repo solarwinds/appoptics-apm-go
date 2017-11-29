@@ -418,7 +418,7 @@ func TestAddHistogramToBSON(t *testing.T) {
 
 func TestGenerateMetricsMessage(t *testing.T) {
 	bbuf := &bsonBuffer{
-		buf: generateMetricsMessage(15),
+		buf: generateMetricsMessage(15, &eventQueueStats{}),
 	}
 	m := bsonToMap(bbuf)
 
@@ -438,6 +438,11 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	// TODO add request counters
 
 	testCases := []testCase{
+		{"RequestCount", int64(1)},
+		{"TraceCount", int64(1)},
+		{"TokenBucketExhaustionCount", int64(1)},
+		{"SampleCount", int64(1)},
+		{"ThroughTraceCount", int64(1)},
 		{"NumSent", int64(1)},
 		{"NumOverflowed", int64(1)},
 		{"NumFailed", int64(1)},
@@ -448,7 +453,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		testCases = append(testCases, []testCase{
 			{"Load1", float64(1)},
 			{"TotalRAM", int64(1)},
-			{"FreeRAM", int(1)},
+			{"FreeRAM", int64(1)},
 			{"ProcessRAM", int(1)},
 		}...)
 	}
@@ -477,7 +482,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	assert.Nil(t, m["TransactionNameOverflow"])
 
 	metricsHTTPMeasurements.transactionNameOverflow = true
-	bbuf.buf = generateMetricsMessage(15)
+	bbuf.buf = generateMetricsMessage(15, &eventQueueStats{})
 	m = bsonToMap(bbuf)
 
 	assert.NotNil(t, m["TransactionNameOverflow"])

@@ -231,17 +231,15 @@ func TestNewContext(t *testing.T) {
 	r.Close(0)
 }
 
+// TestNullContext asserts properties of nullContext structs.
 func TestNullContext(t *testing.T) {
 	r := SetTestReporter(false)
 	r.ShouldTrace = false
-
-	ctx, ok := NewContext("testLayer", "", false, nil)
-	assert.True(t, ok)
-	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
+	// create a nullContext
+	ctx, ok := NewContext("testLayer", "", false, nil) // nullContext{}
+	assert.False(t, ok)
+	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
 	assert.False(t, ctx.IsSampled())
-	mdString := ctx.MetadataString()
-	assert.NotEmpty(t, mdString)
-	assert.Equal(t, mdString[len(mdString)-2:], "00")
 	assert.False(t, ctx.Copy().IsSampled())
 	// reporting shouldn't work
 	assert.NoError(t, ctx.ReportEvent(LabelEntry, "testLayer"))
@@ -254,18 +252,18 @@ func TestNullContext(t *testing.T) {
 	assert.NoError(t, e.ReportContext(ctx, false))
 	assert.Len(t, r.Bufs, 0) // no reporting
 
-	// try and report a real unrelated event
+	// try and report a real unrelated event on a null context
 	e2, err := newTestContext(t).newEvent(LabelEntry, "e2")
 	assert.NoError(t, err)
-	assert.Error(t, e2.ReportContext(ctx, false))
+	assert.NoError(t, e2.ReportContext(ctx, false))
 	assert.Len(t, r.Bufs, 0) // no reporting
 
 	// shouldn't be able to create a trace if the entry event fails
 	r.ShouldTrace = true
 	r.ShouldError = true
 	ctxBad, ok := NewContext("testBadEntry", "", true, nil)
-	assert.True(t, ok)
-	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "oboeContext")
+	assert.False(t, ok)
+	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
 	assert.False(t, ctx.IsSampled())
 
 	assert.Len(t, r.Bufs, 0) // no reporting

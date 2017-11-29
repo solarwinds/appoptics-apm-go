@@ -107,6 +107,9 @@ type eventQueueStats struct {
 	lock          sync.Mutex // protect access to the counters
 }
 
+// rate counts reported by trace sampler
+type rateCounts struct{ requested, sampled, limited, traced, through int64 }
+
 var (
 	cachedDistro          string            // cached distribution name
 	cachedMACAddresses    = "uninitialized" // cached list MAC addresses
@@ -132,9 +135,6 @@ var metricsHTTPHistograms = &histograms{
 	precision:  metricsHistPrecisionDefault,
 }
 
-// event queue stats (reset on each metrics report cycle)
-var metricsEventQueueStats = &eventQueueStats{}
-
 // initialize values according to env variables
 func init() {
 	pEnv := "APPOPTICS_HISTOGRAM_PRECISION"
@@ -158,7 +158,7 @@ func init() {
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
-func generateMetricsMessage(metricsFlushInterval int) []byte {
+func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStats) []byte {
 	bbuf := NewBsonBuffer()
 
 	bsonAppendString(bbuf, "Hostname", cachedHostname)
@@ -195,21 +195,21 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 	addMetricsValue(bbuf, &index, "ThroughTraceCount", rc.through)
 
 	// event queue stats
-	metricsEventQueueStats.lock.Lock()
+	queueStats.lock.Lock()
 
-	addMetricsValue(bbuf, &index, "NumSent", metricsEventQueueStats.numSent)
-	addMetricsValue(bbuf, &index, "NumOverflowed", metricsEventQueueStats.numOverflowed)
-	addMetricsValue(bbuf, &index, "NumFailed", metricsEventQueueStats.numFailed)
-	addMetricsValue(bbuf, &index, "TotalEvents", metricsEventQueueStats.totalEvents)
-	addMetricsValue(bbuf, &index, "QueueLargest", metricsEventQueueStats.queueLargest)
+	addMetricsValue(bbuf, &index, "NumSent", queueStats.numSent)
+	addMetricsValue(bbuf, &index, "NumOverflowed", queueStats.numOverflowed)
+	addMetricsValue(bbuf, &index, "NumFailed", queueStats.numFailed)
+	addMetricsValue(bbuf, &index, "TotalEvents", queueStats.totalEvents)
+	addMetricsValue(bbuf, &index, "QueueLargest", queueStats.queueLargest)
 
-	metricsEventQueueStats.numSent = 0
-	metricsEventQueueStats.numOverflowed = 0
-	metricsEventQueueStats.numFailed = 0
-	metricsEventQueueStats.totalEvents = 0
-	metricsEventQueueStats.queueLargest = 0
+	queueStats.numSent = 0
+	queueStats.numOverflowed = 0
+	queueStats.numFailed = 0
+	queueStats.totalEvents = 0
+	queueStats.queueLargest = 0
 
-	metricsEventQueueStats.lock.Unlock()
+	queueStats.lock.Unlock()
 
 	addHostMetrics(bbuf, &index)
 
@@ -761,34 +761,10 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	*index += 1
 }
 
-func incrementNumSent(count int) {
-	metricsEventQueueStats.lock.Lock()
-	metricsEventQueueStats.numSent += int64(count)
-	metricsEventQueueStats.lock.Unlock()
-}
-
-func incrementNumOverflowed(count int) {
-	metricsEventQueueStats.lock.Lock()
-	metricsEventQueueStats.numOverflowed += int64(count)
-	metricsEventQueueStats.lock.Unlock()
-}
-
-func incrementNumFailed(count int) {
-	metricsEventQueueStats.lock.Lock()
-	metricsEventQueueStats.numFailed += int64(count)
-	metricsEventQueueStats.lock.Unlock()
-}
-
-func incrementTotalEvents(count int) {
-	metricsEventQueueStats.lock.Lock()
-	metricsEventQueueStats.totalEvents += int64(count)
-	metricsEventQueueStats.lock.Unlock()
-}
-
-func setQueueLargest(count int) {
-	metricsEventQueueStats.lock.Lock()
-	if int64(count) > metricsEventQueueStats.queueLargest {
-		metricsEventQueueStats.queueLargest = int64(count)
+func (s *eventQueueStats) setQueueLargest(count int) {
+	s.lock.Lock()
+	if int64(count) > s.queueLargest {
+		s.queueLargest = int64(count)
 	}
-	metricsEventQueueStats.lock.Unlock()
+	s.lock.Unlock()
 }

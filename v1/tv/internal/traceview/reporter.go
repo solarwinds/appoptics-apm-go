@@ -50,9 +50,10 @@ func init() {
 	case "ssl":
 		fallthrough // using fallthrough since the SSL reporter (GRPC) is our default reporter
 	default:
-		thisReporter = grpcNewReporter()
+		thisReporter = newGRPCReporter()
 	case "udp":
 		thisReporter = udpNewReporter()
+	case "none":
 	}
 
 	sendInitMessage()
@@ -112,8 +113,7 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	return nil
 }
 
-// Determines if request should be traced, based on sample rate settings:
-// This is our only dependency on the liboboe C library.
+// Determines if request should be traced, based on sample rate settings.
 func shouldTraceRequest(layer string, traced bool) (bool, int, sampleSource) {
 	return oboeSampleRequest(layer, traced)
 }
