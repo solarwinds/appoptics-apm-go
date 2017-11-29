@@ -429,13 +429,14 @@ func (r *grpcReporter) eventSender() {
 func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan grpcResult {
 	results := make(chan grpcResult)
 	go func() {
-		r.eventRetrySender(batches, POSTEVENTS, r.eventConnection)
+		r.eventRetrySender(batches, results, POSTEVENTS, r.eventConnection)
 	}()
 	return results
 }
 
 func (r *grpcReporter) eventRetrySender(
-	batches chan [][]byte,
+	batches <-chan [][]byte,
+	results chan<- grpcResult,
 	authority reconnectAuthority,
 	connection *grpcConnection,
 ) {
@@ -484,6 +485,7 @@ func (r *grpcReporter) eventRetrySender(
 					resultOk = true
 					connection.reconnectAuthority = UNSET
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
+					results <- grpcResult{ret: result}
 				case collector.ResultCode_TRY_LATER:
 					OboeLog(DEBUG, "Server responded: Try later")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
