@@ -19,7 +19,7 @@ type Trace interface {
 	//	Info(args ...interface{})
 	//  Error(class, msg string)
 	//  Err(error)
-	//  IsTracing() bool
+	//  IsSampled() bool
 	Layer
 
 	// End a Trace, and include KV pairs returned by func f. Useful
@@ -131,6 +131,13 @@ func (t *tvTrace) reportExit() {
 	if t.ok() {
 		t.lock.Lock()
 		defer t.lock.Unlock()
+
+		// if this is an HTTP trace, record a new span
+		if !t.httpSpan.start.IsZero() {
+			t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)
+			t.recordHTTPSpan()
+		}
+
 		for _, edge := range t.childEdges { // add Edge KV for each joined child
 			t.endArgs = append(t.endArgs, "Edge", edge)
 		}
@@ -139,19 +146,19 @@ func (t *tvTrace) reportExit() {
 		} else {
 			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), t.endArgs...)
 		}
-		t.recordHTTPSpan()
+
 		t.childEdges = nil // clear child edge list
 		t.endArgs = nil
 		t.ended = true
 	}
 }
 
-func (t *tvTrace) IsTracing() bool { return t != nil && t.tvCtx.IsTracing() }
+func (t *tvTrace) IsSampled() bool { return t != nil && t.tvCtx.IsSampled() }
 
 // ExitMetadata reports the X-Trace metadata string that will be used by the exit event.
 // This is useful for setting response headers before reporting the end of the span.
 func (t *tvTrace) ExitMetadata() (mdHex string) {
-	if t.IsTracing() {
+	if t.IsSampled() {
 		if t.exitEvent == nil {
 			t.exitEvent = t.tvCtx.NewEvent(traceview.LabelExit, t.layerName(), false)
 		}
@@ -183,9 +190,7 @@ func (t *tvTrace) recordHTTPSpan() {
 			num--
 		}
 	}
-
 	t.httpSpan.span.Transaction = strings.TrimSuffix(transaction, ".")
-	t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)
 
 	traceview.ReportSpan(&t.httpSpan.span)
 }

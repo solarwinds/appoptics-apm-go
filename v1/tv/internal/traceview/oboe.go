@@ -83,18 +83,21 @@ func readEnvSettings() {
 }
 
 const initVersion = 1
-const initLayer = "go"
 
 func sendInitMessage() {
 	ctx := newContext(true)
 	if c, ok := ctx.(*oboeContext); ok {
-		// TODO report as single event on the status channel
-		c.reportEvent(LabelEntry, initLayer, false,
-			"__Init", 1,
-			"Go.Version", runtime.Version(),
-			"Go.Oboe.Version", initVersion,
-		)
-		c.ReportEvent(LabelExit, initLayer)
+		// create new event from context
+		e, err := c.newEvent("single", "go")
+		if err != nil {
+			OboeLog(ERROR, "Error while creating the init message")
+		}
+
+		e.AddKV("__Init", 1)
+		e.AddKV("Go.Version", runtime.Version())
+		e.AddKV("Go.Oboe.Version", initVersion)
+
+		e.ReportStatus(c)
 	}
 }
 

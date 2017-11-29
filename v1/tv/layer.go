@@ -37,6 +37,9 @@ type Layer interface {
 	// in an outgoing HTTP request.
 	MetadataString() string
 
+	// IsSampled returns whether or not this Layer is sampled
+	IsSampled() bool
+
 	// SetAsync(true) provides a hint that this Layer is a parent of
 	// concurrent overlapping child Layers.
 	SetAsync(bool)
@@ -151,6 +154,13 @@ func (s *layerSpan) MetadataString() string {
 	return ""
 }
 
+func (s *layerSpan) IsSampled() bool {
+	if s.ok() {
+		return s.tvCtx.IsSampled()
+	}
+	return false
+}
+
 // SetAsync(true) provides a hint that this Layer is a parent of concurrent overlapping child Layers.
 func (s *layerSpan) SetAsync(val bool) {
 	if val {
@@ -203,6 +213,7 @@ func (s *nullSpan) addProfile(Profile)                                     {}
 func (s *nullSpan) ok() bool                                               { return false }
 func (s *nullSpan) tvContext() traceview.Context                           { return traceview.NewNullContext() }
 func (s *nullSpan) MetadataString() string                                 { return "" }
+func (s *nullSpan) IsSampled() bool                                        { return false }
 func (s *nullSpan) SetAsync(bool)                                          {}
 
 // is this span still valid (has it timed out, expired, not sampled)

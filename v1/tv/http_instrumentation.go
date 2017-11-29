@@ -110,7 +110,8 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 // in the "X-Trace" header, this context will be continued.
 func traceFromHTTPRequest(layerName string, r *http.Request) Trace {
 	// start trace, passing in metadata header
-	t := NewTraceFromID(layerName, r.Header.Get(HTTPHeaderName), func() KVMap {
+	header := r.Header.Get(HTTPHeaderName)
+	t := NewTraceFromID(layerName, header, func() KVMap {
 		return KVMap{
 			"Method":       r.Method,
 			"HTTP-Host":    r.Host,
@@ -121,7 +122,9 @@ func traceFromHTTPRequest(layerName string, r *http.Request) Trace {
 	})
 	// set the start time and method for metrics collection
 	t.SetMethod(r.Method)
-	t.SetStartTime(time.Now())
+	if header == "" {
+		t.SetStartTime(time.Now())
+	}
 	// update incoming metadata in request headers for any downstream readers
 	r.Header.Set(HTTPHeaderName, t.MetadataString())
 	return t

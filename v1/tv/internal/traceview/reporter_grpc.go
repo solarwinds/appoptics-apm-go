@@ -80,6 +80,13 @@ const (
 	GETSETTINGS                    // getSettings() routine
 )
 
+type reporterChannel int
+
+const (
+	EVENTS reporterChannel = iota
+	METRICS
+)
+
 // everything needed for a GRPC connection
 type grpcConnection struct {
 	client             collector.TraceCollectorClient // GRPC client instance
