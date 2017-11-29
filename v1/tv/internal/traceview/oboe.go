@@ -153,6 +153,17 @@ func (b *tokenBucket) update(now time.Time) {
 }
 
 func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
+	if usingTestReporter {
+		if r, ok := thisReporter.(*TestReporter); ok {
+			if globalSettingsCfg.tracingMode == TRACE_NEVER {
+				r.ShouldTrace = false
+			}
+			if r.ShouldTrace == false {
+				return r.ShouldTrace, 0, SAMPLE_SOURCE_NONE // trace tests
+			}
+		}
+	}
+
 	if globalSettingsCfg.tracingMode == TRACE_NEVER || reportingDisabled {
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
