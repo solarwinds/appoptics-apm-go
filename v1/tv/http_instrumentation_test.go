@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/librato/go-traceview/v1/tv"
 	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
@@ -17,12 +18,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+	"gopkg.in/mgo.v2/bson"
 )
 
-func handler404(w http.ResponseWriter, r *http.Request)   { w.WriteHeader(404) }
-func handler403(w http.ResponseWriter, r *http.Request)   { w.WriteHeader(403) }
-func handler200(w http.ResponseWriter, r *http.Request)   {} // do nothing (default should be 200)
-func handlerPanic(w http.ResponseWriter, r *http.Request) { panic("panicking!") }
+func handler404(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(404) }
+func handler403(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(403) }
+func handler200(w http.ResponseWriter, r *http.Request)      {} // do nothing (default should be 200)
+func handlerPanic(w http.ResponseWriter, r *http.Request)    { panic("panicking!") }
+func handlerDelay200(w http.ResponseWriter, r *http.Request) { time.Sleep(httpSpanSleep) }
+func handlerDelay404(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(404)
+	time.Sleep(httpSpanSleep)
+}
 
 func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
 	h := http.HandlerFunc(tv.HTTPHandler(f))
@@ -90,6 +97,50 @@ func TestHTTPHandlerNoTrace(t *testing.T) {
 
 	// tracing disabled, shouldn't report anything
 	assert.Len(t, r.Bufs, 0)
+}
+
+var httpSpanSleep time.Duration
+
+func TestHTTPSpan(t *testing.T) {
+	r := traceview.SetTestReporter(false) // set up test reporter
+
+	httpSpanSleep = time.Duration(0)
+	httpTest(handlerDelay200)
+	httpSpanSleep = time.Duration(25 * time.Millisecond)
+	httpTest(handlerDelay200)
+	httpSpanSleep = time.Duration(456 * time.Millisecond)
+	httpTest(handlerDelay200)
+	httpSpanSleep = time.Duration(54 * time.Millisecond)
+	httpTest(handlerDelay404)
+
+	r.Close(2)
+
+	m := make(map[string]interface{})
+	bson.Unmarshal(r.Bufs[0], m)
+
+	nullDuration := m["duration"].(int64)
+
+	m = make(map[string]interface{})
+	bson.Unmarshal(r.Bufs[1], m)
+
+	assert.Equal(t, "tv_test.handlerDelay200", m["transaction"])
+	assert.Equal(t, "", m["url"])
+	assert.Equal(t, 200, m["status"])
+	assert.Equal(t, "GET", m["method"])
+	assert.False(t, m["hasError"].(bool))
+	assert.InDelta(t, 25*int64(time.Millisecond)+nullDuration, m["duration"], float64(200*time.Microsecond))
+
+	m = make(map[string]interface{})
+	bson.Unmarshal(r.Bufs[2], m)
+
+	assert.InDelta(t, 456*int64(time.Millisecond)+nullDuration, m["duration"], float64(200*time.Microsecond))
+
+	m = make(map[string]interface{})
+	bson.Unmarshal(r.Bufs[3], m)
+
+	assert.Equal(t, "tv_test.handlerDelay404", m["transaction"])
+	assert.Equal(t, 404, m["status"])
+	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(200*time.Microsecond))
 }
 
 // testServer tests creating a layer/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)

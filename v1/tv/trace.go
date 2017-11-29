@@ -131,6 +131,13 @@ func (t *tvTrace) reportExit() {
 	if t.ok() {
 		t.lock.Lock()
 		defer t.lock.Unlock()
+
+		// if this is an HTTP trace, record a new span
+		if !t.httpSpan.start.IsZero() {
+			t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)
+			t.recordHTTPSpan()
+		}
+
 		for _, edge := range t.childEdges { // add Edge KV for each joined child
 			t.endArgs = append(t.endArgs, "Edge", edge)
 		}
@@ -139,7 +146,7 @@ func (t *tvTrace) reportExit() {
 		} else {
 			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), t.endArgs...)
 		}
-		t.recordHTTPSpan()
+
 		t.childEdges = nil // clear child edge list
 		t.endArgs = nil
 		t.ended = true
@@ -183,9 +190,7 @@ func (t *tvTrace) recordHTTPSpan() {
 			num--
 		}
 	}
-
 	t.httpSpan.span.Transaction = strings.TrimSuffix(transaction, ".")
-	t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)
 
 	traceview.ReportSpan(&t.httpSpan.span)
 }

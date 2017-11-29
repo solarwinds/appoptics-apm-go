@@ -61,4 +61,16 @@ func (r *udpReporter) reportStatus(ctx *oboeContext, e *event) error {
 	return r.report(ctx, e)
 }
 
-func (r *udpReporter) reportSpan(span *SpanMessage) error { return nil }
+func (r *udpReporter) reportSpan(span *SpanMessage) error {
+	s := (*span).(*HttpSpanMessage)
+	bbuf := NewBsonBuffer()
+	bsonAppendString(bbuf, "transaction", s.Transaction)
+	bsonAppendString(bbuf, "url", s.Url)
+	bsonAppendInt(bbuf, "status", s.Status)
+	bsonAppendString(bbuf, "method", s.Method)
+	bsonAppendBool(bbuf, "hasError", s.HasError)
+	bsonAppendInt64(bbuf, "duration", s.Duration.Nanoseconds())
+	bsonBufferFinish(bbuf)
+	_, err := r.conn.Write(bbuf.buf)
+	return err
+}
