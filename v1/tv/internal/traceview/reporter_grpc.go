@@ -382,7 +382,8 @@ type grpcResult struct {
 	err error
 }
 
-// eventBatcher batches pending events into a list of messages for a GRPC request.
+// long-running goroutine that listens on the events message channel, collects all messages
+// on that channel and attempts to send them to the collector using the GRPC method PostEvents()
 func (r *grpcReporter) eventSender() {
 	batches := make(chan [][]byte)
 	results := r.eventBatchSender(batches)
@@ -395,11 +396,7 @@ func (r *grpcReporter) eventSender() {
 		case e := <-r.eventMessages:
 			messages = append(messages, e)
 		case result := <-results:
-			// last Log() finished
-			if result.err != nil {
-				// XXX lg.Info("Log() result %v", result)
-			}
-			_ = result // XXX check return code, reconnect
+			_ = result // XXX check return code, log errors?
 
 			// if pending entries, make next Log()
 			if len(messages) > 0 {
@@ -424,8 +421,6 @@ func (r *grpcReporter) eventSender() {
 	}
 }
 
-// long-running goroutine that listens on the events message channel, collects all messages
-// on that channel and attempts to send them to the collector using the GRPC method PostEvents()
 func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan grpcResult {
 	results := make(chan grpcResult)
 	go func() {
