@@ -26,8 +26,8 @@ func handler403(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(403
 func handler200(w http.ResponseWriter, r *http.Request)      {} // do nothing (default should be 200)
 func handlerPanic(w http.ResponseWriter, r *http.Request)    { panic("panicking!") }
 func handlerDelay200(w http.ResponseWriter, r *http.Request) { time.Sleep(httpSpanSleep) }
-func handlerDelay404(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(404)
+func handlerDelay503(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(503)
 	time.Sleep(httpSpanSleep)
 }
 
@@ -111,7 +111,7 @@ func TestHTTPSpan(t *testing.T) {
 	httpSpanSleep = time.Duration(456 * time.Millisecond)
 	httpTest(handlerDelay200)
 	httpSpanSleep = time.Duration(54 * time.Millisecond)
-	httpTest(handlerDelay404)
+	httpTest(handlerDelay503)
 
 	r.Close(4)
 
@@ -138,8 +138,9 @@ func TestHTTPSpan(t *testing.T) {
 	m = make(map[string]interface{})
 	bson.Unmarshal(r.StatusBufs[3], m)
 
-	assert.Equal(t, "tv_test.handlerDelay404", m["transaction"])
-	assert.Equal(t, 404, m["status"])
+	assert.Equal(t, "tv_test.handlerDelay503", m["transaction"])
+	assert.Equal(t, 503, m["status"])
+	assert.True(t, m["hasError"].(bool))
 	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(200*time.Microsecond))
 }
 

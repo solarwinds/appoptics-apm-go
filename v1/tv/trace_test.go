@@ -313,13 +313,15 @@ func TestNoTraceFromMetadata(t *testing.T) {
 }
 func TestTraceFromBadMetadata(t *testing.T) {
 	r := traceview.SetTestReporter(false)
+	r.UseSettings = false
+	r.ShouldTrace = false
 
 	// emulate incoming request with invalad X-Trace header
 	incomingID := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2A2203"
 	tr := tv.NewTraceFromID("test", incomingID, nil)
 	md := tr.ExitMetadata()
 	tr.End("Edge", "823723875") // should not report
-	assert.Equal(t, md, "")
+	assert.Equal(t, "", md)
 	assert.Len(t, r.EventBufs, 0)
 }
 

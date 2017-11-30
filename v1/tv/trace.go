@@ -191,6 +191,9 @@ func (t *tvTrace) recordHTTPSpan() {
 		}
 	}
 	t.httpSpan.span.Transaction = strings.TrimSuffix(transaction, ".")
+	if t.httpSpan.span.Status >= 500 && t.httpSpan.span.Status < 600 {
+		t.httpSpan.span.HasError = true
+	}
 
 	traceview.ReportSpan(&t.httpSpan.span)
 }
