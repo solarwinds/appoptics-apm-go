@@ -5,13 +5,13 @@ package ottv
 import (
 	"testing"
 
+	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
-	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 )
 
 func TestSpanBaggageUnsampled(t *testing.T) {
-	_ = traceview.SetTestReporter()
+	_ = traceview.SetTestReporter(false)
 	tr := NewTracer()
 	tr.(*Tracer).TrimUnsampledSpans = true
 	span := tr.StartSpan("op")

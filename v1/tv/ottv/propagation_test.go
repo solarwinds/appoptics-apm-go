@@ -9,11 +9,11 @@ import (
 	"io"
 	"testing"
 
+	"github.com/librato/go-traceview/v1/tv"
+	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/librato/go-traceview/v1/tv"
-	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 )
 
 type badReader struct{}
@@ -44,7 +44,7 @@ func (l *badLimitedReader) Read(p []byte) (n int, err error) {
 }
 
 func TestBinaryExtract(t *testing.T) {
-	_ = traceview.SetTestReporter()
+	_ = traceview.SetTestReporter(false)
 	tr := NewTracer()
 
 	// test invalid wire data
@@ -107,7 +107,7 @@ type badWriter struct{}
 func (r badWriter) Write(p []byte) (n int, err error) { return 0, errors.New("write error") }
 
 func TestBinaryInject(t *testing.T) {
-	_ = traceview.SetTestReporter()
+	_ = traceview.SetTestReporter(false)
 	tr := NewTracer()
 	span := tr.StartSpan("op")
 
@@ -132,7 +132,7 @@ func TestBinaryInject(t *testing.T) {
 }
 
 func TestTextMapExtract(t *testing.T) {
-	_ = traceview.SetTestReporter()
+	_ = traceview.SetTestReporter(false)
 	tr := NewTracer()
 	span := tr.StartSpan("op")
 	textCarrier := opentracing.TextMapCarrier{}

@@ -88,7 +88,7 @@ func server(t *testing.T, list net.Listener) {
 }
 
 func TestTracer(t *testing.T) {
-	r := traceview.SetTestReporter() // set up test reporter
+	r := traceview.SetTestReporter(true) // set up test reporter
 	opentracing.InitGlobalTracer(NewTracer())
 
 	ln, err := net.Listen("tcp", ":0") // pick an unallocated port
@@ -102,7 +102,7 @@ func TestTracer(t *testing.T) {
 
 	wg.Wait()
 	r.Close(4)
-	g.AssertGraph(t, r.Bufs, 4, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 4, g.AssertNodeMap{
 		{"getInput", "entry"}: {},
 		{"getInput", "exit"}: {Edges: g.Edges{{"getInput", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, testTextVal, n.Map[otLogPrefix+testTextKey])
