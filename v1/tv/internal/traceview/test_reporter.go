@@ -15,6 +15,7 @@ type TestReporter struct {
 	StatusBufs  [][]byte
 	ShouldTrace bool
 	ShouldError bool
+	UseSettings bool
 	ErrorEvents map[int]bool // whether to drop an event
 	eventCount  int64
 	done        chan int
@@ -36,6 +37,7 @@ func SetTestReporter(withDefaultSetting bool, args ...interface{}) *TestReporter
 	}
 	r := &TestReporter{
 		ShouldTrace: true,
+		UseSettings: true,
 		Timeout:     timeout,
 		done:        make(chan int),
 		eventChan:   make(chan []byte),

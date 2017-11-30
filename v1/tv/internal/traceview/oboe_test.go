@@ -143,7 +143,6 @@ func TestSamplingRate(t *testing.T) {
 
 func TestSampleTracingDisabled(t *testing.T) {
 	r := SetTestReporter(true)
-	usingTestReporter = false
 
 	total := 3
 	globalSettingsCfg.tracingMode = TRACE_NEVER
@@ -411,8 +410,6 @@ func TestSampleTokenBucket(t *testing.T) {
 
 func TestOboeTracingMode(t *testing.T) {
 	r := SetTestReporter(true)
-	// make oboeSampleRequest think test reporter is not being used for these tests..
-	//	usingTestReporter = false
 
 	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "ALWAYS")
 	readEnvSettings()
