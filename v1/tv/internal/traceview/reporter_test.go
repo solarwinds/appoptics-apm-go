@@ -55,13 +55,13 @@ func TestReportEvent(t *testing.T) {
 	r := SetTestReporter(true)
 	ctx := newTestContext(t)
 	assert.Error(t, r.reportEvent(ctx, nil))
-	assert.Len(t, r.Bufs, 0) // no reporting
+	assert.Len(t, r.EventBufs, 0) // no reporting
 
 	// mismatched task IDs
 	ev, err := ctx.newEvent(LabelExit, testLayer)
 	assert.NoError(t, err)
 	assert.Error(t, r.reportEvent(nil, ev))
-	assert.Len(t, r.Bufs, 0) // no reporting
+	assert.Len(t, r.EventBufs, 0) // no reporting
 
 	ctx2 := newTestContext(t)
 	e2, err := ctx2.newEvent(LabelEntry, "layer2")
@@ -72,12 +72,12 @@ func TestReportEvent(t *testing.T) {
 	// successful event
 	assert.NoError(t, r.reportEvent(ctx, ev))
 	r.Close(1)
-	assert.Len(t, r.Bufs, 1)
+	assert.Len(t, r.EventBufs, 1)
 
 	// re-report: shouldn't work (op IDs the same, reporter closed)
 	assert.Error(t, r.reportEvent(ctx, ev))
 
-	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{
 		{"go_test", "exit"}: {},
 	})
 }
@@ -86,7 +86,7 @@ func TestReportEvent(t *testing.T) {
 func TestTestReporter(t *testing.T) {
 	r := SetTestReporter(true)
 	r.Close(1) // wait on event that will never be reported: causes timeout
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 
 	r = SetTestReporter(true)
 	go func() { // simulate late event
@@ -97,7 +97,7 @@ func TestTestReporter(t *testing.T) {
 		assert.NoError(t, r.reportEvent(ctx, ev))
 	}()
 	r.Close(1) // wait on late event -- blocks until timeout or event received
-	assert.Len(t, r.Bufs, 1)
+	assert.Len(t, r.EventBufs, 1)
 
 	// send an event after calling Close -- should panic
 	assert.Panics(t, func() {

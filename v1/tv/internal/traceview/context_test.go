@@ -166,13 +166,13 @@ func TestMetadataRandom(t *testing.T) {
 	randReader = &errorReader{failOn: map[int]bool{0: true}}
 	ctx := newContext(true)
 	assert.IsType(t, &nullContext{}, ctx)
-	assert.Empty(t, r.Bufs) // no events reported
+	assert.Empty(t, r.EventBufs) // no events reported
 
 	// RNG failure on second call (for metadata op ID)
 	randReader = &errorReader{failOn: map[int]bool{1: true}}
 	ctx2 := newContext(true)
 	assert.IsType(t, &nullContext{}, ctx2)
-	assert.Empty(t, r.Bufs) // no events reported
+	assert.Empty(t, r.EventBufs) // no events reported
 
 	// RNG failure on third call (for event op ID)
 	randReader = &errorReader{failOn: map[int]bool{2: true}}
@@ -180,12 +180,12 @@ func TestMetadataRandom(t *testing.T) {
 	assert.IsType(t, ctx3, &oboeContext{}) // context created successfully
 	e3 := ctx3.NewEvent(LabelEntry, "randErrLayer", false)
 	assert.IsType(t, &nullEvent{}, e3)
-	assert.Empty(t, r.Bufs) // no events reported
+	assert.Empty(t, r.EventBufs) // no events reported
 
 	// RNG failure on valid context while trying to report an event
 	randReader = &errorReader{failOn: map[int]bool{0: true}}
 	assert.Error(t, ctx3.(*oboeContext).reportEvent(LabelEntry, "randErrLayer", false))
-	assert.Empty(t, r.Bufs) // no events reported
+	assert.Empty(t, r.EventBufs) // no events reported
 
 	r.Close(0)
 	randReader = rand.Reader // set back to normal
@@ -212,7 +212,7 @@ func TestReportEventMap(t *testing.T) {
 		"intval": 333,
 	}))
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		{"myLayer", "entry"}: {},
 		{"myLayer", "info"}: {Edges: g.Edges{{"myLayer", "entry"}}, Callback: func(n g.Node) {
 			assert.EqualValues(t, 333, n.Map["intval"])
@@ -227,7 +227,7 @@ func TestNewContext(t *testing.T) {
 	ctx, ok := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
 	assert.True(t, ok)                                     // bad metadata string should get ignored
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
-	assert.NotEqual(t, len(r.Bufs), 0) // still reported
+	assert.NotEqual(t, len(r.EventBufs), 0) // still reported
 	r.Close(0)
 }
 
@@ -246,17 +246,17 @@ func TestNullContext(t *testing.T) {
 	assert.NoError(t, ctx.ReportEventMap(LabelInfo, "testLayer", map[string]interface{}{"K": "V"}))
 	// try and make an event
 	e := ctx.NewEvent(LabelExit, "testLayer", false)
-	mdString = e.MetadataString()
+	mdString := e.MetadataString()
 	assert.NotEmpty(t, mdString)
 	assert.Equal(t, mdString[len(mdString)-2:], "00")
 	assert.NoError(t, e.ReportContext(ctx, false))
-	assert.Len(t, r.Bufs, 0) // no reporting
+	assert.Len(t, r.EventBufs, 0) // no reporting
 
 	// try and report a real unrelated event on a null context
 	e2, err := newTestContext(t).newEvent(LabelEntry, "e2")
 	assert.NoError(t, err)
 	assert.NoError(t, e2.ReportContext(ctx, false))
-	assert.Len(t, r.Bufs, 0) // no reporting
+	assert.Len(t, r.EventBufs, 0) // no reporting
 
 	// shouldn't be able to create a trace if the entry event fails
 	r.ShouldTrace = true
@@ -266,6 +266,6 @@ func TestNullContext(t *testing.T) {
 	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
 	assert.False(t, ctx.IsSampled())
 
-	assert.Len(t, r.Bufs, 0) // no reporting
+	assert.Len(t, r.EventBufs, 0) // no reporting
 	r.Close(0)
 }

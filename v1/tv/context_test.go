@@ -36,7 +36,7 @@ func TestContext(t *testing.T) {
 	assert.Equal(t, ctx4.Value("t"), tr3)
 
 	r.Close(1)
-	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{{"test", "entry"}: {}})
+	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{{"test", "entry"}: {}})
 }
 
 func TestTraceFromContext(t *testing.T) {
@@ -51,7 +51,7 @@ func TestTraceFromContext(t *testing.T) {
 	assert.Len(t, trN.ExitMetadata(), 0)
 
 	r.Close(1)
-	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{{"TestTFC", "entry"}: {}})
+	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{{"TestTFC", "entry"}: {}})
 }
 
 func TestNullSpan(t *testing.T) {
@@ -84,7 +84,7 @@ func TestNullSpan(t *testing.T) {
 	assert.IsType(t, reflect.TypeOf(nctx.Copy()).Elem().Name(), "nullContext")
 
 	r.Close(3)
-	g.AssertGraph(t, r.Bufs, 3, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 3, g.AssertNodeMap{
 		{"TestNullSpan", "entry"}: {},
 		{"L1", "entry"}:           {Edges: g.Edges{{"TestNullSpan", "entry"}}},
 		{"L1", "exit"}:            {Edges: g.Edges{{"L1", "entry"}}},

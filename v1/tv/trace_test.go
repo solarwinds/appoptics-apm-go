@@ -25,7 +25,7 @@ func TestTraceMetadata(t *testing.T) {
 		"NotReported") // odd-length arg, should be ignored
 
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"test", "entry"}: {},
 		{"test", "exit"}: {Edges: g.Edges{{"test", "entry"}}, Callback: func(n g.Node) {
@@ -44,7 +44,7 @@ func TestNoTraceMetadata(t *testing.T) {
 	tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Not": "reported"} })
 
 	assert.Equal(t, md, "")
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 }
 
 // ensure two different traces have different trace IDs
@@ -56,7 +56,7 @@ func TestTraceMetadataDiff(t *testing.T) {
 	assert.Len(t, md1, 60)
 	t1.End()
 	r.Close(2)
-	assert.Len(t, r.Bufs, 2)
+	assert.Len(t, r.EventBufs, 2)
 
 	r = traceview.SetTestReporter(true)
 	t2 := tv.NewTrace("test1")
@@ -66,7 +66,7 @@ func TestTraceMetadataDiff(t *testing.T) {
 	md2c := t2.ExitMetadata()
 	t2.End()
 	r.Close(2)
-	assert.Len(t, r.Bufs, 2)
+	assert.Len(t, r.EventBufs, 2)
 
 	assert.NotEqual(t, md1, md2)
 	assert.NotEqual(t, md1[2:42], md2[2:42])
@@ -178,7 +178,7 @@ func TestTraceExample(t *testing.T) {
 	t.Logf("Reporting unrecognized event KV type")
 	traceExample(ctx) // generate events
 	r.Close(13)
-	assertTraceExample(t, "f0", r.Bufs)
+	assertTraceExample(t, "f0", r.EventBufs)
 }
 
 func TestTraceExampleCtx(t *testing.T) {
@@ -188,7 +188,7 @@ func TestTraceExampleCtx(t *testing.T) {
 	t.Logf("Reporting unrecognized event KV type")
 	traceExampleCtx(ctx) // generate events
 	r.Close(13)
-	assertTraceExample(t, "f0Ctx", r.Bufs)
+	assertTraceExample(t, "f0Ctx", r.EventBufs)
 }
 
 func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
@@ -257,7 +257,7 @@ func TestNoTraceExample(t *testing.T) {
 	r := traceview.SetTestReporter(true)
 	ctx := context.Background()
 	traceExample(ctx)
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 }
 
 func BenchmarkNewTrace(b *testing.B) {
@@ -287,7 +287,7 @@ func TestTraceFromMetadata(t *testing.T) {
 	tr.EndCallback(func() tv.KVMap { return tv.KVMap{"Extra": "Arg"} })
 
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		// entry event should have edge to incoming opID
 		{"test", "entry"}: {Edges: g.Edges{{"Edge", incomingID[42:58]}}, Callback: func(n g.Node) {
 			// trace ID should match incoming ID
@@ -309,7 +309,7 @@ func TestNoTraceFromMetadata(t *testing.T) {
 	tr.End()
 
 	assert.Equal(t, md, "")
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 }
 func TestTraceFromBadMetadata(t *testing.T) {
 	r := traceview.SetTestReporter(false)
@@ -320,7 +320,7 @@ func TestTraceFromBadMetadata(t *testing.T) {
 	md := tr.ExitMetadata()
 	tr.End("Edge", "823723875") // should not report
 	assert.Equal(t, md, "")
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 }
 
 func TestTraceJoin(t *testing.T) {
@@ -332,7 +332,7 @@ func TestTraceJoin(t *testing.T) {
 	tr.End()
 
 	r.Close(4)
-	g.AssertGraph(t, r.Bufs, 4, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 4, g.AssertNodeMap{
 		// entry event should have no edges
 		{"test", "entry"}: {},
 		{"L1", "entry"}:   {Edges: g.Edges{{"test", "entry"}}},
@@ -348,5 +348,5 @@ func TestNullTrace(t *testing.T) {
 	md := tr.ExitMetadata()
 	tr.End()
 	assert.Equal(t, md, "")
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 }

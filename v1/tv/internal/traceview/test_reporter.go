@@ -11,14 +11,16 @@ import (
 
 // TestReporter appends reported events to Bufs if ShouldTrace is true.
 type TestReporter struct {
-	Bufs        [][]byte
+	EventBufs   [][]byte
+	StatusBufs  [][]byte
 	ShouldTrace bool
 	ShouldError bool
 	ErrorEvents map[int]bool // whether to drop an event
 	eventCount  int64
 	done        chan int
 	wg          sync.WaitGroup
-	bufChan     chan []byte
+	eventChan   chan []byte
+	statusChan  chan []byte
 	Timeout     time.Duration
 }
 
@@ -36,7 +38,8 @@ func SetTestReporter(withDefaultSetting bool, args ...interface{}) *TestReporter
 		ShouldTrace: true,
 		Timeout:     timeout,
 		done:        make(chan int),
-		bufChan:     make(chan []byte),
+		eventChan:   make(chan []byte),
+		statusChan:  make(chan []byte),
 	}
 	go r.resultWriter()
 
@@ -63,7 +66,7 @@ func (r *TestReporter) resultWriter() {
 	for {
 		select {
 		case numBufs = <-r.done:
-			if len(r.Bufs) == numBufs {
+			if len(r.EventBufs)+len(r.StatusBufs) == numBufs {
 				r.wg.Done()
 				return
 			}
@@ -71,9 +74,15 @@ func (r *TestReporter) resultWriter() {
 		case <-time.After(r.Timeout):
 			r.wg.Done()
 			return
-		case buf := <-r.bufChan:
-			r.Bufs = append(r.Bufs, buf)
-			if r.done == nil && len(r.Bufs) == numBufs {
+		case buf := <-r.eventChan:
+			r.EventBufs = append(r.EventBufs, buf)
+			if r.done == nil && len(r.EventBufs)+len(r.StatusBufs) == numBufs {
+				r.wg.Done()
+				return
+			}
+		case buf := <-r.statusChan:
+			r.StatusBufs = append(r.StatusBufs, buf)
+			if r.done == nil && len(r.StatusBufs)+len(r.StatusBufs) == numBufs {
 				r.wg.Done()
 				return
 			}
@@ -81,13 +90,13 @@ func (r *TestReporter) resultWriter() {
 	}
 }
 
-// Close stops the test reporter from listening for events; r.Bufs will no longer be updated and any
+// Close stops the test reporter from listening for events; r.EventBufs will no longer be updated and any
 // calls to WritePacket() will panic.
 func (r *TestReporter) Close(numBufs int) {
 	r.done <- numBufs
 	// wait for reader goroutine to receive numBufs events, or timeout.
 	r.wg.Wait()
-	close(r.bufChan)
+	close(r.eventChan)
 
 	usingTestReporter = false
 	if _, ok := oldReporter.(*nullReporter); !ok {
@@ -107,7 +116,7 @@ func (r *TestReporter) report(ctx *oboeContext, e *event) error {
 		(r.ErrorEvents != nil && r.ErrorEvents[(int(r.eventCount)-1)]) { // error certain specified events
 		return errors.New("TestReporter error")
 	}
-	r.bufChan <- (*e).bbuf.GetBuf() // a send to a closed channel panics.
+	r.eventChan <- (*e).bbuf.GetBuf() // a send to a closed channel panics.
 	return nil
 }
 
@@ -129,7 +138,7 @@ func (r *TestReporter) reportSpan(span *SpanMessage) error {
 	bsonAppendBool(bbuf, "hasError", s.HasError)
 	bsonAppendInt64(bbuf, "duration", s.Duration.Nanoseconds())
 	bsonBufferFinish(bbuf)
-	r.bufChan <- bbuf.buf
+	r.statusChan <- bbuf.buf
 	return nil
 }
 

@@ -46,7 +46,7 @@ func TestHTTPHandler404(t *testing.T) {
 	assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
 
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
@@ -70,7 +70,7 @@ func TestHTTPHandler200(t *testing.T) {
 	response := httpTest(handler200)
 
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
@@ -96,7 +96,7 @@ func TestHTTPHandlerNoTrace(t *testing.T) {
 	httpTest(handler404)
 
 	// tracing disabled, shouldn't report anything
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 }
 
 var httpSpanSleep time.Duration
@@ -113,15 +113,15 @@ func TestHTTPSpan(t *testing.T) {
 	httpSpanSleep = time.Duration(54 * time.Millisecond)
 	httpTest(handlerDelay404)
 
-	r.Close(2)
+	r.Close(4)
 
 	m := make(map[string]interface{})
-	bson.Unmarshal(r.Bufs[0], m)
+	bson.Unmarshal(r.StatusBufs[0], m)
 
 	nullDuration := m["duration"].(int64)
 
 	m = make(map[string]interface{})
-	bson.Unmarshal(r.Bufs[1], m)
+	bson.Unmarshal(r.StatusBufs[1], m)
 
 	assert.Equal(t, "tv_test.handlerDelay200", m["transaction"])
 	assert.Equal(t, "", m["url"])
@@ -131,12 +131,12 @@ func TestHTTPSpan(t *testing.T) {
 	assert.InDelta(t, 25*int64(time.Millisecond)+nullDuration, m["duration"], float64(200*time.Microsecond))
 
 	m = make(map[string]interface{})
-	bson.Unmarshal(r.Bufs[2], m)
+	bson.Unmarshal(r.StatusBufs[2], m)
 
 	assert.InDelta(t, 456*int64(time.Millisecond)+nullDuration, m["duration"], float64(200*time.Microsecond))
 
 	m = make(map[string]interface{})
-	bson.Unmarshal(r.Bufs[3], m)
+	bson.Unmarshal(r.StatusBufs[3], m)
 
 	assert.Equal(t, "tv_test.handlerDelay404", m["transaction"])
 	assert.Equal(t, 404, m["status"])
@@ -336,7 +336,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		r.Close(2)
-		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+		g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {Edges: g.Edges{{"httpTest", "entry"}}},
 		})
@@ -346,7 +346,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	r.Close(server.numBufs)
-	server.assertFn(t, r.Bufs, resp, url, method, port, server.status)
+	server.assertFn(t, r.EventBufs, resp, url, method, port, server.status)
 }
 
 // assert traces that hit testServer, which uses the HTTP server instrumentation.
@@ -447,7 +447,7 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 
 	if badReq { // handle case where http.NewRequest() returned nil
 		r.Close(2)
-		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+		g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {Edges: g.Edges{{"httpTest", "entry"}}},
 		})
@@ -455,7 +455,7 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 	}
 	// handle case where http.Client.Do() returned an error
 	r.Close(5)
-	g.AssertGraph(t, r.Bufs, 5, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 5, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {Edges: g.Edges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
@@ -489,7 +489,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	assert.Equal(t, 403, resp.StatusCode)
 
 	r.Close(10)
-	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 10, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {Edges: g.Edges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
@@ -594,7 +594,7 @@ func TestDistributedApp(t *testing.T) {
 	t.Logf("Response: %v BUF %s", resp, buf)
 
 	r.Close(10)
-	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeKVMap{
+	g.AssertGraph(t, r.EventBufs, 10, g.AssertNodeKVMap{
 		{"http.HandlerFunc", "entry", "URL", "/alice"}:         {},
 		{"aliceHandler", "entry", "URL", "/alice"}:             {Edges: g.Edges{{"http.HandlerFunc", "entry"}}},
 		{"http.Client", "entry", "", ""}:                       {Edges: g.Edges{{"aliceHandler", "entry"}}, Callback: func(n g.Node) {}},
@@ -692,7 +692,7 @@ func TestConcurrentApp(t *testing.T) {
 	t.Logf("Response: %v BUF %s", resp, buf)
 
 	r.Close(14)
-	g.AssertGraph(t, r.Bufs, 14, g.AssertNodeKVMap{
+	g.AssertGraph(t, r.EventBufs, 14, g.AssertNodeKVMap{
 		{"aliceHandler", "entry", "URL", "/alice"}:                       {},
 		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/A"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
 		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/B"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
@@ -738,5 +738,5 @@ func TestConcurrentAppNoTrace(t *testing.T) {
 	assert.NotNil(t, buf)
 
 	// shouldn't report anything
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 }

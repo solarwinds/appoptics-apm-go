@@ -28,7 +28,7 @@ func TestInitMessage(t *testing.T) {
 
 	sendInitMessage()
 	r.Close(2)
-	assertInitMessage(t, r.Bufs)
+	assertInitMessage(t, r.EventBufs)
 }
 func assertInitMessage(t *testing.T, bufs [][]byte) {
 	g.AssertGraph(t, bufs, 1, g.AssertNodeMap{
@@ -143,6 +143,7 @@ func TestSamplingRate(t *testing.T) {
 
 func TestSampleTracingDisabled(t *testing.T) {
 	r := SetTestReporter(true)
+	usingTestReporter = false
 
 	total := 3
 	globalSettingsCfg.tracingMode = TRACE_NEVER
@@ -344,14 +345,14 @@ func TestSampleTokenBucket(t *testing.T) {
 //	sendMetricsMessage(r)
 //	time.Sleep(100 * time.Millisecond)
 //	r.Close(0)
-//	assert.Len(t, r.Bufs, 0)
+//	assert.Len(t, r.EventBufs, 0)
 //
 //	r = SetTestReporter()
 //	randReader = &errorReader{failOn: map[int]bool{2: true}}
 //	sendMetricsMessage(r)
 //	time.Sleep(100 * time.Millisecond)
 //	r.Close(0)
-//	assert.Len(t, r.Bufs, 0)
+//	assert.Len(t, r.EventBufs, 0)
 //
 //	randReader = rand.Reader // set back to normal
 //}
@@ -388,7 +389,7 @@ func TestSampleTokenBucket(t *testing.T) {
 //	time.Sleep(d0)
 //	fmt.Printf("[%v] TestSendMetrics Closing\n", time.Now())
 //	r.Close(4)
-//	g.AssertGraph(t, r.Bufs, 4, g.AssertNodeMap{
+//	g.AssertGraph(t, r.EventBufs, 4, g.AssertNodeMap{
 //		{"go", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 //			assert.Equal(t, 1, n.Map["__Init"])
 //			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
