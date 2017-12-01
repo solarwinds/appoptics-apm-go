@@ -176,3 +176,23 @@ func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactio
 
 	return &args
 }
+
+// simple check if go version is higher or equal to the given version
+func isHigherOrEqualGoVersion(version string) bool {
+	goVersion := strings.Split(runtime.Version(), ".")
+	compVersion := strings.Split(version, ".")
+	for i := 0; i < len(goVersion) && i < len(compVersion); i++ {
+		l := len(compVersion[i])
+		if len(goVersion[i]) > l {
+			l = len(goVersion[i])
+		}
+		compVersion[i] = strings.Repeat("0", l-len(compVersion[i])) + compVersion[i]
+		goVersion[i] = strings.Repeat("0", l-len(goVersion[i])) + goVersion[i]
+		if strings.Compare(goVersion[i], compVersion[i]) == 1 {
+			return true
+		} else if strings.Compare(goVersion[i], compVersion[i]) == -1 {
+			return false
+		}
+	}
+	return true
+}

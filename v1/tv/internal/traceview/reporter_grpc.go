@@ -231,10 +231,15 @@ func grpcCreateClientConnection(cert []byte, addr string) (*grpc.ClientConn, err
 		return nil, errors.New("Unable to append the certificate to pool.")
 	}
 
-	creds := credentials.NewTLS(&tls.Config{
+	tlsConfig := &tls.Config{
 		ServerName: addr,
 		RootCAs:    certPool,
-	})
+	}
+	// turn off server certificate verification for Go < 1.8
+	if !isHigherOrEqualGoVersion("go1.8") {
+		tlsConfig.InsecureSkipVerify = true
+	}
+	creds := credentials.NewTLS(tlsConfig)
 
 	return grpc.Dial(addr, grpc.WithTransportCredentials(creds))
 }
