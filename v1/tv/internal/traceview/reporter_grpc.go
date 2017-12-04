@@ -133,6 +133,9 @@ func newGRPCReporter() reporter {
 		return &nullReporter{}
 	}
 
+	// see if a hostname alias is configured
+	configuredHostname = os.Getenv("APPOPTICS_HOSTNAME_ALIAS")
+
 	// collector address override
 	collectorAddress := os.Getenv("APPOPTICS_COLLECTOR")
 	if collectorAddress == "" {
@@ -196,6 +199,10 @@ func newGRPCReporter() reporter {
 		statusMessages: make(chan []byte, 1024),
 		metricMessages: make(chan []byte, 1024),
 	}
+
+	// send connection init message
+	reporter.eventConnection.sendConnectionInit()
+	reporter.metricConnection.sendConnectionInit()
 
 	// start up long-running goroutine eventSender() which listens on the events message channel
 	// and reports incoming events to the collector using GRPC
@@ -264,6 +271,8 @@ func (r *grpcReporter) reconnect(c *grpcConnection, authority reconnectAuthority
 		OboeLog(INFO, "Lost connection -- attempting reconnect...")
 		c.client = collector.NewTraceCollectorClient(c.connection)
 		c.lock.Unlock()
+
+		c.sendConnectionInit()
 	} else {
 		// we are not authorized to attempt a reconnect, so simply
 		// wait until the connection has been restored
@@ -921,5 +930,28 @@ func (c *grpcConnection) ping() {
 
 	c.lock.RLock()
 	c.client.Ping(context.TODO(), request)
+	c.lock.RUnlock()
+}
+
+// ========================= Connection Init Handling =============================
+
+// send a connection init message
+func (c *grpcConnection) sendConnectionInit() {
+	bbuf := NewBsonBuffer()
+	bsonAppendBool(bbuf, "ConnectionInit", true)
+	appendHostId(bbuf)
+	bsonBufferFinish(bbuf)
+
+	var messages [][]byte
+	messages = append(messages, bbuf.buf)
+
+	request := &collector.MessageRequest{
+		ApiKey:   c.serviceKey,
+		Messages: messages,
+		Encoding: collector.EncodingType_BSON,
+	}
+
+	c.lock.RLock()
+	c.client.PostStatus(context.TODO(), request)
 	c.lock.RUnlock()
 }

@@ -33,6 +33,9 @@ var (
 var cachedHostname string
 var cachedPid = os.Getpid()
 
+// for hostname alias
+var configuredHostname string
+
 // a noop reporter
 type nullReporter struct{}
 

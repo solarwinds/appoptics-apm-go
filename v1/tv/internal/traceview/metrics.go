@@ -135,6 +135,9 @@ var metricsHTTPHistograms = &histograms{
 	precision:  metricsHistPrecisionDefault,
 }
 
+// ensure that only one routine accesses the host id part
+var hostIDLock sync.Mutex
+
 // initialize values according to env variables
 func init() {
 	pEnv := "APPOPTICS_HISTOGRAM_PRECISION"
@@ -161,23 +164,7 @@ func init() {
 func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStats) []byte {
 	bbuf := NewBsonBuffer()
 
-	bsonAppendString(bbuf, "Hostname", cachedHostname)
-	bsonAppendString(bbuf, "Distro", getDistro())
-	bsonAppendInt(bbuf, "PID", cachedPid)
-	appendUname(bbuf)
-	appendIPAddresses(bbuf)
-	appendMACAddresses(bbuf)
-
-	if getAWSInstanceID() != "" {
-		bsonAppendString(bbuf, "EC2InstanceID", getAWSInstanceID())
-	}
-	if getAWSInstanceZone() != "" {
-		bsonAppendString(bbuf, "EC2AvailabilityZone", getAWSInstanceZone())
-	}
-	if getContainerID() != "" {
-		bsonAppendString(bbuf, "DockerContainerID", getContainerID())
-	}
-
+	appendHostId(bbuf)
 	bsonAppendInt64(bbuf, "Timestamp_u", int64(time.Now().UnixNano()/1000))
 	bsonAppendInt(bbuf, "MetricsFlushInterval", metricsFlushInterval)
 
@@ -268,6 +255,32 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 
 	bsonBufferFinish(bbuf)
 	return bbuf.buf
+}
+
+// append host ID to a BSON buffer
+// bbuf	the BSON buffer to append the KVs to
+func appendHostId(bbuf *bsonBuffer) {
+	hostIDLock.Lock()
+	defer hostIDLock.Unlock()
+
+	bsonAppendString(bbuf, "Hostname", cachedHostname)
+	if configuredHostname != "" {
+		bsonAppendString(bbuf, "ConfiguredHostname", configuredHostname)
+	}
+	appendUname(bbuf)
+	bsonAppendInt(bbuf, "PID", cachedPid)
+	bsonAppendString(bbuf, "Distro", getDistro())
+	appendIPAddresses(bbuf)
+	appendMACAddresses(bbuf)
+	if getAWSInstanceID() != "" {
+		bsonAppendString(bbuf, "EC2InstanceID", getAWSInstanceID())
+	}
+	if getAWSInstanceZone() != "" {
+		bsonAppendString(bbuf, "EC2AvailabilityZone", getAWSInstanceZone())
+	}
+	if getContainerID() != "" {
+		bsonAppendString(bbuf, "DockerContainerID", getContainerID())
+	}
 }
 
 // gets distribution identification

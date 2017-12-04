@@ -235,17 +235,30 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, server.events[0].Encoding, pb.EncodingType_BSON)
 	require.Len(t, server.events[0].Messages, 1)
 
-	require.Len(t, server.status, 1)
+	require.Len(t, server.status, 3)
 	assert.Equal(t, server.status[0].Encoding, pb.EncodingType_BSON)
 	require.Len(t, server.status[0].Messages, 1)
+	require.Len(t, server.status[1].Messages, 1)
+	require.Len(t, server.status[2].Messages, 1)
 
-	dec1, dec2 := bson.M{}, bson.M{}
+	dec1, dec2, dec3, dec4 := bson.M{}, bson.M{}, bson.M{}, bson.M{}
 	err = bson.Unmarshal(server.events[0].Messages[0], &dec1)
 	require.NoError(t, err)
 	err = bson.Unmarshal(server.status[0].Messages[0], &dec2)
 	require.NoError(t, err)
+	err = bson.Unmarshal(server.status[1].Messages[0], &dec3)
+	require.NoError(t, err)
+	err = bson.Unmarshal(server.status[2].Messages[0], &dec4)
+	require.NoError(t, err)
 
 	assert.Equal(t, dec1["Layer"], "layer1")
-	assert.Equal(t, dec2["Layer"], "layer2")
+	assert.Equal(t, dec4["Layer"], "layer2")
 
+	// assert ConnectionInit messages
+	assert.Equal(t, dec2["ConnectionInit"], true)
+	assert.Equal(t, dec3["ConnectionInit"], true)
+	assert.Equal(t, dec2["Hostname"], cachedHostname)
+	assert.Equal(t, dec3["Hostname"], cachedHostname)
+	assert.Equal(t, dec2["Distro"], getDistro())
+	assert.Equal(t, dec3["Distro"], getDistro())
 }
