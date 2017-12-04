@@ -104,6 +104,8 @@ var httpSpanSleep time.Duration
 func TestHTTPSpan(t *testing.T) {
 	r := traceview.SetTestReporter(false) // set up test reporter
 
+	httpSpanSleep = time.Duration(0) // fire off first request just as preparation for the following requests
+	httpTest(handlerDelay200)
 	httpSpanSleep = time.Duration(0)
 	httpTest(handlerDelay200)
 	httpSpanSleep = time.Duration(25 * time.Millisecond)
@@ -113,15 +115,15 @@ func TestHTTPSpan(t *testing.T) {
 	httpSpanSleep = time.Duration(54 * time.Millisecond)
 	httpTest(handlerDelay503)
 
-	r.Close(4)
+	r.Close(5)
 
 	m := make(map[string]interface{})
-	bson.Unmarshal(r.StatusBufs[0], m)
+	bson.Unmarshal(r.StatusBufs[1], m)
 
 	nullDuration := m["duration"].(int64)
 
 	m = make(map[string]interface{})
-	bson.Unmarshal(r.StatusBufs[1], m)
+	bson.Unmarshal(r.StatusBufs[2], m)
 
 	assert.Equal(t, "tv_test.handlerDelay200", m["transaction"])
 	assert.Equal(t, "", m["url"])
@@ -131,12 +133,12 @@ func TestHTTPSpan(t *testing.T) {
 	assert.InDelta(t, 25*int64(time.Millisecond)+nullDuration, m["duration"], float64(500*time.Microsecond))
 
 	m = make(map[string]interface{})
-	bson.Unmarshal(r.StatusBufs[2], m)
+	bson.Unmarshal(r.StatusBufs[3], m)
 
 	assert.InDelta(t, 456*int64(time.Millisecond)+nullDuration, m["duration"], float64(500*time.Microsecond))
 
 	m = make(map[string]interface{})
-	bson.Unmarshal(r.StatusBufs[3], m)
+	bson.Unmarshal(r.StatusBufs[4], m)
 
 	assert.Equal(t, "tv_test.handlerDelay503", m["transaction"])
 	assert.Equal(t, 503, m["status"])
