@@ -491,6 +491,7 @@ func (r *grpcReporter) eventRetrySender(
 			connection.resetPing()
 
 			if err != nil {
+				OboeLog(WARNING, fmt.Sprintf("Error calling PostEvents(): %v", err))
 				// some server connection error, attempt reconnect
 				r.reconnect(connection, authority)
 			} else {
@@ -623,6 +624,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		r.metricConnection.resetPing()
 
 		if err != nil {
+			OboeLog(WARNING, fmt.Sprintf("Error calling PostMetrics(): %v", err))
 			// some server connection error, attempt reconnect
 			r.reconnect(r.metricConnection, POSTMETRICS)
 		} else {
@@ -695,6 +697,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		r.metricConnection.resetPing()
 
 		if err != nil {
+			OboeLog(WARNING, fmt.Sprintf("Error calling GetSettings(): %v", err))
 			// some server connection error, attempt reconnect
 			r.reconnect(r.metricConnection, GETSETTINGS)
 		} else {
@@ -845,6 +848,7 @@ func (r *grpcReporter) statusSender() {
 			r.metricConnection.resetPing()
 
 			if err != nil {
+				OboeLog(WARNING, fmt.Sprintf("Error calling PostStatus(): %v", err))
 				// some server connection error, attempt reconnect
 				r.reconnect(r.metricConnection, POSTSTATUS)
 			} else {

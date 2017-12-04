@@ -68,7 +68,7 @@ func (r *TestReporter) resultWriter() {
 	for {
 		select {
 		case numBufs = <-r.done:
-			if len(r.EventBufs)+len(r.StatusBufs) == numBufs {
+			if len(r.EventBufs)+len(r.StatusBufs) >= numBufs {
 				r.wg.Done()
 				return
 			}
@@ -78,13 +78,13 @@ func (r *TestReporter) resultWriter() {
 			return
 		case buf := <-r.eventChan:
 			r.EventBufs = append(r.EventBufs, buf)
-			if r.done == nil && len(r.EventBufs)+len(r.StatusBufs) == numBufs {
+			if r.done == nil && len(r.EventBufs)+len(r.StatusBufs) >= numBufs {
 				r.wg.Done()
 				return
 			}
 		case buf := <-r.statusChan:
 			r.StatusBufs = append(r.StatusBufs, buf)
-			if r.done == nil && len(r.StatusBufs)+len(r.StatusBufs) == numBufs {
+			if r.done == nil && len(r.EventBufs)+len(r.StatusBufs) >= numBufs {
 				r.wg.Done()
 				return
 			}
