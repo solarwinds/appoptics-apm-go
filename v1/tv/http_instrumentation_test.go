@@ -130,12 +130,12 @@ func TestHTTPSpan(t *testing.T) {
 	assert.Equal(t, 200, m["status"])
 	assert.Equal(t, "GET", m["method"])
 	assert.False(t, m["hasError"].(bool))
-	assert.InDelta(t, 25*int64(time.Millisecond)+nullDuration, m["duration"], float64(500*time.Microsecond))
+	assert.InDelta(t, 25*int64(time.Millisecond)+nullDuration, m["duration"], float64(3*time.Millisecond))
 
 	m = make(map[string]interface{})
 	bson.Unmarshal(r.StatusBufs[3], m)
 
-	assert.InDelta(t, 456*int64(time.Millisecond)+nullDuration, m["duration"], float64(500*time.Microsecond))
+	assert.InDelta(t, 456*int64(time.Millisecond)+nullDuration, m["duration"], float64(3*time.Millisecond))
 
 	m = make(map[string]interface{})
 	bson.Unmarshal(r.StatusBufs[4], m)
@@ -143,7 +143,7 @@ func TestHTTPSpan(t *testing.T) {
 	assert.Equal(t, "tv_test.handlerDelay503", m["transaction"])
 	assert.Equal(t, 503, m["status"])
 	assert.True(t, m["hasError"].(bool))
-	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(500*time.Microsecond))
+	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(3*time.Millisecond))
 }
 
 // testServer tests creating a layer/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
