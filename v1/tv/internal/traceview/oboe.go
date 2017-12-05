@@ -95,7 +95,7 @@ func sendInitMessage() {
 
 		e.AddKV("__Init", 1)
 		e.AddKV("Go.Version", runtime.Version())
-		e.AddKV("Go.Oboe.Version", initVersion)
+		e.AddKV("Go.Oboe.Version", strconv.Itoa(initVersion))
 
 		e.ReportStatus(c)
 	}
