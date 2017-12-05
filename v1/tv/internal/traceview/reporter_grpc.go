@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -116,6 +117,7 @@ type grpcReporter struct {
 	metricMessages chan []byte      // channel for metrics messages (internal to reporter)
 	done           chan struct{}    // channel to stop the reporter
 
+	insecureSkipVerify bool // for testing only: if true, skip verifying TLS cert hostname
 }
 
 // initializes a new GRPC reporter from scratch (called once on program startup)
@@ -155,9 +157,15 @@ func newGRPCReporter() reporter {
 		cert = []byte(grpcCertDefault)
 	}
 
+	var insecureSkipVerify bool
+	switch strings.ToLower(os.Getenv("APPOPTICS_INSECURE_SKIP_VERIFY")) {
+	case "true", "1", "yes":
+		insecureSkipVerify = true
+	}
+
 	// create connection object for events client and metrics client
-	eventConn, err1 := grpcCreateClientConnection(cert, collectorAddress)
-	metricConn, err2 := grpcCreateClientConnection(cert, collectorAddress)
+	eventConn, err1 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
+	metricConn, err2 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
 	if err1 != nil || err2 != nil {
 		var err error
 		switch {
@@ -198,6 +206,8 @@ func newGRPCReporter() reporter {
 		spanMessages:   make(chan SpanMessage, 1024),
 		statusMessages: make(chan []byte, 1024),
 		metricMessages: make(chan []byte, 1024),
+
+		insecureSkipVerify: insecureSkipVerify,
 	}
 
 	// send connection init message
@@ -231,16 +241,23 @@ func newGRPCReporter() reporter {
 //
 // returns	client connection object
 //			possible error during AppendCertsFromPEM() and Dial()
-func grpcCreateClientConnection(cert []byte, addr string) (*grpc.ClientConn, error) {
+func grpcCreateClientConnection(cert []byte, addr string, insecureSkipVerify bool) (*grpc.ClientConn, error) {
 	certPool := x509.NewCertPool()
 
 	if ok := certPool.AppendCertsFromPEM(cert); !ok {
 		return nil, errors.New("Unable to append the certificate to pool.")
 	}
 
+	// trim port from server name used for TLS verification
+	serverName := addr
+	if s := strings.Split(addr, ":"); len(s) > 0 {
+		serverName = s[0]
+	}
+
 	tlsConfig := &tls.Config{
-		ServerName: addr,
-		RootCAs:    certPool,
+		ServerName:         serverName,
+		RootCAs:            certPool,
+		InsecureSkipVerify: insecureSkipVerify,
 	}
 	// turn off server certificate verification for Go < 1.8
 	if !isHigherOrEqualGoVersion("go1.8") {
@@ -288,7 +305,7 @@ func (r *grpcReporter) reconnect(c *grpcConnection, authority reconnectAuthority
 // address		redirect address
 func (r *grpcReporter) redirect(c *grpcConnection, authority reconnectAuthority, address string) {
 	// create a new connection object for this client
-	conn, err := grpcCreateClientConnection(c.certificate, address)
+	conn, err := grpcCreateClientConnection(c.certificate, address, r.insecureSkipVerify)
 	if err != nil {
 		OboeLog(ERROR, fmt.Sprintf("Failed redirect to: %v %v", address, err))
 	}
