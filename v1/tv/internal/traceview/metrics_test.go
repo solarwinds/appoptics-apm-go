@@ -286,14 +286,14 @@ func TestRecordHistogram(t *testing.T) {
 	h := hi.histograms[""]
 	assert.Empty(t, h.tags["TransactionName"])
 	encoded, _ := hdrhist.EncodeCompressed(h.hist)
-	assert.Equal(t, "HISTFAAAACR42pJpmSzMwMDAxIAKGEHEtclLGOw/QASYmAABAAD//1nj", string(encoded))
+	assert.Equal(t, "HISTFAAAACR42pJpmSzMwMDAxIAKGEHEtclLGOw/QASYmAABAAD//1njBIo=", string(encoded))
 
 	recordHistogram(hi, "hist1", time.Duration(453122))
 	assert.NotNil(t, hi.histograms["hist1"])
 	h = hi.histograms["hist1"]
 	assert.Equal(t, "hist1", h.tags["TransactionName"])
 	encoded, _ = hdrhist.EncodeCompressed(h.hist)
-	assert.Equal(t, "HISTFAAAACR42pJpmSzMwMDAxIAKGEHEtclLGOw/QAQEmQABAAD//1oB", string(encoded))
+	assert.Equal(t, "HISTFAAAACR42pJpmSzMwMDAxIAKGEHEtclLGOw/QAQEmQABAAD//1oBBJk=", string(encoded))
 
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
@@ -401,7 +401,7 @@ func TestAddHistogramToBSON(t *testing.T) {
 	assert.NotZero(t, m["0"])
 	m1 := m["0"].(map[string]interface{})
 	assert.Equal(t, "TransactionResponseTime", m1["name"])
-	assert.Equal(t, "HISTFAAAACh42pJpmSzMwMDAwgABzFCaEURcm7yEwf4DRGBnAxMTIAAA//9n9AXI", string(m1["value"].([]byte)))
+	assert.Equal(t, "HISTFAAAACh42pJpmSzMwMDAwgABzFCaEURcm7yEwf4DRGBnAxMTIAAA//9n9AXI", m1["value"])
 	assert.NotZero(t, m1["tags"])
 	t1 := m1["tags"].(map[string]interface{})
 	assert.Equal(t, "tag1", t1["t1"])
@@ -409,7 +409,7 @@ func TestAddHistogramToBSON(t *testing.T) {
 	assert.NotZero(t, m["1"])
 	m2 := m["1"].(map[string]interface{})
 	assert.Equal(t, "TransactionResponseTime", m2["name"])
-	assert.Equal(t, "HISTFAAAACZ42pJpmSzMwMDAzAABMJoRRFybvITB/gNEoDWZCRAAAP//YTIF", string(m2["value"].([]byte)))
+	assert.Equal(t, "HISTFAAAACZ42pJpmSzMwMDAzAABMJoRRFybvITB/gNEoDWZCRAAAP//YTIFdA==", m2["value"])
 	assert.NotZero(t, m2["tags"])
 	t2 := m2["tags"].(map[string]interface{})
 	assert.Nil(t, t2[veryLongTagName])

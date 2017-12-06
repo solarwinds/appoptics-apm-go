@@ -12,13 +12,13 @@ import (
 
 func EncodeCompressed(h *Hist) ([]byte, error) {
 	var buf bytes.Buffer
-	l := NewLogWriter(&buf)
-	b64w := base64.NewEncoder(base64.StdEncoding, &l.buf)
-	defer b64w.Close()
+	b64w := base64.NewEncoder(base64.StdEncoding, &buf)
 	if err := encodeCompressed(h, b64w, h.Max()); err != nil {
+		b64w.Close()
 		return nil, errors.Wrap(err, "unable to encode histogram")
 	}
-	return l.buf.Bytes(), nil
+	b64w.Close() // DO NOT defer this close, otherwise that could prevent bytes from getting flushed
+	return buf.Bytes(), nil
 }
 
 func encodeCompressed(h *Hist, w io.Writer, histMax int64) error {

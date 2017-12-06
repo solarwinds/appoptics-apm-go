@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -34,7 +35,7 @@ func assertInitMessage(t *testing.T, bufs [][]byte) {
 	g.AssertGraph(t, bufs, 1, g.AssertNodeMap{
 		{"go", "single"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, 1, n.Map["__Init"])
-			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
+			assert.Equal(t, strconv.Itoa(initVersion), n.Map["Go.Oboe.Version"])
 			assert.NotEmpty(t, n.Map["Go.Version"])
 		}},
 	})

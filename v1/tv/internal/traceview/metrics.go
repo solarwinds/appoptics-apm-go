@@ -753,7 +753,7 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
 
 	bsonAppendString(bbuf, "name", "TransactionResponseTime")
-	bsonAppendBinary(bbuf, "value", data)
+	bsonAppendString(bbuf, "value", string(data))
 
 	// append tags
 	if len(h.tags) > 0 {
