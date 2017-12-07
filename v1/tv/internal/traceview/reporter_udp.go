@@ -31,7 +31,7 @@ func udpNewReporter() reporter {
 		conn, err = net.DialUDP("udp4", nil, serverAddr)
 	}
 	if err != nil {
-		OboeLog(ERROR, fmt.Sprintf("TraceView failed to initialize UDP reporter: %v", err))
+		OboeLog(ERROR, fmt.Sprintf("AppOptics failed to initialize UDP reporter: %v", err))
 		return &nullReporter{}
 	}
 	return &udpReporter{conn: conn}

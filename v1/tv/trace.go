@@ -10,17 +10,17 @@ import (
 )
 
 // Trace represents a distributed trace for this request that reports
-// events to TraceView.
+// events to AppOptics.
 type Trace interface {
-	// Inherited from the Layer interface
-	//  BeginLayer(layerName string, args ...interface{}) Layer
+	// Inherited from the Span interface
+	//  BeginSpan(spanName string, args ...interface{}) Span
 	//  BeginProfile(profileName string, args ...interface{}) Profile
 	//	End(args ...interface{})
 	//	Info(args ...interface{})
 	//  Error(class, msg string)
 	//  Err(error)
 	//  IsTracing() bool
-	Layer
+	Span
 
 	// End a Trace, and include KV pairs returned by func f. Useful
 	// alternative to End() when used with defer to delay evaluation
@@ -44,13 +44,13 @@ type Trace interface {
 }
 
 // KVMap is a map of additional key-value pairs to report along with the event data provided
-// to TraceView. Certain key names (such as "Query" or "RemoteHost") are used by TraceView to
-// provide details about program activity and distinguish between different types of layers.
+// to AppOptics. Certain key names (such as "Query" or "RemoteHost") are used by AppOptics to
+// provide details about program activity and distinguish between different types of spans.
 // Please visit http://docs.appneta.com/traceview-instrumentation#special-interpretation for
-// details on the key names that TraceView looks for.
+// details on the key names that AppOptics looks for.
 type KVMap map[string]interface{}
 
-type traceHttpSpan struct {
+type traceHTTPSpan struct {
 	span  traceview.HttpSpanMessage
 	start time.Time
 }
@@ -58,29 +58,29 @@ type traceHttpSpan struct {
 type tvTrace struct {
 	layerSpan
 	exitEvent traceview.Event
-	httpSpan  traceHttpSpan
+	httpSpan  traceHTTPSpan
 }
 
 func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
 
-// NewTrace creates a new Trace for reporting to TraceView and immediately records
-// the beginning of the layer layerName. If this trace is sampled, it may report
-// event data to TraceView; otherwise event reporting will be a no-op.
-func NewTrace(layerName string) Trace {
-	ctx, ok := traceview.NewContext(layerName, "", true, nil)
+// NewTrace creates a new Trace for reporting to AppOptics and immediately records
+// the beginning of a root span named spanName. If this trace is sampled, it may report
+// event data to AppOptics; otherwise event reporting will be a no-op.
+func NewTrace(spanName string) Trace {
+	ctx, ok := traceview.NewContext(spanName, "", true, nil)
 	if !ok {
 		return &nullTrace{}
 	}
 	return &tvTrace{
-		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: layerLabeler{layerName}}},
+		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: spanLabeler{spanName}}},
 	}
 }
 
-// NewTraceFromID creates a new Trace for reporting to TraceView, provided an
+// NewTraceFromID creates a new Trace for reporting to AppOptics, provided an
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
-func NewTraceFromID(layerName, mdstr string, cb func() KVMap) Trace {
-	ctx, ok := traceview.NewContext(layerName, mdstr, true, func() map[string]interface{} {
+func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
+	ctx, ok := traceview.NewContext(spanName, mdstr, true, func() map[string]interface{} {
 		if cb != nil {
 			return cb()
 		}
@@ -90,11 +90,11 @@ func NewTraceFromID(layerName, mdstr string, cb func() KVMap) Trace {
 		return &nullTrace{}
 	}
 	return &tvTrace{
-		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: layerLabeler{layerName}}},
+		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: spanLabeler{spanName}}},
 	}
 }
 
-// EndTrace reports the exit event for the layer name that was used when calling NewTrace().
+// EndTrace reports the exit event for the span name that was used when calling NewTrace().
 // No more events should be reported from this trace.
 func (t *tvTrace) End(args ...interface{}) {
 	if t.ok() {

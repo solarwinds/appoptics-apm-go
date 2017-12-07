@@ -5,10 +5,10 @@ package ottv
 import (
 	"testing"
 
-	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/stretchr/testify/suite"
 	"github.com/librato/go-traceview/v1/tv/internal/traceview"
 	"github.com/librato/go-traceview/v1/tv/ottv/internal/harness"
+	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestAPICheck(t *testing.T) {

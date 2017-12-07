@@ -1,5 +1,5 @@
-// OpenTracing test web app based on TraceView demo app alice/main.go
-// Wraps standard HTTP handlers with TraceView's OpenTracing instrumentation
+// OpenTracing test web app based on AppOptics demo app alice/main.go
+// Wraps standard HTTP handlers with AppOptics's OpenTracing instrumentation
 
 package main
 

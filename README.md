@@ -1,4 +1,4 @@
-# TraceView for Go
+# AppOptics APM instrumentation for Go
 
 [![GoDoc](https://godoc.org/github.com/librato/go-traceview/v1/tv?status.svg)](https://godoc.org/github.com/librato/go-traceview/v1/tv)
 [![Build Status](https://travis-ci.org/librato/go-traceview.svg?branch=master)](https://travis-ci.org/librato/go-traceview)
@@ -22,23 +22,23 @@
 
 ## Introduction
 
-[TraceView](http://traceview.solarwinds.com) provides distributed tracing and
-code-level application performance monitoring. TraceView's cross-language, production-ready,
+[AppOptics](http://www.appoptics.com) provides distributed tracing,
+code-level application performance monitoring, and host and infrastructure monitoring. AppOptics's cross-language, production-ready,
 low-overhead distributed tracing system (similar to Dapper, Zipkin, or X-Trace) can follow the path
 of an application request as it is processed and forwarded between services written in [Go, Java,
-Scala, Node.js, Ruby, Python, PHP, and C#/.NET](http://docs.traceview.solarwinds.com/TraceView/support-matrix), reporting data to TraceView's cloud platform for
+Scala, Node.js, Ruby, Python, PHP, and C#/.NET](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/), reporting data to AppOptics's cloud platform for
 analysis, monitoring, and fine-grained, filterable data visualization. This repository provides
-instrumentation for Go, which allows Go-based applications to be monitored using TraceView.
+instrumentation for Go, which allows Go-based applications to be monitored using AppOptics.
 
 Go support is currently in beta (though we run the instrumentation to process
 data in our production environment!) so please share any feedback you have; PRs welcome.
-Also, you can read more about how we use Go at TraceView in our [blog post announcing our Go instrumentation](https://www.appneta.com/blog/go-long-with-golang/)!
+Also, you can read more about how we use Go at AppOptics in our [blog post announcing our Go instrumentation](https://www.appneta.com/blog/go-long-with-golang/)!
 
 ## Getting started
 
 ### Installing
 
-To get tracing, you'll need a [(free) TraceView account](http://traceview.solarwinds.com).
+To get tracing, you'll need a [(free) AppOptics account](http://www.appoptics.com).
 
 In the product install flow, **choose to skip the webserver and select any language.**  (You'll notice the absence of Go because we're currently in beta.)
 
@@ -55,17 +55,15 @@ check out the [demo](#demo) app below to get a quick start.  One you have 5,
 you can progress to [your account's overview
 page](https://login.tv.solarwinds.com/overview).
 
-### Building your app with tracing
+### Building your app with or without tracing
 
-By default, no tracing occurs unless you build your app with the build tag “traceview”. Without it,
-calls to this API are no-ops, allowing for precise control over which deployments are traced. To
-build and run with tracing enabled, you must do so on a host with TraceView's packages installed.
-Once the liboboe-dev (or liboboe-devel) package is installed you can build your service as follows:
+No tracing occurs when you build your app with the build tag `disable_tracing`. With this tag,
+calls to this API are no-ops, and [empty structs](https://dave.cheney.net/2014/03/25/the-empty-struct) keep span and instrumentation types from making memory allocations. This allows for precise control over which deployments are traced.
 
 ```
- $ go build -tags traceview
+ # Set to disable tracing and APM instrumentation
+ $ go build -tags disable_tracing
 ```
-
 
 ## Instrumenting your application
 
@@ -78,14 +76,14 @@ will monitor the performance of the provided
 distribution heatmaps filterable by dimensions such as URL host & path, HTTP status & method, server
 hostname, etc. [tv.HTTPHandler](https://godoc.org/github.com/librato/go-traceview/v1/tv#HTTPHandler)
 will also continue a distributed trace described in the incoming HTTP request headers (from
-TraceView's [automatic](http://docs.traceview.solarwinds.com/TraceViewsupport-matrix)
-[C#/.NET](http://docs.traceview.solarwinds.com/TraceView/support-matrix#net),
-[Java](http://docs.traceview.solarwinds.com/TraceView/support-matrix#java-scala),
-[Node.js](https://github.com/tracelytics/node-traceview),
-[PHP](http://docs.traceview.solarwinds.com/TraceView/support-matrix#php),
-[Python](https://github.com/tracelytics/python-traceview),
-[Ruby](https://github.com/tracelytics/ruby-traceview), and
-[Scala](http://docs.traceview.solarwinds.com/TraceView/support-matrix#java-scala) instrumentation) through to the HTTP
+AppOptics's [automatic](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/)
+[C#/.NET](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#net),
+[Java](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#java-scala),
+Node.js,
+[PHP](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#php),
+[Python](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#python),
+Ruby, and
+[Scala](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#java-scala) instrumentation) through to the HTTP
 response.
 
 ```go
@@ -132,7 +130,7 @@ break a request's processing time down by placing small benchmarks into your cod
 start or continue a `Trace` (the root `Layer`), then create a series of `Layer` spans (or `Profile`
 timings) to capture the time used by different parts of the app's stack as it is processed.
 
-TraceView provides two ways of measuring time spent by your code: a `Layer` can measure e.g. a
+AppOptics provides two ways of measuring time spent by your code: a `Layer` can measure e.g. a
 single DB query or cache request, an outgoing HTTP or RPC request, the entire time spent within a
 controller method, or the time used by a middleware method between calls to child Layers. A
 `Profile` provides a named measurement of time spent inside a `Layer`, and is typically used to
@@ -140,7 +138,7 @@ measure a single function call or code block, e.g. to represent the time used by
 computation(s) occurring in a `Layer`. Layers can be created as children of other Layers, but a
 `Profile` cannot have children.
 
-TraceView identifies a reported Layer's type from its key-value pairs; if keys named "Query" and
+AppOptics identifies a reported Layer's type from its key-value pairs; if keys named "Query" and
 "RemoteHost" are used, a Layer is assumed to measure the extent of a DB query. KV pairs can be
 appended to Layer and Profile extents as optional extra variadic arguments to methods such as
 [BeginLayer()](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginLayer) or
@@ -153,8 +151,8 @@ such as [BeginQueryLayer()](https://godoc.org/github.com/librato/go-traceview/v1
 [BeginRPCLayer()](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginRPCLayer), and
 [BeginHTTPClientLayer()](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginHTTPClientLayer)
 that match the spec in our
-[custom instrumentation docs](http://docs.traceview.solarwinds.com/Instrumentation/instrumentation.html#special-interpretation)
-to report attributes associated with different types of service calls, used for indexing TraceView's
+[custom instrumentation docs](https://docs.appoptics.com/kb/apm_tracing/custom_instrumentation/)
+to report attributes associated with different types of service calls, used for indexing AppOptics's
 filterable charts and latency heatmaps.
 
 ```go
@@ -220,13 +218,13 @@ func main() {
 
 ### Distributed tracing and context propagation
 
-A TraceView trace is defined by a context (a globally unique ID and metadata) that is persisted
+A AppOptics trace is defined by a context (a globally unique ID and metadata) that is persisted
 across the different hosts, processes, languages and methods that are used to serve a request. Thus
 to start a new Layer you need either a Trace or another Layer to begin from. (The Trace
 interface is also the root Layer, typically created when a request is first received.) Each new
 Layer is connected to its parent, so you should begin new child Layers from parents in a way that
 logically matches your application; for more information [see our custom layer
-documentation](http://docs.traceview.solarwinds.com/TraceView/instrumentation#custom-layers).
+documentation](https://docs.appoptics.com/kb/apm_tracing/custom_instrumentation/).
 
 The [Go blog](https://blog.golang.org/context) recommends propagating request context using the
 package [golang.org/x/net/context](godoc.org/golang.org/x/net/context): "At Google, we require that
@@ -271,7 +269,7 @@ func main() {
 ### Configuration
 
 The `GO_TRACEVIEW_TRACING_MODE` environment variable may be set to "always", "through", or "never".
-- Mode "always" is the default, and will instruct TraceView to consider sampling every inbound request for tracing.
+- Mode "always" is the default, and will instruct AppOptics to consider sampling every inbound request for tracing.
 - Mode "through" will only continue traces started upstream by inbound requests, when a trace ID is available in the request metadata (e.g. an "X-Trace" HTTP header).
 - Mode "never" will disable tracing, and will neither start nor continue traces.
 
@@ -290,12 +288,12 @@ inside a staging environment.
 
 ### Support
 
-While we use TraceView to trace our own production Go services, this version of our Go instrumentation is currently in beta
+While we use AppOptics to trace our own production Go services, this version of our Go instrumentation is currently in beta
 and under active development. We welcome your feedback, issues and feature requests, and please contact us at traceviewsupport@solarwinds.com!
 
 ### Demo web app
 
-If you have installed TraceView and this package, you can run the sample “web app” included with go-traceview:
+If you have installed AppOptics and this package, you can run the sample “web app” included with go-traceview:
 
     $ cd $GOPATH/src/github.com/librato/go-traceview/examples/sample_app
     $ go run -tags traceview main.go
@@ -305,7 +303,7 @@ A web server will run on port 8899. It doesn’t do much, except wait a bit and 
     $ curl http://localhost:8899/hello
     Slow request... Path: /hello
 
-You should see these requests appear on your TraceView dashboard.
+You should see these requests appear on your AppOptics dashboard.
 
 ### Distributed app
 
@@ -323,7 +321,7 @@ source in each service's subdirectory, or by using docker-compose:
     Starting distributedapp_davepy_1
     Starting distributedapp_redis_1
 
-and substituting "xxx" with your TraceView access key. This app currently provides two HTTP handlers:
+and substituting "xxx" with your AppOptics access key. This app currently provides two HTTP handlers:
 `aliceHandler`, which randomly forwards requests to either of "bob" (Go), "caroljs", or "davepy",
 and `concurrentAliceHandler`, which makes requests to all three in parallel.
 
@@ -336,7 +334,7 @@ and `concurrentAliceHandler`, which makes requests to all three in parallel.
     $ curl http://localhost:8890/concurrent
     Hello from Flask!{"result":"hello from bob"}Hello from app.js
 
-You should see traces for these appear on your TraceView dashboard. Here is an example trace of the
+You should see traces for these appear on your AppOptics dashboard. Here is an example trace of the
 concurrent handler:
 
 <img width=729 src="https://github.com/librato/go-traceview/raw/master/img/concurrent-tracedetails.gif">
@@ -345,11 +343,11 @@ concurrent handler:
 
 Support for the OpenTracing 1.0 API is available in the [ottv](https://godoc.org/github.com/librato/go-traceview/v1/tv/ottv) package as a technology preview. The
 OpenTracing tracer in that package provides support for OpenTracing span reporting and context
-propagation by using TraceView's layer reporting and HTTP header formats, permitting the OT tracer
-to continue distributed traces started by TraceView's instrumentation and vice versa. Some of the
-OpenTracing standardized tags are mapped to TraceView tag names as well.
+propagation by using AppOptics's layer reporting and HTTP header formats, permitting the OT tracer
+to continue distributed traces started by AppOptics's instrumentation and vice versa. Some of the
+OpenTracing standardized tags are mapped to AppOptics tag names as well.
 
-To set TraceView's tracer to be your global tracer, call `opentracing.InitGlobalTracer(ottv.NewTracer())`.
+To set AppOptics's tracer to be your global tracer, call `opentracing.InitGlobalTracer(ottv.NewTracer())`.
 Currently, `ottv.NewTracer()` does not accept any options, but this may change in the future.
 Please let us know if you are using this package while it is in preview by contacting us at opentracing@tracelytics.com.
 

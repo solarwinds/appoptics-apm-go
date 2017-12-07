@@ -1,5 +1,5 @@
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
-// TraceView HTTP instrumentation for Go
+// AppOptics HTTP instrumentation for Go
 
 package tv
 
@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-// HTTPHeaderName is a constant for the HTTP header used by TraceView ("X-Trace") to propagate
+// HTTPHeaderName is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
 // the distributed tracing context across HTTP requests.
 const HTTPHeaderName = "X-Trace"
-const httpHandlerLayerName = "http.HandlerFunc"
+const httpHandlerSpanName = "http.HandlerFunc"
 
 // HTTPHandler wraps an http.HandlerFunc with entry / exit events,
 // returning a new handler that can be used in its place.
@@ -32,7 +32,7 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 	}
 	// return wrapped HTTP request handler
 	return func(w http.ResponseWriter, r *http.Request) {
-		t, w := TraceFromHTTPRequestResponse(httpHandlerLayerName, w, r)
+		t, w := TraceFromHTTPRequestResponse(httpHandlerSpanName, w, r)
 		defer t.End(endArgs...)
 
 		defer func() { // catch and report panic, if one occurs
@@ -56,8 +56,8 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 //       defer tr.End()
 //       // ...
 //   }
-func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter) {
-	t := traceFromHTTPRequest(layerName, r)
+func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter) {
+	t := traceFromHTTPRequest(spanName, r)
 	wrapper := newResponseWriter(w, t) // wrap writer with response-observing writer
 	return t, wrapper
 }
@@ -77,13 +77,16 @@ func (w *HTTPResponseWriter) Write(p []byte) (n int, err error) {
 	}
 	return w.Writer.Write(p)
 }
+
+// Header implements the http.ResponseWriter interface.
 func (w *HTTPResponseWriter) Header() http.Header { return w.Writer.Header() }
 
+// WriteHeader implements the http.ResponseWriter interface.
 func (w *HTTPResponseWriter) WriteHeader(status int) {
 	w.StatusCode = status                // observe HTTP status code
 	md := w.Header().Get(HTTPHeaderName) // check response for downstream metadata
 	if w.t.IsTracing() {                 // set trace exit metadata in X-Trace header
-		// if downstream response headers mention a different layer, add edge to it
+		// if downstream response headers mention a different span, add edge to it
 		if md != "" && md != w.t.ExitMetadata() {
 			w.t.AddEndArgs("Edge", md)
 		}
@@ -108,9 +111,9 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 
 // traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
-func traceFromHTTPRequest(layerName string, r *http.Request) Trace {
+func traceFromHTTPRequest(spanName string, r *http.Request) Trace {
 	// start trace, passing in metadata header
-	t := NewTraceFromID(layerName, r.Header.Get(HTTPHeaderName), func() KVMap {
+	t := NewTraceFromID(spanName, r.Header.Get(HTTPHeaderName), func() KVMap {
 		return KVMap{
 			"Method":       r.Method,
 			"HTTP-Host":    r.Host,

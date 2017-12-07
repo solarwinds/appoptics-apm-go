@@ -20,20 +20,22 @@ func TestContext(t *testing.T) {
 	tr := NewTrace("test").(*tvTrace)
 	xt := tr.tvCtx.MetadataString()
 
-	ctx2 := context.WithValue(ctx, "t", tr)
-	assert.Equal(t, ctx2.Value("t"), tr)
-	assert.Equal(t, ctx2.Value("t").(*tvTrace).tvCtx.MetadataString(), xt)
+	var traceKey = struct{}{}
+
+	ctx2 := context.WithValue(ctx, traceKey, tr)
+	assert.Equal(t, ctx2.Value(traceKey), tr)
+	assert.Equal(t, ctx2.Value(traceKey).(*tvTrace).tvCtx.MetadataString(), xt)
 
 	ctxx := tr.tvCtx.Copy()
-	lbl := layerLabeler{"L1"}
+	lbl := spanLabeler{"L1"}
 	tr2 := &tvTrace{layerSpan: layerSpan{span: span{tvCtx: ctxx, labeler: lbl}}}
-	ctx3 := context.WithValue(ctx2, "t", tr2)
-	assert.Equal(t, ctx3.Value("t"), tr2)
+	ctx3 := context.WithValue(ctx2, traceKey, tr2)
+	assert.Equal(t, ctx3.Value(traceKey), tr2)
 
 	ctxx2 := tr2.tvCtx.Copy()
 	tr3 := &tvTrace{layerSpan: layerSpan{span: span{tvCtx: ctxx2}}}
-	ctx4 := context.WithValue(ctx3, "t", tr3)
-	assert.Equal(t, ctx4.Value("t"), tr3)
+	ctx4 := context.WithValue(ctx3, traceKey, tr3)
+	assert.Equal(t, ctx4.Value(traceKey), tr3)
 
 	r.Close(1)
 	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{{"test", "entry"}: {}})
@@ -59,7 +61,7 @@ func TestNullSpan(t *testing.T) {
 	r := traceview.SetTestReporter()
 
 	ctx := NewContext(context.Background(), NewTrace("TestNullSpan")) // reports event
-	l1, ctxL := BeginLayer(ctx, "L1")                                 // reports event
+	l1, ctxL := BeginSpan(ctx, "L1")                                  // reports event
 	assert.True(t, l1.IsTracing())
 	assert.Equal(t, l1.MetadataString(), MetadataString(ctxL))
 	assert.Len(t, l1.MetadataString(), 58)
@@ -71,8 +73,8 @@ func TestNullSpan(t *testing.T) {
 	p1 := l1.BeginProfile("P2") // try to start profile after end: no effect
 	p1.End()
 
-	c1 := l1.BeginLayer("C1") // child after parent ended
-	assert.IsType(t, c1, &nullSpan{})
+	c1 := l1.BeginSpan("C1") // child after parent ended
+	assert.IsType(t, c1, nullSpan{})
 	assert.False(t, c1.IsTracing())
 	assert.False(t, c1.ok())
 	assert.Empty(t, c1.MetadataString())

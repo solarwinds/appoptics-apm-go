@@ -1,6 +1,6 @@
 FROM ubuntu:14.04
 
-# Install TraceView packages and agent.
+# Install AppOptics packages and agent.
 RUN apt-get update && apt-get -y install wget
 ARG APPNETA_KEY
 RUN wget https://files.appneta.com/install_appneta.sh

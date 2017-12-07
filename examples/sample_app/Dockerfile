@@ -1,6 +1,6 @@
 FROM golang:1.6
 
-# Install TraceView package dependencies and agent.
+# Install AppOptics package dependencies and agent.
 # http://www.appneta.com/products/traceview/
 # requires build arg, e.g.: docker build --build-arg APPNETA_KEY="xx" .
 RUN apt-get -y install wget

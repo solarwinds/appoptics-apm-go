@@ -4,7 +4,7 @@ package ottv
 
 import "github.com/opentracing/opentracing-go/ext"
 
-// Map selected OpenTracing tag constants to TraceView analogs
+// Map selected OpenTracing tag constants to AppOptics analogs
 var otTVMap = map[string]string{
 	string(ext.Component): "OTComponent",
 

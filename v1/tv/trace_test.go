@@ -10,10 +10,10 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/librato/go-traceview/v1/tv"
 	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
 	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTraceMetadata(t *testing.T) {
@@ -90,8 +90,8 @@ func traceExample(ctx context.Context) {
 	t := tv.FromContext(ctx)
 	// instrument a DB query
 	q := "SELECT * FROM tbl"
-	// l, _ := tv.BeginLayer(ctx, "DBx", "Query", q, "Flavor", "postgresql", "RemoteHost", "db.com")
-	l := tv.BeginQueryLayer(ctx, "DBx", q, "postgresql", "db.com")
+	// l, _ := tv.BeginSpan(ctx, "DBx", "Query", q, "Flavor", "postgresql", "RemoteHost", "db.com")
+	l := tv.BeginQuerySpan(ctx, "DBx", q, "postgresql", "db.com")
 	// db.Query(q)
 	time.Sleep(20 * time.Millisecond)
 	l.Error("QueryError", "Error running query!")
@@ -112,7 +112,7 @@ func traceExampleCtx(ctx context.Context) {
 
 	// instrument a DB query
 	q := []byte("SELECT * FROM tbl")
-	_, ctxQ := tv.BeginLayer(ctx, "DBx", "Query", q, "Flavor", "postgresql", "RemoteHost", "db.com")
+	_, ctxQ := tv.BeginSpan(ctx, "DBx", "Query", q, "Flavor", "postgresql", "RemoteHost", "db.com")
 	// db.Query(q)
 	time.Sleep(20 * time.Millisecond)
 	tv.Error(ctxQ, "QueryError", "Error running query!")
@@ -130,8 +130,8 @@ func traceExampleCtx(ctx context.Context) {
 func f0(ctx context.Context) {
 	defer tv.BeginProfile(ctx, "f0").End()
 
-	//	l, _ := tv.BeginLayer(ctx, "http.Get", "RemoteURL", "http://a.b")
-	l := tv.BeginRemoteURLLayer(ctx, "http.Get", "http://a.b")
+	//	l, _ := tv.BeginSpan(ctx, "http.Get", "RemoteURL", "http://a.b")
+	l := tv.BeginRemoteURLSpan(ctx, "http.Get", "http://a.b")
 	time.Sleep(5 * time.Millisecond)
 	// _, _ = http.Get("http://a.b")
 
@@ -153,7 +153,7 @@ func f0(ctx context.Context) {
 func f0Ctx(ctx context.Context) {
 	defer tv.BeginProfile(ctx, "f0").End()
 
-	_, ctx = tv.BeginLayer(ctx, "http.Get", "RemoteURL", "http://a.b")
+	_, ctx = tv.BeginSpan(ctx, "http.Get", "RemoteURL", "http://a.b")
 	time.Sleep(5 * time.Millisecond)
 	// _, _ = http.Get("http://a.b")
 
@@ -206,7 +206,7 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 			assert.Equal(t, n.Map["FunctionName"], "github.com/librato/go-traceview/v1/tv_test."+f0name)
 		}},
 		{"", "profile_exit"}: {Edges: g.Edges{{"", "profile_entry"}}},
-		// nested layer in http.Get profile points to trace entry
+		// nested span in http.Get profile points to trace entry
 		{"http.Get", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["RemoteURL"], "http://a.b")
 		}},
@@ -225,7 +225,7 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 			assert.Equal(t, "error", n.Map["ErrorClass"])
 			assert.Equal(t, "test error!", n.Map["ErrorMsg"])
 		}},
-		// end of nested layer should link to last layer event (error)
+		// end of nested span should link to last span event (error)
 		{"http.Get", "exit"}: {Edges: g.Edges{{"http.Get", "error"}}},
 		// first query after call to f0 should link to ...?
 		{"DBx", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
@@ -233,12 +233,12 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 			assert.Equal(t, n.Map["Flavor"], "postgresql")
 			assert.Equal(t, n.Map["RemoteHost"], "db.com")
 		}},
-		// error in nested layer should link to layer entry
+		// error in nested span should link to span entry
 		{"DBx", "error"}: {Edges: g.Edges{{"DBx", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "QueryError", n.Map["ErrorClass"])
 			assert.Equal(t, "Error running query!", n.Map["ErrorMsg"])
 		}},
-		// end of nested layer should link to layer entry
+		// end of nested span should link to span entry
 		{"DBx", "exit"}: {Edges: g.Edges{{"DBx", "error"}}},
 
 		{"myExample", "info"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
@@ -327,7 +327,7 @@ func TestTraceJoin(t *testing.T) {
 	r := traceview.SetTestReporter()
 
 	tr := tv.NewTrace("test")
-	l := tr.BeginLayer("L1")
+	l := tr.BeginSpan("L1")
 	l.End()
 	tr.End()
 
