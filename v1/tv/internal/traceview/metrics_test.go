@@ -231,27 +231,27 @@ func TestGetTransactionFromURL(t *testing.T) {
 		transaction string
 	}
 	var test = []record{
-		record{
+		{
 			"https://github.com/librato/go-traceview/blob/metrics/reporter.go#L867",
 			"/librato/go-traceview",
 		},
-		record{
+		{
 			"http://github.com/librato",
 			"/librato",
 		},
-		record{
+		{
 			"http://github.com",
 			"/",
 		},
-		record{
+		{
 			"github.com/librato/go-traceview/blob",
 			"/librato/go-traceview",
 		},
-		record{
+		{
 			"github.com:8080/librato/go-traceview/blob",
 			"/librato/go-traceview",
 		},
-		record{
+		{
 			" ",
 			"/",
 		},
