@@ -7,28 +7,28 @@ import "golang.org/x/net/context"
 type contextKeyT string
 
 var contextKey = contextKeyT("github.com/librato/go-traceview/v1/tv.Trace")
-var contextLayerKey = contextKeyT("github.com/librato/go-traceview/v1/tv.Layer")
+var contextSpanKey = contextKeyT("github.com/librato/go-traceview/v1/tv.Span")
 
 // NewContext returns a copy of the parent context and associates it with a Trace.
 func NewContext(ctx context.Context, t Trace) context.Context {
-	return context.WithValue(context.WithValue(ctx, contextKey, t), contextLayerKey, t)
+	return context.WithValue(context.WithValue(ctx, contextKey, t), contextSpanKey, t)
 }
 
-// newLayerContext returns a copy of the parent context and associates it with a Layer.
-func newLayerContext(ctx context.Context, l Layer) context.Context {
-	return context.WithValue(ctx, contextLayerKey, l)
+// newSpanContext returns a copy of the parent context and associates it with a Span.
+func newSpanContext(ctx context.Context, l Span) context.Context {
+	return context.WithValue(ctx, contextSpanKey, l)
 }
 
-// FromContext returns the Layer bound to the context, if any.
-func FromContext(ctx context.Context) Layer {
+// FromContext returns the Span bound to the context, if any.
+func FromContext(ctx context.Context) Span {
 	l, ok := fromContext(ctx)
 	if !ok {
 		return &nullSpan{}
 	}
 	return l
 }
-func fromContext(ctx context.Context) (l Layer, ok bool) {
-	l, ok = ctx.Value(contextLayerKey).(Layer)
+func fromContext(ctx context.Context) (l Span, ok bool) {
+	l, ok = ctx.Value(contextSpanKey).(Span)
 	return
 }
 
@@ -45,8 +45,8 @@ func traceFromContext(ctx context.Context) (t Trace, ok bool) {
 	return
 }
 
-// if context contains a valid Layer, run f
-func runCtx(ctx context.Context, f func(l Layer)) {
+// if context contains a valid Span, run f
+func runCtx(ctx context.Context, f func(l Span)) {
 	if l, ok := fromContext(ctx); ok {
 		f(l)
 	}
@@ -62,21 +62,21 @@ func runTraceCtx(ctx context.Context, f func(t Trace)) {
 // EndTrace ends a Trace, given a context that was associated with the trace.
 func EndTrace(ctx context.Context) { runTraceCtx(ctx, func(t Trace) { t.End() }) }
 
-// End ends a Layer, given a context ctx that was associated with it, optionally reporting KV pairs
+// End ends a Span, given a context ctx that was associated with it, optionally reporting KV pairs
 // provided by args.
-func End(ctx context.Context, args ...interface{}) { runCtx(ctx, func(l Layer) { l.End(args...) }) }
+func End(ctx context.Context, args ...interface{}) { runCtx(ctx, func(l Span) { l.End(args...) }) }
 
-// Info reports KV pairs provided by args for the Layer associated with the context ctx.
-func Info(ctx context.Context, args ...interface{}) { runCtx(ctx, func(l Layer) { l.Info(args...) }) }
+// Info reports KV pairs provided by args for the Span associated with the context ctx.
+func Info(ctx context.Context, args ...interface{}) { runCtx(ctx, func(l Span) { l.Info(args...) }) }
 
-// Error reports details about an error (along with a stack trace) on the Layer associated with the context ctx.
-func Error(ctx context.Context, class, msg string) { runCtx(ctx, func(l Layer) { l.Error(class, msg) }) }
+// Error reports details about an error (along with a stack trace) on the Span associated with the context ctx.
+func Error(ctx context.Context, class, msg string) { runCtx(ctx, func(l Span) { l.Error(class, msg) }) }
 
-// Err reports details error err (along with a stack trace) on the Layer associated with the context ctx.
-func Err(ctx context.Context, err error) { runCtx(ctx, func(l Layer) { l.Err(err) }) }
+// Err reports details error err (along with a stack trace) on the Span associated with the context ctx.
+func Err(ctx context.Context, err error) { runCtx(ctx, func(l Span) { l.Err(err) }) }
 
-// MetadataString returns a representation of the Layer span's context for use with distributed
-// tracing (to create a remote child span). If the Layer has ended, an empty string is returned.
+// MetadataString returns a representation of the Span's context for use with distributed
+// tracing (to create a remote child span). If the Span has ended, an empty string is returned.
 func MetadataString(ctx context.Context) string {
 	if l, ok := fromContext(ctx); ok {
 		return l.MetadataString()

@@ -11,34 +11,34 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Layer is used to measure a span of time associated with an actvity
+// Span is used to measure a span of time associated with an actvity
 // such as an RPC call, DB query, or method invocation.
-type Layer interface {
-	// BeginLayer starts a new Layer span, returning a child of this Layer.
-	BeginLayer(layerName string, args ...interface{}) Layer
+type Span interface {
+	// BeginSpan starts a new Span, returning a child of this Span.
+	BeginSpan(spanName string, args ...interface{}) Span
 	// BeginProfile starts a new Profile, used to measure a named span
-	// of time spent in this Layer.
+	// of time spent in this Span.
 	BeginProfile(profileName string, args ...interface{}) Profile
-	// End ends a Layer, optionally reporting KV pairs provided by args.
+	// End ends a Span, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
 	// Add additional KV pairs that will be serialized (and dereferenced, for pointer
 	// values) at the end of this trace's span.
 	AddEndArgs(args ...interface{})
 
-	// Info reports KV pairs provided by args for this Layer.
+	// Info reports KV pairs provided by args for this Span.
 	Info(args ...interface{})
-	// Error reports details about an error (along with a stack trace) for this Layer.
+	// Error reports details about an error (along with a stack trace) for this Span.
 	Error(class, msg string)
-	// Err reports details about error err (along with a stack trace) for this Layer.
+	// Err reports details about error err (along with a stack trace) for this Span.
 	Err(error)
 
-	// MetadataString returns a string representing this Layer for use
+	// MetadataString returns a string representing this Span for use
 	// in distributed tracing, e.g. to provide as an "X-Trace" header
 	// in an outgoing HTTP request.
 	MetadataString() string
 
-	// SetAsync(true) provides a hint that this Layer is a parent of
-	// concurrent overlapping child Layers.
+	// SetAsync(true) provides a hint that this Span is a parent of
+	// concurrent overlapping child Spans.
 	SetAsync(bool)
 
 	IsTracing() bool
@@ -48,7 +48,7 @@ type Layer interface {
 	ok() bool
 }
 
-// Profile is used to provide micro-benchmarks of named timings inside a Layer.
+// Profile is used to provide micro-benchmarks of named timings inside a Span.
 type Profile interface {
 	// End ends a Profile, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
@@ -58,20 +58,20 @@ type Profile interface {
 	Err(error)
 }
 
-// BeginLayer starts a new Layer span, provided a parent context and name. It returns a Layer
-// and context bound to the new child Layer.
-func BeginLayer(ctx context.Context, layerName string, args ...interface{}) (Layer, context.Context) {
+// BeginSpan starts a new Span, provided a parent context and name. It returns a Span
+// and context bound to the new child Span.
+func BeginSpan(ctx context.Context, layerName string, args ...interface{}) (Span, context.Context) {
 	if parent, ok := fromContext(ctx); ok && parent.ok() { // report layer entry from parent context
-		l := newLayer(parent.tvContext().Copy(), layerName, parent, args...)
-		return l, newLayerContext(ctx, l)
+		l := newSpan(parent.tvContext().Copy(), layerName, parent, args...)
+		return l, newSpanContext(ctx, l)
 	}
 	return &nullSpan{}, ctx
 }
 
-// BeginLayer starts a new Layer span, returning a child of this Layer.
-func (s *layerSpan) BeginLayer(layerName string, args ...interface{}) Layer {
+// BeginSpan starts a new Span, returning a child of this Span.
+func (s *layerSpan) BeginSpan(layerName string, args ...interface{}) Span {
 	if s.ok() { // copy parent context and report entry from child
-		return newLayer(s.tvCtx.Copy(), layerName, s, args...)
+		return newSpan(s.tvCtx.Copy(), layerName, s, args...)
 	}
 	return &nullSpan{}
 }
@@ -89,7 +89,7 @@ func BeginProfile(ctx context.Context, profileName string, args ...interface{}) 
 	return &nullSpan{}
 }
 
-// BeginProfile starts a new Profile, used to measure a named span of time spent in this Layer.
+// BeginProfile starts a new Profile, used to measure a named span of time spent in this Span.
 // The returned Profile should be closed with End().
 func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profile {
 	if s.ok() { // copy parent context and report entry from child
@@ -142,8 +142,8 @@ func (s *layerSpan) Info(args ...interface{}) {
 	}
 }
 
-// MetadataString returns a representation of the Layer span's context for use with distributed
-// tracing (to create a remote child span). If the Layer has ended, an empty string is returned.
+// MetadataString returns a representation of the Span's context for use with distributed
+// tracing (to create a remote child span). If the Span has ended, an empty string is returned.
 func (s *layerSpan) MetadataString() string {
 	if s.ok() {
 		return s.tvCtx.MetadataString()
@@ -151,7 +151,7 @@ func (s *layerSpan) MetadataString() string {
 	return ""
 }
 
-// SetAsync(true) provides a hint that this Layer is a parent of concurrent overlapping child Layers.
+// SetAsync(true) provides a hint that this Span is a parent of concurrent overlapping child Spans.
 func (s *layerSpan) SetAsync(val bool) {
 	if val {
 		s.AddEndArgs("Async", true)
@@ -175,35 +175,35 @@ func (s *span) Err(err error) {
 }
 
 // span satisfies the Extent interface and consolidates common reporting routines used by
-// both Layer and Profile interfaces.
+// both Span and Profile interfaces.
 type span struct {
 	labeler
 	tvCtx         traceview.Context
-	parent        Layer
+	parent        Span
 	childEdges    []traceview.Context // for reporting in exit event
 	childProfiles []Profile
 	endArgs       []interface{}
 	ended         bool // has exit event been reported?
 	lock          sync.RWMutex
 }
-type layerSpan struct{ span }   // satisfies Layer
+type layerSpan struct{ span }   // satisfies Span
 type profileSpan struct{ span } // satisfies Profile
-type nullSpan struct{}          // a span that is not tracing; satisfies Layer & Profile
+type nullSpan struct{}          // a span that is not tracing; satisfies Span & Profile
 
-func (s *nullSpan) BeginLayer(layerName string, args ...interface{}) Layer { return &nullSpan{} }
-func (s *nullSpan) BeginProfile(name string, args ...interface{}) Profile  { return &nullSpan{} }
-func (s *nullSpan) End(args ...interface{})                                {}
-func (s *nullSpan) AddEndArgs(args ...interface{})                         {}
-func (s *nullSpan) Error(class, msg string)                                {}
-func (s *nullSpan) Err(err error)                                          {}
-func (s *nullSpan) Info(args ...interface{})                               {}
-func (s *nullSpan) IsTracing() bool                                        { return false }
-func (s *nullSpan) addChildEdge(traceview.Context)                         {}
-func (s *nullSpan) addProfile(Profile)                                     {}
-func (s *nullSpan) ok() bool                                               { return false }
-func (s *nullSpan) tvContext() traceview.Context                           { return traceview.NewNullContext() }
-func (s *nullSpan) MetadataString() string                                 { return "" }
-func (s *nullSpan) SetAsync(bool)                                          {}
+func (s *nullSpan) BeginSpan(layerName string, args ...interface{}) Span  { return &nullSpan{} }
+func (s *nullSpan) BeginProfile(name string, args ...interface{}) Profile { return &nullSpan{} }
+func (s *nullSpan) End(args ...interface{})                               {}
+func (s *nullSpan) AddEndArgs(args ...interface{})                        {}
+func (s *nullSpan) Error(class, msg string)                               {}
+func (s *nullSpan) Err(err error)                                         {}
+func (s *nullSpan) Info(args ...interface{})                              {}
+func (s *nullSpan) IsTracing() bool                                       { return false }
+func (s *nullSpan) addChildEdge(traceview.Context)                        {}
+func (s *nullSpan) addProfile(Profile)                                    {}
+func (s *nullSpan) ok() bool                                              { return false }
+func (s *nullSpan) tvContext() traceview.Context                          { return traceview.NewNullContext() }
+func (s *nullSpan) MetadataString() string                                { return "" }
+func (s *nullSpan) SetAsync(bool)                                         {}
 
 // is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool {
@@ -235,7 +235,7 @@ type labeler interface {
 type layerLabeler struct{ name string }
 type profileLabeler struct{ name string }
 
-// TV's Layer and Profile spans report their layer and label names slightly differently
+// TV's Span and Profile spans report their layer and label names slightly differently
 func (l layerLabeler) entryLabel() traceview.Label   { return traceview.LabelEntry }
 func (l layerLabeler) exitLabel() traceview.Label    { return traceview.LabelExit }
 func (l layerLabeler) layerName() string             { return l.name }
@@ -243,7 +243,7 @@ func (l profileLabeler) entryLabel() traceview.Label { return traceview.LabelPro
 func (l profileLabeler) exitLabel() traceview.Label  { return traceview.LabelProfileExit }
 func (l profileLabeler) layerName() string           { return "" }
 
-func newLayer(tvCtx traceview.Context, layerName string, parent Layer, args ...interface{}) Layer {
+func newSpan(tvCtx traceview.Context, layerName string, parent Span, args ...interface{}) Span {
 	ll := layerLabeler{layerName}
 	if err := tvCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
 		return &nullSpan{}
@@ -252,7 +252,7 @@ func newLayer(tvCtx traceview.Context, layerName string, parent Layer, args ...i
 
 }
 
-func newProfile(tvCtx traceview.Context, profileName string, parent Layer, args ...interface{}) Profile {
+func newProfile(tvCtx traceview.Context, profileName string, parent Span, args ...interface{}) Profile {
 	var fname string
 	pc, file, line, ok := runtime.Caller(2) // Caller(1) is BeginProfile
 	if ok {

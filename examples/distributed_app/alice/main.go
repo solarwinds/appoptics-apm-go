@@ -38,7 +38,7 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	httpClient := &http.Client{}
 	httpReq, _ := http.NewRequest("GET", url, nil)
 	// begin layer for the client side of the HTTP service request
-	l := tv.BeginHTTPClientLayer(ctx, httpReq)
+	l := tv.BeginHTTPClientSpan(ctx, httpReq)
 
 	// make HTTP request to external API
 	resp, err := httpClient.Do(httpReq)
@@ -87,7 +87,7 @@ func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 			client := &http.Client{}
 			req, _ := http.NewRequest("GET", url, nil)
 			// begin layer for the client side of the HTTP service request
-			l := tv.BeginHTTPClientLayer(ctx, req)
+			l := tv.BeginHTTPClientSpan(ctx, req)
 
 			// make HTTP request to external API
 			resp, err := client.Do(req)

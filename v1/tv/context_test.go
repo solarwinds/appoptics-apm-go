@@ -59,7 +59,7 @@ func TestNullSpan(t *testing.T) {
 	r := traceview.SetTestReporter()
 
 	ctx := NewContext(context.Background(), NewTrace("TestNullSpan")) // reports event
-	l1, ctxL := BeginLayer(ctx, "L1")                                 // reports event
+	l1, ctxL := BeginSpan(ctx, "L1")                                  // reports event
 	assert.True(t, l1.IsTracing())
 	assert.Equal(t, l1.MetadataString(), MetadataString(ctxL))
 	assert.Len(t, l1.MetadataString(), 58)
@@ -71,7 +71,7 @@ func TestNullSpan(t *testing.T) {
 	p1 := l1.BeginProfile("P2") // try to start profile after end: no effect
 	p1.End()
 
-	c1 := l1.BeginLayer("C1") // child after parent ended
+	c1 := l1.BeginSpan("C1") // child after parent ended
 	assert.IsType(t, c1, &nullSpan{})
 	assert.False(t, c1.IsTracing())
 	assert.False(t, c1.ok())

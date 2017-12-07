@@ -5,9 +5,9 @@ package ottv
 import (
 	"sync"
 
+	"github.com/librato/go-traceview/v1/tv"
 	ot "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
-	"github.com/librato/go-traceview/v1/tv"
 )
 
 // NewTracer returns a new Tracelytics tracer.
@@ -35,7 +35,7 @@ func (t *Tracer) StartSpan(operationName string, opts ...ot.StartSpanOption) ot.
 }
 
 func (t *Tracer) StartSpanWithOptions(operationName string, opts ot.StartSpanOptions) ot.Span {
-	// check if trace has already started (use Trace if there is no parent, Layer otherwise)
+	// check if trace has already started (use Trace if there is no parent, Span otherwise)
 	// XXX handle StartTime
 
 	for _, ref := range opts.References {
@@ -44,7 +44,7 @@ func (t *Tracer) StartSpanWithOptions(operationName string, opts ot.StartSpanOpt
 		case ot.ChildOfRef, ot.FollowsFromRef:
 			refCtx := ref.ReferencedContext.(spanContext)
 			if refCtx.layer == nil { // referenced spanContext created by Extract()
-				var layer tv.Layer
+				var layer tv.Span
 				if refCtx.sampled {
 					layer = tv.NewTraceFromID(operationName, refCtx.remoteMD, func() tv.KVMap {
 						return translateTags(opts.Tags)
@@ -60,7 +60,7 @@ func (t *Tracer) StartSpanWithOptions(operationName string, opts ot.StartSpanOpt
 				}
 			}
 			// referenced spanContext was in-process
-			return &spanImpl{tracer: t, context: spanContext{layer: refCtx.layer.BeginLayer(operationName)}}
+			return &spanImpl{tracer: t, context: spanContext{layer: refCtx.layer.BeginSpan(operationName)}}
 		}
 	}
 
@@ -71,7 +71,7 @@ func (t *Tracer) StartSpanWithOptions(operationName string, opts ot.StartSpanOpt
 
 type spanContext struct {
 	// 1. spanContext created by StartSpanWithOptions
-	layer tv.Layer
+	layer tv.Span
 	// 2. spanContext created by Extract()
 	remoteMD string
 	sampled  bool

@@ -15,15 +15,15 @@ import (
 
 func childExample(ctx context.Context) {
 	// create a new trace, and a context to carry it around
-	l1, _ := tv.BeginLayer(ctx, "L1")
-	l2 := l1.BeginLayer("DBx", "Query", "SELECT * FROM tbl")
+	l1, _ := tv.BeginSpan(ctx, "L1")
+	l2 := l1.BeginSpan("DBx", "Query", "SELECT * FROM tbl")
 	time.Sleep(20 * time.Millisecond)
 	l2.End()
 	l1.End()
 
 	// test attempting to start a child from a layer that has ended
 	// currently we don't allow this, so nothing should be reported
-	l3 := l1.BeginLayer("layer", "notReported", true)
+	l3 := l1.BeginSpan("layer", "notReported", true)
 	l3.End()
 
 	// test attempting to start a profile from a layer that has ended
@@ -37,15 +37,15 @@ func childExample(ctx context.Context) {
 
 func childExampleCtx(ctx context.Context) {
 	// create a new trace, and a context to carry it around
-	_, ctxL1 := tv.BeginLayer(ctx, "L1")
-	_, ctxL2 := tv.BeginLayer(ctxL1, "DBx", "Query", "SELECT * FROM tbl")
+	_, ctxL1 := tv.BeginSpan(ctx, "L1")
+	_, ctxL2 := tv.BeginSpan(ctxL1, "DBx", "Query", "SELECT * FROM tbl")
 	time.Sleep(20 * time.Millisecond)
 	tv.End(ctxL2)
 	tv.End(ctxL1)
 
 	// test attempting to start a child from a layer that has ended
 	// currently we don't allow this, so nothing should be reported
-	_, ctxL3 := tv.BeginLayer(ctxL1, "layer", "notReported", true)
+	_, ctxL3 := tv.BeginSpan(ctxL1, "layer", "notReported", true)
 	tv.End(ctxL3)
 
 	// test attempting to start a profile from a layer that has ended

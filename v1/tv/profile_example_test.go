@@ -14,12 +14,12 @@ import (
 // measure a DB query
 func dbQuery(ctx context.Context, host, query string, args ...interface{}) *sql.Rows {
 	// Begin a TraceView layer for this DB query
-	l, _ := tv.BeginLayer(ctx, "dbQuery", "Query", query, "RemoteHost", host)
+	l, _ := tv.BeginSpan(ctx, "dbQuery", "Query", query, "RemoteHost", host)
 	defer l.End()
 
 	db, err := sql.Open("mysql", fmt.Sprintf("user:password@tcp(%s:3306)/db", host))
 	if err != nil {
-		l.Err(err) // Report error & stack trace on Layer span
+		l.Err(err) // Report error & stack trace on Span
 		return nil
 	}
 	defer db.Close()
@@ -37,7 +37,7 @@ func slowFunc(ctx context.Context) {
 }
 
 func Example() {
-	ctx := tv.NewContext(context.Background(), tv.NewTrace("myLayer"))
+	ctx := tv.NewContext(context.Background(), tv.NewTrace("mySpan"))
 	_ = dbQuery(ctx, "dbhost.net", "SELECT * from tbl LIMIT 1")
 	slowFunc(ctx)
 	tv.EndTrace(ctx)

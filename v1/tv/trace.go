@@ -12,15 +12,15 @@ import (
 // Trace represents a distributed trace for this request that reports
 // events to TraceView.
 type Trace interface {
-	// Inherited from the Layer interface
-	//  BeginLayer(layerName string, args ...interface{}) Layer
+	// Inherited from the Span interface
+	//  BeginSpan(layerName string, args ...interface{}) Span
 	//  BeginProfile(profileName string, args ...interface{}) Profile
 	//	End(args ...interface{})
 	//	Info(args ...interface{})
 	//  Error(class, msg string)
 	//  Err(error)
 	//  IsTracing() bool
-	Layer
+	Span
 
 	// End a Trace, and include KV pairs returned by func f. Useful
 	// alternative to End() when used with defer to delay evaluation

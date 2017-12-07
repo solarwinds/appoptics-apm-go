@@ -9,7 +9,7 @@ import (
 
 func ExampleNewTrace() {
 	f0 := func(ctx context.Context) { // example layer
-		l, _ := tv.BeginLayer(ctx, "myDB",
+		l, _ := tv.BeginSpan(ctx, "myDB",
 			"Query", "SELECT * FROM tbl1",
 			"RemoteHost", "db1.com")
 		// ... run a query ...
@@ -24,13 +24,13 @@ func ExampleNewTrace() {
 	tv.EndTrace(ctx)
 }
 
-func ExampleBeginLayer() {
+func ExampleBeginSpan() {
 	// create trace and bind to context, reporting first event
-	ctx := tv.NewContext(context.Background(), tv.NewTrace("baseLayer"))
+	ctx := tv.NewContext(context.Background(), tv.NewTrace("baseSpan"))
 	// ... do something ...
 
 	// instrument a DB query
-	l, _ := tv.BeginLayer(ctx, "DBx", "Query", "SELECT * FROM tbl")
+	l, _ := tv.BeginSpan(ctx, "DBx", "Query", "SELECT * FROM tbl")
 	// .. execute query ..
 	l.End()
 

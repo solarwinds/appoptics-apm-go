@@ -15,7 +15,7 @@ import (
 // HTTPHeaderName is a constant for the HTTP header used by TraceView ("X-Trace") to propagate
 // the distributed tracing context across HTTP requests.
 const HTTPHeaderName = "X-Trace"
-const httpHandlerLayerName = "http.HandlerFunc"
+const httpHandlerSpanName = "http.HandlerFunc"
 
 // HTTPHandler wraps an http.HandlerFunc with entry / exit events,
 // returning a new handler that can be used in its place.
@@ -32,7 +32,7 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 	}
 	// return wrapped HTTP request handler
 	return func(w http.ResponseWriter, r *http.Request) {
-		t, w := TraceFromHTTPRequestResponse(httpHandlerLayerName, w, r)
+		t, w := TraceFromHTTPRequestResponse(httpHandlerSpanName, w, r)
 		defer t.End(endArgs...)
 
 		defer func() { // catch and report panic, if one occurs
