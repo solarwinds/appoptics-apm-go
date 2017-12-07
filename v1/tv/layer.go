@@ -60,18 +60,18 @@ type Profile interface {
 
 // BeginSpan starts a new Span, provided a parent context and name. It returns a Span
 // and context bound to the new child Span.
-func BeginSpan(ctx context.Context, layerName string, args ...interface{}) (Span, context.Context) {
-	if parent, ok := fromContext(ctx); ok && parent.ok() { // report layer entry from parent context
-		l := newSpan(parent.tvContext().Copy(), layerName, parent, args...)
+func BeginSpan(ctx context.Context, spanName string, args ...interface{}) (Span, context.Context) {
+	if parent, ok := fromContext(ctx); ok && parent.ok() { // report span entry from parent context
+		l := newSpan(parent.tvContext().Copy(), spanName, parent, args...)
 		return l, newSpanContext(ctx, l)
 	}
 	return &nullSpan{}, ctx
 }
 
 // BeginSpan starts a new Span, returning a child of this Span.
-func (s *layerSpan) BeginSpan(layerName string, args ...interface{}) Span {
+func (s *layerSpan) BeginSpan(spanName string, args ...interface{}) Span {
 	if s.ok() { // copy parent context and report entry from child
-		return newSpan(s.tvCtx.Copy(), layerName, s, args...)
+		return newSpan(s.tvCtx.Copy(), spanName, s, args...)
 	}
 	return &nullSpan{}
 }
@@ -190,7 +190,7 @@ type layerSpan struct{ span }   // satisfies Span
 type profileSpan struct{ span } // satisfies Profile
 type nullSpan struct{}          // a span that is not tracing; satisfies Span & Profile
 
-func (s *nullSpan) BeginSpan(layerName string, args ...interface{}) Span  { return &nullSpan{} }
+func (s *nullSpan) BeginSpan(spanName string, args ...interface{}) Span   { return &nullSpan{} }
 func (s *nullSpan) BeginProfile(name string, args ...interface{}) Profile { return &nullSpan{} }
 func (s *nullSpan) End(args ...interface{})                               {}
 func (s *nullSpan) AddEndArgs(args ...interface{})                        {}
@@ -232,19 +232,19 @@ type labeler interface {
 	exitLabel() traceview.Label
 	layerName() string
 }
-type layerLabeler struct{ name string }
+type spanLabeler struct{ name string }
 type profileLabeler struct{ name string }
 
 // TV's Span and Profile spans report their layer and label names slightly differently
-func (l layerLabeler) entryLabel() traceview.Label   { return traceview.LabelEntry }
-func (l layerLabeler) exitLabel() traceview.Label    { return traceview.LabelExit }
-func (l layerLabeler) layerName() string             { return l.name }
+func (l spanLabeler) entryLabel() traceview.Label    { return traceview.LabelEntry }
+func (l spanLabeler) exitLabel() traceview.Label     { return traceview.LabelExit }
+func (l spanLabeler) layerName() string              { return l.name }
 func (l profileLabeler) entryLabel() traceview.Label { return traceview.LabelProfileEntry }
 func (l profileLabeler) exitLabel() traceview.Label  { return traceview.LabelProfileExit }
 func (l profileLabeler) layerName() string           { return "" }
 
-func newSpan(tvCtx traceview.Context, layerName string, parent Span, args ...interface{}) Span {
-	ll := layerLabeler{layerName}
+func newSpan(tvCtx traceview.Context, spanName string, parent Span, args ...interface{}) Span {
+	ll := spanLabeler{spanName}
 	if err := tvCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
 		return &nullSpan{}
 	}

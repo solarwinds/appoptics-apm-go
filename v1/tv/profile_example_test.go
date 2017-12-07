@@ -13,7 +13,7 @@ import (
 
 // measure a DB query
 func dbQuery(ctx context.Context, host, query string, args ...interface{}) *sql.Rows {
-	// Begin a TraceView layer for this DB query
+	// Begin a TraceView span for this DB query
 	l, _ := tv.BeginSpan(ctx, "dbQuery", "Query", query, "RemoteHost", host)
 	defer l.End()
 

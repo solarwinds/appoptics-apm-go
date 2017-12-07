@@ -206,7 +206,7 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 			assert.Equal(t, n.Map["FunctionName"], "github.com/librato/go-traceview/v1/tv_test."+f0name)
 		}},
 		{"", "profile_exit"}: {Edges: g.Edges{{"", "profile_entry"}}},
-		// nested layer in http.Get profile points to trace entry
+		// nested span in http.Get profile points to trace entry
 		{"http.Get", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["RemoteURL"], "http://a.b")
 		}},
@@ -225,7 +225,7 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 			assert.Equal(t, "error", n.Map["ErrorClass"])
 			assert.Equal(t, "test error!", n.Map["ErrorMsg"])
 		}},
-		// end of nested layer should link to last layer event (error)
+		// end of nested span should link to last span event (error)
 		{"http.Get", "exit"}: {Edges: g.Edges{{"http.Get", "error"}}},
 		// first query after call to f0 should link to ...?
 		{"DBx", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
@@ -233,12 +233,12 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 			assert.Equal(t, n.Map["Flavor"], "postgresql")
 			assert.Equal(t, n.Map["RemoteHost"], "db.com")
 		}},
-		// error in nested layer should link to layer entry
+		// error in nested span should link to span entry
 		{"DBx", "error"}: {Edges: g.Edges{{"DBx", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "QueryError", n.Map["ErrorClass"])
 			assert.Equal(t, "Error running query!", n.Map["ErrorMsg"])
 		}},
-		// end of nested layer should link to layer entry
+		// end of nested span should link to span entry
 		{"DBx", "exit"}: {Edges: g.Edges{{"DBx", "error"}}},
 
 		{"myExample", "info"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {

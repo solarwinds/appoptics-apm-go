@@ -21,12 +21,12 @@ func childExample(ctx context.Context) {
 	l2.End()
 	l1.End()
 
-	// test attempting to start a child from a layer that has ended
+	// test attempting to start a child from a span that has ended
 	// currently we don't allow this, so nothing should be reported
-	l3 := l1.BeginSpan("layer", "notReported", true)
+	l3 := l1.BeginSpan("invalidSpan", "notReported", true)
 	l3.End()
 
-	// test attempting to start a profile from a layer that has ended
+	// test attempting to start a profile from a span that has ended
 	// similarly we don't allow this, so nothing should be reported
 	p1 := l1.BeginProfile("f2")
 	p1.End()
@@ -43,12 +43,12 @@ func childExampleCtx(ctx context.Context) {
 	tv.End(ctxL2)
 	tv.End(ctxL1)
 
-	// test attempting to start a child from a layer that has ended
+	// test attempting to start a child from a span that has ended
 	// currently we don't allow this, so nothing should be reported
-	_, ctxL3 := tv.BeginSpan(ctxL1, "layer", "notReported", true)
+	_, ctxL3 := tv.BeginSpan(ctxL1, "invalidSpan", "notReported", true)
 	tv.End(ctxL3)
 
-	// test attempting to start a profile from a layer that has ended
+	// test attempting to start a profile from a span that has ended
 	// similarly we don't allow this, so nothing should be reported
 	p1 := tv.BeginProfile(ctxL1, "f2")
 	p1.End()

@@ -56,8 +56,8 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 //       defer tr.End()
 //       // ...
 //   }
-func TraceFromHTTPRequestResponse(layerName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter) {
-	t := traceFromHTTPRequest(layerName, r)
+func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter) {
+	t := traceFromHTTPRequest(spanName, r)
 	wrapper := newResponseWriter(w, t) // wrap writer with response-observing writer
 	return t, wrapper
 }
@@ -83,7 +83,7 @@ func (w *HTTPResponseWriter) WriteHeader(status int) {
 	w.StatusCode = status                // observe HTTP status code
 	md := w.Header().Get(HTTPHeaderName) // check response for downstream metadata
 	if w.t.IsTracing() {                 // set trace exit metadata in X-Trace header
-		// if downstream response headers mention a different layer, add edge to it
+		// if downstream response headers mention a different span, add edge to it
 		if md != "" && md != w.t.ExitMetadata() {
 			w.t.AddEndArgs("Edge", md)
 		}
@@ -108,9 +108,9 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 
 // traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
-func traceFromHTTPRequest(layerName string, r *http.Request) Trace {
+func traceFromHTTPRequest(spanName string, r *http.Request) Trace {
 	// start trace, passing in metadata header
-	t := NewTraceFromID(layerName, r.Header.Get(HTTPHeaderName), func() KVMap {
+	t := NewTraceFromID(spanName, r.Header.Get(HTTPHeaderName), func() KVMap {
 		return KVMap{
 			"Method":       r.Method,
 			"HTTP-Host":    r.Host,

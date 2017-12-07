@@ -8,7 +8,7 @@ import (
 )
 
 func ExampleNewTrace() {
-	f0 := func(ctx context.Context) { // example layer
+	f0 := func(ctx context.Context) { // example span
 		l, _ := tv.BeginSpan(ctx, "myDB",
 			"Query", "SELECT * FROM tbl1",
 			"RemoteHost", "db1.com")

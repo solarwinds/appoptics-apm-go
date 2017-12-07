@@ -25,7 +25,7 @@ func TestContext(t *testing.T) {
 	assert.Equal(t, ctx2.Value("t").(*tvTrace).tvCtx.MetadataString(), xt)
 
 	ctxx := tr.tvCtx.Copy()
-	lbl := layerLabeler{"L1"}
+	lbl := spanLabeler{"L1"}
 	tr2 := &tvTrace{layerSpan: layerSpan{span: span{tvCtx: ctxx, labeler: lbl}}}
 	ctx3 := context.WithValue(ctx2, "t", tr2)
 	assert.Equal(t, ctx3.Value("t"), tr2)

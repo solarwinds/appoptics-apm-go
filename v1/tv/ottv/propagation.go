@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	ot "github.com/opentracing/opentracing-go"
 	"github.com/librato/go-traceview/v1/tv"
 	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	ot "github.com/opentracing/opentracing-go"
 )
 
 const (
@@ -55,10 +55,10 @@ func (p *textMapPropagator) Inject(spanCtx ot.SpanContext, opaqueCarrier interfa
 	if !ok {
 		return ot.ErrInvalidCarrier
 	}
-	if md := sc.layer.MetadataString(); md != "" {
+	if md := sc.span.MetadataString(); md != "" {
 		carrier.Set(tv.HTTPHeaderName, md)
 	}
-	carrier.Set(fieldNameSampled, strconv.FormatBool(sc.layer.IsTracing()))
+	carrier.Set(fieldNameSampled, strconv.FormatBool(sc.span.IsTracing()))
 
 	for k, v := range sc.baggage {
 		carrier.Set(prefixBaggage+k, v)
@@ -92,8 +92,8 @@ func (p *binaryPropagator) Inject(spanCtx ot.SpanContext, opaqueCarrier interfac
 	}
 
 	state := tracerState{
-		XTraceID:     sc.layer.MetadataString(),
-		Sampled:      sc.layer.IsTracing(),
+		XTraceID:     sc.span.MetadataString(),
+		Sampled:      sc.span.IsTracing(),
 		BaggageItems: sc.baggage,
 	}
 

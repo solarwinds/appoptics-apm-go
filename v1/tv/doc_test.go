@@ -17,15 +17,15 @@ import (
 func testDocSpanExample() {
 	// create trace and bind to new context
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myApp"))
-	// create new layer span for this trace
+	// create new span for this trace
 	l, ctxL := tv.BeginSpan(ctx, "mySpan")
 
-	// profile a slow part of a layer
+	// profile a slow part of a span
 	p := tv.BeginProfile(ctxL, "slowFunc")
 	// slowFunc(x, y)
 	p.End()
 
-	// Start a new span, given a parent layer
+	// Start a new span, given a parent span
 	db1L := l.BeginSpan("myDB1", "Query", "SELECT * FROM tbl1")
 	// perform a query
 	db1L.End()
@@ -43,7 +43,7 @@ func testDocSpanExample() {
 func testDocSpanExampleCtx() {
 	// create trace and bind to new context
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myApp"))
-	// create new layer span for this trace
+	// create new span for this trace
 	_, ctxL := tv.BeginSpan(ctx, "mySpan")
 
 	// profile a nested block or function call
@@ -53,7 +53,7 @@ func testDocSpanExampleCtx() {
 	}
 	slowFunc()
 
-	// Start a new span, given a parent layer
+	// Start a new span, given a parent span
 	_, ctxQ1 := tv.BeginSpan(ctxL, "myDB1", "Query", "SELECT * FROM tbl1")
 	// perform a query
 	tv.End(ctxQ1)

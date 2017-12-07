@@ -32,9 +32,9 @@ func BeginHTTPClientSpan(ctx context.Context, req *http.Request) HTTPClientSpan 
 	return HTTPClientSpan{Span: &nullSpan{}}
 }
 
-// AddHTTPResponse adds information from http.Response to this layer. It will also check the HTTP
+// AddHTTPResponse adds information from http.Response to this span. It will also check the HTTP
 // response headers and propagate any valid distributed trace context from the end of the HTTP
-// server's layer to this one.
+// server's span to this one.
 func (l HTTPClientSpan) AddHTTPResponse(resp *http.Response, err error) {
 	if l.ok() {
 		if err != nil {

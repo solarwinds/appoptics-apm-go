@@ -92,10 +92,10 @@ func TestHTTPHandlerNoTrace(t *testing.T) {
 	assert.Len(t, r.Bufs, 0)
 }
 
-// testServer tests creating a layer/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
+// testServer tests creating a span/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
 func testServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// create layer from incoming HTTP Request headers, if trace exists
+		// create span from incoming HTTP Request headers, if trace exists
 		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", w, req)
 		defer tr.End()
 
@@ -114,7 +114,7 @@ func testServer(t *testing.T, list net.Listener) {
 // same as testServer, but with external tv.HTTPHandler() handler wrapping
 func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(func(writer http.ResponseWriter, req *http.Request) {
-		// create layer from incoming HTTP Request headers, if trace exists
+		// create span from incoming HTTP Request headers, if trace exists
 		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
 		defer tr.End()
 
@@ -487,7 +487,7 @@ func AliceHandler(w http.ResponseWriter, r *http.Request) {
 	// create HTTP client and set trace metadata header
 	httpClient := &http.Client{}
 	httpReq, _ := http.NewRequest("GET", url, nil)
-	// begin layer for the client side of the HTTP service request
+	// begin span for the client side of the HTTP service request
 	l := tv.BeginHTTPClientSpan(ctx, httpReq)
 
 	// make HTTP request to external API
@@ -587,7 +587,7 @@ func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 			// create HTTP client and set trace metadata header
 			client := &http.Client{}
 			req, _ := http.NewRequest("GET", url, nil)
-			// begin layer for the client side of the HTTP service request
+			// begin span for the client side of the HTTP service request
 			l := tv.BeginHTTPClientSpan(ctx, req)
 
 			// make HTTP request to external API
