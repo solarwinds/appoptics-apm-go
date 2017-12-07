@@ -1,5 +1,5 @@
 // Test web app
-// Wraps a standard HTTP handler with TraceView instrumentation
+// Wraps a standard HTTP handler with AppOptics instrumentation
 
 package main
 

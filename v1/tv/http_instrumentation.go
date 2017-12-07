@@ -1,5 +1,5 @@
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
-// TraceView HTTP instrumentation for Go
+// AppOptics HTTP instrumentation for Go
 
 package tv
 
@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// HTTPHeaderName is a constant for the HTTP header used by TraceView ("X-Trace") to propagate
+// HTTPHeaderName is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
 // the distributed tracing context across HTTP requests.
 const HTTPHeaderName = "X-Trace"
 const httpHandlerSpanName = "http.HandlerFunc"

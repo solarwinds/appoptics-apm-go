@@ -267,7 +267,7 @@ func newContext() Context {
 	ctx.metadata.Init()
 	if err := ctx.metadata.SetRandom(); err != nil {
 		if debugLog {
-			log.Printf("TraceView rand.Read error: %v", err)
+			log.Printf("AppOptics rand.Read error: %v", err)
 		}
 		return &nullContext{}
 	}

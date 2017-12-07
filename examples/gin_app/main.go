@@ -11,7 +11,7 @@ func main() {
 	// logger and recovery (crash-free) middleware
 	router := gin.Default()
 
-	// add TraceView middleware
+	// add AppOptics middleware
 	router.Use(Tracer())
 
 	router.GET("/", func(c *gin.Context) {

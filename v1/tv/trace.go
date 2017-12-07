@@ -10,7 +10,7 @@ import (
 )
 
 // Trace represents a distributed trace for this request that reports
-// events to TraceView.
+// events to AppOptics.
 type Trace interface {
 	// Inherited from the Span interface
 	//  BeginSpan(spanName string, args ...interface{}) Span
@@ -44,10 +44,10 @@ type Trace interface {
 }
 
 // KVMap is a map of additional key-value pairs to report along with the event data provided
-// to TraceView. Certain key names (such as "Query" or "RemoteHost") are used by TraceView to
+// to AppOptics. Certain key names (such as "Query" or "RemoteHost") are used by AppOptics to
 // provide details about program activity and distinguish between different types of spans.
 // Please visit http://docs.appneta.com/traceview-instrumentation#special-interpretation for
-// details on the key names that TraceView looks for.
+// details on the key names that AppOptics looks for.
 type KVMap map[string]interface{}
 
 type traceHTTPSpan struct {
@@ -63,9 +63,9 @@ type tvTrace struct {
 
 func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
 
-// NewTrace creates a new Trace for reporting to TraceView and immediately records
+// NewTrace creates a new Trace for reporting to AppOptics and immediately records
 // the beginning of a root span named spanName. If this trace is sampled, it may report
-// event data to TraceView; otherwise event reporting will be a no-op.
+// event data to AppOptics; otherwise event reporting will be a no-op.
 func NewTrace(spanName string) Trace {
 	ctx, ok := traceview.NewContext(spanName, "", true, nil)
 	if !ok {
@@ -76,7 +76,7 @@ func NewTrace(spanName string) Trace {
 	}
 }
 
-// NewTraceFromID creates a new Trace for reporting to TraceView, provided an
+// NewTraceFromID creates a new Trace for reporting to AppOptics, provided an
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {

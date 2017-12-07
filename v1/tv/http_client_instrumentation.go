@@ -1,5 +1,5 @@
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
-// TraceView HTTP instrumentation for Go
+// AppOptics HTTP instrumentation for Go
 
 package tv
 

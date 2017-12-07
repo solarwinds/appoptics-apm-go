@@ -1,7 +1,7 @@
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 
 // Package traceview provides a low-level API for creating and reporting events for
-// distributed tracing with TraceView.
+// distributed tracing with AppOptics.
 package traceview
 
 import (
