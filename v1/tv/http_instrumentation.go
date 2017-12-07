@@ -77,8 +77,11 @@ func (w *HTTPResponseWriter) Write(p []byte) (n int, err error) {
 	}
 	return w.Writer.Write(p)
 }
+
+// Header implements the http.ResponseWriter interface.
 func (w *HTTPResponseWriter) Header() http.Header { return w.Writer.Header() }
 
+// WriteHeader implements the http.ResponseWriter interface.
 func (w *HTTPResponseWriter) WriteHeader(status int) {
 	w.StatusCode = status                // observe HTTP status code
 	md := w.Header().Get(HTTPHeaderName) // check response for downstream metadata

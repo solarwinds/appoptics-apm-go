@@ -50,7 +50,7 @@ type Trace interface {
 // details on the key names that TraceView looks for.
 type KVMap map[string]interface{}
 
-type traceHttpSpan struct {
+type traceHTTPSpan struct {
 	span  traceview.HttpSpanMessage
 	start time.Time
 }
@@ -58,7 +58,7 @@ type traceHttpSpan struct {
 type tvTrace struct {
 	layerSpan
 	exitEvent traceview.Event
-	httpSpan  traceHttpSpan
+	httpSpan  traceHTTPSpan
 }
 
 func (t *tvTrace) tvContext() traceview.Context { return t.tvCtx }
