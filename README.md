@@ -1,4 +1,4 @@
-# AppOptics for Go
+# AppOptics APM instrumentation for Go
 
 [![GoDoc](https://godoc.org/github.com/librato/go-traceview/v1/tv?status.svg)](https://godoc.org/github.com/librato/go-traceview/v1/tv)
 [![Build Status](https://travis-ci.org/librato/go-traceview.svg?branch=master)](https://travis-ci.org/librato/go-traceview)
@@ -22,8 +22,8 @@
 
 ## Introduction
 
-[AppOptics](http://www.appoptics.com) provides distributed tracing and
-code-level application performance monitoring. AppOptics's cross-language, production-ready,
+[AppOptics](http://www.appoptics.com) provides distributed tracing,
+code-level application performance monitoring, and host and infrastructure monitoring. AppOptics's cross-language, production-ready,
 low-overhead distributed tracing system (similar to Dapper, Zipkin, or X-Trace) can follow the path
 of an application request as it is processed and forwarded between services written in [Go, Java,
 Scala, Node.js, Ruby, Python, PHP, and C#/.NET](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/), reporting data to AppOptics's cloud platform for
