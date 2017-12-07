@@ -29,7 +29,7 @@ func BeginHTTPClientSpan(ctx context.Context, req *http.Request) HTTPClientSpan 
 		req.Header.Set(HTTPHeaderName, l.MetadataString())
 		return HTTPClientSpan{Span: l}
 	}
-	return HTTPClientSpan{Span: &nullSpan{}}
+	return HTTPClientSpan{Span: nullSpan{}}
 }
 
 // AddHTTPResponse adds information from http.Response to this span. It will also check the HTTP

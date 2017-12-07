@@ -23,7 +23,7 @@ func newSpanContext(ctx context.Context, l Span) context.Context {
 func FromContext(ctx context.Context) Span {
 	l, ok := fromContext(ctx)
 	if !ok {
-		return &nullSpan{}
+		return nullSpan{}
 	}
 	return l
 }
