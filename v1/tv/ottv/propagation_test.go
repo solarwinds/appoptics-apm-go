@@ -93,7 +93,7 @@ func TestBinaryExtract(t *testing.T) {
 	assert.NoError(t, err)
 	require.NotNil(t, sc)
 	assert.NotEmpty(t, sc.(spanContext).remoteMD)
-	assert.Equal(t, sc.(spanContext).remoteMD, span.Context().(spanContext).layer.MetadataString(),
+	assert.Equal(t, sc.(spanContext).remoteMD, span.Context().(spanContext).span.MetadataString(),
 		"extracted context should have same ID as original span")
 }
 
@@ -145,7 +145,7 @@ func TestTextMapExtract(t *testing.T) {
 	assert.NotNil(t, ctx)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, ctx.(spanContext).remoteMD)
-	assert.Equal(t, ctx.(spanContext).remoteMD, span.Context().(spanContext).layer.MetadataString(),
+	assert.Equal(t, ctx.(spanContext).remoteMD, span.Context().(spanContext).span.MetadataString(),
 		"extracted context should have same ID as original span")
 
 	// missing trace ID, true sample flag
@@ -164,8 +164,8 @@ func TestTextMapExtract(t *testing.T) {
 	assert.NoError(t, err)
 	childSpan := tr.StartSpan("op2", opentracing.ChildOf(ctx))
 	assert.NotNil(t, childSpan)
-	assert.NotNil(t, childSpan.Context().(spanContext).layer)
-	assert.False(t, childSpan.Context().(spanContext).layer.IsTracing())
+	assert.NotNil(t, childSpan.Context().(spanContext).span)
+	assert.False(t, childSpan.Context().(spanContext).span.IsTracing())
 
 	// valid trace ID, no sampled flag
 	tvCarrier := opentracing.TextMapCarrier{}
@@ -175,7 +175,7 @@ func TestTextMapExtract(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, ctx.(spanContext).sampled)
 	assert.NotEmpty(t, ctx.(spanContext).remoteMD)
-	assert.Equal(t, ctx.(spanContext).remoteMD, span.Context().(spanContext).layer.MetadataString(),
+	assert.Equal(t, ctx.(spanContext).remoteMD, span.Context().(spanContext).span.MetadataString(),
 		"extracted context should have same ID as original span")
 
 	// invalid trace ID

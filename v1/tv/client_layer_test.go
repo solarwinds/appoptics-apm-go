@@ -13,19 +13,19 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestCacheRPCLayers(t *testing.T) {
+func TestCacheRPCSpans(t *testing.T) {
 	r := traceview.SetTestReporter(true) // enable test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
 
 	// make a cache request
-	l := tv.BeginCacheLayer(ctx, "redis", "INCR", "key31", "redis.net", true)
+	l := tv.BeginCacheSpan(ctx, "redis", "INCR", "key31", "redis.net", true)
 	// ... client.Incr(key) ...
 	time.Sleep(20 * time.Millisecond)
 	l.Error("CacheTimeoutError", "Cache request timeout error!")
 	l.End()
 
 	// make an RPC request (no trace propagation in this example)
-	l = tv.BeginRPCLayer(ctx, "myServiceClient", "thrift", "incrKey", "service.net")
+	l = tv.BeginRPCSpan(ctx, "myServiceClient", "thrift", "incrKey", "service.net")
 	// ... service.incrKey(key) ...
 	time.Sleep(time.Millisecond)
 	l.End()

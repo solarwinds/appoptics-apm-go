@@ -1,5 +1,5 @@
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
-// TraceView HTTP instrumentation for Go
+// AppOptics HTTP instrumentation for Go
 
 package tv
 
@@ -9,33 +9,33 @@ import (
 	"golang.org/x/net/context"
 )
 
-// HTTPClientLayer is a Layer that aids in reporting HTTP client requests.
+// HTTPClientSpan is a Span that aids in reporting HTTP client requests.
 //   req, err := http.NewRequest("GET", "http://example.com", nil)
-//   l := tv.BeginHTTPClientLayer(ctx, httpReq)
+//   l := tv.BeginHTTPClientSpan(ctx, httpReq)
 //   defer l.End()
 //   // ...
 //   resp, err := client.Do(req)
 //   l.AddHTTPResponse(resp, err)
 //   // ...
-type HTTPClientLayer struct{ Layer }
+type HTTPClientSpan struct{ Span }
 
-// BeginHTTPClientLayer stores trace metadata in the headers of an HTTP client request, allowing the
-// trace to be continued on the other end. It returns a Layer that must have End() called to
+// BeginHTTPClientSpan stores trace metadata in the headers of an HTTP client request, allowing the
+// trace to be continued on the other end. It returns a Span that must have End() called to
 // benchmark the client request, and should have AddHTTPResponse(r, err) called to process response
 // metadata.
-func BeginHTTPClientLayer(ctx context.Context, req *http.Request) HTTPClientLayer {
+func BeginHTTPClientSpan(ctx context.Context, req *http.Request) HTTPClientSpan {
 	if req != nil {
-		l := BeginRemoteURLLayer(ctx, "http.Client", req.URL.String())
+		l := BeginRemoteURLSpan(ctx, "http.Client", req.URL.String())
 		req.Header.Set(HTTPHeaderName, l.MetadataString())
-		return HTTPClientLayer{Layer: l}
+		return HTTPClientSpan{Span: l}
 	}
-	return HTTPClientLayer{Layer: &nullSpan{}}
+	return HTTPClientSpan{Span: nullSpan{}}
 }
 
-// AddHTTPResponse adds information from http.Response to this layer. It will also check the HTTP
+// AddHTTPResponse adds information from http.Response to this span. It will also check the HTTP
 // response headers and propagate any valid distributed trace context from the end of the HTTP
-// server's layer to this one.
-func (l HTTPClientLayer) AddHTTPResponse(resp *http.Response, err error) {
+// server's span to this one.
+func (l HTTPClientSpan) AddHTTPResponse(resp *http.Response, err error) {
 	if l.ok() {
 		if err != nil {
 			l.Err(err)

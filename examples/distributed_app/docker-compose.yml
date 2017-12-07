@@ -1,4 +1,4 @@
-# Example distributed app using TraceView: http://www.appneta.com/products/traceview/
+# Example distributed app using AppOptics: http://www.appneta.com/products/traceview/
 # APPNETA_KEY="xx" docker-compose build
 version: '2'
 services:

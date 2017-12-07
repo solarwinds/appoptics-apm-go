@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	ginContextKey = "TraceView"
+	ginContextKey = "AppOptics"
 	ginLayerName  = "gin"
 )
 

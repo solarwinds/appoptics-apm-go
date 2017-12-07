@@ -146,17 +146,17 @@ func TestHTTPSpan(t *testing.T) {
 	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(3*time.Millisecond))
 }
 
-// testServer tests creating a layer/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
+// testServer tests creating a span/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
 func testServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// create layer from incoming HTTP Request headers, if trace exists
+		// create span from incoming HTTP Request headers, if trace exists
 		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", w, req)
 		defer tr.End()
 
 		tr.AddEndArgs("NotReported") // odd-length args, should have no effect
 
 		t.Logf("server: got request %v", req)
-		l2 := tr.BeginLayer("DBx", "Query", "SELECT *", "RemoteHost", "db.net")
+		l2 := tr.BeginSpan("DBx", "Query", "SELECT *", "RemoteHost", "db.net")
 		// Run a query ...
 		l2.End()
 
@@ -168,12 +168,12 @@ func testServer(t *testing.T, list net.Listener) {
 // same as testServer, but with external tv.HTTPHandler() handler wrapping
 func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(func(writer http.ResponseWriter, req *http.Request) {
-		// create layer from incoming HTTP Request headers, if trace exists
+		// create span from incoming HTTP Request headers, if trace exists
 		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
 		defer tr.End()
 
 		t.Logf("server: got request %v", req)
-		l2 := tr.BeginLayer("DBx", "Query", "SELECT *", "RemoteHost", "db.net")
+		l2 := tr.BeginSpan("DBx", "Query", "SELECT *", "RemoteHost", "db.net")
 		// Run a query ...
 		l2.End()
 
@@ -222,7 +222,7 @@ func testHTTPClient(t *testing.T, ctx context.Context, method, url string) (*htt
 	if err != nil {
 		return nil, err
 	}
-	l, _ := tv.BeginLayer(ctx, "http.Client", "IsService", true, "RemoteURL", url)
+	l, _ := tv.BeginSpan(ctx, "http.Client", "IsService", true, "RemoteURL", url)
 	defer l.End()
 	httpReq.Header.Set(tv.HTTPHeaderName, l.MetadataString())
 
@@ -237,11 +237,11 @@ func testHTTPClient(t *testing.T, ctx context.Context, method, url string) (*htt
 	return resp, err
 }
 
-// create an HTTP client span, make an HTTP request, and propagate the trace using HTTPClientLayer
+// create an HTTP client span, make an HTTP request, and propagate the trace using HTTPClientSpan
 func testHTTPClientA(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
 	httpClient := &http.Client{}
 	httpReq, err := http.NewRequest(method, url, nil)
-	l := tv.BeginHTTPClientLayer(ctx, httpReq)
+	l := tv.BeginHTTPClientSpan(ctx, httpReq)
 	defer l.End()
 	if err != nil {
 		l.Err(err)
@@ -259,12 +259,12 @@ func testHTTPClientA(t *testing.T, ctx context.Context, method, url string) (*ht
 	return resp, err
 }
 
-// create an HTTP client span, make an HTTP request, and propagate the trace using HTTPClientLayer
+// create an HTTP client span, make an HTTP request, and propagate the trace using HTTPClientSpan
 // and a different exception-handling flow
 func testHTTPClientB(t *testing.T, ctx context.Context, method, url string) (*http.Response, error) {
 	httpClient := &http.Client{}
 	httpReq, err := http.NewRequest(method, url, nil)
-	l := tv.BeginHTTPClientLayer(ctx, httpReq)
+	l := tv.BeginHTTPClientSpan(ctx, httpReq)
 	if err != nil {
 		l.Err(err)
 		l.End()
@@ -541,8 +541,8 @@ func AliceHandler(w http.ResponseWriter, r *http.Request) {
 	// create HTTP client and set trace metadata header
 	httpClient := &http.Client{}
 	httpReq, _ := http.NewRequest("GET", url, nil)
-	// begin layer for the client side of the HTTP service request
-	l := tv.BeginHTTPClientLayer(ctx, httpReq)
+	// begin span for the client side of the HTTP service request
+	l := tv.BeginHTTPClientSpan(ctx, httpReq)
 
 	// make HTTP request to external API
 	resp, err := httpClient.Do(httpReq)
@@ -641,8 +641,8 @@ func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 			// create HTTP client and set trace metadata header
 			client := &http.Client{}
 			req, _ := http.NewRequest("GET", url, nil)
-			// begin layer for the client side of the HTTP service request
-			l := tv.BeginHTTPClientLayer(ctx, req)
+			// begin span for the client side of the HTTP service request
+			l := tv.BeginHTTPClientSpan(ctx, req)
 
 			// make HTTP request to external API
 			resp, err := client.Do(req)

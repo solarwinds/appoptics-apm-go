@@ -5,9 +5,9 @@ package ottv
 import (
 	"sync"
 
+	"github.com/librato/go-traceview/v1/tv"
 	ot "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
-	"github.com/librato/go-traceview/v1/tv"
 )
 
 // NewTracer returns a new Tracelytics tracer.
@@ -35,7 +35,7 @@ func (t *Tracer) StartSpan(operationName string, opts ...ot.StartSpanOption) ot.
 }
 
 func (t *Tracer) StartSpanWithOptions(operationName string, opts ot.StartSpanOptions) ot.Span {
-	// check if trace has already started (use Trace if there is no parent, Layer otherwise)
+	// check if trace has already started (use Trace if there is no parent, Span otherwise)
 	// XXX handle StartTime
 
 	for _, ref := range opts.References {
@@ -43,35 +43,35 @@ func (t *Tracer) StartSpanWithOptions(operationName string, opts ot.StartSpanOpt
 		// trace has parent XXX only handles one parent
 		case ot.ChildOfRef, ot.FollowsFromRef:
 			refCtx := ref.ReferencedContext.(spanContext)
-			if refCtx.layer == nil { // referenced spanContext created by Extract()
-				var layer tv.Layer
+			if refCtx.span == nil { // referenced spanContext created by Extract()
+				var span tv.Span
 				if refCtx.sampled {
-					layer = tv.NewTraceFromID(operationName, refCtx.remoteMD, func() tv.KVMap {
+					span = tv.NewTraceFromID(operationName, refCtx.remoteMD, func() tv.KVMap {
 						return translateTags(opts.Tags)
 					})
 				} else {
-					layer = tv.NewNullTrace()
+					span = tv.NewNullTrace()
 				}
 				return &spanImpl{tracer: t, context: spanContext{
-					layer:   layer,
+					span:    span,
 					sampled: refCtx.sampled,
 					baggage: refCtx.baggage,
 				},
 				}
 			}
 			// referenced spanContext was in-process
-			return &spanImpl{tracer: t, context: spanContext{layer: refCtx.layer.BeginLayer(operationName)}}
+			return &spanImpl{tracer: t, context: spanContext{span: refCtx.span.BeginSpan(operationName)}}
 		}
 	}
 
 	// otherwise, no parent span found, so make new trace and return as span
-	newSpan := &spanImpl{tracer: t, context: spanContext{layer: tv.NewTrace(operationName)}}
+	newSpan := &spanImpl{tracer: t, context: spanContext{span: tv.NewTrace(operationName)}}
 	return newSpan
 }
 
 type spanContext struct {
 	// 1. spanContext created by StartSpanWithOptions
-	layer tv.Layer
+	span tv.Span
 	// 2. spanContext created by Extract()
 	remoteMD string
 	sampled  bool
@@ -122,7 +122,7 @@ func (c spanContext) WithBaggageItem(key, val string) spanContext {
 		newBaggage[key] = val
 	}
 	// Use positional parameters so the compiler will help catch new fields.
-	return spanContext{c.layer, c.remoteMD, c.sampled, newBaggage}
+	return spanContext{c.span, c.remoteMD, c.sampled, newBaggage}
 }
 
 func (s *spanImpl) BaggageItem(key string) string {
@@ -135,22 +135,22 @@ const otLogPrefix = "OT-Log-"
 
 func (s *spanImpl) LogFields(fields ...log.Field) {
 	for _, field := range fields {
-		s.context.layer.AddEndArgs(otLogPrefix+field.Key(), field.Value())
+		s.context.span.AddEndArgs(otLogPrefix+field.Key(), field.Value())
 	}
 }
-func (s *spanImpl) LogKV(keyVals ...interface{}) { s.context.layer.AddEndArgs(keyVals...) }
+func (s *spanImpl) LogKV(keyVals ...interface{}) { s.context.span.AddEndArgs(keyVals...) }
 func (s *spanImpl) Context() ot.SpanContext      { return s.context }
-func (s *spanImpl) Finish()                      { s.context.layer.End() }
+func (s *spanImpl) Finish()                      { s.context.span.End() }
 func (s *spanImpl) Tracer() ot.Tracer            { return s.tracer }
 
 // XXX handle FinishTime, LogRecords
-func (s *spanImpl) FinishWithOptions(opts ot.FinishOptions) { s.context.layer.End() }
+func (s *spanImpl) FinishWithOptions(opts ot.FinishOptions) { s.context.span.End() }
 
 // XXX handle changing operation name
 func (s *spanImpl) SetOperationName(operationName string) ot.Span { return s }
 
 func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
-	s.context.layer.AddEndArgs(translateTagName(key), value)
+	s.context.span.AddEndArgs(translateTagName(key), value)
 	return s
 }
 

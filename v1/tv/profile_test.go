@@ -18,13 +18,13 @@ func testProf(ctx context.Context) {
 
 func TestBeginProfile(t *testing.T) {
 	r := traceview.SetTestReporter(true)
-	ctx := tv.NewContext(context.Background(), tv.NewTrace("testLayer"))
+	ctx := tv.NewContext(context.Background(), tv.NewTrace("testSpan"))
 	testProf(ctx)
 
 	r.Close(2)
-	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
-		{"testLayer", "entry"}: {},
-		{"", "profile_entry"}: {Edges: g.Edges{{"testLayer", "entry"}}, Callback: func(n g.Node) {
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+		{"testSpan", "entry"}: {},
+		{"", "profile_entry"}: {Edges: g.Edges{{"testSpan", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testProf")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/librato/go-traceview/v1/tv_test.testProf")
@@ -33,35 +33,35 @@ func TestBeginProfile(t *testing.T) {
 	})
 }
 
-func testLayerProf(ctx context.Context) {
-	l1, _ := tv.BeginLayer(ctx, "L1")
-	p := l1.BeginProfile("testLayerProf")
+func testSpanProf(ctx context.Context) {
+	l1, _ := tv.BeginSpan(ctx, "L1")
+	p := l1.BeginProfile("testSpanProf")
 	p.End()
 	l1.End()
 	tv.EndTrace(ctx)
 }
 
-func TestBeginLayerProfile(t *testing.T) {
+func TestBeginSpanProfile(t *testing.T) {
 	r := traceview.SetTestReporter(true)
-	ctx := tv.NewContext(context.Background(), tv.NewTrace("testLayer"))
-	testLayerProf(ctx)
+	ctx := tv.NewContext(context.Background(), tv.NewTrace("testSpan"))
+	testSpanProf(ctx)
 
 	r.Close(6)
-	g.AssertGraph(t, r.EventBufs, 6, g.AssertNodeMap{
-		{"testLayer", "entry"}: {},
-		{"L1", "entry"}:        {Edges: g.Edges{{"testLayer", "entry"}}},
+	g.AssertGraph(t, r.Bufs, 6, g.AssertNodeMap{
+		{"testSpan", "entry"}: {},
+		{"L1", "entry"}:       {Edges: g.Edges{{"testSpan", "entry"}}},
 		{"", "profile_entry"}: {Edges: g.Edges{{"L1", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
-			assert.Equal(t, n.Map["ProfileName"], "testLayerProf")
-			assert.Equal(t, n.Map["FunctionName"], "github.com/librato/go-traceview/v1/tv_test.testLayerProf")
+			assert.Equal(t, n.Map["ProfileName"], "testSpanProf")
+			assert.Equal(t, n.Map["FunctionName"], "github.com/librato/go-traceview/v1/tv_test.testSpanProf")
 			assert.Contains(t, n.Map["File"], "/go-traceview/v1/tv/profile_test.go")
 		}},
 		{"", "profile_exit"}: {Edges: g.Edges{{"", "profile_entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
-			assert.Equal(t, n.Map["ProfileName"], "testLayerProf")
+			assert.Equal(t, n.Map["ProfileName"], "testSpanProf")
 		}},
-		{"L1", "exit"}:        {Edges: g.Edges{{"", "profile_exit"}, {"L1", "entry"}}},
-		{"testLayer", "exit"}: {Edges: g.Edges{{"L1", "exit"}, {"testLayer", "entry"}}},
+		{"L1", "exit"}:       {Edges: g.Edges{{"", "profile_exit"}, {"L1", "entry"}}},
+		{"testSpan", "exit"}: {Edges: g.Edges{{"L1", "exit"}, {"testSpan", "entry"}}},
 	})
 
 }
@@ -75,31 +75,31 @@ func TestNoTraceBeginProfile(t *testing.T) {
 	assert.Len(t, r.EventBufs, 0)
 }
 func TestTraceErrorBeginProfile(t *testing.T) {
-	// simulate reporter error on second event: prevents Layer from being reported
+	// simulate reporter error on second event: prevents Span from being reported
 	r := traceview.SetTestReporter(true)
 	r.ErrorEvents = map[int]bool{1: true}
-	testProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
+	testProf(tv.NewContext(context.Background(), tv.NewTrace("testSpan")))
 	r.Close(1)
-	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{
-		{"testLayer", "entry"}: {},
+	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{
+		{"testSpan", "entry"}: {},
 	})
 }
 
-func TestNoTraceBeginLayerProfile(t *testing.T) {
+func TestNoTraceBeginSpanProfile(t *testing.T) {
 	r := traceview.SetTestReporter(true)
 	ctx := context.Background()
-	testLayerProf(ctx)
+	testSpanProf(ctx)
 	r.Close(0)
 	assert.Len(t, r.EventBufs, 0)
 }
-func TestTraceErrorBeginLayerProfile(t *testing.T) {
-	// simulate reporter error on second event: prevents nested Layer & Profile spans
+func TestTraceErrorBeginSpanProfile(t *testing.T) {
+	// simulate reporter error on second event: prevents nested Span & Profile spans
 	r := traceview.SetTestReporter(true)
 	r.ErrorEvents = map[int]bool{1: true}
-	testLayerProf(tv.NewContext(context.Background(), tv.NewTrace("testLayer")))
+	testSpanProf(tv.NewContext(context.Background(), tv.NewTrace("testSpan")))
 	r.Close(2)
-	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
-		{"testLayer", "entry"}: {},
-		{"testLayer", "exit"}:  {Edges: g.Edges{{"testLayer", "entry"}}},
+	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+		{"testSpan", "entry"}: {},
+		{"testSpan", "exit"}:  {Edges: g.Edges{{"testSpan", "entry"}}},
 	})
 }
