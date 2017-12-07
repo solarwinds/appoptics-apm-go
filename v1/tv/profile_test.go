@@ -22,7 +22,7 @@ func TestBeginProfile(t *testing.T) {
 	testProf(ctx)
 
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		{"testSpan", "entry"}: {},
 		{"", "profile_entry"}: {Edges: g.Edges{{"testSpan", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
@@ -47,7 +47,7 @@ func TestBeginSpanProfile(t *testing.T) {
 	testSpanProf(ctx)
 
 	r.Close(6)
-	g.AssertGraph(t, r.Bufs, 6, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 6, g.AssertNodeMap{
 		{"testSpan", "entry"}: {},
 		{"L1", "entry"}:       {Edges: g.Edges{{"testSpan", "entry"}}},
 		{"", "profile_entry"}: {Edges: g.Edges{{"L1", "entry"}}, Callback: func(n g.Node) {
@@ -80,7 +80,7 @@ func TestTraceErrorBeginProfile(t *testing.T) {
 	r.ErrorEvents = map[int]bool{1: true}
 	testProf(tv.NewContext(context.Background(), tv.NewTrace("testSpan")))
 	r.Close(1)
-	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{
 		{"testSpan", "entry"}: {},
 	})
 }
@@ -98,7 +98,7 @@ func TestTraceErrorBeginSpanProfile(t *testing.T) {
 	r.ErrorEvents = map[int]bool{1: true}
 	testSpanProf(tv.NewContext(context.Background(), tv.NewTrace("testSpan")))
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		{"testSpan", "entry"}: {},
 		{"testSpan", "exit"}:  {Edges: g.Edges{{"testSpan", "entry"}}},
 	})
