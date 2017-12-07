@@ -60,6 +60,11 @@ page](https://login.tv.solarwinds.com/overview).
 No tracing occurs when you build your app with the build tag `disable_tracing`. With this tag,
 calls to this API are no-ops, and [empty structs](https://dave.cheney.net/2014/03/25/the-empty-struct) keep span and instrumentation types from making memory allocations. This allows for precise control over which deployments are traced.
 
+```
+ # Set to disable tracing and APM instrumentation
+ $ go build -tags disable_tracing
+```
+
 ## Instrumenting your application
 
 ### Usage examples
