@@ -16,8 +16,8 @@ import (
 
 var (
 	testKeyPath  = path.Join(os.Getenv("GOPATH"), "src/github.com/librato/go-traceview/v1/tv/internal/traceview")
-	testKeyFile  = path.Join(testKeyPath, "localhost:4567.key")
-	testCertFile = path.Join(testKeyPath, "localhost:4567.crt")
+	testKeyFile  = path.Join(testKeyPath, "localhost.key")
+	testCertFile = path.Join(testKeyPath, "localhost.crt")
 )
 
 type TestGRPCServer struct {
