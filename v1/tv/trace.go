@@ -46,7 +46,7 @@ type Trace interface {
 // KVMap is a map of additional key-value pairs to report along with the event data provided
 // to AppOptics. Certain key names (such as "Query" or "RemoteHost") are used by AppOptics to
 // provide details about program activity and distinguish between different types of spans.
-// Please visit http://docs.appneta.com/traceview-instrumentation#special-interpretation for
+// Please visit https://docs.appoptics.com/kb/apm_tracing/custom_instrumentation/ for
 // details on the key names that AppOptics looks for.
 type KVMap map[string]interface{}
 

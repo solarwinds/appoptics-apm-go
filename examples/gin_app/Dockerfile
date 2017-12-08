@@ -1,21 +1,12 @@
-FROM golang:1.6
+FROM golang:1.9
 
-# Install AppOptics package dependencies and agent.
-# http://www.appneta.com/products/traceview/
-# requires build arg, e.g.: docker build --build-arg APPNETA_KEY="xx" .
-RUN apt-get -y install wget
-ARG APPNETA_KEY
-RUN wget https://files.appneta.com/install_appneta.sh
-RUN bash ./install_appneta.sh $APPNETA_KEY
-
-# Based on Go 1.6-onbuild Dockerfile
-RUN mkdir -p /go/src/app
+# Based on https://hub.docker.com/_/golang/
 WORKDIR /go/src/app
-COPY . /go/src/app
-RUN go-wrapper download -tags traceview
-RUN go-wrapper install -tags traceview
+COPY . .
+RUN go-wrapper download
+RUN go-wrapper install
 
-# Start tracelyzer agent and app
+# Start app. APPOPTICS_SERVICE_KEY must be set to enable AppOptics.
 ENV PORT=8080
-CMD service tracelyzer start; /go/bin/app
+CMD /go/bin/app
 EXPOSE 8080
