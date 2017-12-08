@@ -1,11 +1,10 @@
+# https://docs.appoptics.com/kb/apm_tracing/python/install/#flask-and-generic-wsgi
 from flask import Flask
-from oboeware import OboeMiddleware
-import oboe
+from appoptics.middleware import AppOpticsMiddleware
 
-oboe.config['tracing_mode'] = 'always'
-application = Flask(__name__)
-application.wsgi_app = OboeMiddleware(application.wsgi_app)
+app = Flask(__name__)
+app.wsgi_app = AppOpticsMiddleware(app.wsgi_app)
 
-@application.route("/")
+@app.route("/")
 def hello():
     return "Hello from Flask!"

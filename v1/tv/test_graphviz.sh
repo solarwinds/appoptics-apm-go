@@ -1,10 +1,10 @@
 #!/bin/bash
 # build dot graph files for specified tests and open as PDFs
 # runs go test $@ in current dir, e.g.:
-# ./graphtest.sh -v
-# ./graphtest.sh -tags traceview
-# ./graphtest.sh -v -run TestTraceHTTP
-# ./graphtest.sh -v -tags traceview github.com/librato/go-traceview/v1/tv/internal/traceview/
+# ./test_graphviz.sh -v
+# ./test_graphviz.sh -v -tags disable_tracing
+# ./test_graphviz.sh -v -run TestTraceHTTP
+# ./test_graphviz.sh -v -tags traceview github.com/librato/go-traceview/v1/tv/internal/traceview/
 graphdir="${DOT_GRAPHDIR:=$(pwd)}"
 DOT_GRAPHS=1 DOT_GRAPHDIR="$graphdir" go test "$@"
 OPEN="echo"

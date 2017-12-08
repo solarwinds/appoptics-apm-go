@@ -1,4 +1,4 @@
-var tv = require('traceview');
+var tv = require('appoptics');
 var http = require('http');
 
 var server = http.createServer(function(req, res) {
