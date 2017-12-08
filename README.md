@@ -289,14 +289,14 @@ inside a staging environment.
 ### Support
 
 While we use AppOptics to trace our own production Go services, this version of our Go instrumentation is currently in beta
-and under active development. We welcome your feedback, issues and feature requests, and please contact us at traceviewsupport@solarwinds.com!
+and under active development. We welcome your feedback, issues and feature requests, and please contact us at support@appoptics.com!
 
 ### Demo web app
 
 If you have installed AppOptics and this package, you can run the sample “web app” included with go-traceview:
 
     $ cd $GOPATH/src/github.com/librato/go-traceview/examples/sample_app
-    $ go run -tags traceview main.go
+    $ go run main.go
 
 A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:
 

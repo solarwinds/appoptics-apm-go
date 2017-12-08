@@ -1,13 +1,11 @@
 FROM golang:1.9
 
-# Based on Go 1.9-onbuild Dockerfile
+# Based on https://hub.docker.com/_/golang/
 WORKDIR /go/src/app
 COPY . .
-RUN go-wrapper download -tags traceview
-RUN go-wrapper install -tags traceview
+RUN go-wrapper download
+RUN go-wrapper install
 
-ENV APPOPTICS_SERVICE_KEY
-
-# Start app
+# Start app. APPOPTICS_SERVICE_KEY must be set to enable AppOptics.
 CMD /go/bin/app
 EXPOSE 8084
