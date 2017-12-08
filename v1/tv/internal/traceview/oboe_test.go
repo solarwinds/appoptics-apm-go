@@ -126,11 +126,11 @@ func TestSamplingRate(t *testing.T) {
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		25000, 120, argsToMap(1000000, 1000000, -1, -1))
 
-	total := 1000000
+	total := 100000
 	traced := callShouldTraceRequest(total, false)
 
 	// make sure we're within 5% of our expected rate over 1,000,000 trials
-	assert.InDelta(t, 2.5, float64(traced)*100/float64(total), 0.05)
+	assert.InDelta(t, 2.5, float64(traced)*100/float64(total), 0.1)
 
 	c := globalSettingsCfg
 	assert.EqualValues(t, c.requested, total)

@@ -227,13 +227,20 @@ func TestNewContext(t *testing.T) {
 	ctx, ok := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
 	assert.True(t, ok)                                     // bad metadata string should get ignored
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
-	assert.NotEqual(t, len(r.EventBufs), 0) // still reported
+	r.Close(1)
 
+	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{
+		{"testBadMd", "entry"}: {},
+	})
+}
+
+func TestNewContextTracingDisabled(t *testing.T) {
+	r := SetTestReporter(true)
 	r.ShouldTrace = false
 	r.UseSettings = false
 
 	// create a valid context even if tracing is disabled
-	ctx, ok = NewContext("testLayer", "", false, nil)
+	ctx, ok := NewContext("testLayer", "", false, nil)
 	assert.True(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
 	assert.False(t, ctx.IsSampled())
