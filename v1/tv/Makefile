@@ -6,7 +6,7 @@ cov_files=cov.out covtv.out internal/traceview/cov.out internal/traceview/covtv.
 cov_merge=covmerge.out
 test_args=-race
 
-test: export TRACEVIEW_DEBUG_LEVEL=0
+test: export APPOPTICS_DEBUG_LEVEL=0
 test:
 	go test $(test_args) $(cov_args) -v $(cov_out)
 	go test $(test_args) $(cov_args) -v $(covtv_out) -tags disable_tracing

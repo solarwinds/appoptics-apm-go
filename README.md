@@ -32,7 +32,7 @@ instrumentation for Go, which allows Go-based applications to be monitored using
 
 Go support is currently in beta (though we run the instrumentation to process
 data in our production environment!) so please share any feedback you have; PRs welcome.
-Also, you can read more about how we use Go at AppOptics in our [blog post announcing our Go instrumentation](https://www.appneta.com/blog/go-long-with-golang/)!
+Also, you can read more about how we use Go at AppOptics in our [blog post announcing our Go instrumentation]()!
 
 ## Getting started
 
@@ -278,7 +278,7 @@ The `GO_TRACEVIEW_TRACING_MODE` environment variable may be set to "always", "th
 
 In addition to distributed tracing and latency measurement, this package also provides Go metrics
 monitoring for runtime metrics such as memory and number of goroutines. Below is a screenshot from
-our [blog's release announcement](https://www.appneta.com/blog/go-long-with-golang/) of a latency
+our [blog's release announcement]() of a latency
 heatmap underlaid with memory metrics, just after fixing a memory leak and restarting a service
 inside a staging environment.
 
@@ -289,14 +289,14 @@ inside a staging environment.
 ### Support
 
 While we use AppOptics to trace our own production Go services, this version of our Go instrumentation is currently in beta
-and under active development. We welcome your feedback, issues and feature requests, and please contact us at traceviewsupport@solarwinds.com!
+and under active development. We welcome your feedback, issues and feature requests, and please contact us at support@appoptics.com!
 
 ### Demo web app
 
 If you have installed AppOptics and this package, you can run the sample “web app” included with go-traceview:
 
     $ cd $GOPATH/src/github.com/librato/go-traceview/examples/sample_app
-    $ go run -tags traceview main.go
+    $ go run main.go
 
 A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:
 
@@ -312,9 +312,9 @@ comprised of two Go services, a Node.js service, and a Python service. It can be
 source in each service's subdirectory, or by using docker-compose:
 
     $ cd $GOPATH/src/github.com/librato/go-traceview/examples/distributed_app
-    $ APPNETA_KEY="xxx" docker-compose build
+    $ docker-compose build
     # ... (building)
-    $ docker-compose up -d
+    $ APPOPTICS_SERVICE_KEY=xxx docker-compose up -d
     Starting distributedapp_alice_1
     Starting distributedapp_bob_1
     Starting distributedapp_caroljs_1

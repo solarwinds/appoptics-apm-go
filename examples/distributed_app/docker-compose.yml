@@ -1,15 +1,16 @@
-# Example distributed app using AppOptics: http://www.appneta.com/products/traceview/
-# APPNETA_KEY="xx" docker-compose build
+# Example distributed app using AppOptics
+# http://www.appoptics.com
 version: '2'
 services:
   redis:
     image: redis
+
   # Alice is a Go service
   alice:
     build:
       context: ./alice
-      args:
-        - APPNETA_KEY=${APPNETA_KEY}
+    environment:
+      - APPOPTICS_SERVICE_KEY
     links:
       - bob
       - caroljs:carol
@@ -17,32 +18,37 @@ services:
       - otto:otto
     ports:
       - "8890:8890"
+
   # Bob is a Go service
   bob:
     build:
       context: ./bob
-      args:
-        - APPNETA_KEY=${APPNETA_KEY} 
+    environment:
+      - APPOPTICS_SERVICE_KEY
     links:
       - redis
       - caroljs:carol
+
   # Carol runs in Node.js
   caroljs:
     build:
       context: ./caroljs
-      args:
-        - APPNETA_KEY=${APPNETA_KEY} 
+    environment:
+      - APPOPTICS_SERVICE_KEY
+
   # Dave is a Flask app running on uWSGI
   davepy:
     build:
       context: ./davepy
-      args:
-        - APPNETA_KEY=${APPNETA_KEY}
+    environment:
+      - APPOPTICS_SERVICE_KEY
+
+  # Otto is a Go app using the OpenTracing API
   otto:
     build:
       context: ./otto
-      args:
-        - APPNETA_KEY=${APPNETA_KEY}
+    environment:
+      - APPOPTICS_SERVICE_KEY
     links:
       - bob
       - caroljs:carol
