@@ -231,7 +231,6 @@ func TestNewContext(t *testing.T) {
 
 	r.ShouldTrace = false
 	r.UseSettings = false
-	r.EventBufs = nil
 
 	// create a valid context even if tracing is disabled
 	ctx, ok = NewContext("testLayer", "", false, nil)
