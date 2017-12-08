@@ -224,13 +224,21 @@ func TestReportEventMap(t *testing.T) {
 func TestNewContext(t *testing.T) {
 	r := SetTestReporter(true)
 	r.ShouldTrace = true
-	ctx, ok := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
-	assert.True(t, ok)                                     // bad metadata string should get ignored
-	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
-	r.Close(1)
 
-	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{
-		{"testBadMd", "entry"}: {},
+	ctx, ok := NewContext("testBadMDSpan", "hello", true, nil) // test invalid metadata string
+	assert.True(t, ok)                                         // bad metadata string should get ignored
+	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
+
+	oldMD := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2A2203"
+	ctx, ok = NewContext("testOldMDSpan", oldMD, true, nil) // test old metadata string
+	assert.True(t, ok)                                      // old metadata string should get ignore
+	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
+
+	r.Close(2)
+
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+		{"testBadMDSpan", "entry"}: {},
+		{"testOldMDSpan", "entry"}: {},
 	})
 }
 

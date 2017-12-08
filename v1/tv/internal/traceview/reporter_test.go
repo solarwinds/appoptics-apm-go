@@ -120,7 +120,7 @@ func TestNullReporter(t *testing.T) {
 // ========================= UDP Reporter =============================
 func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) chan struct{} {
 	done := make(chan struct{})
-	assert.IsType(t, &udpReporter{}, thisReporter)
+	assert.IsType(t, &udpReporter{}, globalReporter)
 
 	addr, err := net.ResolveUDPAddr("udp4", os.Getenv("APPOPTICS_REPORTER_UDP"))
 	assert.NoError(t, err)
@@ -155,9 +155,9 @@ func assertUDPMode(t *testing.T) {
 
 func TestUDPReporter(t *testing.T) {
 	assertUDPMode(t)
-	assert.IsType(t, &udpReporter{}, thisReporter)
+	assert.IsType(t, &udpReporter{}, globalReporter)
 
-	r := thisReporter.(*udpReporter)
+	r := globalReporter.(*udpReporter)
 	ctx := newTestContext(t)
 	ev1, _ := ctx.newEvent(LabelInfo, testLayer)
 	ev2, _ := ctx.newEvent(LabelInfo, testLayer)
@@ -194,12 +194,12 @@ func TestGRPCReporter(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	oldReporter := thisReporter
-	thisReporter = newGRPCReporter()
+	oldReporter := globalReporter
+	globalReporter = newGRPCReporter()
 
-	require.IsType(t, &grpcReporter{}, thisReporter)
+	require.IsType(t, &grpcReporter{}, globalReporter)
 
-	r := thisReporter.(*grpcReporter)
+	r := globalReporter.(*grpcReporter)
 	ctx := newTestContext(t)
 	ev1, err := ctx.newEvent(LabelInfo, "layer1")
 	assert.NoError(t, err)
@@ -228,7 +228,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	// stop test reporter
 	server.Stop()
-	thisReporter = oldReporter
+	globalReporter = oldReporter
 
 	// assert data received
 	require.Len(t, server.events, 1)

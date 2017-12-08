@@ -6,7 +6,7 @@ package traceview
 
 func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	if usingTestReporter {
-		if r, ok := thisReporter.(*TestReporter); ok {
+		if r, ok := globalReporter.(*TestReporter); ok {
 			return r.ShouldTrace, 1000000, 2 // trace tests
 		}
 	}

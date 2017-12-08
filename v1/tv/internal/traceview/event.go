@@ -278,8 +278,8 @@ func (e *event) ReportUsing(c *oboeContext, r reporter, channel reporterChannel)
 }
 
 // Reports event using default Reporter
-func (e *event) Report(c *oboeContext) error       { return e.ReportUsing(c, thisReporter, EVENTS) }
-func (e *event) ReportStatus(c *oboeContext) error { return e.ReportUsing(c, thisReporter, METRICS) }
+func (e *event) Report(c *oboeContext) error       { return e.ReportUsing(c, globalReporter, EVENTS) }
+func (e *event) ReportStatus(c *oboeContext) error { return e.ReportUsing(c, globalReporter, METRICS) }
 
 // Report event using Context interface
 func (e *event) ReportContext(c Context, addCtxEdge bool, args ...interface{}) error {

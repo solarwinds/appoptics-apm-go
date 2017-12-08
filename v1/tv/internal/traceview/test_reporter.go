@@ -46,9 +46,9 @@ func SetTestReporter(withDefaultSetting bool, args ...interface{}) *TestReporter
 	go r.resultWriter()
 
 	if _, ok := oldReporter.(*nullReporter); ok {
-		oldReporter = thisReporter
+		oldReporter = globalReporter
 	}
-	thisReporter = r
+	globalReporter = r
 	usingTestReporter = true
 
 	// start with clean slate
@@ -102,7 +102,7 @@ func (r *TestReporter) Close(numBufs int) {
 
 	usingTestReporter = false
 	if _, ok := oldReporter.(*nullReporter); !ok {
-		thisReporter = oldReporter
+		globalReporter = oldReporter
 		oldReporter = &nullReporter{}
 	}
 }

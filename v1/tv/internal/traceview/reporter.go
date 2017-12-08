@@ -22,7 +22,7 @@ type reporter interface {
 }
 
 // currently used reporter
-var thisReporter reporter = &nullReporter{}
+var globalReporter reporter = &nullReporter{}
 
 var (
 	reportingDisabled     = false // reporting disabled due to error
@@ -48,18 +48,20 @@ func (r *nullReporter) reportSpan(span *SpanMessage) error            { return n
 // can be overridden via APPOPTICS_REPORTER
 func init() {
 	cacheHostname(osHostnamer{})
+	setGlobalReporter(os.Getenv("APPOPTICS_REPORTER"))
+	sendInitMessage()
+}
 
-	switch strings.ToLower(os.Getenv("APPOPTICS_REPORTER")) {
+func setGlobalReporter(reporterType string) {
+	switch strings.ToLower(reporterType) {
 	case "ssl":
 		fallthrough // using fallthrough since the SSL reporter (GRPC) is our default reporter
 	default:
-		thisReporter = newGRPCReporter()
+		globalReporter = newGRPCReporter()
 	case "udp":
-		thisReporter = udpNewReporter()
+		globalReporter = udpNewReporter()
 	case "none":
 	}
-
-	sendInitMessage()
 }
 
 // called from the app when a span message is available
@@ -67,7 +69,7 @@ func init() {
 //
 // returns	error if channel is full
 func ReportSpan(span SpanMessage) error {
-	return thisReporter.reportSpan(&span)
+	return globalReporter.reportSpan(&span)
 }
 
 // cache hostname

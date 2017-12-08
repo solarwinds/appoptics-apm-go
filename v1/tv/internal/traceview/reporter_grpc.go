@@ -167,14 +167,7 @@ func newGRPCReporter() reporter {
 	eventConn, err1 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
 	metricConn, err2 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
 	if err1 != nil || err2 != nil {
-		var err error
-		switch {
-		case err1 != nil:
-			err = err1
-		case err2 != nil:
-			err = err2
-		}
-		OboeLog(ERROR, fmt.Sprintf("Failed to initialize gRPC reporter: %v %v", collectorAddress, err))
+		OboeLog(ERROR, fmt.Sprintf("Failed to initialize gRPC reporter %v: %v; %v", collectorAddress, err1, err2))
 		return &nullReporter{}
 	}
 
