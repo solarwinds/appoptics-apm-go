@@ -41,7 +41,7 @@ func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
 }
 
 func TestHTTPHandler404(t *testing.T) {
-	r := traceview.SetTestReporter(true) // set up test reporter
+	r := traceview.SetTestReporter() // set up test reporter
 	response := httpTest(handler404)
 	assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
 
@@ -66,7 +66,7 @@ func TestHTTPHandler404(t *testing.T) {
 }
 
 func TestHTTPHandler200(t *testing.T) {
-	r := traceview.SetTestReporter(true) // set up test reporter
+	r := traceview.SetTestReporter() // set up test reporter
 	response := httpTest(handler200)
 
 	r.Close(2)
@@ -91,8 +91,7 @@ func TestHTTPHandler200(t *testing.T) {
 }
 
 func TestHTTPHandlerNoTrace(t *testing.T) {
-	r := traceview.SetTestReporter(false) // set up test reporter
-	r.ShouldTrace = false
+	r := traceview.SetTestReporter(traceview.TestReporterDisableTracing())
 	httpTest(handler404)
 
 	// tracing disabled, shouldn't report anything
@@ -102,7 +101,7 @@ func TestHTTPHandlerNoTrace(t *testing.T) {
 var httpSpanSleep time.Duration
 
 func TestHTTPSpan(t *testing.T) {
-	r := traceview.SetTestReporter(false) // set up test reporter
+	r := traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true)) // set up test reporter
 
 	httpSpanSleep = time.Duration(0) // fire off first request just as preparation for the following requests
 	httpTest(handlerDelay200)
@@ -130,12 +129,12 @@ func TestHTTPSpan(t *testing.T) {
 	assert.Equal(t, 200, m["status"])
 	assert.Equal(t, "GET", m["method"])
 	assert.False(t, m["hasError"].(bool))
-	assert.InDelta(t, 25*int64(time.Millisecond)+nullDuration, m["duration"], float64(5*time.Millisecond))
+	assert.InDelta(t, 25*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
 
 	m = make(map[string]interface{})
 	bson.Unmarshal(r.StatusBufs[3], m)
 
-	assert.InDelta(t, 456*int64(time.Millisecond)+nullDuration, m["duration"], float64(5*time.Millisecond))
+	assert.InDelta(t, 456*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
 
 	m = make(map[string]interface{})
 	bson.Unmarshal(r.StatusBufs[4], m)
@@ -143,7 +142,7 @@ func TestHTTPSpan(t *testing.T) {
 	assert.Equal(t, "tv_test.handlerDelay503", m["transaction"])
 	assert.Equal(t, 503, m["status"])
 	assert.True(t, m["hasError"].(bool))
-	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(5*time.Millisecond))
+	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
 }
 
 // testServer tests creating a span/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
@@ -325,7 +324,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 	port := ln.Addr().(*net.TCPAddr).Port
 	go server.serverFn(t, ln) // start test server
 
-	r := traceview.SetTestReporter(true) // set up test reporter
+	r := traceview.SetTestReporter() // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	// make request to URL of test server
 	url := fmt.Sprintf("http://127.0.0.1:%d/test?qs=1", port)
@@ -436,7 +435,7 @@ func TestTraceHTTPErrorBBadRequest(t *testing.T) { testTraceHTTPError(t, "GET", 
 
 // test making an HTTP request that causes http.Client.Do() to fail
 func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testClientFn) {
-	r := traceview.SetTestReporter(true) // set up test reporter
+	r := traceview.SetTestReporter() // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	url := invalidPortURL // make HTTP req to invalid port
 	if badReq {
@@ -480,7 +479,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	port := list.Addr().(*net.TCPAddr).Port
 	go testDoubleWrappedServer(t, list) // start test server
 
-	r := traceview.SetTestReporter(true) // set up test reporter
+	r := traceview.SetTestReporter() // set up test reporter
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("httpTest"))
 	url := fmt.Sprintf("http://127.0.0.1:%d/test?qs=1", port)
 	resp, err := testHTTPClient(t, ctx, "GET", url)
@@ -573,7 +572,7 @@ func BobHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestDistributedApp(t *testing.T) {
-	r := traceview.SetTestReporter(true) // set up test reporter
+	r := traceview.SetTestReporter() // set up test reporter
 
 	aliceLn, err := net.Listen("tcp", ":8080")
 	assert.NoError(t, err)
@@ -672,7 +671,7 @@ func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestConcurrentApp(t *testing.T) {
-	r := traceview.SetTestReporter(true) // set up test reporter
+	r := traceview.SetTestReporter() // set up test reporter
 
 	aliceLn, err := net.Listen("tcp", ":8082")
 	assert.NoError(t, err)
@@ -717,8 +716,7 @@ func TestConcurrentApp(t *testing.T) {
 }
 
 func TestConcurrentAppNoTrace(t *testing.T) {
-	r := traceview.SetTestReporter(false) // set up test reporter
-	r.ShouldTrace = false
+	r := traceview.SetTestReporter(traceview.TestReporterDisableTracing())
 
 	aliceLn, err := net.Listen("tcp", ":8084")
 	assert.NoError(t, err)

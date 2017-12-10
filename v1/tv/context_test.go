@@ -13,12 +13,14 @@ import (
 )
 
 func TestContext(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 
 	ctx := context.Background()
 	assert.Empty(t, MetadataString(ctx))
 	tr := NewTrace("test").(*tvTrace)
+
 	xt := tr.tvCtx.MetadataString()
+	//	assert.True(t, IsSampled(ctx), "%T", tr.tvCtx)
 
 	var traceKey = struct{}{}
 
@@ -42,7 +44,7 @@ func TestContext(t *testing.T) {
 }
 
 func TestTraceFromContext(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 	tr := NewTrace("TestTFC")
 	ctx := NewContext(context.Background(), tr)
 	trFC := TraceFromContext(ctx)
@@ -56,9 +58,19 @@ func TestTraceFromContext(t *testing.T) {
 	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{{"TestTFC", "entry"}: {}})
 }
 
+func TestContextIsSampled(t *testing.T) {
+	// no context: not sampled
+	assert.False(t, IsSampled(context.Background()))
+	// sampled context
+	_ = traceview.SetTestReporter()
+	tr := NewTrace("TestTFC")
+	ctx := NewContext(context.Background(), tr)
+	assert.True(t, IsSampled(ctx))
+}
+
 func TestNullSpan(t *testing.T) {
 	// enable reporting to test reporter
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 
 	ctx := NewContext(context.Background(), NewTrace("TestNullSpan")) // reports event
 	l1, ctxL := BeginSpan(ctx, "L1")                                  // reports event

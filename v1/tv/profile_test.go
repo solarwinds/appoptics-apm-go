@@ -17,7 +17,7 @@ func testProf(ctx context.Context) {
 }
 
 func TestBeginProfile(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("testSpan"))
 	testProf(ctx)
 
@@ -42,7 +42,7 @@ func testSpanProf(ctx context.Context) {
 }
 
 func TestBeginSpanProfile(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("testSpan"))
 	testSpanProf(ctx)
 
@@ -68,7 +68,7 @@ func TestBeginSpanProfile(t *testing.T) {
 
 // ensure above tests run smoothly with no events reported when a context has no trace
 func TestNoTraceBeginProfile(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 	ctx := context.Background()
 	testProf(ctx)
 	r.Close(0)
@@ -76,7 +76,7 @@ func TestNoTraceBeginProfile(t *testing.T) {
 }
 func TestTraceErrorBeginProfile(t *testing.T) {
 	// simulate reporter error on second event: prevents Span from being reported
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 	r.ErrorEvents = map[int]bool{1: true}
 	testProf(tv.NewContext(context.Background(), tv.NewTrace("testSpan")))
 	r.Close(1)
@@ -86,7 +86,7 @@ func TestTraceErrorBeginProfile(t *testing.T) {
 }
 
 func TestNoTraceBeginSpanProfile(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 	ctx := context.Background()
 	testSpanProf(ctx)
 	r.Close(0)
@@ -94,7 +94,7 @@ func TestNoTraceBeginSpanProfile(t *testing.T) {
 }
 func TestTraceErrorBeginSpanProfile(t *testing.T) {
 	// simulate reporter error on second event: prevents nested Span & Profile spans
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 	r.ErrorEvents = map[int]bool{1: true}
 	testSpanProf(tv.NewContext(context.Background(), tv.NewTrace("testSpan")))
 	r.Close(2)

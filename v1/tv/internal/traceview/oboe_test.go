@@ -5,8 +5,6 @@
 package traceview
 
 import (
-	"bytes"
-	"log"
 	"os"
 	"strconv"
 	"sync"
@@ -25,10 +23,10 @@ func newTokenBucket(ratePerSec, size float64) *tokenBucket {
 }
 
 func TestInitMessage(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 
 	sendInitMessage()
-	r.Close(2)
+	r.Close(1)
 	assertInitMessage(t, r.EventBufs)
 }
 func assertInitMessage(t *testing.T, bufs [][]byte) {
@@ -119,7 +117,7 @@ func callShouldTraceRequest(total int, isTraced bool) (traced int) {
 }
 
 func TestSamplingRate(t *testing.T) {
-	r := SetTestReporter(false)
+	r := SetTestReporter(TestReporterDisableDefaultSetting(true))
 
 	// set 2.5% sampling rate
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -140,10 +138,11 @@ func TestSamplingRate(t *testing.T) {
 	assert.EqualValues(t, c.limited, 0)
 
 	r.Close(2)
+	// XXX assert bufs
 }
 
 func TestSampleTracingDisabled(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 
 	total := 3
 	globalSettingsCfg.tracingMode = TRACE_NEVER
@@ -162,22 +161,22 @@ func TestSampleTracingDisabled(t *testing.T) {
 }
 
 func TestSampleNoValidSettings(t *testing.T) {
-	r := SetTestReporter(false)
+	r := SetTestReporter(TestReporterDisableDefaultSetting(true))
 
 	total := 1
 
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
+	//var buf bytes.Buffer
+	//log.SetOutput(&buf)
 	traced := callShouldTraceRequest(total, false)
-	log.SetOutput(os.Stderr)
-	assert.Contains(t, buf.String(), "Sampling disabled for go_test until valid settings are retrieved")
+	//log.SetOutput(os.Stderr)
+	//assert.Contains(t, buf.String(), "Sampling disabled for go_test until valid settings are retrieved")
 	assert.EqualValues(t, 0, traced)
 
 	r.Close(2)
 }
 
 func TestSampleRateBoundaries(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 
 	_, rate, _ := shouldTraceRequest(testLayer, false)
 	assert.Equal(t, 1000000, rate)
@@ -209,7 +208,7 @@ func TestSampleRateBoundaries(t *testing.T) {
 }
 
 func TestSampleSource(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 
 	_, _, source := shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
@@ -236,7 +235,7 @@ func TestSampleSource(t *testing.T) {
 }
 
 func TestSampleFlags(t *testing.T) {
-	r := SetTestReporter(false)
+	r := SetTestReporter(TestReporterDisableDefaultSetting(true))
 	c := globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -292,7 +291,7 @@ func TestSampleFlags(t *testing.T) {
 }
 
 func TestSampleTokenBucket(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 	c := globalSettingsCfg
 
 	traced := callShouldTraceRequest(1, false)
@@ -381,7 +380,7 @@ func TestSampleTokenBucket(t *testing.T) {
 //		t.Skip("Skipping metrics periodic sender test")
 //	}
 //	// full periodic sender test: wait for next interval & report
-//	r := SetTestReporter(time.Duration(30) * time.Second)
+//	r := SetTestReporter(TestReporterTimeout(time.Duration(30) * time.Second))
 //	disableMetrics = false
 //	go sendInitMessage()
 //	d0 := getNextInterval(time.Now()) + time.Second
@@ -410,7 +409,7 @@ func TestSampleTokenBucket(t *testing.T) {
 //}
 
 func TestOboeTracingMode(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 
 	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "ALWAYS")
 	readEnvSettings()

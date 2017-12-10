@@ -161,7 +161,7 @@ func (r *errorReader) Read(p []byte) (n int, err error) {
 }
 
 func TestMetadataRandom(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 	// if RNG fails, don't report events/spans associated with RNG failures.
 	randReader = &errorReader{failOn: map[int]bool{0: true}}
 	ctx := newContext(true)
@@ -200,7 +200,7 @@ func newTestContext(t *testing.T) *oboeContext {
 }
 
 func TestReportEventMap(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelEntry, "myLayer")
 	assert.NoError(t, err)
@@ -222,8 +222,7 @@ func TestReportEventMap(t *testing.T) {
 }
 
 func TestNewContext(t *testing.T) {
-	r := SetTestReporter(true)
-	r.ShouldTrace = true
+	r := SetTestReporter()
 
 	ctx, ok := NewContext("testBadMDSpan", "hello", true, nil) // test invalid metadata string
 	assert.True(t, ok)                                         // bad metadata string should get ignored
@@ -243,9 +242,7 @@ func TestNewContext(t *testing.T) {
 }
 
 func TestNewContextTracingDisabled(t *testing.T) {
-	r := SetTestReporter(true)
-	r.ShouldTrace = false
-	r.UseSettings = false
+	r := SetTestReporter(TestReporterDisableTracing()) // set up test reporter
 
 	// create a valid context even if tracing is disabled
 	ctx, ok := NewContext("testLayer", "", false, nil)
@@ -275,7 +272,7 @@ func TestNewContextTracingDisabled(t *testing.T) {
 
 // TestNullContext asserts properties of nullContext structs.
 func TestNullContext(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 
 	// shouldn't be able to create a trace if the entry event fails
 	r.ShouldError = true

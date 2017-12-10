@@ -44,7 +44,7 @@ func (l *badLimitedReader) Read(p []byte) (n int, err error) {
 }
 
 func TestBinaryExtract(t *testing.T) {
-	_ = traceview.SetTestReporter(false)
+	_ = traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true))
 	tr := NewTracer()
 
 	// test invalid wire data
@@ -107,7 +107,7 @@ type badWriter struct{}
 func (r badWriter) Write(p []byte) (n int, err error) { return 0, errors.New("write error") }
 
 func TestBinaryInject(t *testing.T) {
-	_ = traceview.SetTestReporter(false)
+	_ = traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true))
 	tr := NewTracer()
 	span := tr.StartSpan("op")
 
@@ -132,7 +132,7 @@ func TestBinaryInject(t *testing.T) {
 }
 
 func TestTextMapExtract(t *testing.T) {
-	_ = traceview.SetTestReporter(false)
+	_ = traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true))
 	tr := NewTracer()
 	span := tr.StartSpan("op")
 	textCarrier := opentracing.TextMapCarrier{}

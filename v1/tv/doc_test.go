@@ -69,13 +69,13 @@ func testDocSpanExampleCtx() {
 }
 
 func TestDocSpanExample(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 	testDocSpanExample()
 	r.Close(11)
 	assertDocSpanExample(t, r.EventBufs)
 }
 func TestDocSpanExampleCtx(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 	testDocSpanExampleCtx()
 	r.Close(11)
 	assertDocSpanExample(t, r.EventBufs)

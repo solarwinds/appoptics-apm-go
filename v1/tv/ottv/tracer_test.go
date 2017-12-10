@@ -11,7 +11,7 @@ import (
 )
 
 func TestSpanBaggageUnsampled(t *testing.T) {
-	_ = traceview.SetTestReporter(false)
+	_ = traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true))
 	tr := NewTracer()
 	tr.(*Tracer).TrimUnsampledSpans = true
 	span := tr.StartSpan("op")

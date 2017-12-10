@@ -88,7 +88,7 @@ func server(t *testing.T, list net.Listener) {
 }
 
 func TestTracer(t *testing.T) {
-	r := traceview.SetTestReporter(true) // set up test reporter
+	r := traceview.SetTestReporter() // set up test reporter
 	opentracing.InitGlobalTracer(NewTracer())
 
 	ln, err := net.Listen("tcp", ":0") // pick an unallocated port

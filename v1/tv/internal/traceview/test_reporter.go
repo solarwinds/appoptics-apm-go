@@ -4,6 +4,7 @@ package traceview
 
 import (
 	"errors"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,37 +12,73 @@ import (
 
 // TestReporter appends reported events to Bufs if ShouldTrace is true.
 type TestReporter struct {
-	EventBufs   [][]byte
-	StatusBufs  [][]byte
-	ShouldTrace bool
-	ShouldError bool
-	UseSettings bool
-	ErrorEvents map[int]bool // whether to drop an event
-	eventCount  int64
-	done        chan int
-	wg          sync.WaitGroup
-	eventChan   chan []byte
-	statusChan  chan []byte
-	Timeout     time.Duration
+	EventBufs             [][]byte
+	StatusBufs            [][]byte
+	ShouldTrace           bool
+	ShouldError           bool
+	UseSettings           bool
+	DisableDefaultSetting bool
+	ErrorEvents           map[int]bool // whether to drop an event
+	eventCount            int64
+	done                  chan int
+	wg                    sync.WaitGroup
+	eventChan             chan []byte
+	statusChan            chan []byte
+	Timeout               time.Duration
 }
+
+const defaultTestReporterTimeout = 2 * time.Second
 
 var usingTestReporter = false
 var oldReporter reporter = &nullReporter{}
 
+// TestReporterOption values may be passed to SetTestReporter.
+type TestReporterOption func(*TestReporter)
+
+// TestReporterDisableDefaultSetting disables the default 100% test sampling rate and leaves settings state empty.
+func TestReporterDisableDefaultSetting(val bool) TestReporterOption {
+	return func(r *TestReporter) { r.DisableDefaultSetting = val }
+}
+
+// TestReporterTimeout sets a timeout for the TestReporter to wait before shutting down its writer.
+func TestReporterTimeout(timeout time.Duration) TestReporterOption {
+	return func(r *TestReporter) { r.Timeout = timeout }
+}
+
+// TestReporterDisableTracing turns off settings lookup and ensures oboeSampleRequest returns false.
+func TestReporterDisableTracing() TestReporterOption {
+	return func(r *TestReporter) {
+		r.DisableDefaultSetting = true
+		r.ShouldTrace = false
+		r.UseSettings = false
+	}
+}
+
+// TestReporterShouldTrace sets the first argument of the return value of oboeSampleRequest().
+func TestReporterShouldTrace(val bool) TestReporterOption {
+	return func(r *TestReporter) {
+		r.ShouldTrace = val
+	}
+}
+
+// TestReporterUseSettings sets whether to look up settings lookup or return the value of r.ShouldTrace.
+func TestReporterUseSettings(val bool) TestReporterOption {
+	return func(r *TestReporter) { r.UseSettings = val }
+}
+
 // SetTestReporter sets and returns a test reporter that captures raw event bytes
 // for making assertions about using the graphtest package.
-func SetTestReporter(withDefaultSetting bool, args ...interface{}) *TestReporter {
-	timeout := 2 * time.Second
-	if len(args) == 1 {
-		timeout, _ = args[0].(time.Duration)
-	}
+func SetTestReporter(options ...TestReporterOption) *TestReporter {
 	r := &TestReporter{
 		ShouldTrace: true,
 		UseSettings: true,
-		Timeout:     timeout,
+		Timeout:     defaultTestReporterTimeout,
 		done:        make(chan int),
 		eventChan:   make(chan []byte),
 		statusChan:  make(chan []byte),
+	}
+	for _, option := range options {
+		option(r)
 	}
 	go r.resultWriter()
 
@@ -55,7 +92,7 @@ func SetTestReporter(withDefaultSetting bool, args ...interface{}) *TestReporter
 	resetSettings()
 
 	// set default setting with 100% sampling rate
-	if withDefaultSetting {
+	if !r.DisableDefaultSetting {
 		r.addDefaultSetting()
 	}
 
@@ -99,7 +136,9 @@ func (r *TestReporter) Close(numBufs int) {
 	// wait for reader goroutine to receive numBufs events, or timeout.
 	r.wg.Wait()
 	close(r.eventChan)
-
+	if len(r.EventBufs) < numBufs {
+		log.Printf("# FIX: TestReporter.Close() waited for %d events, got %d", numBufs, len(r.EventBufs))
+	}
 	usingTestReporter = false
 	if _, ok := oldReporter.(*nullReporter); !ok {
 		globalReporter = oldReporter

@@ -13,7 +13,7 @@ import (
 var testLayer = "go_test"
 
 func TestSendEvent(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
@@ -117,7 +117,7 @@ func TestOboeEvent(t *testing.T) {
 }
 
 func TestEventMetadata(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelExit, "alice")
@@ -145,7 +145,7 @@ func TestEventMetadata(t *testing.T) {
 }
 
 func TestEvent(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)
@@ -162,7 +162,7 @@ func TestEvent(t *testing.T) {
 	})
 }
 func TestEventNoEdge(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 	ctx := newTestContext(t)
 	e, err := ctx.newEvent(LabelEntry, testLayer)
 	assert.NoError(t, err)

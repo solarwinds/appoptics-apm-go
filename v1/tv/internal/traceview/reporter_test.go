@@ -52,7 +52,7 @@ func TestCacheHostname(t *testing.T) {
 // ========================= Test Reporter =============================
 
 func TestReportEvent(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 	ctx := newTestContext(t)
 	assert.Error(t, r.reportEvent(ctx, nil))
 	assert.Len(t, r.EventBufs, 0) // no reporting
@@ -84,11 +84,11 @@ func TestReportEvent(t *testing.T) {
 
 // test behavior of the TestReporter
 func TestTestReporter(t *testing.T) {
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 	r.Close(1) // wait on event that will never be reported: causes timeout
 	assert.Len(t, r.EventBufs, 0)
 
-	r = SetTestReporter(true)
+	r = SetTestReporter()
 	go func() { // simulate late event
 		time.Sleep(100 * time.Millisecond)
 		ctx := newTestContext(t)

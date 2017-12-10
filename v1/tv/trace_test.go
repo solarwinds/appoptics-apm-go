@@ -17,7 +17,7 @@ import (
 )
 
 func TestTraceMetadata(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 
 	tr := tv.NewTrace("test")
 	md := tr.ExitMetadata()
@@ -35,8 +35,7 @@ func TestTraceMetadata(t *testing.T) {
 	})
 }
 func TestNoTraceMetadata(t *testing.T) {
-	r := traceview.SetTestReporter(false)
-	r.ShouldTrace = false
+	r := traceview.SetTestReporter(traceview.TestReporterDisableTracing())
 
 	// if trace is not sampled, metadata should be empty
 	tr := tv.NewTrace("test")
@@ -49,7 +48,7 @@ func TestNoTraceMetadata(t *testing.T) {
 
 // ensure two different traces have different trace IDs
 func TestTraceMetadataDiff(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 
 	t1 := tv.NewTrace("test1")
 	md1 := t1.ExitMetadata()
@@ -58,7 +57,7 @@ func TestTraceMetadataDiff(t *testing.T) {
 	r.Close(2)
 	assert.Len(t, r.EventBufs, 2)
 
-	r = traceview.SetTestReporter(true)
+	r = traceview.SetTestReporter()
 	t2 := tv.NewTrace("test1")
 	md2 := t2.ExitMetadata()
 	assert.Len(t, md2, 60)
@@ -83,11 +82,11 @@ func TestTraceMetadataDiff(t *testing.T) {
 }
 
 // example trace
-func traceExample(ctx context.Context) {
+func traceExample(t *testing.T, ctx context.Context) {
 	// do some work
 	f0(ctx)
 
-	t := tv.FromContext(ctx)
+	tr := tv.FromContext(ctx)
 	// instrument a DB query
 	q := "SELECT * FROM tbl"
 	// l, _ := tv.BeginSpan(ctx, "DBx", "Query", q, "Flavor", "postgresql", "RemoteHost", "db.com")
@@ -98,21 +97,22 @@ func traceExample(ctx context.Context) {
 	l.End()
 
 	// tv.Info and tv.Error report on the root span
-	t.Info("HTTP-Status", 500)
-	t.Error("TimeoutError", "response timeout")
+	tr.Info("HTTP-Status", 500)
+	tr.Error("TimeoutError", "response timeout")
 
 	// end the trace
-	t.End()
+	tr.End()
 }
 
 // example trace
-func traceExampleCtx(ctx context.Context) {
+func traceExampleCtx(t *testing.T, ctx context.Context) {
 	// do some work
 	f0Ctx(ctx)
 
 	// instrument a DB query
 	q := []byte("SELECT * FROM tbl")
 	_, ctxQ := tv.BeginSpan(ctx, "DBx", "Query", q, "Flavor", "postgresql", "RemoteHost", "db.com")
+	assert.True(t, tv.IsSampled(ctxQ))
 	// db.Query(q)
 	time.Sleep(20 * time.Millisecond)
 	tv.Error(ctxQ, "QueryError", "Error running query!")
@@ -172,21 +172,21 @@ func f0Ctx(ctx context.Context) {
 }
 
 func TestTraceExample(t *testing.T) {
-	r := traceview.SetTestReporter(true) // enable test reporter
+	r := traceview.SetTestReporter() // enable test reporter
 	// create a new trace, and a context to carry it around
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
 	t.Logf("Reporting unrecognized event KV type")
-	traceExample(ctx) // generate events
+	traceExample(t, ctx) // generate events
 	r.Close(13)
 	assertTraceExample(t, "f0", r.EventBufs)
 }
 
 func TestTraceExampleCtx(t *testing.T) {
-	r := traceview.SetTestReporter(true) // enable test reporter
+	r := traceview.SetTestReporter() // enable test reporter
 	// create a new trace, and a context to carry it around
 	ctx := tv.NewContext(context.Background(), tv.NewTrace("myExample"))
 	t.Logf("Reporting unrecognized event KV type")
-	traceExampleCtx(ctx) // generate events
+	traceExampleCtx(t, ctx) // generate events
 	r.Close(13)
 	assertTraceExample(t, "f0Ctx", r.EventBufs)
 }
@@ -254,15 +254,15 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 	})
 }
 func TestNoTraceExample(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 	ctx := context.Background()
-	traceExample(ctx)
+	traceExample(t, ctx)
+	assert.False(t, tv.IsSampled(ctx))
 	assert.Len(t, r.EventBufs, 0)
 }
 
 func BenchmarkNewTrace(b *testing.B) {
-	r := traceview.SetTestReporter(true)
-	r.ShouldTrace = false
+	_ = traceview.SetTestReporter(traceview.TestReporterShouldTrace(false))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = tv.NewTrace("test")
@@ -270,8 +270,7 @@ func BenchmarkNewTrace(b *testing.B) {
 }
 
 func BenchmarkNewTraceFromID(b *testing.B) {
-	r := traceview.SetTestReporter(true)
-	r.ShouldTrace = false
+	_ = traceview.SetTestReporter(traceview.TestReporterShouldTrace(false))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = tv.NewTraceFromID("test", "", nil)
@@ -279,7 +278,7 @@ func BenchmarkNewTraceFromID(b *testing.B) {
 }
 
 func TestTraceFromMetadata(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 
 	// emulate incoming request with X-Trace header
 	incomingID := "2BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2198D447EA220301"
@@ -302,8 +301,7 @@ func TestTraceFromMetadata(t *testing.T) {
 	})
 }
 func TestNoTraceFromMetadata(t *testing.T) {
-	r := traceview.SetTestReporter(false)
-	r.ShouldTrace = false
+	r := traceview.SetTestReporter(traceview.TestReporterDisableTracing())
 	tr := tv.NewTraceFromID("test", "", nil)
 	md := tr.ExitMetadata()
 	tr.End()
@@ -311,12 +309,10 @@ func TestNoTraceFromMetadata(t *testing.T) {
 	assert.Equal(t, md, "")
 	assert.Len(t, r.EventBufs, 0)
 }
-func TestTraceFromBadMetadata(t *testing.T) {
-	r := traceview.SetTestReporter(false)
-	r.UseSettings = false
-	r.ShouldTrace = false
+func TestNoTraceFromBadMetadata(t *testing.T) {
+	r := traceview.SetTestReporter(traceview.TestReporterDisableTracing())
 
-	// emulate incoming request with invalad X-Trace header
+	// emulate incoming request with invalid X-Trace header
 	incomingID := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2A2203"
 	tr := tv.NewTraceFromID("test", incomingID, nil)
 	md := tr.ExitMetadata()
@@ -326,7 +322,7 @@ func TestTraceFromBadMetadata(t *testing.T) {
 }
 
 func TestTraceJoin(t *testing.T) {
-	r := traceview.SetTestReporter(true)
+	r := traceview.SetTestReporter()
 
 	tr := tv.NewTrace("test")
 	l := tr.BeginSpan("L1")
@@ -344,8 +340,7 @@ func TestTraceJoin(t *testing.T) {
 }
 
 func TestNullTrace(t *testing.T) {
-	r := traceview.SetTestReporter(true)
-	r.ShouldTrace = true
+	r := traceview.SetTestReporter()
 	tr := tv.NewNullTrace()
 	md := tr.ExitMetadata()
 	tr.End()

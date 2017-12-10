@@ -176,7 +176,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		OboeLog(ERROR, fmt.Sprintf("Sampling disabled for %v until valid settings are retrieved.", layer))
+		OboeLog(DEBUG, fmt.Sprintf("Sampling disabled for %v until valid settings are retrieved.", layer))
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
 

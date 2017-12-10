@@ -15,7 +15,7 @@ func TestNoboe(t *testing.T) {
 	sampled, _, _ := shouldTraceRequest("test", true)
 	assert.False(t, sampled)
 
-	r := SetTestReporter(true)
+	r := SetTestReporter()
 	sampled, _, _ = shouldTraceRequest("test", false)
 	assert.True(t, sampled)
 	r.ShouldTrace = false
