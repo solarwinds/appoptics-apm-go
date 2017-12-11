@@ -117,6 +117,7 @@ func traceExampleCtx(t *testing.T, ctx context.Context) {
 	time.Sleep(20 * time.Millisecond)
 	tv.Error(ctxQ, "QueryError", "Error running query!")
 	tv.End(ctxQ)
+	assert.False(t, tv.IsSampled(ctxQ)) // Not considered sampled after span ends
 
 	// tv.Info and tv.Error report on the root span
 	tv.Info(ctx, "HTTP-Status", 500)

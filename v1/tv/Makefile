@@ -6,6 +6,7 @@ cov_files=cov.out covtv.out internal/traceview/cov.out internal/traceview/covtv.
 cov_merge=covmerge.out
 test_args=-race
 
+test: export APPOPTICS_DEBUG_LEVEL=1
 #test: export APPOPTICS_DEBUG_LEVEL=0
 test:
 	go test $(test_args) $(cov_args) -v $(cov_out)

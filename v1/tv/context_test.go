@@ -88,6 +88,7 @@ func TestNullSpan(t *testing.T) {
 	c1 := l1.BeginSpan("C1") // child after parent ended
 	assert.IsType(t, c1, nullSpan{})
 	assert.False(t, c1.IsTracing())
+	assert.False(t, c1.IsSampled())
 	assert.False(t, c1.ok())
 	assert.Empty(t, c1.MetadataString())
 	c1.addChildEdge(l1.tvContext())

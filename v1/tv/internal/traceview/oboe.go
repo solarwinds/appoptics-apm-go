@@ -159,12 +159,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {
 			if !r.UseSettings {
-				if globalSettingsCfg.tracingMode == TRACE_NEVER {
-					r.ShouldTrace = false
-				}
-				if r.ShouldTrace == false {
-					return r.ShouldTrace, 0, SAMPLE_SOURCE_NONE // trace tests
-				}
+				return r.ShouldTrace, 0, SAMPLE_SOURCE_NONE // trace tests
 			}
 		}
 	}

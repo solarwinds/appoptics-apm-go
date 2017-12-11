@@ -195,7 +195,7 @@ func TestGRPCReporter(t *testing.T) {
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
 	oldReporter := globalReporter
-	globalReporter = newGRPCReporter()
+	setGlobalReporter("ssl")
 
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
