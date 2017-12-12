@@ -80,6 +80,7 @@ func SetTestReporter(options ...TestReporterOption) *TestReporter {
 	for _, option := range options {
 		option(r)
 	}
+	r.wg.Add(1)
 	go r.resultWriter()
 
 	if _, ok := oldReporter.(*nullReporter); ok {
@@ -100,7 +101,6 @@ func SetTestReporter(options ...TestReporterOption) *TestReporter {
 }
 
 func (r *TestReporter) resultWriter() {
-	r.wg.Add(1)
 	var numBufs int
 	for {
 		select {
