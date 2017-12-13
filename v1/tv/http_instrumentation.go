@@ -85,7 +85,7 @@ func (w *HTTPResponseWriter) Header() http.Header { return w.Writer.Header() }
 func (w *HTTPResponseWriter) WriteHeader(status int) {
 	w.StatusCode = status                // observe HTTP status code
 	md := w.Header().Get(HTTPHeaderName) // check response for downstream metadata
-	if w.t.IsTracing() {                 // set trace exit metadata in X-Trace header
+	if w.t.IsReporting() {               // set trace exit metadata in X-Trace header
 		// if downstream response headers mention a different span, add edge to it
 		if md != "" && md != w.t.ExitMetadata() {
 			w.t.AddEndArgs("Edge", md)
@@ -102,7 +102,7 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 	w := &HTTPResponseWriter{Writer: writer, t: t, StatusCode: http.StatusOK}
 	t.AddEndArgs("Status", &w.StatusCode)
 	// add exit event metadata to X-Trace header
-	if t.IsTracing() {
+	if t.IsReporting() {
 		// add/replace response header metadata with this trace's
 		w.Header().Set(HTTPHeaderName, t.ExitMetadata())
 	}

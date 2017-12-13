@@ -165,7 +165,7 @@ func TestTextMapExtract(t *testing.T) {
 	childSpan := tr.StartSpan("op2", opentracing.ChildOf(ctx))
 	assert.NotNil(t, childSpan)
 	assert.NotNil(t, childSpan.Context().(spanContext).span)
-	assert.False(t, childSpan.Context().(spanContext).span.IsTracing())
+	assert.False(t, childSpan.Context().(spanContext).span.IsReporting())
 
 	// valid trace ID, no sampled flag
 	tvCarrier := opentracing.TextMapCarrier{}

@@ -44,7 +44,7 @@ type Span interface {
 	// concurrent overlapping child Spans.
 	SetAsync(bool)
 
-	IsTracing() bool
+	IsReporting() bool
 	addChildEdge(traceview.Context)
 	addProfile(Profile)
 	tvContext() traceview.Context
@@ -207,7 +207,7 @@ func (s nullSpan) AddEndArgs(args ...interface{})                        {}
 func (s nullSpan) Error(class, msg string)                               {}
 func (s nullSpan) Err(err error)                                         {}
 func (s nullSpan) Info(args ...interface{})                              {}
-func (s nullSpan) IsTracing() bool                                       { return false }
+func (s nullSpan) IsReporting() bool                                     { return false }
 func (s nullSpan) addChildEdge(traceview.Context)                        {}
 func (s nullSpan) addProfile(Profile)                                    {}
 func (s nullSpan) ok() bool                                              { return false }
@@ -222,7 +222,7 @@ func (s *span) ok() bool {
 	defer s.lock.RUnlock()
 	return s != nil && !s.ended
 }
-func (s *span) IsTracing() bool              { return s.ok() }
+func (s *span) IsReporting() bool            { return s.ok() }
 func (s *span) tvContext() traceview.Context { return s.tvCtx }
 
 // addChildEdge keeps track of edges to closed child spans

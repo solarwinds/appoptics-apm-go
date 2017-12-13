@@ -74,12 +74,12 @@ func TestNullSpan(t *testing.T) {
 
 	ctx := NewContext(context.Background(), NewTrace("TestNullSpan")) // reports event
 	l1, ctxL := BeginSpan(ctx, "L1")                                  // reports event
-	assert.True(t, l1.IsTracing())
+	assert.True(t, l1.IsReporting())
 	assert.Equal(t, l1.MetadataString(), MetadataString(ctxL))
 	assert.Len(t, l1.MetadataString(), 60)
 
 	l1.End() // reports event
-	assert.False(t, l1.IsTracing())
+	assert.False(t, l1.IsReporting())
 	assert.Empty(t, l1.MetadataString())
 
 	p1 := l1.BeginProfile("P2") // try to start profile after end: no effect
@@ -87,7 +87,7 @@ func TestNullSpan(t *testing.T) {
 
 	c1 := l1.BeginSpan("C1") // child after parent ended
 	assert.IsType(t, c1, nullSpan{})
-	assert.False(t, c1.IsTracing())
+	assert.False(t, c1.IsReporting())
 	assert.False(t, c1.IsSampled())
 	assert.False(t, c1.ok())
 	assert.Empty(t, c1.MetadataString())
