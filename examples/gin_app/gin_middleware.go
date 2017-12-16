@@ -18,7 +18,8 @@ func Tracer() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		t, w := tv.TraceFromHTTPRequestResponse("gin", c.Writer, c.Request)
 		c.Writer = &ginResponseWriter{w.(*tv.HTTPResponseWriter), c.Writer}
-		defer t.End("Controller", ginLayerName, "Action", c.HandlerName())
+		t.SetControllerAction(ginLayerName, c.HandlerName())
+		defer t.End()
 		// create a context.Context and bind it to the gin.Context
 		c.Set(ginContextKey, tv.NewContext(context.Background(), t))
 		// Pass to the next handler
