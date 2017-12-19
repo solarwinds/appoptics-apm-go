@@ -469,7 +469,10 @@ func getContainerID() string {
 		// A typical line returned by cat /proc/self/cgroup (that's why we expect 3 tokens):
 		// 9:devices:/docker/40188af19439697187e3f60b933e7e37c5c41035f4c0b266a51c86c5a0074b25
 		if len(tokens) == 3 {
-			cachedContainerID = tokens[2]
+			// make sure the string length matches that of a container ID
+			if len(tokens[2]) == 64 {
+				cachedContainerID = tokens[2]
+			}
 		}
 	}
 
