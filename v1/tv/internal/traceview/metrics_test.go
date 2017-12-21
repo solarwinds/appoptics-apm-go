@@ -60,10 +60,6 @@ func TestAppendIPAddresses(t *testing.T) {
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
 
-	assert.NotZero(t, m["IPAddresses"])
-	bsonIPs := m["IPAddresses"].([]interface{})
-	assert.NotZero(t, len(bsonIPs))
-
 	ifaces, _ := net.Interfaces()
 	var addresses []string
 
@@ -76,10 +72,16 @@ func TestAppendIPAddresses(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, len(bsonIPs), len(addresses))
+	if m["IPAddresses"] != nil {
+		bsonIPs := m["IPAddresses"].([]interface{})
+		assert.NotZero(t, len(bsonIPs))
+		assert.Equal(t, len(bsonIPs), len(addresses))
 
-	for i := 0; i < len(bsonIPs); i++ {
-		assert.Equal(t, bsonIPs[i], addresses[i])
+		for i := 0; i < len(bsonIPs); i++ {
+			assert.Equal(t, bsonIPs[i], addresses[i])
+		}
+	} else {
+		assert.Equal(t, 0, len(addresses))
 	}
 }
 
@@ -88,10 +90,6 @@ func TestAppendMACAddresses(t *testing.T) {
 	appendMACAddresses(bbuf)
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
-
-	assert.NotZero(t, m["MACAddresses"])
-	bsonMACs := m["MACAddresses"].([]interface{})
-	assert.NotZero(t, len(bsonMACs))
 
 	ifaces, _ := net.Interfaces()
 	var macs []string
@@ -104,10 +102,16 @@ func TestAppendMACAddresses(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, len(bsonMACs), len(macs))
+	if m["MACAddresses"] != nil {
+		bsonMACs := m["MACAddresses"].([]interface{})
+		assert.NotZero(t, len(bsonMACs))
+		assert.Equal(t, len(bsonMACs), len(macs))
 
-	for i := 0; i < len(bsonMACs); i++ {
-		assert.Equal(t, bsonMACs[i], macs[i])
+		for i := 0; i < len(bsonMACs); i++ {
+			assert.Equal(t, bsonMACs[i], macs[i])
+		}
+	} else {
+		assert.Equal(t, 0, len(macs))
 	}
 }
 
