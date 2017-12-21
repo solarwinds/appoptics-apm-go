@@ -388,6 +388,9 @@ func appendMACAddresses(bbuf *bsonBuffer) {
 
 	start := bsonAppendStartArray(bbuf, "MACAddresses")
 	for _, mac := range macs {
+		if mac == "" {
+			continue
+		}
 		i := 0
 		bsonAppendString(bbuf, strconv.Itoa(i), mac)
 		i++

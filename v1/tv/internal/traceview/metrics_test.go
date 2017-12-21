@@ -107,9 +107,6 @@ func TestAppendMACAddresses(t *testing.T) {
 
 	if m["MACAddresses"] != nil {
 		bsonMACs := m["MACAddresses"].([]interface{})
-		for i := 0; i < len(bsonMACs); i++ {
-			fmt.Println(bsonMACs[i])
-		}
 		assert.NotZero(t, len(bsonMACs))
 		assert.Equal(t, len(bsonMACs), len(macs))
 
