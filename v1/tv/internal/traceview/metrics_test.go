@@ -97,7 +97,10 @@ func TestAppendMACAddresses(t *testing.T) {
 		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		if mac := iface.HardwareAddr.String(); mac != "" && isPhysicalInterface(iface.Name) {
+		if !isPhysicalInterface(iface.Name) {
+			continue
+		}
+		if mac := iface.HardwareAddr.String(); mac != "" {
 			macs = append(macs, iface.HardwareAddr.String())
 		}
 	}
