@@ -67,20 +67,14 @@ func addHostMetrics(bbuf *bsonBuffer, index *int) {
 
 // isPhysicalInterface returns true if the specified interface name is physical
 func isPhysicalInterface(ifname string) bool {
-	fmt.Println("isPhysicalInterface 01", ifname)
 	fn := "/sys/class/net/" + ifname
 	link, err := os.Readlink(fn)
-	fmt.Println("isPhysicalInterface 02")
 	if err != nil {
 		OboeLog(ERROR, fmt.Sprintf("cannot readlink %s", fn))
-		fmt.Println("isPhysicalInterface 03")
 		return false
 	}
-	fmt.Println("isPhysicalInterface 04")
 	if strings.Contains(link, "/virtual/") {
-		fmt.Println("isPhysicalInterface 05")
 		return false
 	}
-	fmt.Println("isPhysicalInterface 06")
 	return true
 }
