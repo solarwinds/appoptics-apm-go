@@ -349,15 +349,32 @@ func appendIPAddresses(bbuf *bsonBuffer) {
 
 // gets the system's IP addresses
 func getIPAddresses() []string {
-	addrs, err := net.InterfaceAddrs()
+	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil
 	}
 
 	var addresses []string
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			addresses = append(addresses, ipnet.IP.String())
+
+	for _, iface := range ifaces {
+		// skip over local interface
+		if iface.Name == "lo" {
+			continue
+		}
+		// skip over virtual interface
+		if physical := isPhysicalInterface(iface.Name); !physical {
+			continue
+		}
+		// get unicast addresses associated with the current network interface
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				addresses = append(addresses, ipnet.IP.String())
+			}
 		}
 	}
 
@@ -389,6 +406,10 @@ func getMACAddressList() string {
 	if err == nil {
 		for _, iface := range ifaces {
 			if iface.Flags&net.FlagLoopback != 0 {
+				continue
+			}
+			// skip over virtual interface
+			if physical := isPhysicalInterface(iface.Name); !physical {
 				continue
 			}
 			if mac := iface.HardwareAddr.String(); mac != "" {

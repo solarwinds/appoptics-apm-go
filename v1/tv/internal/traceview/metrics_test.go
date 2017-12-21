@@ -64,23 +64,22 @@ func TestAppendIPAddresses(t *testing.T) {
 	bsonIPs := m["IPAddresses"].([]interface{})
 	assert.NotZero(t, len(bsonIPs))
 
-	addrs, _ := net.InterfaceAddrs()
+	ifaces, _ := net.Interfaces()
 	var addresses []string
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			addresses = append(addresses, ipnet.IP.String())
+
+	for _, iface := range ifaces {
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && isPhysicalInterface(iface.Name) {
+				addresses = append(addresses, ipnet.IP.String())
+			}
 		}
 	}
 
-	for _, ip1 := range bsonIPs {
-		found := false
-		for _, ip2 := range addresses {
-			if ip1 == ip2 {
-				found = true
-				break
-			}
-		}
-		assert.True(t, found)
+	assert.Equal(t, len(bsonIPs), len(addresses))
+
+	for i := 0; i < len(bsonIPs); i++ {
+		assert.Equal(t, bsonIPs[i], addresses[i])
 	}
 }
 
@@ -100,20 +99,15 @@ func TestAppendMACAddresses(t *testing.T) {
 		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		if mac := iface.HardwareAddr.String(); mac != "" {
+		if mac := iface.HardwareAddr.String(); mac != "" && isPhysicalInterface(iface.Name) {
 			macs = append(macs, iface.HardwareAddr.String())
 		}
 	}
 
-	for _, mac1 := range bsonMACs {
-		found := false
-		for _, mac2 := range macs {
-			if mac1 == mac2 {
-				found = true
-				break
-			}
-		}
-		assert.True(t, found)
+	assert.Equal(t, len(bsonMACs), len(macs))
+
+	for i := 0; i < len(bsonMACs); i++ {
+		assert.Equal(t, bsonMACs[i], macs[i])
 	}
 }
 

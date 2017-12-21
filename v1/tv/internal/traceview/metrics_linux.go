@@ -3,6 +3,7 @@
 package traceview
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -62,4 +63,18 @@ func addHostMetrics(bbuf *bsonBuffer, index *int) {
 			}
 		}
 	}
+}
+
+// isPhysicalInterface returns true if the specified interface name is physical
+func isPhysicalInterface(ifname string) bool {
+	fn := "/sys/class/net/" + ifname
+	link, err := os.Readlink(fn)
+	if err != nil {
+		OboeLog(ERROR, fmt.Sprintf("cannot readlink %s", fn))
+		return false
+	}
+	if strings.Contains(link, "/virtual/") {
+		return false
+	}
+	return true
 }
