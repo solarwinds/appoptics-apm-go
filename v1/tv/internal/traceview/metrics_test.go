@@ -94,15 +94,20 @@ func TestAppendMACAddresses(t *testing.T) {
 	ifaces, _ := net.Interfaces()
 	var macs []string
 	for _, iface := range ifaces {
+		fmt.Println("01", iface.Name)
 		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
+		fmt.Println("02")
 		if !isPhysicalInterface(iface.Name) {
 			continue
 		}
+		fmt.Println("03")
 		if mac := iface.HardwareAddr.String(); mac != "" {
+			fmt.Println("04")
 			macs = append(macs, iface.HardwareAddr.String())
 		}
+		fmt.Println("05")
 	}
 
 	if m["MACAddresses"] != nil {
