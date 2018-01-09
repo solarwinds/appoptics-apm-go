@@ -1,3 +1,4 @@
+// +build go1.7
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 
 package tv_test
@@ -29,6 +30,11 @@ func handlerDelay200(w http.ResponseWriter, r *http.Request) { time.Sleep(httpSp
 func handlerDelay503(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(503)
 	time.Sleep(httpSpanSleep)
+}
+func handlerDoubleWrapped(w http.ResponseWriter, r *http.Request) {
+	t, w, r := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
+	tv.NewContext(context.Background(), t)
+	defer t.End()
 }
 
 func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
@@ -145,11 +151,19 @@ func TestHTTPSpan(t *testing.T) {
 	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
 }
 
+func TestSingleHTTPSpan(t *testing.T) {
+	r := traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true)) // set up test reporter
+	httpTest(handlerDoubleWrapped)
+	r.Close(1)
+
+	assert.Equal(t, 1, len(r.StatusBufs))
+}
+
 // testServer tests creating a span/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
 func testServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// create span from incoming HTTP Request headers, if trace exists
-		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", w, req)
+		tr, w, req := tv.TraceFromHTTPRequestResponse("myHandler", w, req)
 		defer tr.End()
 
 		tr.AddEndArgs("NotReported") // odd-length args, should have no effect
@@ -168,7 +182,7 @@ func testServer(t *testing.T, list net.Listener) {
 func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(func(writer http.ResponseWriter, req *http.Request) {
 		// create span from incoming HTTP Request headers, if trace exists
-		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
+		tr, w, req := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
 		defer tr.End()
 
 		t.Logf("server: got request %v", req)
@@ -530,7 +544,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 // based on examples/distributed_app
 func AliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	t, w, r := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
 	ctx := tv.NewContext(context.Background(), t)
 	defer t.End()
 
@@ -566,7 +580,7 @@ func AliceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func BobHandler(w http.ResponseWriter, r *http.Request) {
-	t, w := tv.TraceFromHTTPRequestResponse("bobHandler", w, r)
+	t, w, r := tv.TraceFromHTTPRequestResponse("bobHandler", w, r)
 	defer t.End()
 	w.Write([]byte(`{"result":"hello from bob"}`))
 }
@@ -612,7 +626,7 @@ func TestDistributedApp(t *testing.T) {
 
 func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	t, w, r := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
 	ctx := tv.NewContext(context.Background(), t)
 	t.SetAsync(true)
 	defer t.End()

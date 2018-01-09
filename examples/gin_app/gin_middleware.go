@@ -16,7 +16,7 @@ const (
 
 func Tracer() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		t, w := tv.TraceFromHTTPRequestResponse("gin", c.Writer, c.Request)
+		t, w, _ := tv.TraceFromHTTPRequestResponse("gin", c.Writer, c.Request)
 		c.Writer = &ginResponseWriter{w.(*tv.HTTPResponseWriter), c.Writer}
 		t.SetControllerAction(ginLayerName, c.HandlerName())
 		defer t.End()

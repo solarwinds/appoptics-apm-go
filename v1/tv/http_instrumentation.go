@@ -1,9 +1,11 @@
+// +build go1.7
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 // AppOptics HTTP instrumentation for Go
 
 package tv
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -16,6 +18,9 @@ import (
 // the distributed tracing context across HTTP requests.
 const HTTPHeaderName = "X-Trace"
 const httpHandlerSpanName = "http.HandlerFunc"
+
+// key used for HTTP span to indicate a new context
+const httpSpanKey = "github.com/librato/go-traceview/v1/tv.HTTPSpan"
 
 // HTTPHandler wraps an http.HandlerFunc with entry / exit events,
 // returning a new handler that can be used in its place.
@@ -32,7 +37,7 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 	}
 	// return wrapped HTTP request handler
 	return func(w http.ResponseWriter, r *http.Request) {
-		t, w := TraceFromHTTPRequestResponse(httpHandlerSpanName, w, r)
+		t, w, r := TraceFromHTTPRequestResponse(httpHandlerSpanName, w, r)
 		defer t.End(endArgs...)
 
 		defer func() { // catch and report panic, if one occurs
@@ -46,20 +51,31 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 	}
 }
 
-// TraceFromHTTPRequestResponse returns a Trace and a wrapped http.ResponseWriter, given a
-// http.ResponseWriter and http.Request. If a distributed trace is described in the HTTP request
-// headers, the trace's context will be continued. The returned http.ResponseWriter should be used
-// in place of the one passed into this function in order to observe the response's headers and
-// status code.
+// TraceFromHTTPRequestResponse returns a Trace, a wrapped http.ResponseWriter, and a modified
+// http.Request, given a http.ResponseWriter and http.Request. If a distributed trace is described
+// in the HTTP request headers, the trace's context will be continued. The returned http.ResponseWriter
+// should be used in place of the one passed into this function in order to observe the response's
+// headers and status code.
 //   func myHandler(w http.ResponseWriter, r *http.Request) {
-//       tr, w := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
+//       tr, w, r := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
 //       defer tr.End()
 //       // ...
 //   }
-func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter) {
-	t := traceFromHTTPRequest(spanName, r)
+func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter,
+	*http.Request) {
+
+	// determine if this is a new context, if so set flag isNewcontext to start a new HTTP Span
+	isNewcontext := false
+	ctx := r.Context()
+	if b, ok := ctx.Value(httpSpanKey).(bool); !ok || !b {
+		// save KV to ensure future calls won't treat as new context
+		r = r.WithContext(context.WithValue(ctx, httpSpanKey, true))
+		isNewcontext = true
+	}
+
+	t := traceFromHTTPRequest(spanName, r, isNewcontext)
 	wrapper := newResponseWriter(w, t) // wrap writer with response-observing writer
-	return t, wrapper
+	return t, wrapper, r
 }
 
 // HTTPResponseWriter observes an http.ResponseWriter when WriteHeader() or Write() is called to
@@ -111,10 +127,9 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 
 // traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
-func traceFromHTTPRequest(spanName string, r *http.Request) Trace {
+func traceFromHTTPRequest(spanName string, r *http.Request, isNewcontext bool) Trace {
 	// start trace, passing in metadata header
-	header := r.Header.Get(HTTPHeaderName)
-	t := NewTraceFromID(spanName, header, func() KVMap {
+	t := NewTraceFromID(spanName, r.Header.Get(HTTPHeaderName), func() KVMap {
 		return KVMap{
 			"Method":       r.Method,
 			"HTTP-Host":    r.Host,
@@ -125,7 +140,7 @@ func traceFromHTTPRequest(spanName string, r *http.Request) Trace {
 	})
 	// set the start time and method for metrics collection
 	t.SetMethod(r.Method)
-	if header == "" {
+	if isNewcontext {
 		t.SetStartTime(time.Now())
 	}
 	// update incoming metadata in request headers for any downstream readers
