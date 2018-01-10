@@ -102,7 +102,7 @@ func TestTracer(t *testing.T) {
 
 	wg.Wait()
 	r.Close(4)
-	g.AssertGraph(t, r.Bufs, 4, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 4, g.AssertNodeMap{
 		{"getInput", "entry"}: {},
 		{"getInput", "exit"}: {Edges: g.Edges{{"getInput", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, testTextVal, n.Map[otLogPrefix+testTextKey])

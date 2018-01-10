@@ -4,6 +4,7 @@
 package graphtest
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"math"
@@ -34,6 +35,7 @@ type Node struct {
 	OpID         string
 	Edges        []string
 	Map          map[string]interface{}
+	Flag         uint8
 }
 type eventGraph map[string]Node
 
@@ -57,7 +59,13 @@ func buildGraph(t *testing.T, bufs [][]byte) eventGraph {
 			case "Label":
 				n.Label = v.Value.(string)
 			case "X-Trace":
-				n.OpID = v.Value.(string)[42:]
+				n.OpID = v.Value.(string)[42:58]
+
+				buf := v.Value.(string)[58:60]
+				flag := make([]byte, 1)
+				if _, err := hex.Decode(flag, []byte(buf)); err != nil {
+					n.Flag = buf[0]
+				}
 				fallthrough
 			default:
 				n.Map[v.Name] = v.Value

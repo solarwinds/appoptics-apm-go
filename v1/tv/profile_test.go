@@ -22,7 +22,7 @@ func TestBeginProfile(t *testing.T) {
 	testProf(ctx)
 
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		{"testSpan", "entry"}: {},
 		{"", "profile_entry"}: {Edges: g.Edges{{"testSpan", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
@@ -47,7 +47,7 @@ func TestBeginSpanProfile(t *testing.T) {
 	testSpanProf(ctx)
 
 	r.Close(6)
-	g.AssertGraph(t, r.Bufs, 6, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 6, g.AssertNodeMap{
 		{"testSpan", "entry"}: {},
 		{"L1", "entry"}:       {Edges: g.Edges{{"testSpan", "entry"}}},
 		{"", "profile_entry"}: {Edges: g.Edges{{"L1", "entry"}}, Callback: func(n g.Node) {
@@ -72,7 +72,7 @@ func TestNoTraceBeginProfile(t *testing.T) {
 	ctx := context.Background()
 	testProf(ctx)
 	r.Close(0)
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 }
 func TestTraceErrorBeginProfile(t *testing.T) {
 	// simulate reporter error on second event: prevents Span from being reported
@@ -80,7 +80,7 @@ func TestTraceErrorBeginProfile(t *testing.T) {
 	r.ErrorEvents = map[int]bool{1: true}
 	testProf(tv.NewContext(context.Background(), tv.NewTrace("testSpan")))
 	r.Close(1)
-	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{
 		{"testSpan", "entry"}: {},
 	})
 }
@@ -90,7 +90,7 @@ func TestNoTraceBeginSpanProfile(t *testing.T) {
 	ctx := context.Background()
 	testSpanProf(ctx)
 	r.Close(0)
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 }
 func TestTraceErrorBeginSpanProfile(t *testing.T) {
 	// simulate reporter error on second event: prevents nested Span & Profile spans
@@ -98,7 +98,7 @@ func TestTraceErrorBeginSpanProfile(t *testing.T) {
 	r.ErrorEvents = map[int]bool{1: true}
 	testSpanProf(tv.NewContext(context.Background(), tv.NewTrace("testSpan")))
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		{"testSpan", "entry"}: {},
 		{"testSpan", "exit"}:  {Edges: g.Edges{{"testSpan", "entry"}}},
 	})

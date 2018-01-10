@@ -18,7 +18,9 @@ func TestContext(t *testing.T) {
 	ctx := context.Background()
 	assert.Empty(t, MetadataString(ctx))
 	tr := NewTrace("test").(*tvTrace)
+
 	xt := tr.tvCtx.MetadataString()
+	//	assert.True(t, IsSampled(ctx), "%T", tr.tvCtx)
 
 	var traceKey = struct{}{}
 
@@ -38,7 +40,7 @@ func TestContext(t *testing.T) {
 	assert.Equal(t, ctx4.Value(traceKey), tr3)
 
 	r.Close(1)
-	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{{"test", "entry"}: {}})
+	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{{"test", "entry"}: {}})
 }
 
 func TestTraceFromContext(t *testing.T) {
@@ -47,13 +49,23 @@ func TestTraceFromContext(t *testing.T) {
 	ctx := NewContext(context.Background(), tr)
 	trFC := TraceFromContext(ctx)
 	assert.Equal(t, tr.ExitMetadata(), trFC.ExitMetadata())
-	assert.Len(t, tr.ExitMetadata(), 58)
+	assert.Len(t, tr.ExitMetadata(), 60)
 
 	trN := TraceFromContext(context.Background()) // no trace bound to this ctx
 	assert.Len(t, trN.ExitMetadata(), 0)
 
 	r.Close(1)
-	g.AssertGraph(t, r.Bufs, 1, g.AssertNodeMap{{"TestTFC", "entry"}: {}})
+	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{{"TestTFC", "entry"}: {}})
+}
+
+func TestContextIsSampled(t *testing.T) {
+	// no context: not sampled
+	assert.False(t, IsSampled(context.Background()))
+	// sampled context
+	_ = traceview.SetTestReporter()
+	tr := NewTrace("TestTFC")
+	ctx := NewContext(context.Background(), tr)
+	assert.True(t, IsSampled(ctx))
 }
 
 func TestNullSpan(t *testing.T) {
@@ -62,12 +74,12 @@ func TestNullSpan(t *testing.T) {
 
 	ctx := NewContext(context.Background(), NewTrace("TestNullSpan")) // reports event
 	l1, ctxL := BeginSpan(ctx, "L1")                                  // reports event
-	assert.True(t, l1.IsTracing())
+	assert.True(t, l1.IsReporting())
 	assert.Equal(t, l1.MetadataString(), MetadataString(ctxL))
-	assert.Len(t, l1.MetadataString(), 58)
+	assert.Len(t, l1.MetadataString(), 60)
 
 	l1.End() // reports event
-	assert.False(t, l1.IsTracing())
+	assert.False(t, l1.IsReporting())
 	assert.Empty(t, l1.MetadataString())
 
 	p1 := l1.BeginProfile("P2") // try to start profile after end: no effect
@@ -75,7 +87,8 @@ func TestNullSpan(t *testing.T) {
 
 	c1 := l1.BeginSpan("C1") // child after parent ended
 	assert.IsType(t, c1, nullSpan{})
-	assert.False(t, c1.IsTracing())
+	assert.False(t, c1.IsReporting())
+	assert.False(t, c1.IsSampled())
 	assert.False(t, c1.ok())
 	assert.Empty(t, c1.MetadataString())
 	c1.addChildEdge(l1.tvContext())
@@ -86,7 +99,7 @@ func TestNullSpan(t *testing.T) {
 	assert.IsType(t, reflect.TypeOf(nctx.Copy()).Elem().Name(), "nullContext")
 
 	r.Close(3)
-	g.AssertGraph(t, r.Bufs, 3, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 3, g.AssertNodeMap{
 		{"TestNullSpan", "entry"}: {},
 		{"L1", "entry"}:           {Edges: g.Edges{{"TestNullSpan", "entry"}}},
 		{"L1", "exit"}:            {Edges: g.Edges{{"L1", "entry"}}},

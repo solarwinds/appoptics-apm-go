@@ -1,7 +1,6 @@
 language: go
 
 go:
-  - 1.6
   - 1.7
   - 1.8
   - 1.9
@@ -9,7 +8,7 @@ go:
 env:
   global:
     - GO15VENDOREXPERIMENT=1
-    - APPOPTICS_DEBUG_LEVEL=0
+    - APPOPTICS_DEBUG_LEVEL=1
         
 install:
   - go get golang.org/x/tools/cmd/cover

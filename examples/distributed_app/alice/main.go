@@ -26,7 +26,7 @@ var urls = []string{
 
 func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	t, w, r := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
 	ctx := tv.NewContext(context.Background(), t)
 	defer t.End()
 	log.Printf("%s %s", r.Method, r.URL)
@@ -64,7 +64,7 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 
 func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	t, w, r := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
 	ctx := tv.NewContext(context.Background(), t)
 	t.SetAsync(true)
 	defer t.End()

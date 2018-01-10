@@ -35,6 +35,42 @@ const (
 	eventHeader = "1"
 )
 
+// enums used by sampling and tracing settings
+type tracingMode int
+type settingType int
+type settingFlag uint16
+type sampleSource int
+
+const (
+	TRACE_NEVER tracingMode = iota
+	TRACE_ALWAYS
+)
+
+const (
+	TYPE_DEFAULT settingType = iota
+	TYPE_LAYER
+)
+
+const (
+	FLAG_OK                    settingFlag = 0x0
+	FLAG_INVALID               settingFlag = 0x1
+	FLAG_OVERRIDE              settingFlag = 0x2
+	FLAG_SAMPLE_START          settingFlag = 0x4
+	FLAG_SAMPLE_THROUGH        settingFlag = 0x8
+	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 0x10
+)
+
+const (
+	SAMPLE_SOURCE_NONE    sampleSource = 0
+	SAMPLE_SOURCE_FILE    sampleSource = 1
+	SAMPLE_SOURCE_DEFAULT sampleSource = 2
+	SAMPLE_SOURCE_LAYER   sampleSource = 3
+)
+
+const (
+	maxSamplingRate = 1000000
+)
+
 func oboeEventInit(evt *event, md *oboeMetadata) error {
 	if evt == nil || md == nil {
 		return errors.New("oboeEventInit got nil args")
@@ -50,6 +86,7 @@ func oboeEventInit(evt *event, md *oboeMetadata) error {
 	if err := evt.metadata.SetRandomOpID(); err != nil {
 		return err
 	}
+	evt.metadata.flags = md.flags
 
 	// Buffer initialization
 	bsonBufferInit(&evt.bbuf)
@@ -163,6 +200,8 @@ func (e *event) AddKV(key, value interface{}) error {
 		if k == EdgeKey {
 			e.AddEdge(v)
 		}
+	case sampleSource:
+		e.AddInt(k, int(v))
 
 	// allow reporting of pointers to basic types as well (for delayed evaluation)
 	case *string:
@@ -227,12 +266,20 @@ func (e *event) AddKV(key, value interface{}) error {
 }
 
 // Reports event using specified Reporter
-func (e *event) ReportUsing(c *oboeContext, r reporter) error {
-	return r.reportEvent(c, e)
+func (e *event) ReportUsing(c *oboeContext, r reporter, channel reporterChannel) error {
+	if channel == EVENTS {
+		if e.metadata.isSampled() {
+			return r.reportEvent(c, e)
+		}
+	} else if channel == METRICS {
+		return r.reportStatus(c, e)
+	}
+	return nil
 }
 
-// Reports event using default (UDP) Reporter
-func (e *event) Report(c *oboeContext) error { return e.ReportUsing(c, thisReporter) }
+// Reports event using default Reporter
+func (e *event) Report(c *oboeContext) error       { return e.ReportUsing(c, globalReporter, EVENTS) }
+func (e *event) ReportStatus(c *oboeContext) error { return e.ReportUsing(c, globalReporter, METRICS) }
 
 // Report event using Context interface
 func (e *event) ReportContext(c Context, addCtxEdge bool, args ...interface{}) error {

@@ -44,7 +44,7 @@ func (l *badLimitedReader) Read(p []byte) (n int, err error) {
 }
 
 func TestBinaryExtract(t *testing.T) {
-	_ = traceview.SetTestReporter()
+	_ = traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true))
 	tr := NewTracer()
 
 	// test invalid wire data
@@ -107,7 +107,7 @@ type badWriter struct{}
 func (r badWriter) Write(p []byte) (n int, err error) { return 0, errors.New("write error") }
 
 func TestBinaryInject(t *testing.T) {
-	_ = traceview.SetTestReporter()
+	_ = traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true))
 	tr := NewTracer()
 	span := tr.StartSpan("op")
 
@@ -132,7 +132,7 @@ func TestBinaryInject(t *testing.T) {
 }
 
 func TestTextMapExtract(t *testing.T) {
-	_ = traceview.SetTestReporter()
+	_ = traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true))
 	tr := NewTracer()
 	span := tr.StartSpan("op")
 	textCarrier := opentracing.TextMapCarrier{}
@@ -165,7 +165,7 @@ func TestTextMapExtract(t *testing.T) {
 	childSpan := tr.StartSpan("op2", opentracing.ChildOf(ctx))
 	assert.NotNil(t, childSpan)
 	assert.NotNil(t, childSpan.Context().(spanContext).span)
-	assert.False(t, childSpan.Context().(spanContext).span.IsTracing())
+	assert.False(t, childSpan.Context().(spanContext).span.IsReporting())
 
 	// valid trace ID, no sampled flag
 	tvCarrier := opentracing.TextMapCarrier{}

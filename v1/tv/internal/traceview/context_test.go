@@ -37,13 +37,13 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, 0, pkcnt)
 	assert.Error(t, pkerr)
 	pkcnt, pkerr = md1.Pack(buf) // pack valid md into valid buf
-	assert.Equal(t, 29, pkcnt)
+	assert.Equal(t, 30, pkcnt)
 	assert.NoError(t, pkerr)
 
 	// make metadata buf with bad header
 	badVer := make([]byte, len(buf))
 	copy(badVer, buf)
-	badVer[0] = byte(0x2b)
+	badVer[0] = byte(0x0b)
 
 	// oboe_metadata_unpack
 	var mdUnpack oboeMetadata
@@ -65,11 +65,11 @@ func TestMetadata(t *testing.T) {
 	bufS := make([]byte, 128)          // buffer to pack
 	pkcnt, pkerr = mdS.Pack(bufS)
 	assert.NoError(t, pkerr)
-	assert.Equal(t, (1 + shortTaskLen + 8), pkcnt) // pack buf
+	assert.Equal(t, (2 + shortTaskLen + 8), pkcnt) // pack buf
 	mdSStr, err := mdS.ToString()                  // encode as string
 	assert.NoError(t, err)
 	t.Logf("mdS: %s", mdSStr)                   // log 50 char hex string
-	assert.Len(t, mdSStr, (1+shortTaskLen+8)*2) // check len=(1 + 12 + 8)*2
+	assert.Len(t, mdSStr, (2+shortTaskLen+8)*2) // check len=(1 + 12 + 8)*2
 	mdSU.taskLen = shortTaskLen                 // override target MD task len
 	assert.NoError(t, mdSU.Unpack(bufS))        // unpack
 	assert.Equal(t, shortTaskLen, mdSU.taskLen) // verify target MD task len
@@ -82,14 +82,14 @@ func TestMetadata(t *testing.T) {
 
 	// oboe_metadata_fromstr
 	var md2 oboeMetadata
-	nullMd := "1B00000000000000000000000000000000000000000000000000000000"
+	nullMd := "2B0000000000000000000000000000000000000000000000000000000000"
 	assert.NotEqual(t, md1Str, nullMd)                          // ensure md1 string is not null
 	md2.Init()                                                  // init empty md2
 	assert.Equal(t, nullMd, md2.String())                       // empty md produces null md string
 	assert.Error(t, mdNil.FromString(md1Str))                   // unpack str to nil md
 	assert.Error(t, md2.FromString("1BA70"))                    // load md2 from invalid str
 	assert.Equal(t, nullMd, md2.String())                       // no change to md2 from previous
-	assert.Error(t, md2.FromString("2"+md1Str[1:]))             // load md2 from bad ver
+	assert.Error(t, md2.FromString("1"+md1Str[1:]))             // load md2 from bad ver
 	assert.Equal(t, nullMd, md2.String())                       // no change to md2 from previous
 	assert.Error(t, md2.FromString(string(make([]byte, 2048)))) // load md2 from too-long string
 	assert.Equal(t, nullMd, md2.String())                       // no change to md2 from previous
@@ -130,6 +130,20 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, len(ctx.metadata.ids.taskID), ctx.metadata.taskLen)
 	assert.Equal(t, len(ctx.metadata.ids.opID), ctx.metadata.opLen)
 	assert.Equal(t, oboeMetadataStringLen, len(cctx.MetadataString()))
+
+	// isSampled()
+	var md3 oboeMetadata
+	md3.FromString(md1Str)
+	ctx3 := &oboeContext{md3}
+	ctx3.SetSampled(true)
+	assert.True(t, ctx3.IsSampled())
+	assert.Equal(t, "01", ctx3.MetadataString()[58:])
+	ctx3.SetSampled(false)
+	assert.False(t, ctx3.IsSampled())
+	assert.Equal(t, "00", ctx3.MetadataString()[58:])
+	ctx3.SetSampled(true)
+	assert.True(t, ctx3.IsSampled())
+	assert.Equal(t, "01", ctx3.MetadataString()[58:])
 }
 
 type errorReader struct {
@@ -150,28 +164,28 @@ func TestMetadataRandom(t *testing.T) {
 	r := SetTestReporter()
 	// if RNG fails, don't report events/spans associated with RNG failures.
 	randReader = &errorReader{failOn: map[int]bool{0: true}}
-	ctx := newContext()
+	ctx := newContext(true)
 	assert.IsType(t, &nullContext{}, ctx)
-	assert.Empty(t, r.Bufs) // no events reported
+	assert.Empty(t, r.EventBufs) // no events reported
 
 	// RNG failure on second call (for metadata op ID)
 	randReader = &errorReader{failOn: map[int]bool{1: true}}
-	ctx2 := newContext()
+	ctx2 := newContext(true)
 	assert.IsType(t, &nullContext{}, ctx2)
-	assert.Empty(t, r.Bufs) // no events reported
+	assert.Empty(t, r.EventBufs) // no events reported
 
 	// RNG failure on third call (for event op ID)
 	randReader = &errorReader{failOn: map[int]bool{2: true}}
-	ctx3 := newContext()
+	ctx3 := newContext(true)
 	assert.IsType(t, ctx3, &oboeContext{}) // context created successfully
 	e3 := ctx3.NewEvent(LabelEntry, "randErrLayer", false)
 	assert.IsType(t, &nullEvent{}, e3)
-	assert.Empty(t, r.Bufs) // no events reported
+	assert.Empty(t, r.EventBufs) // no events reported
 
 	// RNG failure on valid context while trying to report an event
 	randReader = &errorReader{failOn: map[int]bool{0: true}}
 	assert.Error(t, ctx3.(*oboeContext).reportEvent(LabelEntry, "randErrLayer", false))
-	assert.Empty(t, r.Bufs) // no events reported
+	assert.Empty(t, r.EventBufs) // no events reported
 
 	r.Close(0)
 	randReader = rand.Reader // set back to normal
@@ -179,8 +193,8 @@ func TestMetadataRandom(t *testing.T) {
 
 // newTestContext returns a fresh random *context with no events reported for use in unit tests.
 func newTestContext(t *testing.T) *oboeContext {
-	ctx := newContext()
-	assert.True(t, ctx.IsTracing())
+	ctx := newContext(true)
+	assert.True(t, ctx.IsSampled())
 	assert.IsType(t, ctx, &oboeContext{})
 	return ctx.(*oboeContext)
 }
@@ -198,7 +212,7 @@ func TestReportEventMap(t *testing.T) {
 		"intval": 333,
 	}))
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		{"myLayer", "entry"}: {},
 		{"myLayer", "info"}: {Edges: g.Edges{{"myLayer", "entry"}}, Callback: func(n g.Node) {
 			assert.EqualValues(t, 333, n.Map["intval"])
@@ -209,46 +223,64 @@ func TestReportEventMap(t *testing.T) {
 
 func TestNewContext(t *testing.T) {
 	r := SetTestReporter()
-	r.ShouldTrace = true
-	ctx, ok := NewContext("testBadMd", "hello", true, nil) // test invalid metadata string
-	assert.False(t, ok)
-	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
-	assert.Len(t, r.Bufs, 0) // no reporting
-	r.Close(0)
+
+	ctx, ok := NewContext("testBadMDSpan", "hello", true, nil) // test invalid metadata string
+	assert.True(t, ok)                                         // bad metadata string should get ignored
+	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
+
+	oldMD := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2A2203"
+	ctx, ok = NewContext("testOldMDSpan", oldMD, true, nil) // test old metadata string
+	assert.True(t, ok)                                      // old metadata string should get ignore
+	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
+
+	r.Close(2)
+
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+		{"testBadMDSpan", "entry"}: {},
+		{"testOldMDSpan", "entry"}: {},
+	})
 }
 
-func TestNullContext(t *testing.T) {
-	r := SetTestReporter()
-	r.ShouldTrace = false
+func TestNewContextTracingDisabled(t *testing.T) {
+	r := SetTestReporter(TestReporterDisableTracing()) // set up test reporter
 
-	ctx, ok := NewContext("testLayer", "", false, nil) // nullContext{}
-	assert.False(t, ok)
-	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "nullContext")
-	assert.False(t, ctx.IsTracing())
-	assert.Empty(t, ctx.MetadataString())
-	assert.False(t, ctx.Copy().IsTracing())
+	// create a valid context even if tracing is disabled
+	ctx, ok := NewContext("testLayer", "", false, nil)
+	assert.True(t, ok)
+	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
+	assert.False(t, ctx.IsSampled())
+	assert.False(t, ctx.Copy().IsSampled())
 	// reporting shouldn't work
 	assert.NoError(t, ctx.ReportEvent(LabelEntry, "testLayer"))
 	assert.NoError(t, ctx.ReportEventMap(LabelInfo, "testLayer", map[string]interface{}{"K": "V"}))
 	// try and make an event
 	e := ctx.NewEvent(LabelExit, "testLayer", false)
-	assert.Empty(t, e.MetadataString())
+	mdString := e.MetadataString()
+	assert.NotEmpty(t, mdString)
+	assert.Equal(t, mdString[len(mdString)-2:], "00")
 	assert.NoError(t, e.ReportContext(ctx, false))
-	assert.Len(t, r.Bufs, 0) // no reporting
+	assert.Len(t, r.EventBufs, 0) // no reporting
 
-	// try and report a real unrelated event on a null context
+	// try and report a real unrelated event
 	e2, err := newTestContext(t).newEvent(LabelEntry, "e2")
 	assert.NoError(t, err)
-	assert.NoError(t, e2.ReportContext(ctx, false))
-	assert.Len(t, r.Bufs, 0) // no reporting
+	assert.Error(t, e2.ReportContext(ctx, false))
+	assert.Len(t, r.EventBufs, 0) // no reporting
+
+	r.Close(0)
+}
+
+// TestNullContext asserts properties of nullContext structs.
+func TestNullContext(t *testing.T) {
+	r := SetTestReporter()
 
 	// shouldn't be able to create a trace if the entry event fails
-	r.ShouldTrace = true
 	r.ShouldError = true
 	ctxBad, ok := NewContext("testBadEntry", "", true, nil)
 	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
+	assert.False(t, ctxBad.IsSampled())
+	assert.Len(t, r.EventBufs, 0) // no reporting
 
-	assert.Len(t, r.Bufs, 0) // no reporting
 	r.Close(0)
 }

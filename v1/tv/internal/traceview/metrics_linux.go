@@ -3,6 +3,7 @@
 package traceview
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -35,7 +36,7 @@ func addHostMetrics(bbuf *bsonBuffer, index *int) {
 		memTotal := strings.Fields(s) // MemTotal: 7657668 kB
 		if len(memTotal) == 3 {
 			if total, err := strconv.Atoi(memTotal[1]); err == nil {
-				addMetricsValue(bbuf, index, "TotalRAM", total*1024)
+				addMetricsValue(bbuf, index, "TotalRAM", int64(total*1024))
 			}
 		}
 	}
@@ -45,7 +46,7 @@ func addHostMetrics(bbuf *bsonBuffer, index *int) {
 		memFree := strings.Fields(s) // MemFree: 161396 kB
 		if len(memFree) == 3 {
 			if free, err := strconv.Atoi(memFree[1]); err == nil {
-				addMetricsValue(bbuf, index, "FreeRAM", free*1024) // bytes
+				addMetricsValue(bbuf, index, "FreeRAM", int64(free*1024)) // bytes
 			}
 		}
 	}
@@ -62,4 +63,18 @@ func addHostMetrics(bbuf *bsonBuffer, index *int) {
 			}
 		}
 	}
+}
+
+// isPhysicalInterface returns true if the specified interface name is physical
+func isPhysicalInterface(ifname string) bool {
+	fn := "/sys/class/net/" + ifname
+	link, err := os.Readlink(fn)
+	if err != nil {
+		OboeLog(ERROR, fmt.Sprintf("cannot readlink %s", fn))
+		return false
+	}
+	if strings.Contains(link, "/virtual/") {
+		return false
+	}
+	return true
 }

@@ -3,7 +3,6 @@
 package tv
 
 import (
-	"strings"
 	"time"
 
 	"github.com/librato/go-traceview/v1/tv/internal/traceview"
@@ -19,7 +18,7 @@ type Trace interface {
 	//	Info(args ...interface{})
 	//  Error(class, msg string)
 	//  Err(error)
-	//  IsTracing() bool
+	//  IsSampled() bool
 	Span
 
 	// End a Trace, and include KV pairs returned by func f. Useful
@@ -41,6 +40,9 @@ type Trace interface {
 
 	// SetMethod sets the request's HTTP method of the trace, if any
 	SetMethod(method string)
+
+	// SetControllerAction sets controller/action for the trace
+	SetControllerAction(controller, action string)
 }
 
 // KVMap is a map of additional key-value pairs to report along with the event data provided
@@ -51,8 +53,10 @@ type Trace interface {
 type KVMap map[string]interface{}
 
 type traceHTTPSpan struct {
-	span  traceview.HttpSpanMessage
-	start time.Time
+	span       traceview.HttpSpanMessage
+	start      time.Time
+	controller string
+	action     string
 }
 
 type tvTrace struct {
@@ -127,10 +131,23 @@ func (t *tvTrace) SetMethod(method string) {
 	t.httpSpan.span.Method = method
 }
 
+// SetControllerAction sets the controller and action
+func (t *tvTrace) SetControllerAction(controller, action string) {
+	t.httpSpan.controller = controller
+	t.httpSpan.action = action
+}
+
 func (t *tvTrace) reportExit() {
 	if t.ok() {
 		t.lock.Lock()
 		defer t.lock.Unlock()
+
+		// if this is an HTTP trace, record a new span
+		if !t.httpSpan.start.IsZero() {
+			t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)
+			t.recordHTTPSpan()
+		}
+
 		for _, edge := range t.childEdges { // add Edge KV for each joined child
 			t.endArgs = append(t.endArgs, "Edge", edge)
 		}
@@ -139,19 +156,19 @@ func (t *tvTrace) reportExit() {
 		} else {
 			_ = t.tvCtx.ReportEvent(traceview.LabelExit, t.layerName(), t.endArgs...)
 		}
-		t.recordHTTPSpan()
+
 		t.childEdges = nil // clear child edge list
 		t.endArgs = nil
 		t.ended = true
 	}
 }
 
-func (t *tvTrace) IsTracing() bool { return t != nil && t.tvCtx.IsTracing() }
+func (t *tvTrace) IsSampled() bool { return t != nil && t.tvCtx.IsSampled() }
 
 // ExitMetadata reports the X-Trace metadata string that will be used by the exit event.
 // This is useful for setting response headers before reporting the end of the span.
 func (t *tvTrace) ExitMetadata() (mdHex string) {
-	if t.IsTracing() {
+	if t.IsSampled() {
 		if t.exitEvent == nil {
 			t.exitEvent = t.tvCtx.NewEvent(traceview.LabelExit, t.layerName(), false)
 		}
@@ -165,7 +182,7 @@ func (t *tvTrace) ExitMetadata() (mdHex string) {
 // recordHTTPSpan extract http status, controller and action from the deferred endArgs
 // and fill them into trace's httpSpan struct. The data is then sent to the span message channel.
 func (t *tvTrace) recordHTTPSpan() {
-	var transaction string
+	var controller, action string
 	num := len([]string{"Status", "Controller", "Action"})
 	for i := 0; (i+1 < len(t.endArgs)) && (num > 0); i += 2 {
 		k, isStr := t.endArgs[i].(string)
@@ -176,16 +193,23 @@ func (t *tvTrace) recordHTTPSpan() {
 			t.httpSpan.span.Status = *(t.endArgs[i+1].(*int))
 			num--
 		} else if k == "Controller" {
-			transaction += t.endArgs[i+1].(string) + "."
+			controller += t.endArgs[i+1].(string)
 			num--
 		} else if k == "Action" {
-			transaction += t.endArgs[i+1].(string) + "."
+			action += t.endArgs[i+1].(string)
 			num--
 		}
 	}
 
-	t.httpSpan.span.Transaction = strings.TrimSuffix(transaction, ".")
-	t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)
+	if t.httpSpan.controller != "" && t.httpSpan.action != "" {
+		t.httpSpan.span.Transaction = t.httpSpan.controller + "." + t.httpSpan.action
+	} else if controller != "" && action != "" {
+		t.httpSpan.span.Transaction = controller + "." + action
+	}
+
+	if t.httpSpan.span.Status >= 500 && t.httpSpan.span.Status < 600 {
+		t.httpSpan.span.HasError = true
+	}
 
 	traceview.ReportSpan(&t.httpSpan.span)
 }
@@ -193,11 +217,12 @@ func (t *tvTrace) recordHTTPSpan() {
 // A nullTrace is not tracing.
 type nullTrace struct{ nullSpan }
 
-func (t *nullTrace) EndCallback(f func() KVMap)   {}
-func (t *nullTrace) ExitMetadata() string         { return "" }
-func (t *nullTrace) SetStartTime(start time.Time) {}
-func (t *nullTrace) SetMethod(method string)      {}
-func (t *nullTrace) recordMetrics()               {}
+func (t *nullTrace) EndCallback(f func() KVMap)                    {}
+func (t *nullTrace) ExitMetadata() string                          { return "" }
+func (t *nullTrace) SetStartTime(start time.Time)                  {}
+func (t *nullTrace) SetMethod(method string)                       {}
+func (t *nullTrace) SetControllerAction(controller, action string) {}
+func (t *nullTrace) recordMetrics()                                {}
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }

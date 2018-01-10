@@ -54,58 +54,33 @@ func TestDistro(t *testing.T) {
 	}
 }
 
-func TestAppendUname(t *testing.T) {
-	// bbuf := NewBsonBuffer()
-	// appendUname(bbuf)
-	// bsonBufferFinish(bbuf)
-	// m := bsonToMap(bbuf)
-
-	// var sysname, version string
-
-	// if runtime.GOOS == "linux" {
-	// 	var uname syscall.Utsname
-	// 	if err := syscall.Uname(&uname); err == nil {
-	// 		sysname = Byte2String(uname.Sysname[:])
-	// 		version = Byte2String(uname.Version[:])
-	// 		sysname = strings.TrimRight(sysname, "\x00")
-	// 		version = strings.TrimRight(version, "\x00")
-	// 	}
-
-	// 	assert.Equal(t, sysname, m["UnameSysName"])
-	// 	assert.Equal(t, version, m["UnameVersion"])
-	// } else {
-	// 	assert.Nil(t, m["UnameSysName"])
-	// 	assert.Nil(t, m["UnameVersion"])
-	// }
-}
-
 func TestAppendIPAddresses(t *testing.T) {
 	bbuf := NewBsonBuffer()
 	appendIPAddresses(bbuf)
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
 
-	assert.NotZero(t, m["IPAddresses"])
-	bsonIPs := m["IPAddresses"].([]interface{})
-	assert.NotZero(t, len(bsonIPs))
-
-	addrs, _ := net.InterfaceAddrs()
+	ifaces, _ := net.Interfaces()
 	var addresses []string
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			addresses = append(addresses, ipnet.IP.String())
+
+	for _, iface := range ifaces {
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && isPhysicalInterface(iface.Name) {
+				addresses = append(addresses, ipnet.IP.String())
+			}
 		}
 	}
 
-	for _, ip1 := range bsonIPs {
-		found := false
-		for _, ip2 := range addresses {
-			if ip1 == ip2 {
-				found = true
-				break
-			}
+	if m["IPAddresses"] != nil {
+		bsonIPs := m["IPAddresses"].([]interface{})
+		assert.Equal(t, len(bsonIPs), len(addresses))
+
+		for i := 0; i < len(bsonIPs); i++ {
+			assert.Equal(t, bsonIPs[i], addresses[i])
 		}
-		assert.True(t, found)
+	} else {
+		assert.Equal(t, 0, len(addresses))
 	}
 }
 
@@ -115,14 +90,13 @@ func TestAppendMACAddresses(t *testing.T) {
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
 
-	assert.NotZero(t, m["MACAddresses"])
-	bsonMACs := m["MACAddresses"].([]interface{})
-	assert.NotZero(t, len(bsonMACs))
-
 	ifaces, _ := net.Interfaces()
 	var macs []string
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if !isPhysicalInterface(iface.Name) {
 			continue
 		}
 		if mac := iface.HardwareAddr.String(); mac != "" {
@@ -130,15 +104,15 @@ func TestAppendMACAddresses(t *testing.T) {
 		}
 	}
 
-	for _, mac1 := range bsonMACs {
-		found := false
-		for _, mac2 := range macs {
-			if mac1 == mac2 {
-				found = true
-				break
-			}
+	if m["MACAddresses"] != nil {
+		bsonMACs := m["MACAddresses"].([]interface{})
+		assert.Equal(t, len(bsonMACs), len(macs))
+
+		for i := 0; i < len(bsonMACs); i++ {
+			assert.Equal(t, bsonMACs[i], macs[i])
 		}
-		assert.True(t, found)
+	} else {
+		assert.Equal(t, 0, len(macs))
 	}
 }
 
@@ -311,14 +285,14 @@ func TestRecordHistogram(t *testing.T) {
 	h := hi.histograms[""]
 	assert.Empty(t, h.tags["TransactionName"])
 	encoded, _ := hdrhist.EncodeCompressed(h.hist)
-	assert.Equal(t, "HISTFAAAACR42pJpmSzMwMDAxIAKGEHEtclLGOw/QASYmAABAAD//1nj", string(encoded))
+	assert.Equal(t, "HISTFAAAACR42pJpmSzMwMDAxIAKGEHEtclLGOw/QASYmAABAAD//1njBIo=", string(encoded))
 
 	recordHistogram(hi, "hist1", time.Duration(453122))
 	assert.NotNil(t, hi.histograms["hist1"])
 	h = hi.histograms["hist1"]
 	assert.Equal(t, "hist1", h.tags["TransactionName"])
 	encoded, _ = hdrhist.EncodeCompressed(h.hist)
-	assert.Equal(t, "HISTFAAAACR42pJpmSzMwMDAxIAKGEHEtclLGOw/QAQEmQABAAD//1oB", string(encoded))
+	assert.Equal(t, "HISTFAAAACR42pJpmSzMwMDAxIAKGEHEtclLGOw/QAQEmQABAAD//1oBBJk=", string(encoded))
 
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
@@ -426,7 +400,7 @@ func TestAddHistogramToBSON(t *testing.T) {
 	assert.NotZero(t, m["0"])
 	m1 := m["0"].(map[string]interface{})
 	assert.Equal(t, "TransactionResponseTime", m1["name"])
-	assert.Equal(t, "HISTFAAAACh42pJpmSzMwMDAwgABzFCaEURcm7yEwf4DRGBnAxMTIAAA//9n9AXI", string(m1["value"].([]byte)))
+	assert.Equal(t, "HISTFAAAACh42pJpmSzMwMDAwgABzFCaEURcm7yEwf4DRGBnAxMTIAAA//9n9AXI", m1["value"])
 	assert.NotZero(t, m1["tags"])
 	t1 := m1["tags"].(map[string]interface{})
 	assert.Equal(t, "tag1", t1["t1"])
@@ -434,7 +408,7 @@ func TestAddHistogramToBSON(t *testing.T) {
 	assert.NotZero(t, m["1"])
 	m2 := m["1"].(map[string]interface{})
 	assert.Equal(t, "TransactionResponseTime", m2["name"])
-	assert.Equal(t, "HISTFAAAACZ42pJpmSzMwMDAzAABMJoRRFybvITB/gNEoDWZCRAAAP//YTIF", string(m2["value"].([]byte)))
+	assert.Equal(t, "HISTFAAAACZ42pJpmSzMwMDAzAABMJoRRFybvITB/gNEoDWZCRAAAP//YTIFdA==", m2["value"])
 	assert.NotZero(t, m2["tags"])
 	t2 := m2["tags"].(map[string]interface{})
 	assert.Nil(t, t2[veryLongTagName])
@@ -443,7 +417,7 @@ func TestAddHistogramToBSON(t *testing.T) {
 
 func TestGenerateMetricsMessage(t *testing.T) {
 	bbuf := &bsonBuffer{
-		buf: generateMetricsMessage(15),
+		buf: generateMetricsMessage(15, &eventQueueStats{}),
 	}
 	m := bsonToMap(bbuf)
 
@@ -459,7 +433,15 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		name  string
 		value interface{}
 	}
+
+	// TODO add request counters
+
 	testCases := []testCase{
+		{"RequestCount", int64(1)},
+		{"TraceCount", int64(1)},
+		{"TokenBucketExhaustionCount", int64(1)},
+		{"SampleCount", int64(1)},
+		{"ThroughTraceCount", int64(1)},
 		{"NumSent", int64(1)},
 		{"NumOverflowed", int64(1)},
 		{"NumFailed", int64(1)},
@@ -493,13 +475,13 @@ func TestGenerateMetricsMessage(t *testing.T) {
 
 	for i, tc := range testCases {
 		assert.Equal(t, tc.name, mts[i].(map[string]interface{})["name"])
-		assert.IsType(t, mts[i].(map[string]interface{})["value"], tc.value)
+		assert.IsType(t, mts[i].(map[string]interface{})["value"], tc.value, tc.name)
 	}
 
 	assert.Nil(t, m["TransactionNameOverflow"])
 
 	metricsHTTPMeasurements.transactionNameOverflow = true
-	bbuf.buf = generateMetricsMessage(15)
+	bbuf.buf = generateMetricsMessage(15, &eventQueueStats{})
 	m = bsonToMap(bbuf)
 
 	assert.NotNil(t, m["TransactionNameOverflow"])

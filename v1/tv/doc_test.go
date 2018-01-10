@@ -72,13 +72,13 @@ func TestDocSpanExample(t *testing.T) {
 	r := traceview.SetTestReporter()
 	testDocSpanExample()
 	r.Close(11)
-	assertDocSpanExample(t, r.Bufs)
+	assertDocSpanExample(t, r.EventBufs)
 }
 func TestDocSpanExampleCtx(t *testing.T) {
 	r := traceview.SetTestReporter()
 	testDocSpanExampleCtx()
 	r.Close(11)
-	assertDocSpanExample(t, r.Bufs)
+	assertDocSpanExample(t, r.EventBufs)
 }
 func assertDocSpanExample(t *testing.T, bufs [][]byte) {
 	g.AssertGraph(t, bufs, 11, g.AssertNodeMap{

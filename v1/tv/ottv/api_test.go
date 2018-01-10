@@ -12,7 +12,7 @@ import (
 )
 
 func TestAPICheck(t *testing.T) {
-	_ = traceview.SetTestReporter() // set up test reporter
+	_ = traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true)) // set up test reporter
 	apiSuite := harness.NewAPICheckSuite(func() (tracer opentracing.Tracer, closer func()) {
 		return NewTracer(), nil
 	}, harness.APICheckCapabilities{

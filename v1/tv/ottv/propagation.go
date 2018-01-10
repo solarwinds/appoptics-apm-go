@@ -58,7 +58,7 @@ func (p *textMapPropagator) Inject(spanCtx ot.SpanContext, opaqueCarrier interfa
 	if md := sc.span.MetadataString(); md != "" {
 		carrier.Set(tv.HTTPHeaderName, md)
 	}
-	carrier.Set(fieldNameSampled, strconv.FormatBool(sc.span.IsTracing()))
+	carrier.Set(fieldNameSampled, strconv.FormatBool(sc.span.IsReporting()))
 
 	for k, v := range sc.baggage {
 		carrier.Set(prefixBaggage+k, v)
@@ -93,7 +93,7 @@ func (p *binaryPropagator) Inject(spanCtx ot.SpanContext, opaqueCarrier interfac
 
 	state := tracerState{
 		XTraceID:     sc.span.MetadataString(),
-		Sampled:      sc.span.IsTracing(),
+		Sampled:      sc.span.IsReporting(),
 		BaggageItems: sc.baggage,
 	}
 

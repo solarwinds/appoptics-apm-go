@@ -107,6 +107,9 @@ type eventQueueStats struct {
 	lock          sync.Mutex // protect access to the counters
 }
 
+// rate counts reported by trace sampler
+type rateCounts struct{ requested, sampled, limited, traced, through int64 }
+
 var (
 	cachedDistro          string            // cached distribution name
 	cachedMACAddresses    = "uninitialized" // cached list MAC addresses
@@ -132,8 +135,8 @@ var metricsHTTPHistograms = &histograms{
 	precision:  metricsHistPrecisionDefault,
 }
 
-// event queue stats (reset on each metrics report cycle)
-var metricsEventQueueStats = &eventQueueStats{}
+// ensure that only one routine accesses the host id part
+var hostIDLock sync.Mutex
 
 // initialize values according to env variables
 func init() {
@@ -158,26 +161,10 @@ func init() {
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
-func generateMetricsMessage(metricsFlushInterval int) []byte {
+func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStats) []byte {
 	bbuf := NewBsonBuffer()
 
-	bsonAppendString(bbuf, "Hostname", cachedHostname)
-	bsonAppendString(bbuf, "Distro", getDistro())
-	bsonAppendInt(bbuf, "PID", cachedPid)
-	appendUname(bbuf)
-	appendIPAddresses(bbuf)
-	appendMACAddresses(bbuf)
-
-	if getAWSInstanceID() != "" {
-		bsonAppendString(bbuf, "EC2InstanceID", getAWSInstanceID())
-	}
-	if getAWSInstanceZone() != "" {
-		bsonAppendString(bbuf, "EC2AvailabilityZone", getAWSInstanceZone())
-	}
-	if getContainerID() != "" {
-		bsonAppendString(bbuf, "DockerContainerID", getContainerID())
-	}
-
+	appendHostId(bbuf)
 	bsonAppendInt64(bbuf, "Timestamp_u", int64(time.Now().UnixNano()/1000))
 	bsonAppendInt(bbuf, "MetricsFlushInterval", metricsFlushInterval)
 
@@ -186,24 +173,30 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 	start := bsonAppendStartArray(bbuf, "measurements")
 	index := 0
 
-	// TODO add request counters
+	// request counters
+	rc := flushRateCounts()
+	addMetricsValue(bbuf, &index, "RequestCount", rc.requested)
+	addMetricsValue(bbuf, &index, "TraceCount", rc.traced)
+	addMetricsValue(bbuf, &index, "TokenBucketExhaustionCount", rc.limited)
+	addMetricsValue(bbuf, &index, "SampleCount", rc.sampled)
+	addMetricsValue(bbuf, &index, "ThroughTraceCount", rc.through)
 
 	// event queue stats
-	metricsEventQueueStats.lock.Lock()
+	queueStats.lock.Lock()
 
-	addMetricsValue(bbuf, &index, "NumSent", metricsEventQueueStats.numSent)
-	addMetricsValue(bbuf, &index, "NumOverflowed", metricsEventQueueStats.numOverflowed)
-	addMetricsValue(bbuf, &index, "NumFailed", metricsEventQueueStats.numFailed)
-	addMetricsValue(bbuf, &index, "TotalEvents", metricsEventQueueStats.totalEvents)
-	addMetricsValue(bbuf, &index, "QueueLargest", metricsEventQueueStats.queueLargest)
+	addMetricsValue(bbuf, &index, "NumSent", queueStats.numSent)
+	addMetricsValue(bbuf, &index, "NumOverflowed", queueStats.numOverflowed)
+	addMetricsValue(bbuf, &index, "NumFailed", queueStats.numFailed)
+	addMetricsValue(bbuf, &index, "TotalEvents", queueStats.totalEvents)
+	addMetricsValue(bbuf, &index, "QueueLargest", queueStats.queueLargest)
 
-	metricsEventQueueStats.numSent = 0
-	metricsEventQueueStats.numOverflowed = 0
-	metricsEventQueueStats.numFailed = 0
-	metricsEventQueueStats.totalEvents = 0
-	metricsEventQueueStats.queueLargest = 0
+	queueStats.numSent = 0
+	queueStats.numOverflowed = 0
+	queueStats.numFailed = 0
+	queueStats.totalEvents = 0
+	queueStats.queueLargest = 0
 
-	metricsEventQueueStats.lock.Unlock()
+	queueStats.lock.Unlock()
 
 	addHostMetrics(bbuf, &index)
 
@@ -262,6 +255,32 @@ func generateMetricsMessage(metricsFlushInterval int) []byte {
 
 	bsonBufferFinish(bbuf)
 	return bbuf.buf
+}
+
+// append host ID to a BSON buffer
+// bbuf	the BSON buffer to append the KVs to
+func appendHostId(bbuf *bsonBuffer) {
+	hostIDLock.Lock()
+	defer hostIDLock.Unlock()
+
+	bsonAppendString(bbuf, "Hostname", cachedHostname)
+	if configuredHostname != "" {
+		bsonAppendString(bbuf, "ConfiguredHostname", configuredHostname)
+	}
+	appendUname(bbuf)
+	bsonAppendInt(bbuf, "PID", cachedPid)
+	bsonAppendString(bbuf, "Distro", getDistro())
+	appendIPAddresses(bbuf)
+	appendMACAddresses(bbuf)
+	if getAWSInstanceID() != "" {
+		bsonAppendString(bbuf, "EC2InstanceID", getAWSInstanceID())
+	}
+	if getAWSInstanceZone() != "" {
+		bsonAppendString(bbuf, "EC2AvailabilityZone", getAWSInstanceZone())
+	}
+	if getContainerID() != "" {
+		bsonAppendString(bbuf, "DockerContainerID", getContainerID())
+	}
 }
 
 // gets distribution identification
@@ -330,15 +349,32 @@ func appendIPAddresses(bbuf *bsonBuffer) {
 
 // gets the system's IP addresses
 func getIPAddresses() []string {
-	addrs, err := net.InterfaceAddrs()
+	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil
 	}
 
 	var addresses []string
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			addresses = append(addresses, ipnet.IP.String())
+
+	for _, iface := range ifaces {
+		// skip over local interface
+		if iface.Name == "lo" {
+			continue
+		}
+		// skip over virtual interface
+		if physical := isPhysicalInterface(iface.Name); !physical {
+			continue
+		}
+		// get unicast addresses associated with the current network interface
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				addresses = append(addresses, ipnet.IP.String())
+			}
 		}
 	}
 
@@ -352,6 +388,9 @@ func appendMACAddresses(bbuf *bsonBuffer) {
 
 	start := bsonAppendStartArray(bbuf, "MACAddresses")
 	for _, mac := range macs {
+		if mac == "" {
+			continue
+		}
 		i := 0
 		bsonAppendString(bbuf, strconv.Itoa(i), mac)
 		i++
@@ -370,6 +409,10 @@ func getMACAddressList() string {
 	if err == nil {
 		for _, iface := range ifaces {
 			if iface.Flags&net.FlagLoopback != 0 {
+				continue
+			}
+			// skip over virtual interface
+			if physical := isPhysicalInterface(iface.Name); !physical {
 				continue
 			}
 			if mac := iface.HardwareAddr.String(); mac != "" {
@@ -450,7 +493,10 @@ func getContainerID() string {
 		// A typical line returned by cat /proc/self/cgroup (that's why we expect 3 tokens):
 		// 9:devices:/docker/40188af19439697187e3f60b933e7e37c5c41035f4c0b266a51c86c5a0074b25
 		if len(tokens) == 3 {
-			cachedContainerID = tokens[2]
+			// make sure the string length matches that of a container ID
+			if len(tokens[2]) == 64 {
+				cachedContainerID = tokens[2]
+			}
 		}
 	}
 
@@ -734,7 +780,7 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
 
 	bsonAppendString(bbuf, "name", "TransactionResponseTime")
-	bsonAppendBinary(bbuf, "value", data)
+	bsonAppendString(bbuf, "value", string(data))
 
 	// append tags
 	if len(h.tags) > 0 {
@@ -755,34 +801,10 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	*index += 1
 }
 
-func incrementNumSent(count int) {
-	metricsEventQueueStats.lock.Lock()
-	metricsEventQueueStats.numSent += int64(count)
-	metricsEventQueueStats.lock.Unlock()
-}
-
-func incrementNumOverflowed(count int) {
-	metricsEventQueueStats.lock.Lock()
-	metricsEventQueueStats.numOverflowed += int64(count)
-	metricsEventQueueStats.lock.Unlock()
-}
-
-func incrementNumFailed(count int) {
-	metricsEventQueueStats.lock.Lock()
-	metricsEventQueueStats.numFailed += int64(count)
-	metricsEventQueueStats.lock.Unlock()
-}
-
-func incrementTotalEvents(count int) {
-	metricsEventQueueStats.lock.Lock()
-	metricsEventQueueStats.totalEvents += int64(count)
-	metricsEventQueueStats.lock.Unlock()
-}
-
-func setQueueLargest(count int) {
-	metricsEventQueueStats.lock.Lock()
-	if int64(count) > metricsEventQueueStats.queueLargest {
-		metricsEventQueueStats.queueLargest = int64(count)
+func (s *eventQueueStats) setQueueLargest(count int) {
+	s.lock.Lock()
+	if int64(count) > s.queueLargest {
+		s.queueLargest = int64(count)
 	}
-	metricsEventQueueStats.lock.Unlock()
+	s.lock.Unlock()
 }

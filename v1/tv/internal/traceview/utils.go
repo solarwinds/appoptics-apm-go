@@ -4,9 +4,11 @@ package traceview
 
 import (
 	"bufio"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -144,4 +146,53 @@ func copyMap(from *map[string]string) map[string]string {
 	}
 
 	return to
+}
+
+func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) *map[string][]byte {
+	args := make(map[string][]byte)
+
+	if capacity > -1 {
+		bits := math.Float64bits(capacity)
+		bytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bytes, bits)
+		args["BucketCapacity"] = bytes
+	}
+	if ratePerSec > -1 {
+		bits := math.Float64bits(ratePerSec)
+		bytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bytes, bits)
+		args["BucketRate"] = bytes
+	}
+	if metricsFlushInterval > -1 {
+		bytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bytes, uint32(metricsFlushInterval))
+		args["MetricsFlushInterval"] = bytes
+	}
+	if maxTransactions > -1 {
+		bytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bytes, uint32(maxTransactions))
+		args["MaxTransactions"] = bytes
+	}
+
+	return &args
+}
+
+// simple check if go version is higher or equal to the given version
+func isHigherOrEqualGoVersion(version string) bool {
+	goVersion := strings.Split(runtime.Version(), ".")
+	compVersion := strings.Split(version, ".")
+	for i := 0; i < len(goVersion) && i < len(compVersion); i++ {
+		l := len(compVersion[i])
+		if len(goVersion[i]) > l {
+			l = len(goVersion[i])
+		}
+		compVersion[i] = strings.Repeat("0", l-len(compVersion[i])) + compVersion[i]
+		goVersion[i] = strings.Repeat("0", l-len(goVersion[i])) + goVersion[i]
+		if strings.Compare(goVersion[i], compVersion[i]) == 1 {
+			return true
+		} else if strings.Compare(goVersion[i], compVersion[i]) == -1 {
+			return false
+		}
+	}
+	return true
 }

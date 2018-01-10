@@ -1,3 +1,4 @@
+// +build go1.7
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 
 package tv_test
@@ -10,6 +11,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/librato/go-traceview/v1/tv"
 	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
@@ -17,12 +19,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
+	"gopkg.in/mgo.v2/bson"
 )
 
-func handler404(w http.ResponseWriter, r *http.Request)   { w.WriteHeader(404) }
-func handler403(w http.ResponseWriter, r *http.Request)   { w.WriteHeader(403) }
-func handler200(w http.ResponseWriter, r *http.Request)   {} // do nothing (default should be 200)
-func handlerPanic(w http.ResponseWriter, r *http.Request) { panic("panicking!") }
+func handler404(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(404) }
+func handler403(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(403) }
+func handler200(w http.ResponseWriter, r *http.Request)      {} // do nothing (default should be 200)
+func handlerPanic(w http.ResponseWriter, r *http.Request)    { panic("panicking!") }
+func handlerDelay200(w http.ResponseWriter, r *http.Request) { time.Sleep(httpSpanSleep) }
+func handlerDelay503(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(503)
+	time.Sleep(httpSpanSleep)
+}
+func handlerDoubleWrapped(w http.ResponseWriter, r *http.Request) {
+	t, w, r := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
+	tv.NewContext(context.Background(), t)
+	defer t.End()
+}
 
 func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
 	h := http.HandlerFunc(tv.HTTPHandler(f))
@@ -39,7 +52,7 @@ func TestHTTPHandler404(t *testing.T) {
 	assert.Len(t, response.HeaderMap[tv.HTTPHeaderName], 1)
 
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
@@ -63,7 +76,7 @@ func TestHTTPHandler200(t *testing.T) {
 	response := httpTest(handler200)
 
 	r.Close(2)
-	g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
@@ -84,19 +97,73 @@ func TestHTTPHandler200(t *testing.T) {
 }
 
 func TestHTTPHandlerNoTrace(t *testing.T) {
-	r := traceview.SetTestReporter() // set up test reporter
-	r.ShouldTrace = false
+	r := traceview.SetTestReporter(traceview.TestReporterDisableTracing())
 	httpTest(handler404)
 
 	// tracing disabled, shouldn't report anything
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
+}
+
+var httpSpanSleep time.Duration
+
+func TestHTTPSpan(t *testing.T) {
+	r := traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true)) // set up test reporter
+
+	httpSpanSleep = time.Duration(0) // fire off first request just as preparation for the following requests
+	httpTest(handlerDelay200)
+	httpSpanSleep = time.Duration(0)
+	httpTest(handlerDelay200)
+	httpSpanSleep = time.Duration(25 * time.Millisecond)
+	httpTest(handlerDelay200)
+	httpSpanSleep = time.Duration(456 * time.Millisecond)
+	httpTest(handlerDelay200)
+	httpSpanSleep = time.Duration(54 * time.Millisecond)
+	httpTest(handlerDelay503)
+
+	r.Close(5)
+
+	m := make(map[string]interface{})
+	bson.Unmarshal(r.StatusBufs[1], m)
+
+	nullDuration := m["duration"].(int64)
+
+	m = make(map[string]interface{})
+	bson.Unmarshal(r.StatusBufs[2], m)
+
+	assert.Equal(t, "tv_test.handlerDelay200", m["transaction"])
+	assert.Equal(t, "", m["url"])
+	assert.Equal(t, 200, m["status"])
+	assert.Equal(t, "GET", m["method"])
+	assert.False(t, m["hasError"].(bool))
+	assert.InDelta(t, 25*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
+
+	m = make(map[string]interface{})
+	bson.Unmarshal(r.StatusBufs[3], m)
+
+	assert.InDelta(t, 456*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
+
+	m = make(map[string]interface{})
+	bson.Unmarshal(r.StatusBufs[4], m)
+
+	assert.Equal(t, "tv_test.handlerDelay503", m["transaction"])
+	assert.Equal(t, 503, m["status"])
+	assert.True(t, m["hasError"].(bool))
+	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
+}
+
+func TestSingleHTTPSpan(t *testing.T) {
+	r := traceview.SetTestReporter(traceview.TestReporterDisableDefaultSetting(true)) // set up test reporter
+	httpTest(handlerDoubleWrapped)
+	r.Close(1)
+
+	assert.Equal(t, 1, len(r.StatusBufs))
 }
 
 // testServer tests creating a span/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
 func testServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// create span from incoming HTTP Request headers, if trace exists
-		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", w, req)
+		tr, w, req := tv.TraceFromHTTPRequestResponse("myHandler", w, req)
 		defer tr.End()
 
 		tr.AddEndArgs("NotReported") // odd-length args, should have no effect
@@ -115,7 +182,7 @@ func testServer(t *testing.T, list net.Listener) {
 func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(tv.HTTPHandler(func(writer http.ResponseWriter, req *http.Request) {
 		// create span from incoming HTTP Request headers, if trace exists
-		tr, w := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
+		tr, w, req := tv.TraceFromHTTPRequestResponse("myHandler", writer, req)
 		defer tr.End()
 
 		t.Logf("server: got request %v", req)
@@ -285,7 +352,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		r.Close(2)
-		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+		g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {Edges: g.Edges{{"httpTest", "entry"}}},
 		})
@@ -295,7 +362,7 @@ func testHTTP(t *testing.T, method string, badReq bool, clientFn testClientFn, s
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 	r.Close(server.numBufs)
-	server.assertFn(t, r.Bufs, resp, url, method, port, server.status)
+	server.assertFn(t, r.EventBufs, resp, url, method, port, server.status)
 }
 
 // assert traces that hit testServer, which uses the HTTP server instrumentation.
@@ -396,7 +463,7 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 
 	if badReq { // handle case where http.NewRequest() returned nil
 		r.Close(2)
-		g.AssertGraph(t, r.Bufs, 2, g.AssertNodeMap{
+		g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 			{"httpTest", "entry"}: {},
 			{"httpTest", "exit"}:  {Edges: g.Edges{{"httpTest", "entry"}}},
 		})
@@ -404,7 +471,7 @@ func testTraceHTTPError(t *testing.T, method string, badReq bool, clientFn testC
 	}
 	// handle case where http.Client.Do() returned an error
 	r.Close(5)
-	g.AssertGraph(t, r.Bufs, 5, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 5, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {Edges: g.Edges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
@@ -438,7 +505,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 	assert.Equal(t, 403, resp.StatusCode)
 
 	r.Close(10)
-	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeMap{
+	g.AssertGraph(t, r.EventBufs, 10, g.AssertNodeMap{
 		{"httpTest", "entry"}: {},
 		{"http.Client", "entry"}: {Edges: g.Edges{{"httpTest", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, true, n.Map["IsService"])
@@ -477,7 +544,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 // based on examples/distributed_app
 func AliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	t, w, r := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
 	ctx := tv.NewContext(context.Background(), t)
 	defer t.End()
 
@@ -513,7 +580,7 @@ func AliceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func BobHandler(w http.ResponseWriter, r *http.Request) {
-	t, w := tv.TraceFromHTTPRequestResponse("bobHandler", w, r)
+	t, w, r := tv.TraceFromHTTPRequestResponse("bobHandler", w, r)
 	defer t.End()
 	w.Write([]byte(`{"result":"hello from bob"}`))
 }
@@ -543,7 +610,7 @@ func TestDistributedApp(t *testing.T) {
 	t.Logf("Response: %v BUF %s", resp, buf)
 
 	r.Close(10)
-	g.AssertGraph(t, r.Bufs, 10, g.AssertNodeKVMap{
+	g.AssertGraph(t, r.EventBufs, 10, g.AssertNodeKVMap{
 		{"http.HandlerFunc", "entry", "URL", "/alice"}:         {},
 		{"aliceHandler", "entry", "URL", "/alice"}:             {Edges: g.Edges{{"http.HandlerFunc", "entry"}}},
 		{"http.Client", "entry", "", ""}:                       {Edges: g.Edges{{"aliceHandler", "entry"}}, Callback: func(n g.Node) {}},
@@ -559,7 +626,7 @@ func TestDistributedApp(t *testing.T) {
 
 func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	t, w, r := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
 	ctx := tv.NewContext(context.Background(), t)
 	t.SetAsync(true)
 	defer t.End()
@@ -641,7 +708,7 @@ func TestConcurrentApp(t *testing.T) {
 	t.Logf("Response: %v BUF %s", resp, buf)
 
 	r.Close(14)
-	g.AssertGraph(t, r.Bufs, 14, g.AssertNodeKVMap{
+	g.AssertGraph(t, r.EventBufs, 14, g.AssertNodeKVMap{
 		{"aliceHandler", "entry", "URL", "/alice"}:                       {},
 		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/A"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
 		{"http.Client", "entry", "RemoteURL", "http://localhost:8083/B"}: {Edges: g.Edges{{"aliceHandler", "entry"}}},
@@ -663,8 +730,7 @@ func TestConcurrentApp(t *testing.T) {
 }
 
 func TestConcurrentAppNoTrace(t *testing.T) {
-	r := traceview.SetTestReporter() // set up test reporter
-	r.ShouldTrace = false
+	r := traceview.SetTestReporter(traceview.TestReporterDisableTracing())
 
 	aliceLn, err := net.Listen("tcp", ":8084")
 	assert.NoError(t, err)
@@ -687,5 +753,5 @@ func TestConcurrentAppNoTrace(t *testing.T) {
 	assert.NotNil(t, buf)
 
 	// shouldn't report anything
-	assert.Len(t, r.Bufs, 0)
+	assert.Len(t, r.EventBufs, 0)
 }

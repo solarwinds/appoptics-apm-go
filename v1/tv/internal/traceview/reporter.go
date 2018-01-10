@@ -22,7 +22,7 @@ type reporter interface {
 }
 
 // currently used reporter
-var thisReporter reporter = &nullReporter{}
+var globalReporter reporter = &nullReporter{}
 
 var (
 	reportingDisabled     = false // reporting disabled due to error
@@ -32,6 +32,9 @@ var (
 // cached hostname and PID since they don't change (only one system call each)
 var cachedHostname string
 var cachedPid = os.Getpid()
+
+// for hostname alias
+var configuredHostname string
 
 // a noop reporter
 type nullReporter struct{}
@@ -45,14 +48,19 @@ func (r *nullReporter) reportSpan(span *SpanMessage) error            { return n
 // can be overridden via APPOPTICS_REPORTER
 func init() {
 	cacheHostname(osHostnamer{})
+	setGlobalReporter(os.Getenv("APPOPTICS_REPORTER"))
+	sendInitMessage()
+}
 
-	switch strings.ToLower(os.Getenv("APPOPTICS_REPORTER")) {
+func setGlobalReporter(reporterType string) {
+	switch strings.ToLower(reporterType) {
 	case "ssl":
 		fallthrough // using fallthrough since the SSL reporter (GRPC) is our default reporter
 	default:
-		thisReporter = grpcNewReporter()
+		globalReporter = newGRPCReporter()
 	case "udp":
-		thisReporter = udpNewReporter()
+		globalReporter = udpNewReporter()
+	case "none":
 	}
 }
 
@@ -61,7 +69,7 @@ func init() {
 //
 // returns	error if channel is full
 func ReportSpan(span SpanMessage) error {
-	return thisReporter.reportSpan(&span)
+	return globalReporter.reportSpan(&span)
 }
 
 // cache hostname
@@ -110,8 +118,7 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	return nil
 }
 
-// Determines if request should be traced, based on sample rate settings:
-// This is our only dependency on the liboboe C library.
-func shouldTraceRequest(layer, xtraceHeader string) (sampled bool, sampleRate, sampleSource int) {
-	return oboeSampleRequest(layer, xtraceHeader)
+// Determines if request should be traced, based on sample rate settings.
+func shouldTraceRequest(layer string, traced bool) (bool, int, sampleSource) {
+	return oboeSampleRequest(layer, traced)
 }

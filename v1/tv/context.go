@@ -83,3 +83,11 @@ func MetadataString(ctx context.Context) string {
 	}
 	return ""
 }
+
+// IsSampled returns whether or not the Layer span's context is sampled
+func IsSampled(ctx context.Context) bool {
+	if l, ok := fromContext(ctx); ok {
+		return l.IsSampled()
+	}
+	return false
+}

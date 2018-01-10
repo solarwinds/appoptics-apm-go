@@ -1,7 +1,7 @@
 FROM ubuntu:16.04
 
 # Install Node.js
-RUN apt-get -y install build-essential nodejs npm
+RUN apt-get update && apt-get -y install build-essential nodejs npm
 RUN ln -s /usr/bin/nodejs /usr/bin/node
 
 # Install Node app
