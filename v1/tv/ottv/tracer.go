@@ -5,7 +5,7 @@ package ottv
 import (
 	"sync"
 
-	"github.com/librato/go-traceview/v1/tv"
+	"github.com/appoptics/go-appoptics/v1/tv"
 	ot "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
 )

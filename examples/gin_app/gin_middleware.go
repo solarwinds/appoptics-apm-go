@@ -5,7 +5,7 @@ import (
 	"net"
 
 	"github.com/gin-gonic/gin"
-	"github.com/librato/go-traceview/v1/tv"
+	"github.com/appoptics/go-appoptics/v1/tv"
 	"golang.org/x/net/context"
 )
 

@@ -6,7 +6,7 @@ import (
 	"path"
 	"testing"
 
-	pb "github.com/librato/go-traceview/v1/tv/internal/traceview/collector"
+	pb "github.com/appoptics/go-appoptics/v1/tv/internal/traceview/collector"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	testKeyPath  = path.Join(os.Getenv("GOPATH"), "src/github.com/librato/go-traceview/v1/tv/internal/traceview")
+	testKeyPath  = path.Join(os.Getenv("GOPATH"), "src/github.com/appoptics/go-appoptics/v1/tv/internal/traceview")
 	testKeyFile  = path.Join(testKeyPath, "localhost.key")
 	testCertFile = path.Join(testKeyPath, "localhost.crt")
 )

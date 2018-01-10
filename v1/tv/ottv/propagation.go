@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/librato/go-traceview/v1/tv"
-	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	"github.com/appoptics/go-appoptics/v1/tv"
+	"github.com/appoptics/go-appoptics/v1/tv/internal/traceview"
 	ot "github.com/opentracing/opentracing-go"
 )
 

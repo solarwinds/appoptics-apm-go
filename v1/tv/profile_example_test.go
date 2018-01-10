@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/librato/go-traceview/v1/tv"
+	"github.com/appoptics/go-appoptics/v1/tv"
 	"golang.org/x/net/context"
 )
 

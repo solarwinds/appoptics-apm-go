@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 	"sync"
 
-	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	"github.com/appoptics/go-appoptics/v1/tv/internal/traceview"
 	"golang.org/x/net/context"
 )
 

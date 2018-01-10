@@ -1,9 +1,9 @@
 # AppOptics APM instrumentation for Go
 
-[![GoDoc](https://godoc.org/github.com/librato/go-traceview/v1/tv?status.svg)](https://godoc.org/github.com/librato/go-traceview/v1/tv)
-[![Build Status](https://travis-ci.org/librato/go-traceview.svg?branch=master)](https://travis-ci.org/librato/go-traceview)
-[![Coverage Status](https://coveralls.io/repos/github/librato/go-traceview/badge.svg?branch=master)](https://coveralls.io/github/librato/go-traceview?branch=master)
-[![codecov](https://codecov.io/gh/librato/go-traceview/branch/master/graph/badge.svg)](https://codecov.io/gh/librato/go-traceview)
+[![GoDoc](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv?status.svg)](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv)
+[![Build Status](https://travis-ci.org/appoptics/go-appoptics.svg?branch=master)](https://travis-ci.org/appoptics/go-appoptics)
+[![Coverage Status](https://coveralls.io/repos/github/appoptics/go-appoptics/badge.svg?branch=master)](https://coveralls.io/github/appoptics/go-appoptics?branch=master)
+[![codecov](https://codecov.io/gh/appoptics/go-appoptics/branch/master/graph/badge.svg)](https://codecov.io/gh/appoptics/go-appoptics)
 
 * [Introduction](#introduction)
 * [Getting started](#getting-started)
@@ -48,7 +48,7 @@ install the liboboe and liboboe-dev packages on your platform.
 Then, install the following:
 
 * [Go >= 1.5](https://golang.org/dl/)
-* This package: go get github.com/librato/go-traceview/v1/tv
+* This package: go get github.com/appoptics/go-appoptics/v1/tv
 
 The install flow will wait for 5 traces to come in from your app.  You can
 check out the [demo](#demo) app below to get a quick start.  One you have 5,
@@ -70,11 +70,11 @@ calls to this API are no-ops, and [empty structs](https://dave.cheney.net/2014/0
 ### Usage examples
 
 The simplest integration option is this package's
-[tv.HTTPHandler](https://godoc.org/github.com/librato/go-traceview/v1/tv#HTTPHandler) wrapper.  This
+[tv.HTTPHandler](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#HTTPHandler) wrapper.  This
 will monitor the performance of the provided
 [http.HandlerFunc](https://golang.org/pkg/net/http/#HandlerFunc), visualized with latency
 distribution heatmaps filterable by dimensions such as URL host & path, HTTP status & method, server
-hostname, etc. [tv.HTTPHandler](https://godoc.org/github.com/librato/go-traceview/v1/tv#HTTPHandler)
+hostname, etc. [tv.HTTPHandler](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#HTTPHandler)
 will also continue a distributed trace described in the incoming HTTP request headers (from
 AppOptics's [automatic](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/)
 [C#/.NET](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#net),
@@ -95,7 +95,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/librato/go-traceview/v1/tv"
+	"github.com/appoptics/go-appoptics/v1/tv"
 )
 
 var startTime = time.Now()
@@ -123,7 +123,7 @@ func main() {
 	http.ListenAndServe(":8899", nil)
 }
 ```
-![sample_app screenshot](https://github.com/librato/go-traceview/raw/master/img/readme-screenshot1.png)
+![sample_app screenshot](https://github.com/appoptics/go-appoptics/raw/master/img/readme-screenshot1.png)
 
 To monitor more than just the overall latency of each request to your Go service, you will need to
 break a request's processing time down by placing small benchmarks into your code. To do so, first
@@ -141,15 +141,15 @@ computation(s) occurring in a `Layer`. Layers can be created as children of othe
 AppOptics identifies a reported Layer's type from its key-value pairs; if keys named "Query" and
 "RemoteHost" are used, a Layer is assumed to measure the extent of a DB query. KV pairs can be
 appended to Layer and Profile extents as optional extra variadic arguments to methods such as
-[BeginLayer()](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginLayer) or
-[BeginProfile()](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginProfile),
-[Info()](https://godoc.org/github.com/librato/go-traceview/v1/tv#Layer), and
-[End()](https://godoc.org/github.com/librato/go-traceview/v1/tv#Layer). We also provide helper methods
-such as [BeginQueryLayer()](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginQueryLayer),
-[BeginCacheLayer()](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginCacheLayer),
-[BeginRemoteURLLayer()](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginRemoteURLLayer),
-[BeginRPCLayer()](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginRPCLayer), and
-[BeginHTTPClientLayer()](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginHTTPClientLayer)
+[BeginLayer()](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#BeginLayer) or
+[BeginProfile()](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#BeginProfile),
+[Info()](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#Layer), and
+[End()](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#Layer). We also provide helper methods
+such as [BeginQueryLayer()](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#BeginQueryLayer),
+[BeginCacheLayer()](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#BeginCacheLayer),
+[BeginRemoteURLLayer()](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#BeginRemoteURLLayer),
+[BeginRPCLayer()](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#BeginRPCLayer), and
+[BeginHTTPClientLayer()](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#BeginHTTPClientLayer)
 that match the spec in our
 [custom instrumentation docs](https://docs.appoptics.com/kb/apm_tracing/custom_instrumentation/)
 to report attributes associated with different types of service calls, used for indexing AppOptics's
@@ -234,16 +234,16 @@ argument to every function on the call path between incoming and outgoing reques
 [Gizmo](https://godoc.org/github.com/NYTimes/gizmo/server#ContextHandler) use Context
 implementations, for example. We provide helper methods that allow a Trace to be associated with a
 [context.Context](https://godoc.org/golang.org/x/net/context) interface; for example,
-[tv.BeginLayer](https://godoc.org/github.com/librato/go-traceview/v1/tv#BeginLayer) returns both a
+[tv.BeginLayer](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#BeginLayer) returns both a
 new Layer and an associated context, and
-[tv.Info(ctx)](https://godoc.org/github.com/librato/go-traceview/v1/tv#Info) and
-[tv.End(ctx)](https://godoc.org/github.com/librato/go-traceview/v1/tv#Layer) both use the Layer
+[tv.Info(ctx)](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#Info) and
+[tv.End(ctx)](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#Layer) both use the Layer
 defined in the provided context.
 
 It is not required to work with context.Context to trace your app, however. You can also use just
-the [Trace](https://godoc.org/github.com/librato/go-traceview/v1/tv#Trace),
-[Layer](https://godoc.org/github.com/librato/go-traceview/v1/tv#Layer), and
-[Profile](https://godoc.org/github.com/librato/go-traceview/v1/tv#Profile) interfaces directly, if it
+the [Trace](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#Trace),
+[Layer](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#Layer), and
+[Profile](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv#Profile) interfaces directly, if it
 better suits your instrumentation use case.
 
 ```go
@@ -282,7 +282,7 @@ our [blog's release announcement]() of a latency
 heatmap underlaid with memory metrics, just after fixing a memory leak and restarting a service
 inside a staging environment.
 
-<img width=729 src="https://github.com/librato/go-traceview/raw/master/img/metrics-screenshot1.png">
+<img width=729 src="https://github.com/appoptics/go-appoptics/raw/master/img/metrics-screenshot1.png">
 
 ## Help and examples
 
@@ -295,7 +295,7 @@ and under active development. We welcome your feedback, issues and feature reque
 
 If you have installed AppOptics and this package, you can run the sample “web app” included with go-traceview:
 
-    $ cd $GOPATH/src/github.com/librato/go-traceview/examples/sample_app
+    $ cd $GOPATH/src/github.com/appoptics/go-appoptics/examples/sample_app
     $ go run main.go
 
 A web server will run on port 8899. It doesn’t do much, except wait a bit and echo back your URL path:
@@ -311,7 +311,7 @@ There is also a demonstration of distributed tracing in examples/distributed_app
 comprised of two Go services, a Node.js service, and a Python service. It can be built and run from
 source in each service's subdirectory, or by using docker-compose:
 
-    $ cd $GOPATH/src/github.com/librato/go-traceview/examples/distributed_app
+    $ cd $GOPATH/src/github.com/appoptics/go-appoptics/examples/distributed_app
     $ docker-compose build
     # ... (building)
     $ APPOPTICS_SERVICE_KEY=xxx docker-compose up -d
@@ -337,11 +337,11 @@ and `concurrentAliceHandler`, which makes requests to all three in parallel.
 You should see traces for these appear on your AppOptics dashboard. Here is an example trace of the
 concurrent handler:
 
-<img width=729 src="https://github.com/librato/go-traceview/raw/master/img/concurrent-tracedetails.gif">
+<img width=729 src="https://github.com/appoptics/go-appoptics/raw/master/img/concurrent-tracedetails.gif">
 
 ### OpenTracing
 
-Support for the OpenTracing 1.0 API is available in the [ottv](https://godoc.org/github.com/librato/go-traceview/v1/tv/ottv) package as a technology preview. The
+Support for the OpenTracing 1.0 API is available in the [ottv](https://godoc.org/github.com/appoptics/go-appoptics/v1/tv/ottv) package as a technology preview. The
 OpenTracing tracer in that package provides support for OpenTracing span reporting and context
 propagation by using AppOptics's layer reporting and HTTP header formats, permitting the OT tracer
 to continue distributed traces started by AppOptics's instrumentation and vice versa. Some of the

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/librato/go-traceview/v1/tv"
-	g "github.com/librato/go-traceview/v1/tv/internal/graphtest"
-	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	"github.com/appoptics/go-appoptics/v1/tv"
+	g "github.com/appoptics/go-appoptics/v1/tv/internal/graphtest"
+	"github.com/appoptics/go-appoptics/v1/tv/internal/traceview"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 )

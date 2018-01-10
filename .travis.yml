@@ -20,17 +20,17 @@ install:
   - go get github.com/uluyol/hdrhist
 
 script:
-  - cd $GOPATH/src/github.com/librato/go-traceview/v1/tv
-  - go build -v github.com/librato/go-traceview/v1/tv github.com/librato/go-traceview/v1/tv/internal/traceview
-  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/librato/go-traceview/v1/tv/internal/traceview,github.com/librato/go-traceview/v1/tv
-  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covtv.out -coverpkg github.com/librato/go-traceview/v1/tv/internal/traceview,github.com/librato/go-traceview/v1/tv
+  - cd $GOPATH/src/github.com/appoptics/go-appoptics/v1/tv
+  - go build -v github.com/appoptics/go-appoptics/v1/tv github.com/appoptics/go-appoptics/v1/tv/internal/traceview
+  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/go-appoptics/v1/tv/internal/traceview,github.com/appoptics/go-appoptics/v1/tv
+  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covtv.out -coverpkg github.com/appoptics/go-appoptics/v1/tv/internal/traceview,github.com/appoptics/go-appoptics/v1/tv
   - pushd internal/traceview/
   - go test -v -covermode=atomic -coverprofile=cov.out
   - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covtv.out
   - popd
   - pushd ottv
-  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/librato/go-traceview/v1/tv/internal/traceview,github.com/librato/go-traceview/v1/tv/ottv,github.com/librato/go-traceview/v1/tv
-  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covtv.out -coverpkg github.com/librato/go-traceview/v1/tv/internal/traceview,github.com/librato/go-traceview/v1/tv/ottv,github.com/librato/go-traceview/v1/tv
+  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/go-appoptics/v1/tv/internal/traceview,github.com/appoptics/go-appoptics/v1/tv/ottv,github.com/appoptics/go-appoptics/v1/tv
+  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covtv.out -coverpkg github.com/appoptics/go-appoptics/v1/tv/internal/traceview,github.com/appoptics/go-appoptics/v1/tv/ottv,github.com/appoptics/go-appoptics/v1/tv
   - popd
   - gocovmerge cov.out covtv.out internal/traceview/cov.out internal/traceview/covtv.out ottv/cov.out ottv/covtv.out > coverage.txt
 

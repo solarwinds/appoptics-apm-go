@@ -1,4 +1,4 @@
-coverpkg="github.com/librato/go-traceview/v1/tv/internal/traceview,github.com/librato/go-traceview/v1/tv,github.com/librato/go-traceview/v1/tv/ottv"
+coverpkg="github.com/appoptics/go-appoptics/v1/tv/internal/traceview,github.com/appoptics/go-appoptics/v1/tv,github.com/appoptics/go-appoptics/v1/tv/ottv"
 cov_args=-covermode=atomic -coverpkg=$(coverpkg)
 cov_out=-coverprofile=cov.out 
 covtv_out=-coverprofile=covtv.out 

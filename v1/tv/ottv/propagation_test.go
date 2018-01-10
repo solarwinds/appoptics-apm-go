@@ -9,8 +9,8 @@ import (
 	"io"
 	"testing"
 
-	"github.com/librato/go-traceview/v1/tv"
-	"github.com/librato/go-traceview/v1/tv/internal/traceview"
+	"github.com/appoptics/go-appoptics/v1/tv"
+	"github.com/appoptics/go-appoptics/v1/tv/internal/traceview"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
