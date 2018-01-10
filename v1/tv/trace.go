@@ -5,7 +5,7 @@ package tv
 import (
 	"time"
 
-	"github.com/appoptics/go-appoptics/v1/tv/internal/traceview"
+	"github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview"
 )
 
 // Trace represents a distributed trace for this request that reports

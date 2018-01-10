@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/appoptics/go-appoptics/v1/tv/internal/hdrhist"
+	"github.com/appoptics/appoptics-apm-go/v1/tv/internal/hdrhist"
 )
 
 // Linux distributions and their identifying files
@@ -541,7 +541,7 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 }
 
 // performs URL fingerprinting on a given URL to extract the transaction name
-// e.g. https://github.com/appoptics/go-appoptics/blob/metrics becomes /appoptics/go-appoptics
+// e.g. https://github.com/appoptics/appoptics-apm-go/blob/metrics becomes /appoptics/appoptics-apm-go
 func getTransactionFromURL(url string) string {
 	matches := metricsHTTPMeasurements.uRLRegex.FindStringSubmatch(url)
 	var ret string

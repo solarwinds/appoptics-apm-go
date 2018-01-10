@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/appoptics/go-appoptics/v1/tv"
+	"github.com/appoptics/appoptics-apm-go/v1/tv"
 )
 
 // hard-coded service discovery

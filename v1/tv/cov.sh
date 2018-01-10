@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-COVERPKG="github.com/appoptics/go-appoptics/v1/tv/internal/traceview,github.com/appoptics/go-appoptics/v1/tv,github.com/appoptics/go-appoptics/v1/tv/ottv"
+COVERPKG="github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview,github.com/appoptics/appoptics-apm-go/v1/tv,github.com/appoptics/appoptics-apm-go/v1/tv/ottv"
 export APPOPTICS_DEBUG_LEVEL=0
 go test -v -covermode=count -coverprofile=cov.out -coverpkg $COVERPKG
 go test -v -tags disable_tracing -covermode=count -coverprofile=covtv.out -coverpkg $COVERPKG

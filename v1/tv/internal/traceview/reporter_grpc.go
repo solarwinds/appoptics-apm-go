@@ -15,7 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/appoptics/go-appoptics/v1/tv/internal/traceview/collector"
+	"github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview/collector"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"

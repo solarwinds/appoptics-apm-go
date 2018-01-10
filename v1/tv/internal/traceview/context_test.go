@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	g "github.com/appoptics/go-appoptics/v1/tv/internal/graphtest"
+	g "github.com/appoptics/appoptics-apm-go/v1/tv/internal/graphtest"
 	"github.com/stretchr/testify/assert"
 )
 

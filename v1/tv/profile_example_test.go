@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/appoptics/go-appoptics/v1/tv"
+	"github.com/appoptics/appoptics-apm-go/v1/tv"
 	"golang.org/x/net/context"
 )
 

@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/appoptics/go-appoptics/v1/tv/internal/hdrhist"
+	"github.com/appoptics/appoptics-apm-go/v1/tv/internal/hdrhist"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
@@ -206,8 +206,8 @@ func TestGetTransactionFromURL(t *testing.T) {
 	}
 	var test = []record{
 		{
-			"https://github.com/appoptics/go-appoptics/blob/metrics/reporter.go#L867",
-			"/appoptics/go-appoptics",
+			"https://github.com/appoptics/appoptics-apm-go/blob/metrics/reporter.go#L867",
+			"/appoptics/appoptics-apm-go",
 		},
 		{
 			"http://github.com/librato",
@@ -218,12 +218,12 @@ func TestGetTransactionFromURL(t *testing.T) {
 			"/",
 		},
 		{
-			"github.com/appoptics/go-appoptics/blob",
-			"/appoptics/go-appoptics",
+			"github.com/appoptics/appoptics-apm-go/blob",
+			"/appoptics/appoptics-apm-go",
 		},
 		{
-			"github.com:8080/appoptics/go-appoptics/blob",
-			"/appoptics/go-appoptics",
+			"github.com:8080/appoptics/appoptics-apm-go/blob",
+			"/appoptics/appoptics-apm-go",
 		},
 		{
 			" ",

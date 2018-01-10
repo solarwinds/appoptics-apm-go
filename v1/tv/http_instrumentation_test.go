@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/appoptics/go-appoptics/v1/tv"
-	g "github.com/appoptics/go-appoptics/v1/tv/internal/graphtest"
-	"github.com/appoptics/go-appoptics/v1/tv/internal/traceview"
+	"github.com/appoptics/appoptics-apm-go/v1/tv"
+	g "github.com/appoptics/appoptics-apm-go/v1/tv/internal/graphtest"
+	"github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"

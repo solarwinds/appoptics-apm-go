@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	g "github.com/appoptics/go-appoptics/v1/tv/internal/graphtest"
-	pb "github.com/appoptics/go-appoptics/v1/tv/internal/traceview/collector"
+	g "github.com/appoptics/appoptics-apm-go/v1/tv/internal/graphtest"
+	pb "github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview/collector"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/grpclog"
