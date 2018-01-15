@@ -28,7 +28,7 @@ func TestBeginProfile(t *testing.T) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testProf")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/appoptics/appoptics-apm-go/v1/tv_test.testProf")
-			assert.Contains(t, n.Map["File"], "/go-traceview/v1/tv/profile_test.go")
+			assert.Contains(t, n.Map["File"], "/appoptics-apm-go/v1/tv/profile_test.go")
 		}},
 	})
 }
@@ -54,7 +54,7 @@ func TestBeginSpanProfile(t *testing.T) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "testSpanProf")
 			assert.Equal(t, n.Map["FunctionName"], "github.com/appoptics/appoptics-apm-go/v1/tv_test.testSpanProf")
-			assert.Contains(t, n.Map["File"], "/go-traceview/v1/tv/profile_test.go")
+			assert.Contains(t, n.Map["File"], "/appoptics-apm-go/v1/tv/profile_test.go")
 		}},
 		{"", "profile_exit"}: {Edges: g.Edges{{"", "profile_entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
