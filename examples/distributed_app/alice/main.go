@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/appoptics/appoptics-apm-go/v1/tv"
+	"github.com/appoptics/appoptics-apm-go/v1/ao"
 )
 
 // hard-coded service discovery
@@ -26,8 +26,8 @@ var urls = []string{
 
 func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w, r := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
-	ctx := tv.NewContext(context.Background(), t)
+	t, w, r := ao.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	ctx := ao.NewContext(context.Background(), t)
 	defer t.End()
 	log.Printf("%s %s", r.Method, r.URL)
 
@@ -38,7 +38,7 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 	httpClient := &http.Client{}
 	httpReq, _ := http.NewRequest("GET", url, nil)
 	// begin layer for the client side of the HTTP service request
-	l := tv.BeginHTTPClientSpan(ctx, httpReq)
+	l := ao.BeginHTTPClientSpan(ctx, httpReq)
 
 	// make HTTP request to external API
 	resp, err := httpClient.Do(httpReq)
@@ -64,8 +64,8 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 
 func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w, r := tv.TraceFromHTTPRequestResponse("aliceHandler", w, r)
-	ctx := tv.NewContext(context.Background(), t)
+	t, w, r := ao.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	ctx := ao.NewContext(context.Background(), t)
 	t.SetAsync(true)
 	defer t.End()
 
@@ -87,7 +87,7 @@ func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 			client := &http.Client{}
 			req, _ := http.NewRequest("GET", url, nil)
 			// begin layer for the client side of the HTTP service request
-			l := tv.BeginHTTPClientSpan(ctx, req)
+			l := ao.BeginHTTPClientSpan(ctx, req)
 
 			// make HTTP request to external API
 			resp, err := client.Do(req)
