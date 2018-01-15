@@ -267,9 +267,8 @@ func main() {
 
 ### Configuration
 
-The `GO_TRACEVIEW_TRACING_MODE` environment variable may be set to "always", "through", or "never".
+The `APPOPTICS_TRACING_MODE` environment variable may be set to "always" or "never".
 - Mode "always" is the default, and will instruct AppOptics to consider sampling every inbound request for tracing.
-- Mode "through" will only continue traces started upstream by inbound requests, when a trace ID is available in the request metadata (e.g. an "X-Trace" HTTP header).
 - Mode "never" will disable tracing, and will neither start nor continue traces.
 
 
