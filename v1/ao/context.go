@@ -6,8 +6,8 @@ import "golang.org/x/net/context"
 
 type contextKeyT string
 
-var contextKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/tv.Trace")
-var contextSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/tv.Span")
+var contextKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.Trace")
+var contextSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.Span")
 
 // NewContext returns a copy of the parent context and associates it with a Trace.
 func NewContext(ctx context.Context, t Trace) context.Context {

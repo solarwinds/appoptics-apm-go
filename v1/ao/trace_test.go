@@ -204,7 +204,7 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 		{"", "profile_entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["Language"], "go")
 			assert.Equal(t, n.Map["ProfileName"], "f0")
-			assert.Equal(t, n.Map["FunctionName"], "github.com/appoptics/appoptics-apm-go/v1/tv_test."+f0name)
+			assert.Equal(t, n.Map["FunctionName"], "github.com/appoptics/appoptics-apm-go/v1/ao_test."+f0name)
 		}},
 		{"", "profile_exit"}: {Edges: g.Edges{{"", "profile_entry"}}},
 		// nested span in http.Get profile points to trace entry

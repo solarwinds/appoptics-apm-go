@@ -1,4 +1,4 @@
-coverpkg="github.com/appoptics/appoptics-apm-go/v1/tv/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/tv,github.com/appoptics/appoptics-apm-go/v1/tv/ottv"
+coverpkg="github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/ottv"
 cov_args=-covermode=atomic -coverpkg=$(coverpkg)
 cov_out=-coverprofile=cov.out 
 covtv_out=-coverprofile=covtv.out 
