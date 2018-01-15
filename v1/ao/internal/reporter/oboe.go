@@ -55,7 +55,6 @@ var globalSettingsCfg = &oboeSettingsCfg{
 	settings: make(map[oboeSettingKey]*oboeSettings),
 }
 
-// Initialize Traceview C instrumentation library ("oboe"):
 func init() {
 	readEnvSettings()
 	rand.Seed(time.Now().UnixNano())
