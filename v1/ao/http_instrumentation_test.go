@@ -411,7 +411,7 @@ func assertHTTPRequestUntracedGraph(t *testing.T, bufs [][]byte, resp *http.Resp
 	})
 }
 
-// assert traces that hit a TV-wrapped, panicking http Handler.
+// assert traces that hit an AO-wrapped, panicking http Handler.
 func assertHTTPRequestPanic(t *testing.T, bufs [][]byte, resp *http.Response, url, method string, port, status int) {
 
 	g.AssertGraph(t, bufs, 7, g.AssertNodeMap{

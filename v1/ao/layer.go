@@ -246,7 +246,7 @@ type labeler interface {
 type spanLabeler struct{ name string }
 type profileLabeler struct{ name string }
 
-// TV's Span and Profile spans report their layer and label names slightly differently
+// AO's Span and Profile spans report their layer and label names slightly differently
 func (l spanLabeler) entryLabel() reporter.Label    { return reporter.LabelEntry }
 func (l spanLabeler) exitLabel() reporter.Label     { return reporter.LabelExit }
 func (l spanLabeler) layerName() string             { return l.name }
