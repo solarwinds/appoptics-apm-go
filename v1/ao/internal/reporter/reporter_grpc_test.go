@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	testKeyPath  = path.Join(os.Getenv("GOPATH"), "src/github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview")
+	testKeyPath  = path.Join(os.Getenv("GOPATH"), "src/github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter")
 	testKeyFile  = path.Join(testKeyPath, "localhost.key")
 	testCertFile = path.Join(testKeyPath, "localhost.crt")
 )

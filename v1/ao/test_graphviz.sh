@@ -4,7 +4,7 @@
 # ./test_graphviz.sh -v
 # ./test_graphviz.sh -v -tags disable_tracing
 # ./test_graphviz.sh -v -run TestTraceHTTP
-# ./test_graphviz.sh -v -tags traceview github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview/
+# ./test_graphviz.sh -v github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/
 graphdir="${DOT_GRAPHDIR:=$(pwd)}"
 DOT_GRAPHS=1 DOT_GRAPHDIR="$graphdir" go test "$@"
 OPEN="echo"

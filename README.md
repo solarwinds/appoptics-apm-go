@@ -293,7 +293,7 @@ and under active development. We welcome your feedback, issues and feature reque
 
 ### Demo web app
 
-If you have installed AppOptics and this package, you can run the sample “web app” included with go-traceview:
+If you have installed AppOptics and this package, you can run the sample “web app” included with appoptics-apm-go:
 
     $ cd $GOPATH/src/github.com/appoptics/appoptics-apm-go/examples/sample_app
     $ go run main.go

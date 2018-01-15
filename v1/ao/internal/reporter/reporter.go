@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// defines what methods a reporter should offer (internal to traceview package)
+// defines what methods a reporter should offer (internal to reporter package)
 type reporter interface {
 	// called when an event should be reported
 	reportEvent(ctx *oboeContext, e *event) error

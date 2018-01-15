@@ -1,6 +1,6 @@
 // +build linux
 
-package traceview
+package reporter
 
 import (
 	"strings"

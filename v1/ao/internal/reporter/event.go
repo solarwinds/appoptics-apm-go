@@ -1,6 +1,6 @@
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 
-// Package traceview provides a low-level API for creating and reporting events for
+// Package reporter provides a low-level API for creating and reporting events for
 // distributed tracing with AppOptics.
 package reporter
 

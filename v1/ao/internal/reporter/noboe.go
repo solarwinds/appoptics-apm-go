@@ -2,7 +2,7 @@
 
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 
-package traceview
+package reporter
 
 func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	if usingTestReporter {
