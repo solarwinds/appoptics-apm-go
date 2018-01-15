@@ -62,7 +62,7 @@ func init() {
 
 func readEnvSettings() {
 	// Configure tracing mode setting using environment variable
-	mode := strings.ToLower(os.Getenv("GO_TRACEVIEW_TRACING_MODE"))
+	mode := strings.ToLower(os.Getenv("APPOPTICS_TRACING_MODE"))
 	switch mode {
 	case "always":
 		fallthrough

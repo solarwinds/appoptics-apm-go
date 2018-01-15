@@ -411,17 +411,17 @@ func TestSampleTokenBucket(t *testing.T) {
 func TestOboeTracingMode(t *testing.T) {
 	r := SetTestReporter()
 
-	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "ALWAYS")
+	os.Setenv("APPOPTICS_TRACING_MODE", "ALWAYS")
 	readEnvSettings()
 	assert.EqualValues(t, globalSettingsCfg.tracingMode, 1) // C.OBOE_TRACE_ALWAYS
 
-	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "never")
+	os.Setenv("APPOPTICS_TRACING_MODE", "never")
 	readEnvSettings()
 	assert.EqualValues(t, globalSettingsCfg.tracingMode, 0) // C.OBOE_TRACE_NEVER
 	ok, _, _ := oboeSampleRequest("myLayer", false)
 	assert.False(t, ok)
 
-	os.Setenv("GO_TRACEVIEW_TRACING_MODE", "")
+	os.Setenv("APPOPTICS_TRACING_MODE", "")
 	readEnvSettings()
 	assert.EqualValues(t, globalSettingsCfg.tracingMode, 1)
 
