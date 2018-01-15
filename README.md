@@ -50,10 +50,8 @@ Then, install the following:
 * [Go >= 1.5](https://golang.org/dl/)
 * This package: go get github.com/appoptics/appoptics-apm-go/v1/ao
 
-The install flow will wait for 5 traces to come in from your app.  You can
-check out the [demo](#demo) app below to get a quick start.  One you have 5,
-you can progress to [your account's overview
-page](https://login.tv.solarwinds.com/overview).
+The install flow will wait for some data to come in from your service before continuing. You can
+check out the [demo](#demo) app below to get a quick start.
 
 ### Building your app with or without tracing
 
@@ -70,11 +68,11 @@ calls to this API are no-ops, and [empty structs](https://dave.cheney.net/2014/0
 ### Usage examples
 
 The simplest integration option is this package's
-[tv.HTTPHandler](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#HTTPHandler) wrapper.  This
+[ao.HTTPHandler](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#HTTPHandler) wrapper.  This
 will monitor the performance of the provided
 [http.HandlerFunc](https://golang.org/pkg/net/http/#HandlerFunc), visualized with latency
 distribution heatmaps filterable by dimensions such as URL host & path, HTTP status & method, server
-hostname, etc. [tv.HTTPHandler](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#HTTPHandler)
+hostname, etc. [ao.HTTPHandler](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#HTTPHandler)
 will also continue a distributed trace described in the incoming HTTP request headers (from
 AppOptics's [automatic](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/)
 [C#/.NET](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#net),
@@ -118,8 +116,8 @@ func increasinglySlowHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/slow", tv.HTTPHandler(slowHandler))
-	http.HandleFunc("/slowly", tv.HTTPHandler(increasinglySlowHandler))
+	http.HandleFunc("/slow", ao.HTTPHandler(slowHandler))
+	http.HandleFunc("/slowly", ao.HTTPHandler(increasinglySlowHandler))
 	http.ListenAndServe(":8899", nil)
 }
 ```
@@ -127,29 +125,29 @@ func main() {
 
 To monitor more than just the overall latency of each request to your Go service, you will need to
 break a request's processing time down by placing small benchmarks into your code. To do so, first
-start or continue a `Trace` (the root `Layer`), then create a series of `Layer` spans (or `Profile`
+start or continue a `Trace` (the root `Span`), then create a series of `Span`s (or `Profile`
 timings) to capture the time used by different parts of the app's stack as it is processed.
 
-AppOptics provides two ways of measuring time spent by your code: a `Layer` can measure e.g. a
+AppOptics provides two ways of measuring time spent by your code: a `Span` can measure e.g. a
 single DB query or cache request, an outgoing HTTP or RPC request, the entire time spent within a
-controller method, or the time used by a middleware method between calls to child Layers. A
-`Profile` provides a named measurement of time spent inside a `Layer`, and is typically used to
+controller method, or the time used by a middleware method between calls to child Spans. A
+`Profile` provides a named measurement of time spent inside a `Span`, and is typically used to
 measure a single function call or code block, e.g. to represent the time used by expensive
-computation(s) occurring in a `Layer`. Layers can be created as children of other Layers, but a
+computation(s) occurring in a `Span`. Spans can be created as children of other Spans, but a
 `Profile` cannot have children.
 
-AppOptics identifies a reported Layer's type from its key-value pairs; if keys named "Query" and
-"RemoteHost" are used, a Layer is assumed to measure the extent of a DB query. KV pairs can be
-appended to Layer and Profile extents as optional extra variadic arguments to methods such as
-[BeginLayer()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginLayer) or
+AppOptics identifies a reported Span's type from its key-value pairs; if keys named "Query" and
+"RemoteHost" are used, a Span is assumed to measure the extent of a DB query. KV pairs can be
+appended to Span and Profile extents as optional extra variadic arguments to methods such as
+[BeginSpan()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginSpan) or
 [BeginProfile()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginProfile),
-[Info()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Layer), and
-[End()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Layer). We also provide helper methods
-such as [BeginQueryLayer()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginQueryLayer),
-[BeginCacheLayer()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginCacheLayer),
-[BeginRemoteURLLayer()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginRemoteURLLayer),
-[BeginRPCLayer()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginRPCLayer), and
-[BeginHTTPClientLayer()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginHTTPClientLayer)
+[Info()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Span), and
+[End()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Span). We also provide helper methods
+such as [BeginQuerySpan()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginQuerySpan),
+[BeginCacheSpan()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginCacheSpan),
+[BeginRemoteURLSpan()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginRemoteURLSpan),
+[BeginRPCSpan()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginRPCSpan), and
+[BeginHTTPClientSpan()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginHTTPClientSpan)
 that match the spec in our
 [custom instrumentation docs](https://docs.appoptics.com/kb/apm_tracing/custom_instrumentation/)
 to report attributes associated with different types of service calls, used for indexing AppOptics's
@@ -158,60 +156,61 @@ filterable charts and latency heatmaps.
 ```go
 func slowFunc(ctx context.Context) {
     // profile a slow function call
-    defer tv.BeginProfile(ctx, "slowFunc").End()
+    defer ao.BeginProfile(ctx, "slowFunc").End()
     // ... do something slow
 }
 
 func myHandler(ctx context.Context) {
-    // create new tv.Layer and context.Context for this part of the request
-    L, ctxL := tv.BeginLayer(ctx, "myHandler")
+    // create new ao.Span and context.Context for this part of the request
+    L, ctxL := ao.BeginSpan(ctx, "myHandler")
     defer L.End()
 
-    // profile a slow part of this tv.Layer
+    // profile a slow part of this ao.Span
     slowFunc(ctxL)
 
-    // Start a new Layer, given a parent layer
-    mL, _ := L.BeginLayer("myMiddleware")
+    // Start a new Span, given a parent span
+    mL, _ := L.BeginSpan("myMiddleware")
     // ... do something slow ...
     mL.End()
 
-    // Start a new query Layer, given a context.Context
-    q1L := tv.BeginQueryLayer(ctxL, "myDB", "SELECT * FROM tbl1", "postgresql", "db1.com")
+    // Start a new query Span, given a context.Context
+    q1L := ao.BeginQuerySpan(ctxL, "myDB", "SELECT * FROM tbl1", "postgresql", "db1.com")
     // perform a query
     q2L.End()
 }
 
 func processRequest() {
-    // Create tv.Trace and bind to new context.Context
-    ctx := tv.NewContext(context.Background(), tv.NewTrace("myApp"))
+    // Create ao.Trace and bind to new context.Context
+    ctx := ao.NewContext(context.Background(), ao.NewTrace("myApp"))
     myHandler(ctx) // Dispatch handler for request
-    tv.EndTrace(ctx)
+    ao.EndTrace(ctx)
 }
 ```
 
 ### Retrieving the context from an http request
 
-A common pattern when tracing in golang is to call `tv.HTTPHandler(handler)` then retrieve the trace
+A common pattern when tracing in golang is to call `ao.HTTPHandler(handler)` then retrieve the trace
 context inside of the handler.  
 ```go
 
 func myHandler( w http.ResponseWriter, r *http.Request ) {
     // trace this request, overwriting w with wrapped ResponseWriter
-    t, w := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
-    ctx := tv.NewContext(context.Background(), t)
+    t, w := ao.TraceFromHTTPRequestResponse("myHandler", w, r)
+    ctx := ao.NewContext(context.Background(), t)
     defer t.End()
 
-    //create a query layer
-    q1L := tv.BeginQueryLayer(ctx, "myDB", "SELECT * FROM tbl1", "postgresql", "db1.com")
-    //run you're query here
+    // create a query span
+    q1L := ao.BeginQuerySpan(ctx, "myDB", "SELECT * FROM tbl1", "postgresql", "db1.com")
 
-    //
+    // run your query here
+
+    // end the query span
     q1L.End()
 
     fmt.Fprintf(w, "I ran a query")
 
 func main() {
-    http.HandleFunc("/endpoint", tv.HTTPHandler(myHandler))
+    http.HandleFunc("/endpoint", ao.HTTPHandler(myHandler))
     http.ListenAndServe(":8899", nil)
 }
 ```
@@ -220,10 +219,10 @@ func main() {
 
 A AppOptics trace is defined by a context (a globally unique ID and metadata) that is persisted
 across the different hosts, processes, languages and methods that are used to serve a request. Thus
-to start a new Layer you need either a Trace or another Layer to begin from. (The Trace
-interface is also the root Layer, typically created when a request is first received.) Each new
-Layer is connected to its parent, so you should begin new child Layers from parents in a way that
-logically matches your application; for more information [see our custom layer
+to start a new Span you need either a Trace or another Span to begin from. (The Trace
+interface is also the root Span, typically created when a request is first received.) Each new
+Span is connected to its parent, so you should begin new child Spans from parents in a way that
+logically matches your application; for more information [see our custom span
 documentation](https://docs.appoptics.com/kb/apm_tracing/custom_instrumentation/).
 
 The [Go blog](https://blog.golang.org/context) recommends propagating request context using the
@@ -234,34 +233,34 @@ argument to every function on the call path between incoming and outgoing reques
 [Gizmo](https://godoc.org/github.com/NYTimes/gizmo/server#ContextHandler) use Context
 implementations, for example. We provide helper methods that allow a Trace to be associated with a
 [context.Context](https://godoc.org/golang.org/x/net/context) interface; for example,
-[tv.BeginLayer](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginLayer) returns both a
-new Layer and an associated context, and
-[tv.Info(ctx)](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Info) and
-[tv.End(ctx)](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Layer) both use the Layer
+[ao.BeginSpan](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginSpan) returns both a
+new Span and an associated context, and
+[ao.Info(ctx)](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Info) and
+[ao.End(ctx)](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Span) both use the Span
 defined in the provided context.
 
 It is not required to work with context.Context to trace your app, however. You can also use just
 the [Trace](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Trace),
-[Layer](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Layer), and
+[Span](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Span), and
 [Profile](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Profile) interfaces directly, if it
 better suits your instrumentation use case.
 
 ```go
 func runQuery(ctx context.Context, query string) {
-    l := tv.BeginQueryLayer(ctx, "myDB", query, "postgresql", "db1.com")
+    l := ao.BeginQuerySpan(ctx, "myDB", query, "postgresql", "db1.com")
     // .. execute query ..
     l.End()
 }
 
 func main() {
     // create trace and bind to new context
-    ctx := tv.NewContext(context.Background(), tv.NewTrace("myApp"))
+    ctx := ao.NewContext(context.Background(), ao.NewTrace("myApp"))
 
-    // pass the root layer context to runQuery
+    // pass the root span context to runQuery
     runQuery(ctx)
 
     // end trace
-    tv.EndTrace(ctx)
+    ao.EndTrace(ctx)
 }
 ```
 
@@ -343,12 +342,12 @@ concurrent handler:
 
 Support for the OpenTracing 1.0 API is available in the [ottv](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao/ottv) package as a technology preview. The
 OpenTracing tracer in that package provides support for OpenTracing span reporting and context
-propagation by using AppOptics's layer reporting and HTTP header formats, permitting the OT tracer
+propagation by using AppOptics's span reporting and HTTP header formats, permitting the OT tracer
 to continue distributed traces started by AppOptics's instrumentation and vice versa. Some of the
 OpenTracing standardized tags are mapped to AppOptics tag names as well.
 
-To set AppOptics's tracer to be your global tracer, call `opentracing.InitGlobalTracer(ottv.NewTracer())`.
-Currently, `ottv.NewTracer()` does not accept any options, but this may change in the future.
+To set AppOptics's tracer to be your global tracer, call `opentracing.InitGlobalTracer(otao.NewTracer())`.
+Currently, `otao.NewTracer()` does not accept any options, but this may change in the future.
 Please let us know if you are using this package while it is in preview by contacting us at opentracing@tracelytics.com.
 
 ## License
