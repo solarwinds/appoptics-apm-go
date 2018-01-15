@@ -2,7 +2,6 @@
 
 [![GoDoc](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao?status.svg)](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao)
 [![Build Status](https://travis-ci.org/appoptics/appoptics-apm-go.svg?branch=master)](https://travis-ci.org/appoptics/appoptics-apm-go)
-[![Coverage Status](https://coveralls.io/repos/github/appoptics/appoptics-apm-go/badge.svg?branch=master)](https://coveralls.io/github/appoptics/appoptics-apm-go?branch=master)
 [![codecov](https://codecov.io/gh/appoptics/appoptics-apm-go/branch/master/graph/badge.svg)](https://codecov.io/gh/appoptics/appoptics-apm-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/appoptics/appoptics-apm-go)](https://goreportcard.com/report/github.com/appoptics/appoptics-apm-go)
 
