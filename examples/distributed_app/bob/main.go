@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/appoptics/appoptics-apm-go/v1/tv"
+	"github.com/appoptics/appoptics-apm-go/v1/ao"
 )
 
 func bobHandler(w http.ResponseWriter, r *http.Request) {
@@ -16,6 +16,6 @@ func bobHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/bob", tv.HTTPHandler(bobHandler))
+	http.HandleFunc("/bob", ao.HTTPHandler(bobHandler))
 	http.ListenAndServe(":8081", nil)
 }

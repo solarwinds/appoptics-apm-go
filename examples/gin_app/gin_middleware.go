@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"net"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	"github.com/gin-gonic/gin"
-	"github.com/appoptics/appoptics-apm-go/v1/tv"
 	"golang.org/x/net/context"
 )
 
@@ -16,12 +16,12 @@ const (
 
 func Tracer() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		t, w, _ := tv.TraceFromHTTPRequestResponse("gin", c.Writer, c.Request)
-		c.Writer = &ginResponseWriter{w.(*tv.HTTPResponseWriter), c.Writer}
+		t, w, _ := ao.TraceFromHTTPRequestResponse("gin", c.Writer, c.Request)
+		c.Writer = &ginResponseWriter{w.(*ao.HTTPResponseWriter), c.Writer}
 		t.SetControllerAction(ginLayerName, c.HandlerName())
 		defer t.End()
 		// create a context.Context and bind it to the gin.Context
-		c.Set(ginContextKey, tv.NewContext(context.Background(), t))
+		c.Set(ginContextKey, ao.NewContext(context.Background(), t))
 		// Pass to the next handler
 		c.Next()
 	}
@@ -30,7 +30,7 @@ func Tracer() gin.HandlerFunc {
 // ginResponseWriter satisfies the gin.ResponseWriter interface
 type ginResponseWriter struct {
 	// handles Write, WriteHeader, Header (by calling wrapped gin writer)
-	*tv.HTTPResponseWriter
+	*ao.HTTPResponseWriter
 	// handles all other gin.ResponseWriter methods
 	ginWriter gin.ResponseWriter
 }

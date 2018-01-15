@@ -20,19 +20,19 @@ install:
   - go get github.com/uluyol/hdrhist
 
 script:
-  - cd $GOPATH/src/github.com/appoptics/appoptics-apm-go/v1/tv
-  - go build -v github.com/appoptics/appoptics-apm-go/v1/tv github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview
-  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview,github.com/appoptics/appoptics-apm-go/v1/tv
-  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covtv.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview,github.com/appoptics/appoptics-apm-go/v1/tv
-  - pushd internal/traceview/
+  - cd $GOPATH/src/github.com/appoptics/appoptics-apm-go/v1/ao
+  - go build -v github.com/appoptics/appoptics-apm-go/v1/ao github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter
+  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao
+  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covao.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao
+  - pushd internal/reporter/
   - go test -v -covermode=atomic -coverprofile=cov.out
-  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covtv.out
+  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covao.out
   - popd
-  - pushd ottv
-  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview,github.com/appoptics/appoptics-apm-go/v1/tv/ottv,github.com/appoptics/appoptics-apm-go/v1/tv
-  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covtv.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/tv/internal/traceview,github.com/appoptics/appoptics-apm-go/v1/tv/ottv,github.com/appoptics/appoptics-apm-go/v1/tv
+  - pushd opentracing
+  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao
+  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covao.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao
   - popd
-  - gocovmerge cov.out covtv.out internal/traceview/cov.out internal/traceview/covtv.out ottv/cov.out ottv/covtv.out > coverage.txt
+  - gocovmerge cov.out covao.out internal/reporter/cov.out internal/reporter/covao.out opentracing/cov.out opentracing/covao.out > coverage.txt
 
 after_success:
   - if [[ $TRAVIS_GO_VERSION == 1.9* ]]; then bash <(curl -s https://codecov.io/bash); fi
