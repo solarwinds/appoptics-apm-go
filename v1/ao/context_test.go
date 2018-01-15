@@ -17,25 +17,25 @@ func TestContext(t *testing.T) {
 
 	ctx := context.Background()
 	assert.Empty(t, MetadataString(ctx))
-	tr := NewTrace("test").(*tvTrace)
+	tr := NewTrace("test").(*aoTrace)
 
-	xt := tr.tvCtx.MetadataString()
-	//	assert.True(t, IsSampled(ctx), "%T", tr.tvCtx)
+	xt := tr.aoCtx.MetadataString()
+	//	assert.True(t, IsSampled(ctx), "%T", tr.aoCtx)
 
 	var traceKey = struct{}{}
 
 	ctx2 := context.WithValue(ctx, traceKey, tr)
 	assert.Equal(t, ctx2.Value(traceKey), tr)
-	assert.Equal(t, ctx2.Value(traceKey).(*tvTrace).tvCtx.MetadataString(), xt)
+	assert.Equal(t, ctx2.Value(traceKey).(*aoTrace).aoCtx.MetadataString(), xt)
 
-	ctxx := tr.tvCtx.Copy()
+	ctxx := tr.aoCtx.Copy()
 	lbl := spanLabeler{"L1"}
-	tr2 := &tvTrace{layerSpan: layerSpan{span: span{tvCtx: ctxx, labeler: lbl}}}
+	tr2 := &aoTrace{layerSpan: layerSpan{span: span{aoCtx: ctxx, labeler: lbl}}}
 	ctx3 := context.WithValue(ctx2, traceKey, tr2)
 	assert.Equal(t, ctx3.Value(traceKey), tr2)
 
-	ctxx2 := tr2.tvCtx.Copy()
-	tr3 := &tvTrace{layerSpan: layerSpan{span: span{tvCtx: ctxx2}}}
+	ctxx2 := tr2.aoCtx.Copy()
+	tr3 := &aoTrace{layerSpan: layerSpan{span: span{aoCtx: ctxx2}}}
 	ctx4 := context.WithValue(ctx3, traceKey, tr3)
 	assert.Equal(t, ctx4.Value(traceKey), tr3)
 
@@ -91,10 +91,10 @@ func TestNullSpan(t *testing.T) {
 	assert.False(t, c1.IsSampled())
 	assert.False(t, c1.ok())
 	assert.Empty(t, c1.MetadataString())
-	c1.addChildEdge(l1.tvContext())
+	c1.addChildEdge(l1.aoContext())
 	c1.addProfile(p1)
 
-	nctx := c1.tvContext()
+	nctx := c1.aoContext()
 	assert.Equal(t, reflect.TypeOf(nctx).Elem().Name(), "nullContext")
 	assert.IsType(t, reflect.TypeOf(nctx.Copy()).Elem().Name(), "nullContext")
 

@@ -47,7 +47,7 @@ type Span interface {
 	IsReporting() bool
 	addChildEdge(reporter.Context)
 	addProfile(Profile)
-	tvContext() reporter.Context
+	aoContext() reporter.Context
 	ok() bool
 }
 
@@ -65,7 +65,7 @@ type Profile interface {
 // and context bound to the new child Span.
 func BeginSpan(ctx context.Context, spanName string, args ...interface{}) (Span, context.Context) {
 	if parent, ok := fromContext(ctx); ok && parent.ok() { // report span entry from parent context
-		l := newSpan(parent.tvContext().Copy(), spanName, parent, args...)
+		l := newSpan(parent.aoContext().Copy(), spanName, parent, args...)
 		return l, newSpanContext(ctx, l)
 	}
 	return nullSpan{}, ctx
@@ -74,7 +74,7 @@ func BeginSpan(ctx context.Context, spanName string, args ...interface{}) (Span,
 // BeginSpan starts a new Span, returning a child of this Span.
 func (s *layerSpan) BeginSpan(spanName string, args ...interface{}) Span {
 	if s.ok() { // copy parent context and report entry from child
-		return newSpan(s.tvCtx.Copy(), spanName, s, args...)
+		return newSpan(s.aoCtx.Copy(), spanName, s, args...)
 	}
 	return nullSpan{}
 }
@@ -87,7 +87,7 @@ func (s *layerSpan) BeginSpan(spanName string, args ...interface{}) Span {
 //    }
 func BeginProfile(ctx context.Context, profileName string, args ...interface{}) Profile {
 	if parent, ok := fromContext(ctx); ok && parent.ok() { // report profile entry from parent context
-		return newProfile(parent.tvContext().Copy(), profileName, parent, args...)
+		return newProfile(parent.aoContext().Copy(), profileName, parent, args...)
 	}
 	return nullSpan{}
 }
@@ -96,7 +96,7 @@ func BeginProfile(ctx context.Context, profileName string, args ...interface{}) 
 // The returned Profile should be closed with End().
 func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profile {
 	if s.ok() { // copy parent context and report entry from child
-		return newProfile(s.tvCtx.Copy(), profileName, s, args...)
+		return newProfile(s.aoCtx.Copy(), profileName, s, args...)
 	}
 	return nullSpan{}
 }
@@ -113,13 +113,13 @@ func (s *span) End(args ...interface{}) {
 		for _, edge := range s.childEdges { // add Edge KV for each joined child
 			args = append(args, "Edge", edge)
 		}
-		_ = s.tvCtx.ReportEvent(s.exitLabel(), s.layerName(), args...)
+		_ = s.aoCtx.ReportEvent(s.exitLabel(), s.layerName(), args...)
 		s.childEdges = nil // clear child edge list
 		s.endArgs = nil
 		s.ended = true
 		// add this span's context to list to be used as Edge by parent exit
 		if s.parent != nil && s.parent.ok() {
-			s.parent.addChildEdge(s.tvCtx)
+			s.parent.addChildEdge(s.aoCtx)
 		}
 	}
 }
@@ -141,7 +141,7 @@ func (s *layerSpan) AddEndArgs(args ...interface{}) {
 // Info reports KV pairs provided by args.
 func (s *layerSpan) Info(args ...interface{}) {
 	if s.ok() {
-		_ = s.tvCtx.ReportEvent(reporter.LabelInfo, s.layerName(), args...)
+		_ = s.aoCtx.ReportEvent(reporter.LabelInfo, s.layerName(), args...)
 	}
 }
 
@@ -149,14 +149,14 @@ func (s *layerSpan) Info(args ...interface{}) {
 // tracing (to create a remote child span). If the Span has ended, an empty string is returned.
 func (s *layerSpan) MetadataString() string {
 	if s.ok() {
-		return s.tvCtx.MetadataString()
+		return s.aoCtx.MetadataString()
 	}
 	return ""
 }
 
 func (s *layerSpan) IsSampled() bool {
 	if s.ok() {
-		return s.tvCtx.IsSampled()
+		return s.aoCtx.IsSampled()
 	}
 	return false
 }
@@ -171,7 +171,7 @@ func (s *layerSpan) SetAsync(val bool) {
 // Error reports an error, distinguished by its class and message
 func (s *span) Error(class, msg string) {
 	if s.ok() {
-		_ = s.tvCtx.ReportEvent(reporter.LabelError, s.layerName(),
+		_ = s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
 			"ErrorClass", class, "ErrorMsg", msg, "Backtrace", debug.Stack())
 	}
 }
@@ -179,7 +179,7 @@ func (s *span) Error(class, msg string) {
 // Err reports the provided error type
 func (s *span) Err(err error) {
 	if s.ok() && err != nil {
-		_ = s.tvCtx.ReportEvent(reporter.LabelError, s.layerName(),
+		_ = s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
 			"ErrorClass", "error", "ErrorMsg", err.Error(), "Backtrace", debug.Stack())
 	}
 }
@@ -188,7 +188,7 @@ func (s *span) Err(err error) {
 // both Span and Profile interfaces.
 type span struct {
 	labeler
-	tvCtx         reporter.Context
+	aoCtx         reporter.Context
 	parent        Span
 	childEdges    []reporter.Context // for reporting in exit event
 	childProfiles []Profile
@@ -211,7 +211,7 @@ func (s nullSpan) IsReporting() bool                                     { retur
 func (s nullSpan) addChildEdge(reporter.Context)                         {}
 func (s nullSpan) addProfile(Profile)                                    {}
 func (s nullSpan) ok() bool                                              { return false }
-func (s nullSpan) tvContext() reporter.Context                           { return reporter.NewNullContext() }
+func (s nullSpan) aoContext() reporter.Context                           { return reporter.NewNullContext() }
 func (s nullSpan) MetadataString() string                                { return "" }
 func (s nullSpan) IsSampled() bool                                       { return false }
 func (s nullSpan) SetAsync(bool)                                         {}
@@ -223,7 +223,7 @@ func (s *span) ok() bool {
 	return s != nil && !s.ended
 }
 func (s *span) IsReporting() bool           { return s.ok() }
-func (s *span) tvContext() reporter.Context { return s.tvCtx }
+func (s *span) aoContext() reporter.Context { return s.aoCtx }
 
 // addChildEdge keeps track of edges to closed child spans
 func (s *span) addChildEdge(ctx reporter.Context) {
@@ -254,16 +254,16 @@ func (l profileLabeler) entryLabel() reporter.Label { return reporter.LabelProfi
 func (l profileLabeler) exitLabel() reporter.Label  { return reporter.LabelProfileExit }
 func (l profileLabeler) layerName() string          { return "" }
 
-func newSpan(tvCtx reporter.Context, spanName string, parent Span, args ...interface{}) Span {
+func newSpan(aoCtx reporter.Context, spanName string, parent Span, args ...interface{}) Span {
 	ll := spanLabeler{spanName}
-	if err := tvCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
+	if err := aoCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
 		return nullSpan{}
 	}
-	return &layerSpan{span: span{tvCtx: tvCtx.Copy(), labeler: ll, parent: parent}}
+	return &layerSpan{span: span{aoCtx: aoCtx.Copy(), labeler: ll, parent: parent}}
 
 }
 
-func newProfile(tvCtx reporter.Context, profileName string, parent Span, args ...interface{}) Profile {
+func newProfile(aoCtx reporter.Context, profileName string, parent Span, args ...interface{}) Profile {
 	var fname string
 	pc, file, line, ok := runtime.Caller(2) // Caller(1) is BeginProfile
 	if ok {
@@ -271,13 +271,13 @@ func newProfile(tvCtx reporter.Context, profileName string, parent Span, args ..
 		fname = f.Name()
 	}
 	pl := profileLabeler{profileName}
-	if err := tvCtx.ReportEvent(pl.entryLabel(), pl.layerName(), // report profile entry
+	if err := aoCtx.ReportEvent(pl.entryLabel(), pl.layerName(), // report profile entry
 		"Language", "go", "ProfileName", profileName,
 		"FunctionName", fname, "File", file, "LineNumber", line,
 	); err != nil {
 		return nullSpan{}
 	}
-	p := &profileSpan{span{tvCtx: tvCtx.Copy(), labeler: pl, parent: parent,
+	p := &profileSpan{span{aoCtx: aoCtx.Copy(), labeler: pl, parent: parent,
 		endArgs: []interface{}{"Language", "go", "ProfileName", profileName}}}
 	if parent != nil && parent.ok() {
 		parent.addProfile(p)

@@ -59,13 +59,13 @@ type traceHTTPSpan struct {
 	action     string
 }
 
-type tvTrace struct {
+type aoTrace struct {
 	layerSpan
 	exitEvent reporter.Event
 	httpSpan  traceHTTPSpan
 }
 
-func (t *tvTrace) tvContext() reporter.Context { return t.tvCtx }
+func (t *aoTrace) aoContext() reporter.Context { return t.aoCtx }
 
 // NewTrace creates a new Trace for reporting to AppOptics and immediately records
 // the beginning of a root span named spanName. If this trace is sampled, it may report
@@ -75,8 +75,8 @@ func NewTrace(spanName string) Trace {
 	if !ok {
 		return &nullTrace{}
 	}
-	return &tvTrace{
-		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: spanLabeler{spanName}}},
+	return &aoTrace{
+		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
 	}
 }
 
@@ -93,14 +93,14 @@ func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
 	if !ok {
 		return &nullTrace{}
 	}
-	return &tvTrace{
-		layerSpan: layerSpan{span: span{tvCtx: ctx, labeler: spanLabeler{spanName}}},
+	return &aoTrace{
+		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
 	}
 }
 
 // EndTrace reports the exit event for the span name that was used when calling NewTrace().
 // No more events should be reported from this trace.
-func (t *tvTrace) End(args ...interface{}) {
+func (t *aoTrace) End(args ...interface{}) {
 	if t.ok() {
 		t.AddEndArgs(args...)
 		t.reportExit()
@@ -108,7 +108,7 @@ func (t *tvTrace) End(args ...interface{}) {
 }
 
 // EndCallback ends a Trace, reporting additional KV pairs returned by calling cb
-func (t *tvTrace) EndCallback(cb func() KVMap) {
+func (t *aoTrace) EndCallback(cb func() KVMap) {
 	if t.ok() {
 		if cb != nil {
 			var args []interface{}
@@ -122,22 +122,22 @@ func (t *tvTrace) EndCallback(cb func() KVMap) {
 }
 
 // SetStartTime sets the start time of a trace
-func (t *tvTrace) SetStartTime(start time.Time) {
+func (t *aoTrace) SetStartTime(start time.Time) {
 	t.httpSpan.start = start
 }
 
 // SetMethod sets the request's HTTP method, if any
-func (t *tvTrace) SetMethod(method string) {
+func (t *aoTrace) SetMethod(method string) {
 	t.httpSpan.span.Method = method
 }
 
 // SetControllerAction sets the controller and action
-func (t *tvTrace) SetControllerAction(controller, action string) {
+func (t *aoTrace) SetControllerAction(controller, action string) {
 	t.httpSpan.controller = controller
 	t.httpSpan.action = action
 }
 
-func (t *tvTrace) reportExit() {
+func (t *aoTrace) reportExit() {
 	if t.ok() {
 		t.lock.Lock()
 		defer t.lock.Unlock()
@@ -152,9 +152,9 @@ func (t *tvTrace) reportExit() {
 			t.endArgs = append(t.endArgs, "Edge", edge)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
-			_ = t.exitEvent.ReportContext(t.tvCtx, true, t.endArgs...)
+			_ = t.exitEvent.ReportContext(t.aoCtx, true, t.endArgs...)
 		} else {
-			_ = t.tvCtx.ReportEvent(reporter.LabelExit, t.layerName(), t.endArgs...)
+			_ = t.aoCtx.ReportEvent(reporter.LabelExit, t.layerName(), t.endArgs...)
 		}
 
 		t.childEdges = nil // clear child edge list
@@ -163,14 +163,14 @@ func (t *tvTrace) reportExit() {
 	}
 }
 
-func (t *tvTrace) IsSampled() bool { return t != nil && t.tvCtx.IsSampled() }
+func (t *aoTrace) IsSampled() bool { return t != nil && t.aoCtx.IsSampled() }
 
 // ExitMetadata reports the X-Trace metadata string that will be used by the exit event.
 // This is useful for setting response headers before reporting the end of the span.
-func (t *tvTrace) ExitMetadata() (mdHex string) {
+func (t *aoTrace) ExitMetadata() (mdHex string) {
 	if t.IsSampled() {
 		if t.exitEvent == nil {
-			t.exitEvent = t.tvCtx.NewEvent(reporter.LabelExit, t.layerName(), false)
+			t.exitEvent = t.aoCtx.NewEvent(reporter.LabelExit, t.layerName(), false)
 		}
 		if t.exitEvent != nil {
 			mdHex = t.exitEvent.MetadataString()
@@ -181,7 +181,7 @@ func (t *tvTrace) ExitMetadata() (mdHex string) {
 
 // recordHTTPSpan extract http status, controller and action from the deferred endArgs
 // and fill them into trace's httpSpan struct. The data is then sent to the span message channel.
-func (t *tvTrace) recordHTTPSpan() {
+func (t *aoTrace) recordHTTPSpan() {
 	var controller, action string
 	num := len([]string{"Status", "Controller", "Action"})
 	for i := 0; (i+1 < len(t.endArgs)) && (num > 0); i += 2 {
