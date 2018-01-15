@@ -159,7 +159,7 @@ func TestSingleHTTPSpan(t *testing.T) {
 	assert.Equal(t, 1, len(r.StatusBufs))
 }
 
-// testServer tests creating a span/trace from inside an HTTP handler (using tv.TraceFromHTTPRequest)
+// testServer tests creating a span/trace from inside an HTTP handler (using ao.TraceFromHTTPRequest)
 func testServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		// create span from incoming HTTP Request headers, if trace exists
@@ -178,7 +178,7 @@ func testServer(t *testing.T, list net.Listener) {
 	assert.NoError(t, s.Serve(list))
 }
 
-// same as testServer, but with external tv.HTTPHandler() handler wrapping
+// same as testServer, but with external ao.HTTPHandler() handler wrapping
 func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 	s := &http.Server{Handler: http.HandlerFunc(ao.HTTPHandler(func(writer http.ResponseWriter, req *http.Request) {
 		// create span from incoming HTTP Request headers, if trace exists
@@ -207,7 +207,7 @@ func testServer403(t *testing.T, list net.Listener) {
 	assert.NoError(t, s.Serve(list))
 }
 
-// simulate panic-catching middleware wrapping tv.HTTPHandler(handlerPanic)
+// simulate panic-catching middleware wrapping ao.HTTPHandler(handlerPanic)
 func panicCatchingMiddleware(t *testing.T, f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

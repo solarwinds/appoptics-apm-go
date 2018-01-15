@@ -1,6 +1,6 @@
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
-package ottv
+package opentracing
 
 import (
 	"testing"

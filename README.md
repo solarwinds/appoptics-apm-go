@@ -340,14 +340,14 @@ concurrent handler:
 
 ### OpenTracing
 
-Support for the OpenTracing 1.0 API is available in the [ottv](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao/ottv) package as a technology preview. The
+Support for the OpenTracing 1.0 API is available in the [opentracing](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao/opentracing) package as a technology preview. The
 OpenTracing tracer in that package provides support for OpenTracing span reporting and context
 propagation by using AppOptics's span reporting and HTTP header formats, permitting the OT tracer
 to continue distributed traces started by AppOptics's instrumentation and vice versa. Some of the
 OpenTracing standardized tags are mapped to AppOptics tag names as well.
 
-To set AppOptics's tracer to be your global tracer, call `opentracing.InitGlobalTracer(otao.NewTracer())`.
-Currently, `otao.NewTracer()` does not accept any options, but this may change in the future.
+To set AppOptics's tracer to be your global tracer, call `opentracing.InitGlobalTracer(opentracing.NewTracer())`.
+Currently, `opentracing.NewTracer()` does not accept any options, but this may change in the future.
 Please let us know if you are using this package while it is in preview by contacting us at opentracing@tracelytics.com.
 
 ## License

@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/ottv"
+	ao_ot "github.com/appoptics/appoptics-apm-go/v1/ao/opentracing"
 	ot "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	otlog "github.com/opentracing/opentracing-go/log"
@@ -143,7 +143,7 @@ func concurrentOttoHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	ot.InitGlobalTracer(ottv.NewTracer())
+	ot.InitGlobalTracer(ao_ot.NewTracer())
 
 	http.HandleFunc("/otto", ottoHandler)
 	http.HandleFunc("/concurrent", concurrentOttoHandler)

@@ -82,7 +82,7 @@ func (s *layerSpan) BeginSpan(spanName string, args ...interface{}) Span {
 // BeginProfile begins a profiled block or method and return a context that should be closed with End().
 // You can use defer to profile a function in one line, as below:
 //   func exampleFunc(ctx context.Context) {
-//       defer tv.BeginProfile(ctx, "exampleFunc").End()
+//       defer ao.BeginProfile(ctx, "exampleFunc").End()
 //       // ... do something ...
 //    }
 func BeginProfile(ctx context.Context, profileName string, args ...interface{}) Profile {

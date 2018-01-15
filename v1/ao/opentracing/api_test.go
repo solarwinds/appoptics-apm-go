@@ -1,12 +1,12 @@
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
-package ottv
+package opentracing
 
 import (
 	"testing"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
-	"github.com/appoptics/appoptics-apm-go/v1/ao/ottv/internal/harness"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/opentracing/internal/harness"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/suite"
 )

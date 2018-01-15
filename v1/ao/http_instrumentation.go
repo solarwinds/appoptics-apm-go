@@ -24,7 +24,7 @@ const httpSpanKey = "github.com/appoptics/appoptics-apm-go/v1/ao.HTTPSpan"
 
 // HTTPHandler wraps an http.HandlerFunc with entry / exit events,
 // returning a new handler that can be used in its place.
-//   http.HandleFunc("/path", tv.HTTPHandler(myHandler))
+//   http.HandleFunc("/path", ao.HTTPHandler(myHandler))
 func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	// At wrap time (when binding handler to router): get name of wrapped handler func
 	var endArgs []interface{}
@@ -57,7 +57,7 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 // should be used in place of the one passed into this function in order to observe the response's
 // headers and status code.
 //   func myHandler(w http.ResponseWriter, r *http.Request) {
-//       tr, w, r := tv.TraceFromHTTPRequestResponse("myHandler", w, r)
+//       tr, w, r := ao.TraceFromHTTPRequestResponse("myHandler", w, r)
 //       defer tr.End()
 //       // ...
 //   }

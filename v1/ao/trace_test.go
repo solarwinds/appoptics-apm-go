@@ -89,14 +89,14 @@ func traceExample(t *testing.T, ctx context.Context) {
 	tr := ao.FromContext(ctx)
 	// instrument a DB query
 	q := "SELECT * FROM tbl"
-	// l, _ := tv.BeginSpan(ctx, "DBx", "Query", q, "Flavor", "postgresql", "RemoteHost", "db.com")
+	// l, _ := ao.BeginSpan(ctx, "DBx", "Query", q, "Flavor", "postgresql", "RemoteHost", "db.com")
 	l := ao.BeginQuerySpan(ctx, "DBx", q, "postgresql", "db.com")
 	// db.Query(q)
 	time.Sleep(20 * time.Millisecond)
 	l.Error("QueryError", "Error running query!")
 	l.End()
 
-	// tv.Info and tv.Error report on the root span
+	// ao.Info and ao.Error report on the root span
 	tr.Info("HTTP-Status", 500)
 	tr.Error("TimeoutError", "response timeout")
 
@@ -119,7 +119,7 @@ func traceExampleCtx(t *testing.T, ctx context.Context) {
 	ao.End(ctxQ)
 	assert.False(t, ao.IsSampled(ctxQ)) // Not considered sampled after span ends
 
-	// tv.Info and tv.Error report on the root span
+	// ao.Info and ao.Error report on the root span
 	ao.Info(ctx, "HTTP-Status", 500)
 	ao.Error(ctx, "TimeoutError", "response timeout")
 
@@ -131,7 +131,7 @@ func traceExampleCtx(t *testing.T, ctx context.Context) {
 func f0(ctx context.Context) {
 	defer ao.BeginProfile(ctx, "f0").End()
 
-	//	l, _ := tv.BeginSpan(ctx, "http.Get", "RemoteURL", "http://a.b")
+	//	l, _ := ao.BeginSpan(ctx, "http.Get", "RemoteURL", "http://a.b")
 	l := ao.BeginRemoteURLSpan(ctx, "http.Get", "http://a.b")
 	time.Sleep(5 * time.Millisecond)
 	// _, _ = http.Get("http://a.b")
