@@ -65,7 +65,7 @@ func TestHTTPHandler404(t *testing.T) {
 			assert.Equal(t, response.HeaderMap.Get(ao.HTTPHeaderName), n.Map[ao.HTTPHeaderName])
 			assert.EqualValues(t, response.Code, n.Map["Status"])
 			assert.EqualValues(t, 404, n.Map["Status"])
-			assert.Equal(t, "tv_test", n.Map["Controller"])
+			assert.Equal(t, "ao_test", n.Map["Controller"])
 			assert.Equal(t, "handler404", n.Map["Action"])
 		}},
 	})
@@ -90,7 +90,7 @@ func TestHTTPHandler200(t *testing.T) {
 			assert.Equal(t, response.HeaderMap[ao.HTTPHeaderName][0], n.Map[ao.HTTPHeaderName])
 			assert.EqualValues(t, response.Code, n.Map["Status"])
 			assert.EqualValues(t, 200, n.Map["Status"])
-			assert.Equal(t, "tv_test", n.Map["Controller"])
+			assert.Equal(t, "ao_test", n.Map["Controller"])
 			assert.Equal(t, "handler200", n.Map["Action"])
 		}},
 	})
@@ -130,7 +130,7 @@ func TestHTTPSpan(t *testing.T) {
 	m = make(map[string]interface{})
 	bson.Unmarshal(r.StatusBufs[2], m)
 
-	assert.Equal(t, "tv_test.handlerDelay200", m["transaction"])
+	assert.Equal(t, "ao_test.handlerDelay200", m["transaction"])
 	assert.Equal(t, "", m["url"])
 	assert.Equal(t, 200, m["status"])
 	assert.Equal(t, "GET", m["method"])
@@ -145,7 +145,7 @@ func TestHTTPSpan(t *testing.T) {
 	m = make(map[string]interface{})
 	bson.Unmarshal(r.StatusBufs[4], m)
 
-	assert.Equal(t, "tv_test.handlerDelay503", m["transaction"])
+	assert.Equal(t, "ao_test.handlerDelay503", m["transaction"])
 	assert.Equal(t, 503, m["status"])
 	assert.True(t, m["hasError"].(bool))
 	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
@@ -432,7 +432,7 @@ func assertHTTPRequestPanic(t *testing.T, bufs [][]byte, resp *http.Response, ur
 			assert.Equal(t, "panicking!", n.Map["ErrorMsg"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "error"}}, Callback: func(n g.Node) {
-			assert.Equal(t, "tv_test", n.Map["Controller"])
+			assert.Equal(t, "ao_test", n.Map["Controller"])
 			assert.Equal(t, "handlerPanic", n.Map["Action"])
 			assert.Equal(t, status, n.Map["Status"])
 		}},
@@ -520,7 +520,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"myHandler", "exit"}, {"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, 403, n.Map["Status"])
-			assert.Equal(t, "tv_test", n.Map["Controller"])
+			assert.Equal(t, "ao_test", n.Map["Controller"])
 			assert.Equal(t, "testDoubleWrappedServer.func1", n.Map["Action"])
 		}},
 		{"myHandler", "entry"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {

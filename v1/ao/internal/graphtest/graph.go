@@ -260,9 +260,9 @@ func AssertGraph(t *testing.T, bufs [][]byte, numNodes int, asserterMap Asserter
 			return f[strings.LastIndex(f, "/")+1:]
 		}
 		caller := funcDepth(1)
-		for i := 2; strings.HasPrefix(strings.ToLower(caller), "tv_test.assert") ||
+		for i := 2; strings.HasPrefix(strings.ToLower(caller), "ao_test.assert") ||
 			strings.HasPrefix(caller, "graphtest.") ||
-			strings.HasPrefix(caller, "tv_test.test"); i++ {
+			strings.HasPrefix(caller, "ao_test.test"); i++ {
 			caller = funcDepth(i)
 		}
 		fname := fmt.Sprintf("graph_%s-%d_%d.dot", caller, line, os.Getpid())
