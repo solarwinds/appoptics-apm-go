@@ -85,7 +85,7 @@ func TestReportEvent(t *testing.T) {
 // test behavior of the TestReporter
 func TestTestReporter(t *testing.T) {
 	r := SetTestReporter()
-	r.Close(1) // wait on event that will never be reported: causes timeout
+	r.Close(0) // wait on event that will never be reported: causes timeout
 	assert.Len(t, r.EventBufs, 0)
 
 	r = SetTestReporter()

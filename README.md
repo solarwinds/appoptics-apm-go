@@ -200,7 +200,7 @@ context inside of the handler.
 
 func myHandler( w http.ResponseWriter, r *http.Request ) {
     // trace this request, overwriting w with wrapped ResponseWriter
-    t, w := ao.TraceFromHTTPRequestResponse("myHandler", w, r)
+    t, w, r := ao.TraceFromHTTPRequestResponse("myHandler", w, r)
     ctx := ao.NewContext(context.Background(), t)
     defer t.End()
 

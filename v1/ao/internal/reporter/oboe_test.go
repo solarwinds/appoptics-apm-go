@@ -127,8 +127,8 @@ func TestSamplingRate(t *testing.T) {
 	total := 100000
 	traced := callShouldTraceRequest(total, false)
 
-	// make sure we're within 5% of our expected rate over 1,000,000 trials
-	assert.InDelta(t, 2.5, float64(traced)*100/float64(total), 0.1)
+	// make sure we're within 20% of our expected rate over 1,000,000 trials
+	assert.InDelta(t, 2.5, float64(traced)*100/float64(total), 0.2)
 
 	c := globalSettingsCfg
 	assert.EqualValues(t, c.requested, total)
@@ -137,7 +137,7 @@ func TestSamplingRate(t *testing.T) {
 	assert.EqualValues(t, c.sampled, traced)
 	assert.EqualValues(t, c.limited, 0)
 
-	r.Close(2)
+	r.Close(0)
 	// XXX assert bufs
 }
 
@@ -157,7 +157,7 @@ func TestSampleTracingDisabled(t *testing.T) {
 	traced = callShouldTraceRequest(total, false)
 	assert.EqualValues(t, 0, traced)
 
-	r.Close(2)
+	r.Close(0)
 }
 
 func TestSampleNoValidSettings(t *testing.T) {
@@ -172,7 +172,7 @@ func TestSampleNoValidSettings(t *testing.T) {
 	//assert.Contains(t, buf.String(), "Sampling disabled for go_test until valid settings are retrieved")
 	assert.EqualValues(t, 0, traced)
 
-	r.Close(2)
+	r.Close(0)
 }
 
 func TestSampleRateBoundaries(t *testing.T) {
@@ -204,7 +204,7 @@ func TestSampleRateBoundaries(t *testing.T) {
 	_, rate, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, 0, rate)
 
-	r.Close(2)
+	r.Close(0)
 }
 
 func TestSampleSource(t *testing.T) {
@@ -231,7 +231,7 @@ func TestSampleSource(t *testing.T) {
 	_, _, source = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 
-	r.Close(2)
+	r.Close(0)
 }
 
 func TestSampleFlags(t *testing.T) {
@@ -287,7 +287,7 @@ func TestSampleFlags(t *testing.T) {
 	assert.True(t, ok)
 	assert.EqualValues(t, 1, c.through)
 
-	r.Close(2)
+	r.Close(0)
 }
 
 func TestSampleTokenBucket(t *testing.T) {
@@ -333,7 +333,7 @@ func TestSampleTokenBucket(t *testing.T) {
 	assert.EqualValues(t, 50, c.requested)
 	assert.EqualValues(t, 42, c.limited)
 
-	r.Close(2)
+	r.Close(0)
 }
 
 //func TestMetrics(t *testing.T) {
