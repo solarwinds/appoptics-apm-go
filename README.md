@@ -176,7 +176,7 @@ func myHandler(ctx context.Context) {
     // Start a new query Span, given a context.Context
     q1L := ao.BeginQuerySpan(ctxL, "myDB", "SELECT * FROM tbl1", "postgresql", "db1.com")
     // perform a query
-    q2L.End()
+    q1L.End()
 }
 
 func processRequest() {
