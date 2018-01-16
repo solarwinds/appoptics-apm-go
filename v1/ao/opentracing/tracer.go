@@ -31,10 +31,10 @@ func (t *Tracer) StartSpan(operationName string, opts ...ot.StartSpanOption) ot.
 	for _, o := range opts {
 		o.Apply(&sso)
 	}
-	return t.StartSpanWithOptions(operationName, sso)
+	return t.startSpanWithOptions(operationName, sso)
 }
 
-func (t *Tracer) StartSpanWithOptions(operationName string, opts ot.StartSpanOptions) ot.Span {
+func (t *Tracer) startSpanWithOptions(operationName string, opts ot.StartSpanOptions) ot.Span {
 	// check if trace has already started (use Trace if there is no parent, Span otherwise)
 	// XXX handle StartTime
 
