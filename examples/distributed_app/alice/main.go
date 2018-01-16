@@ -64,7 +64,7 @@ func aliceHandler(w http.ResponseWriter, r *http.Request) {
 
 func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w, r := ao.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	t, w, _ := ao.TraceFromHTTPRequestResponse("aliceHandler", w, r)
 	ctx := ao.NewContext(context.Background(), t)
 	t.SetAsync(true)
 	defer t.End()
