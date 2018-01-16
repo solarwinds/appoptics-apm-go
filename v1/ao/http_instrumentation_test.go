@@ -32,7 +32,7 @@ func handlerDelay503(w http.ResponseWriter, r *http.Request) {
 	time.Sleep(httpSpanSleep)
 }
 func handlerDoubleWrapped(w http.ResponseWriter, r *http.Request) {
-	t, w, r := ao.TraceFromHTTPRequestResponse("myHandler", w, r)
+	t, _, _ := ao.TraceFromHTTPRequestResponse("myHandler", w, r)
 	ao.NewContext(context.Background(), t)
 	defer t.End()
 }
@@ -544,7 +544,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 // based on examples/distributed_app
 func AliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w, r := ao.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	t, w, _ := ao.TraceFromHTTPRequestResponse("aliceHandler", w, r)
 	ctx := ao.NewContext(context.Background(), t)
 	defer t.End()
 
@@ -580,7 +580,7 @@ func AliceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func BobHandler(w http.ResponseWriter, r *http.Request) {
-	t, w, r := ao.TraceFromHTTPRequestResponse("bobHandler", w, r)
+	t, w, _ := ao.TraceFromHTTPRequestResponse("bobHandler", w, r)
 	defer t.End()
 	w.Write([]byte(`{"result":"hello from bob"}`))
 }
@@ -607,6 +607,7 @@ func TestDistributedApp(t *testing.T) {
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	t.Logf("Response: %v BUF %s", resp, buf)
 
 	r.Close(10)
@@ -626,7 +627,7 @@ func TestDistributedApp(t *testing.T) {
 
 func concurrentAliceHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request, overwriting w with wrapped ResponseWriter
-	t, w, r := ao.TraceFromHTTPRequestResponse("aliceHandler", w, r)
+	t, w, _ := ao.TraceFromHTTPRequestResponse("aliceHandler", w, r)
 	ctx := ao.NewContext(context.Background(), t)
 	t.SetAsync(true)
 	defer t.End()
