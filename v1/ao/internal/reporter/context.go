@@ -23,6 +23,7 @@ const (
 	oboeMaxMetadataPackLen = 512
 )
 
+// x-trace flags
 const (
 	XTR_FLAGS_NONE    = 0x0
 	XTR_FLAGS_SAMPLED = 0x1
@@ -315,12 +316,12 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 			OboeLog(INFO, "passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
 			OboeLog(INFO, "passed in x-trace has wrong version, ignoring")
-		} else if !ctx.IsSampled() {
-			OboeLog(INFO, "passed in x-trace indicates that request is not being sampled")
-			return ctx, true
-		} else {
+		} else if ctx.IsSampled() {
 			traced = true
 			addCtxEdge = true
+		} else {
+			OboeLog(INFO, "passed in x-trace indicates that request is not being sampled")
+			return ctx, true
 		}
 	}
 

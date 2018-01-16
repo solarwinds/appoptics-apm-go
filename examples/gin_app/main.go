@@ -12,7 +12,7 @@ func main() {
 	router := gin.Default()
 
 	// add AppOptics middleware
-	router.Use(Tracer())
+	router.Use(tracer())
 
 	router.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Hello from Gin")

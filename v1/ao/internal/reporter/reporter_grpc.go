@@ -83,6 +83,7 @@ const (
 
 type reporterChannel int
 
+// a channel the reporter is listening on for messages from the agent
 const (
 	EVENTS reporterChannel = iota
 	METRICS

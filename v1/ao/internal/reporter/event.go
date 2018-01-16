@@ -42,15 +42,16 @@ type settingFlag uint16
 type sampleSource int
 
 const (
-	TRACE_NEVER tracingMode = iota
-	TRACE_ALWAYS
+	TRACE_NEVER  tracingMode = iota // disable tracing, will neither start nor continue traces
+	TRACE_ALWAYS                    // perform sampling every inbound request for tracing
 )
 
 const (
-	TYPE_DEFAULT settingType = iota
-	TYPE_LAYER
+	TYPE_DEFAULT settingType = iota // default setting which serves as a fallback if no other settings found
+	TYPE_LAYER                      // layer specific settings
 )
 
+// setting flags
 const (
 	FLAG_OK                    settingFlag = 0x0
 	FLAG_INVALID               settingFlag = 0x1
@@ -60,6 +61,7 @@ const (
 	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 0x10
 )
 
+// source of the sample value
 const (
 	SAMPLE_SOURCE_NONE    sampleSource = 0
 	SAMPLE_SOURCE_FILE    sampleSource = 1

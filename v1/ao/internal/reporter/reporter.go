@@ -64,7 +64,7 @@ func setGlobalReporter(reporterType string) {
 	}
 }
 
-// called from the app when a span message is available
+// ReportSpan is called from the app when a span message is available
 // span	span message to be put on the channel
 //
 // returns	error if channel is full

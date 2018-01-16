@@ -29,8 +29,9 @@ func printBson(message []byte) {
 
 ///////////////////////
 
-type DebugLevel uint8
+type DebugLevel uint8 // the log level type
 
+// log levels
 const (
 	DEBUG DebugLevel = iota
 	INFO
@@ -110,6 +111,7 @@ func getStrByKeywordFiles(pathes []string, keyword string) (path string, line st
 	return "", ""
 }
 
+// Min returns the lower value
 func Min(x, y int) int {
 	if x < y {
 		return x
@@ -117,6 +119,7 @@ func Min(x, y int) int {
 	return y
 }
 
+// Max returns the greater value
 func Max(x, y int) int {
 	if x > y {
 		return x
@@ -124,6 +127,7 @@ func Max(x, y int) int {
 	return y
 }
 
+// Byte2String converts a byte array into a string
 func Byte2String(bs []int8) string {
 	b := make([]byte, len(bs))
 	for i, v := range bs {

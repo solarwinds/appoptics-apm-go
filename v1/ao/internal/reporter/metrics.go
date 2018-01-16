@@ -44,19 +44,19 @@ var (
 	ec2MetadataZoneURL       = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
 )
 
-// defines a span message
+// SpanMessage defines a span message
 type SpanMessage interface {
 	// called for message processing
 	process()
 }
 
-// base span message with properties found in all types of span messages
+// BaseSpanMessage is the base span message with properties found in all types of span messages
 type BaseSpanMessage struct {
 	Duration time.Duration // duration of the span (nanoseconds)
 	HasError bool          // boolean flag whether this transaction contains an error or not
 }
 
-// HTTP span message used for inbound metrics
+// HttpSpanMessage is used for inbound metrics
 type HttpSpanMessage struct {
 	BaseSpanMessage
 	Transaction string // transaction name (e.g. controller.action)
@@ -571,9 +571,9 @@ func isWithinLimit(m *map[string]bool, element string, max int) bool {
 			return true
 		}
 		return false
-	} else {
-		return true
 	}
+
+	return true
 }
 
 // processes an HttpSpanMessage

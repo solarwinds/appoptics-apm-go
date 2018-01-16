@@ -14,7 +14,7 @@ const (
 	ginLayerName  = "gin"
 )
 
-func Tracer() gin.HandlerFunc {
+func tracer() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		t, w, _ := ao.TraceFromHTTPRequestResponse("gin", c.Writer, c.Request)
 		c.Writer = &ginResponseWriter{w.(*ao.HTTPResponseWriter), c.Writer}
