@@ -29,7 +29,7 @@ func printBson(message []byte) {
 
 ///////////////////////
 
-// the log level type
+// DebugLevel is a type that defines the log level.
 type DebugLevel uint8
 
 // log levels

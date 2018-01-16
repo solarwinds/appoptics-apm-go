@@ -98,7 +98,7 @@ type NodeAsserter struct { // run to assert each Node
 	Seen     bool
 }
 
-// an AsserterMap looks up NodeAsserters for Nodes in a graph, keeping track of which
+// An AsserterMap looks up NodeAsserters for Nodes in a graph, keeping track of which
 // have been seen.
 type AsserterMap interface {
 	Match(n Node) (NodeAsserter, bool)
