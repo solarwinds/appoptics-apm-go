@@ -29,7 +29,8 @@ func printBson(message []byte) {
 
 ///////////////////////
 
-type DebugLevel uint8 // the log level type
+// the log level type
+type DebugLevel uint8
 
 // log levels
 const (

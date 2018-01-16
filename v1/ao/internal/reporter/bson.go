@@ -107,9 +107,9 @@ func (bbuf *bsonBuffer) addBinary(v []byte) {
 	bbuf.addBytes(v...)
 }
 
-func (b *bsonBuffer) addStr(v string) {
-	b.addInt32(int32(len(v) + 1))
-	b.addCStr(v)
+func (bbuf *bsonBuffer) addStr(v string) {
+	bbuf.addInt32(int32(len(v) + 1))
+	bbuf.addCStr(v)
 }
 
 func (bbuf *bsonBuffer) addCStr(v string) {

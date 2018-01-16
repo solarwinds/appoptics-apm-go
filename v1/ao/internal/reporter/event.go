@@ -41,11 +41,13 @@ type settingType int
 type settingFlag uint16
 type sampleSource int
 
+// tracing modes
 const (
 	TRACE_NEVER  tracingMode = iota // disable tracing, will neither start nor continue traces
-	TRACE_ALWAYS                    // perform sampling every inbound request for tracing
+	TRACE_ALWAYS                    //perform sampling every inbound request for tracing
 )
 
+// setting types
 const (
 	TYPE_DEFAULT settingType = iota // default setting which serves as a fallback if no other settings found
 	TYPE_LAYER                      // layer specific settings
