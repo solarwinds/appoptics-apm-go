@@ -62,7 +62,7 @@ func OboeLog(level DebugLevel, msg string, args ...interface{}) {
 		name := path[len(path)-1]
 		p = fmt.Sprintf("%s %s#%d %s(): ", dbgLevels[level], filepath.Base(f), l, name)
 	} else {
-		p = fmt.Sprintf("%s %s#%s %s(): ", level, "na", "na", "na")
+		p = fmt.Sprintf("%s %s#%s %s(): ", dbgLevels[level], "na", "na", "na")
 	}
 	if len(args) == 0 {
 		log.Printf("%s%s", p, msg)
