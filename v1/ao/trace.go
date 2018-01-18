@@ -198,7 +198,12 @@ func (t *aoTrace) recordHTTPSpan() {
 			continue
 		}
 		if k == "Status" {
-			t.httpSpan.span.Status = *(t.endArgs[i+1].(*int))
+			switch v := t.endArgs[i+1].(type) {
+			case int:
+				t.httpSpan.span.Status = v
+			case *int:
+				t.httpSpan.span.Status = *v
+			}
 			num--
 		} else if k == "Controller" {
 			controller += t.endArgs[i+1].(string)
