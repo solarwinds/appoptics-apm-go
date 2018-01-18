@@ -41,6 +41,9 @@ type Trace interface {
 	// SetMethod sets the request's HTTP method of the trace, if any
 	SetMethod(method string)
 
+	// SetStatus sets the request's HTTP status code of the trace, if any
+	SetStatus(status int)
+
 	// SetControllerAction sets controller/action for the trace
 	SetControllerAction(controller, action string)
 }
@@ -129,6 +132,11 @@ func (t *aoTrace) SetStartTime(start time.Time) {
 // SetMethod sets the request's HTTP method, if any
 func (t *aoTrace) SetMethod(method string) {
 	t.httpSpan.span.Method = method
+}
+
+// SetStatus sets the request's HTTP status code of the trace, if any
+func (t *aoTrace) SetStatus(status int) {
+	t.httpSpan.span.Status = status
 }
 
 // SetControllerAction sets the controller and action
@@ -221,6 +229,7 @@ func (t *nullTrace) EndCallback(f func() KVMap)                    {}
 func (t *nullTrace) ExitMetadata() string                          { return "" }
 func (t *nullTrace) SetStartTime(start time.Time)                  {}
 func (t *nullTrace) SetMethod(method string)                       {}
+func (t *nullTrace) SetStatus(status int)                          {}
 func (t *nullTrace) SetControllerAction(controller, action string) {}
 func (t *nullTrace) recordMetrics()                                {}
 
