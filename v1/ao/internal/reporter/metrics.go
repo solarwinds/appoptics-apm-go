@@ -487,9 +487,9 @@ func getContainerID() string {
 	}
 
 	cachedContainerID = ""
-	line := getLineByKeyword("/tmp/proc/self/cgroup", "/docker/")
+	line := getLineByKeyword("/proc/self/cgroup", "/docker/")
 	if line == "" {
-		line = getLineByKeyword("/tmp/proc/self/cgroup", "/ecs/")
+		line = getLineByKeyword("/proc/self/cgroup", "/ecs/")
 	}
 	if line != "" {
 		tokens := strings.Split(line, "/")
