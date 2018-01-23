@@ -195,7 +195,7 @@ func processRequest() {
 ### Retrieving the context from an http request
 
 A common pattern when tracing in golang is to call `ao.HTTPHandler(handler)` then retrieve the trace
-context inside of the handler.  
+context inside of the handler.
 ```go
 
 func myHandler( w http.ResponseWriter, r *http.Request ) {
@@ -222,7 +222,7 @@ func main() {
 
 ### Distributed tracing and context propagation
 
-A AppOptics trace is defined by a context (a globally unique ID and metadata) that is persisted
+An AppOptics trace is defined by a context (a globally unique ID and metadata) that is persisted
 across the different hosts, processes, languages and methods that are used to serve a request. Thus
 to start a new Span you need either a Trace or another Span to begin from. (The Trace
 interface is also the root Span, typically created when a request is first received.) Each new
