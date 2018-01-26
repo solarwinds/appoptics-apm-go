@@ -23,7 +23,7 @@ func udpNewReporter() reporter {
 	}
 
 	// collector address override
-	udpAddress := os.Getenv("APPOPTICS_REPORTER_UDP")
+	udpAddress := os.Getenv("APPOPTICS_COLLECTOR_UDP")
 	if udpAddress == "" {
 		udpAddress = udpAddrDefault
 	}

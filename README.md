@@ -37,7 +37,6 @@ instrumentation for Go, which allows Go-based applications to be monitored using
 
 Go support is currently in beta (though we run the instrumentation to process
 data in our production environment!) so please share any feedback you have; PRs welcome.
-Also, you can read more about how we use Go at AppOptics in our [blog post announcing our Go instrumentation]()!
 
 ## Getting started
 
@@ -45,15 +44,15 @@ Also, you can read more about how we use Go at AppOptics in our [blog post annou
 
 To get tracing, you'll need a [(free) AppOptics account](http://www.appoptics.com).
 
-In the product install flow, **choose to skip the webserver and select any language.**  (You'll notice the absence of Go because we're currently in beta.)
-
-Follow the instructions during signup to install the Host Agent (“tracelyzer”). This will also
-install the liboboe and liboboe-dev packages on your platform.
+Follow the instructions during signup to install the Go Agent.
 
 Then, install the following:
 
 * [Go >= 1.5](https://golang.org/dl/)
 * This package: go get github.com/appoptics/appoptics-apm-go/v1/ao
+
+Note that the service key needs to be configured for a successful setup. See [Configuration](#configuration) 
+for more info.
 
 The install flow will wait for some data to come in from your service before continuing. You can
 check out the [demo](#demo) app below to get a quick start.
@@ -272,10 +271,19 @@ func main() {
 
 ### Configuration
 
-The `APPOPTICS_TRACING_MODE` environment variable may be set to "always" or "never".
-- Mode "always" is the default, and will instruct AppOptics to consider sampling every inbound request for tracing.
-- Mode "never" will disable tracing, and will neither start nor continue traces.
+These environment variables may be set:
 
+| Variable Name        | Required           | Default  | Description |
+| -------------------- | ------------------ | -------- | ----------- |
+|APPOPTICS_SERVICE_KEY|Yes||The service key identifies the service being instrumented within your Organization. It should be in the form of ``<api token>:<service name>``.|
+|APPOPTICS_DEBUG_LEVEL|No|ERROR|Logging level to adjust the logging verbosity. Increase the logging verbosity to one of the debug levels to get more detailed information. Possible values: DEBUG, INFO, WARN, ERROR|
+|APPOPTICS_HOSTNAME_ALIAS|No||A logical/readable hostname that can be used to easily identify the host|
+|APPOPTICS_TRACING_MODE|No|always|Mode "always" will instruct AppOptics to consider sampling every inbound request for tracing. Mode "never" will disable tracing, and will neither start nor continue traces.|
+|APPOPTICS_REPORTER|No|ssl|The reporter that will be used throughout the runtime of the app. Possible values: ssl, udp, none|
+|APPOPTICS_COLLECTOR|No|collector.appoptics.com:443|SSL collector endpoint address and port (only used if APPOPTICS_REPORTER = ssl).|
+|APPOPTICS_COLLECTOR_UDP|No|127.0.0.1:7831|UDP collector endpoint address and port (only used if APPOPTICS_REPORTER = udp).|
+|APPOPTICS_TRUSTEDPATH|No||Path to the certificate used to verify the collector endpoint.|
+|APPOPTICS_INSECURE_SKIP_VERIFY|No|false|Skip verification of the collector endpoint. Possible values: true, false|
 
 ### Metrics
 
