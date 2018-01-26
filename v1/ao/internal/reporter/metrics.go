@@ -498,8 +498,11 @@ func getContainerID() string {
 		for _, token := range tokens {
 			// a length of 64 indicates a container ID
 			if len(token) == 64 {
-				cachedContainerID = token
-				break
+				// ensure token is hex SHA1
+				if match, _ := regexp.MatchString("^[0-9a-f]+$", token); match {
+					cachedContainerID = token
+					break
+				}
 			}
 		}
 	}
