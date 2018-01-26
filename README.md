@@ -37,7 +37,6 @@ instrumentation for Go, which allows Go-based applications to be monitored using
 
 Go support is currently in beta (though we run the instrumentation to process
 data in our production environment!) so please share any feedback you have; PRs welcome.
-Also, you can read more about how we use Go at AppOptics in our [blog post announcing our Go instrumentation]()!
 
 ## Getting started
 
@@ -51,6 +50,9 @@ Then, install the following:
 
 * [Go >= 1.5](https://golang.org/dl/)
 * This package: go get github.com/appoptics/appoptics-apm-go/v1/ao
+
+Note that the service key needs to be configured for a successful setup. See [Configuration](#configuration) 
+for more info.
 
 The install flow will wait for some data to come in from your service before continuing. You can
 check out the [demo](#demo) app below to get a quick start.
@@ -274,7 +276,7 @@ These environment variables may be set:
 | Variable Name        | Required           | Default  | Description |
 | -------------------- | ------------------ | -------- | ----------- |
 |APPOPTICS_SERVICE_KEY|Yes||The service key identifies the service being instrumented within your Organization. It should be in the form of ``<api token>:<service name>``.|
-|APPOPTICS_DEBUG_LEVEL|No|ERROR|Logging level to adjust the logging verbosity. Increase the logging verbosity to one of the debug levels to get more detailed information added to the app logs. Possible values: DEBUG, INFO, WARN, ERROR|
+|APPOPTICS_DEBUG_LEVEL|No|ERROR|Logging level to adjust the logging verbosity. Increase the logging verbosity to one of the debug levels to get more detailed information. Possible values: DEBUG, INFO, WARN, ERROR|
 |APPOPTICS_HOSTNAME_ALIAS|No||A logical/readable hostname that can be used to easily identify the host|
 |APPOPTICS_TRACING_MODE|No|always|Mode "always" will instruct AppOptics to consider sampling every inbound request for tracing. Mode "never" will disable tracing, and will neither start nor continue traces.|
 |APPOPTICS_REPORTER|No|ssl|The reporter that will be used throughout the runtime of the app. Possible values: ssl, udp, none|
