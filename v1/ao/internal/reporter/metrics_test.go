@@ -153,7 +153,9 @@ func TestGetAWSMetadata(t *testing.T) {
 
 func TestGetContainerID(t *testing.T) {
 	id := getContainerID()
-	if getLineByKeyword("/proc/self/cgroup", "docker") != "" {
+	if getLineByKeyword("/proc/self/cgroup", "/docker/") != "" ||
+		getLineByKeyword("/proc/self/cgroup", "/ecs/") != "" {
+
 		assert.NotEmpty(t, id)
 		assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]+$`), id)
 	} else {

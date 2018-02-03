@@ -41,6 +41,9 @@ type Trace interface {
 	// SetMethod sets the request's HTTP method of the trace, if any
 	SetMethod(method string)
 
+	// SetStatus sets the request's HTTP status code of the trace, if any
+	SetStatus(status int)
+
 	// SetControllerAction sets controller/action for the trace
 	SetControllerAction(controller, action string)
 }
@@ -131,6 +134,11 @@ func (t *aoTrace) SetMethod(method string) {
 	t.httpSpan.span.Method = method
 }
 
+// SetStatus sets the request's HTTP status code of the trace, if any
+func (t *aoTrace) SetStatus(status int) {
+	t.httpSpan.span.Status = status
+}
+
 // SetControllerAction sets the controller and action
 func (t *aoTrace) SetControllerAction(controller, action string) {
 	t.httpSpan.controller = controller
@@ -190,7 +198,12 @@ func (t *aoTrace) recordHTTPSpan() {
 			continue
 		}
 		if k == "Status" {
-			t.httpSpan.span.Status = *(t.endArgs[i+1].(*int))
+			switch v := t.endArgs[i+1].(type) {
+			case int:
+				t.httpSpan.span.Status = v
+			case *int:
+				t.httpSpan.span.Status = *v
+			}
 			num--
 		} else if k == "Controller" {
 			controller += t.endArgs[i+1].(string)
@@ -221,6 +234,7 @@ func (t *nullTrace) EndCallback(f func() KVMap)                    {}
 func (t *nullTrace) ExitMetadata() string                          { return "" }
 func (t *nullTrace) SetStartTime(start time.Time)                  {}
 func (t *nullTrace) SetMethod(method string)                       {}
+func (t *nullTrace) SetStatus(status int)                          {}
 func (t *nullTrace) SetControllerAction(controller, action string) {}
 func (t *nullTrace) recordMetrics()                                {}
 

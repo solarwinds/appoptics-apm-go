@@ -122,7 +122,7 @@ func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) chan struct
 	done := make(chan struct{})
 	assert.IsType(t, &udpReporter{}, globalReporter)
 
-	addr, err := net.ResolveUDPAddr("udp4", os.Getenv("APPOPTICS_REPORTER_UDP"))
+	addr, err := net.ResolveUDPAddr("udp4", os.Getenv("APPOPTICS_COLLECTOR_UDP"))
 	assert.NoError(t, err)
 	conn, err := net.ListenUDP("udp4", addr)
 	assert.NoError(t, err)

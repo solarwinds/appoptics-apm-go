@@ -480,22 +480,29 @@ func isEC2Instance() bool {
 	return isEC2
 }
 
-// gets the docker container ID (or empty string if not a docker container)
+// gets the docker container ID (or empty string if not a docker/ecs container)
 func getContainerID() string {
 	if cachedContainerID != "uninitialized" {
 		return cachedContainerID
 	}
 
 	cachedContainerID = ""
-	line := getLineByKeyword("/proc/self/cgroup", "docker")
+	line := getLineByKeyword("/proc/self/cgroup", "/docker/")
+	if line == "" {
+		line = getLineByKeyword("/proc/self/cgroup", "/ecs/")
+	}
 	if line != "" {
 		tokens := strings.Split(line, "/")
-		// A typical line returned by cat /proc/self/cgroup (that's why we expect 3 tokens):
+		// A typical line returned by cat /proc/self/cgroup:
 		// 9:devices:/docker/40188af19439697187e3f60b933e7e37c5c41035f4c0b266a51c86c5a0074b25
-		if len(tokens) == 3 {
-			// make sure the string length matches that of a container ID
-			if len(tokens[2]) == 64 {
-				cachedContainerID = tokens[2]
+		for _, token := range tokens {
+			// a length of 64 indicates a container ID
+			if len(token) == 64 {
+				// ensure token is hex SHA1
+				if match, _ := regexp.MatchString("^[0-9a-f]+$", token); match {
+					cachedContainerID = token
+					break
+				}
 			}
 		}
 	}
