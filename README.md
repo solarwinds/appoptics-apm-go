@@ -21,10 +21,6 @@
 * [License](#license)
 
 
-## Alpha Release Status
-
-Please note that this is under active development and considered alpha status as we work towards a tested beta release soon.
-
 ## Introduction
 
 [AppOptics](http://www.appoptics.com) provides distributed tracing,
@@ -48,7 +44,7 @@ Follow the instructions during signup to install the Go Agent.
 
 Then, install the following:
 
-* [Go >= 1.5](https://golang.org/dl/)
+* [Go >= 1.7](https://golang.org/dl/)
 * This package: go get github.com/appoptics/appoptics-apm-go/v1/ao
 
 Note that the service key needs to be configured for a successful setup. See [Configuration](#configuration) 
