@@ -5,7 +5,6 @@
 [![codecov](https://codecov.io/gh/appoptics/appoptics-apm-go/branch/master/graph/badge.svg)](https://codecov.io/gh/appoptics/appoptics-apm-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/appoptics/appoptics-apm-go)](https://goreportcard.com/report/github.com/appoptics/appoptics-apm-go)
 
-* [Alpha Release Status](#alpha-release-status)
 * [Introduction](#introduction)
 * [Getting started](#getting-started)
     - [Installing](#installing)
