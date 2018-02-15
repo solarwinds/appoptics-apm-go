@@ -5,7 +5,6 @@
 [![codecov](https://codecov.io/gh/appoptics/appoptics-apm-go/branch/master/graph/badge.svg)](https://codecov.io/gh/appoptics/appoptics-apm-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/appoptics/appoptics-apm-go)](https://goreportcard.com/report/github.com/appoptics/appoptics-apm-go)
 
-* [Alpha Release Status](#alpha-release-status)
 * [Introduction](#introduction)
 * [Getting started](#getting-started)
     - [Installing](#installing)
@@ -20,10 +19,6 @@
     - [Demo app](#demo-app)
 * [License](#license)
 
-
-## Alpha Release Status
-
-Please note that this is under active development and considered alpha status as we work towards a tested beta release soon.
 
 ## Introduction
 
@@ -48,7 +43,7 @@ Follow the instructions during signup to install the Go Agent.
 
 Then, install the following:
 
-* [Go >= 1.5](https://golang.org/dl/)
+* [Go >= 1.7](https://golang.org/dl/)
 * This package: go get github.com/appoptics/appoptics-apm-go/v1/ao
 
 Note that the service key needs to be configured for a successful setup. See [Configuration](#configuration) 
