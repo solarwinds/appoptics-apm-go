@@ -502,7 +502,7 @@ func (r *grpcReporter) eventRetrySender(
 			connection.resetPing()
 
 			if err != nil {
-				OboeLog(WARNING, fmt.Sprintf("Error calling PostEvents(): %v", err))
+				OboeLog(INFO, fmt.Sprintf("Error calling PostEvents(): %v", err))
 				// some server connection error, attempt reconnect
 				r.reconnect(connection, authority)
 			} else {
@@ -515,13 +515,13 @@ func (r *grpcReporter) eventRetrySender(
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
 					results <- grpcResult{ret: result}
 				case collector.ResultCode_TRY_LATER:
-					OboeLog(DEBUG, "Server responded: Try later")
+					OboeLog(INFO, "Server responded: Try later")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
 				case collector.ResultCode_LIMIT_EXCEEDED:
-					OboeLog(DEBUG, "Server responded: Limit exceeded")
+					OboeLog(INFO, "Server responded: Limit exceeded")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
 				case collector.ResultCode_INVALID_API_KEY:
-					OboeLog(DEBUG, "Server responded: Invalid API key")
+					OboeLog(ERROR, "Server responded: Invalid API key")
 				case collector.ResultCode_REDIRECT:
 					if redirects > grpcRedirectMax {
 						OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
@@ -532,7 +532,7 @@ func (r *grpcReporter) eventRetrySender(
 						redirects++
 					}
 				default:
-					OboeLog(DEBUG, "Unknown Server response")
+					OboeLog(INFO, "Unknown Server response")
 				}
 			}
 
@@ -635,7 +635,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		r.metricConnection.resetPing()
 
 		if err != nil {
-			OboeLog(WARNING, fmt.Sprintf("Error calling PostMetrics(): %v", err))
+			OboeLog(INFO, fmt.Sprintf("Error calling PostMetrics(): %v", err))
 			// some server connection error, attempt reconnect
 			r.reconnect(r.metricConnection, POSTMETRICS)
 		} else {
@@ -646,11 +646,11 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 				resultOk = true
 				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
-				OboeLog(DEBUG, "Server responded: Try later")
+				OboeLog(INFO, "Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
-				OboeLog(DEBUG, "Server responded: Limit exceeded")
+				OboeLog(INFO, "Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
-				OboeLog(DEBUG, "Server responded: Invalid API key")
+				OboeLog(ERROR, "Server responded: Invalid API key")
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
 					OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
@@ -661,7 +661,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 					redirects++
 				}
 			default:
-				OboeLog(DEBUG, "Unknown Server response")
+				OboeLog(INFO, "Unknown Server response")
 			}
 		}
 
@@ -708,7 +708,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		r.metricConnection.resetPing()
 
 		if err != nil {
-			OboeLog(WARNING, fmt.Sprintf("Error calling GetSettings(): %v", err))
+			OboeLog(INFO, fmt.Sprintf("Error calling GetSettings(): %v", err))
 			// some server connection error, attempt reconnect
 			r.reconnect(r.metricConnection, GETSETTINGS)
 		} else {
@@ -720,11 +720,11 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 				resultOK = true
 				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
-				OboeLog(DEBUG, "Server responded: Try later")
+				OboeLog(INFO, "Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
-				OboeLog(DEBUG, "Server responded: Limit exceeded")
+				OboeLog(INFO, "Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
-				OboeLog(DEBUG, "Server responded: Invalid API key")
+				OboeLog(ERROR, "Server responded: Invalid API key")
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
 					OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
@@ -735,7 +735,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 					redirects++
 				}
 			default:
-				OboeLog(DEBUG, "Unknown Server response")
+				OboeLog(INFO, "Unknown Server response")
 			}
 		}
 
@@ -859,7 +859,7 @@ func (r *grpcReporter) statusSender() {
 			r.metricConnection.resetPing()
 
 			if err != nil {
-				OboeLog(WARNING, fmt.Sprintf("Error calling PostStatus(): %v", err))
+				OboeLog(INFO, fmt.Sprintf("Error calling PostStatus(): %v", err))
 				// some server connection error, attempt reconnect
 				r.reconnect(r.metricConnection, POSTSTATUS)
 			} else {
@@ -870,11 +870,11 @@ func (r *grpcReporter) statusSender() {
 					resultOk = true
 					r.metricConnection.reconnectAuthority = UNSET
 				case collector.ResultCode_TRY_LATER:
-					OboeLog(DEBUG, "Server responded: Try later")
+					OboeLog(INFO, "Server responded: Try later")
 				case collector.ResultCode_LIMIT_EXCEEDED:
-					OboeLog(DEBUG, "Server responded: Limit exceeded")
+					OboeLog(INFO, "Server responded: Limit exceeded")
 				case collector.ResultCode_INVALID_API_KEY:
-					OboeLog(DEBUG, "Server responded: Invalid API key")
+					OboeLog(ERROR, "Server responded: Invalid API key")
 				case collector.ResultCode_REDIRECT:
 					if redirects > grpcRedirectMax {
 						OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
@@ -885,7 +885,7 @@ func (r *grpcReporter) statusSender() {
 						redirects++
 					}
 				default:
-					OboeLog(DEBUG, "Unknown Server response")
+					OboeLog(INFO, "Unknown Server response")
 				}
 			}
 
