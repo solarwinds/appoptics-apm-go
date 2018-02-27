@@ -353,7 +353,24 @@ propagation by using AppOptics's span reporting and HTTP header formats, permitt
 to continue distributed traces started by AppOptics's instrumentation and vice versa. Some of the
 OpenTracing standardized tags are mapped to AppOptics tag names as well.
 
-To set AppOptics's tracer to be your global tracer, call `opentracing.InitGlobalTracer(opentracing.NewTracer())`.
+To set AppOptics's tracer to be your global tracer, use something like the following:
+
+```go
+import(
+  stdopentracing "github.com/opentracing/opentracing-go"
+  aotracing "github.com/appoptics/appoptics-apm-go/v1/ao/opentracing"
+)
+
+// tracer returns the global tracing construct for OpenTracing.
+// it is returned here so it can be used in functions that expect
+// a Tracer, such as server init functions in go-kit
+func tracer() stdopentracing.Tracer {
+	tracer := aotracing.NewTracer()
+	stdopentracing.SetGlobalTracer(tracer)
+	return tracer
+}
+```
+
 Currently, `opentracing.NewTracer()` does not accept any options, but this may change in the future.
 Please let us know if you are using this package while it is in preview by contacting us at opentracing@tracelytics.com.
 
