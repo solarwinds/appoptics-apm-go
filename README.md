@@ -300,20 +300,22 @@ You should see these requests appear on your AppOptics dashboard.
 ### Distributed app
 
 There is also a demonstration of distributed tracing in examples/distributed_app, a sample system
-comprised of two Go services, a Node.js service, and a Python service. It can be built and run from
+comprised of three Go services and two Python services. It can be built and run from
 source in each service's subdirectory, or by using docker-compose:
 
     $ cd $GOPATH/src/github.com/appoptics/appoptics-apm-go/examples/distributed_app
     $ docker-compose build
     # ... (building)
-    $ APPOPTICS_SERVICE_KEY=xxx docker-compose up -d
+    $ APPOPTICS_API_TOKEN=xxx docker-compose up -d
     Starting distributedapp_alice_1
     Starting distributedapp_bob_1
     Starting distributedapp_caroljs_1
     Starting distributedapp_davepy_1
     Starting distributedapp_redis_1
 
-and substituting "xxx" with your AppOptics access key. This app currently provides two HTTP handlers:
+and substituting "xxx" with your AppOptics API token.  Note that because this spins up multiple services, the service name is provided in the `docker-compose.yml` file.
+
+This app currently provides two HTTP handlers:
 `aliceHandler`, which randomly forwards requests to either of "bob" (Go), "caroljs", or "davepy",
 and `concurrentAliceHandler`, which makes requests to all three in parallel.
 

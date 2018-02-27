@@ -10,7 +10,7 @@ services:
     build:
       context: ./alice
     environment:
-      APPOPTICS_SERVICE_KEY: ${APPOPTICS_SERVICE_KEY}
+      APPOPTICS_SERVICE_KEY: ${APPOPTICS_API_TOKEN}:example-alice
     links:
       - bob
       - carolpy:carol
@@ -24,7 +24,7 @@ services:
     build:
       context: ./bob
     environment:
-      APPOPTICS_SERVICE_KEY: ${APPOPTICS_SERVICE_KEY}
+      APPOPTICS_SERVICE_KEY: ${APPOPTICS_API_TOKEN}:example-bob
     links:
       - redis
       - carolpy:carol
@@ -34,21 +34,21 @@ services:
     build:
       context: ./carolpy
     environment:
-      APPOPTICS_SERVICE_KEY: ${APPOPTICS_SERVICE_KEY}
+      APPOPTICS_SERVICE_KEY: ${APPOPTICS_API_TOKEN}:example-carol
 
   # Dave is a Flask app running on uWSGI
   davepy:
     build:
       context: ./davepy
     environment:
-      APPOPTICS_SERVICE_KEY: ${APPOPTICS_SERVICE_KEY}
+      APPOPTICS_SERVICE_KEY: ${APPOPTICS_API_TOKEN}:example-dave
 
   # Otto is a Go app using the OpenTracing API
   otto:
     build:
       context: ./otto
     environment:
-      APPOPTICS_SERVICE_KEY: ${APPOPTICS_SERVICE_KEY}
+      APPOPTICS_SERVICE_KEY: ${APPOPTICS_API_TOKEN}:example-otto
     links:
       - bob
       - carolpy:carol
