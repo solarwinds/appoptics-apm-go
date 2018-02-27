@@ -13,7 +13,7 @@ services:
       APPOPTICS_SERVICE_KEY: ${APPOPTICS_SERVICE_KEY}
     links:
       - bob
-      - caroljs:carol
+      - carolpy:carol
       - davepy:dave
       - otto:otto
     ports:
@@ -27,12 +27,12 @@ services:
       APPOPTICS_SERVICE_KEY: ${APPOPTICS_SERVICE_KEY}
     links:
       - redis
-      - caroljs:carol
+      - carolpy:carol
 
-  # Carol runs in Node.js
-  caroljs:
+  # Carol runs Python
+  carolpy:
     build:
-      context: ./caroljs
+      context: ./carolpy
     environment:
       APPOPTICS_SERVICE_KEY: ${APPOPTICS_SERVICE_KEY}
 
@@ -51,7 +51,7 @@ services:
       APPOPTICS_SERVICE_KEY: ${APPOPTICS_SERVICE_KEY}
     links:
       - bob
-      - caroljs:carol
+      - carolpy:carol
       - davepy:dave
     ports:
       - "8084:8084"
