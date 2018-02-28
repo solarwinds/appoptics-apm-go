@@ -7,13 +7,13 @@
 
 * [Introduction](#introduction)
 * [Getting started](#getting-started)
+    - [Prerequisites](#prerequisites)
     - [Installing](#installing)
     - [Building your app with tracing](#building-your-app-with-tracing)
 * [Instrumenting your application](#instrumenting-your-application)
     - [Usage examples](#usage-examples)
     - [Distributed tracing and context propagation](#distributed-tracing-and-context-propagation)
     - [Configuration](#configuration)
-    - [Metrics](#metrics)
 * [Help and examples](#help-and-examples)
     - [Support](#support)
     - [Demo app](#demo-app)
@@ -22,26 +22,31 @@
 
 ## Introduction
 
-[AppOptics](http://www.appoptics.com) provides distributed tracing,
-code-level application performance monitoring, and host and infrastructure monitoring. AppOptics's cross-language, production-ready,
+[AppOptics](http://www.appoptics.com) is SaaS-based monitoring with distributed
+tracing, code-level application performance monitoring, and host and
+infrastructure monitoring.  This repository provides instrumentation for Go,
+which allows Go-based applications to be monitored using AppOptics.
+
+AppOptics's cross-language, production-ready,
 low-overhead distributed tracing system (similar to Dapper, Zipkin, or X-Trace) can follow the path
 of an application request as it is processed and forwarded between services written in [Go, Java,
 Scala, Node.js, Ruby, Python, PHP, and C#/.NET](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/), reporting data to AppOptics's cloud platform for
-analysis, monitoring, and fine-grained, filterable data visualization. This repository provides
-instrumentation for Go, which allows Go-based applications to be monitored using AppOptics.
+analysis, monitoring, and fine-grained, filterable data visualization.
 
-Go support is currently in beta (though we run the instrumentation to process
-data in our production environment!) so please share any feedback you have; PRs welcome.
+We run this in our production environment, as do our customers.  Please share any feedback you have; PRs welcome.
 
 ## Getting started
 
+### Prerequisites
+
+To get tracing, you'll need a [(free) AppOptics account](http://www.appoptics.com).  Follow the instructions during signup to install the Go Agent.
+
+The in-app install flow will wait for some data to come in from your service before continuing. You can either instrument your application (read on), or 
+check out the [demo](#demo) app below to get a quick start!
+
 ### Installing
 
-To get tracing, you'll need a [(free) AppOptics account](http://www.appoptics.com).
-
-Follow the instructions during signup to install the Go Agent.
-
-Then, install the following:
+Install the following to get started:
 
 * [Go >= 1.7](https://golang.org/dl/)
 * This package: go get github.com/appoptics/appoptics-apm-go/v1/ao
@@ -49,8 +54,6 @@ Then, install the following:
 Note that the service key needs to be configured for a successful setup. See [Configuration](#configuration) 
 for more info.
 
-The install flow will wait for some data to come in from your service before continuing. You can
-check out the [demo](#demo) app below to get a quick start.
 
 ### Building your app with or without tracing
 
@@ -72,16 +75,8 @@ will monitor the performance of the provided
 [http.HandlerFunc](https://golang.org/pkg/net/http/#HandlerFunc), visualized with latency
 distribution heatmaps filterable by dimensions such as URL host & path, HTTP status & method, server
 hostname, etc. [ao.HTTPHandler](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#HTTPHandler)
-will also continue a distributed trace described in the incoming HTTP request headers (from
-AppOptics's [automatic](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/)
-[C#/.NET](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#net),
-[Java](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#java-scala),
-Node.js,
-[PHP](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#php),
-[Python](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#python),
-Ruby, and
-[Scala](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/#java-scala) instrumentation) through to the HTTP
-response.
+will also continue a distributed trace described in the incoming HTTP request headers (from either another instrumented Golang application or 
+AppOptics's automatic instrumentation of [our other supported application runtimes](https://docs.appoptics.com/kb/apm_tracing/supported_platforms/)).
 
 ```go
 package main
@@ -120,24 +115,24 @@ func main() {
 	http.ListenAndServe(":8899", nil)
 }
 ```
-![sample_app screenshot](https://github.com/appoptics/appoptics-apm-go/raw/master/img/readme-screenshot1.png)
+![sample_app screenshot](https://github.com/appoptics/appoptics-apm-go/raw/master/img/readme-ao-screenshot1.png)
+![sample_app screenshot2](https://github.com/appoptics/appoptics-apm-go/raw/master/img/readme-ao-screenshot2.png)
 
 To monitor more than just the overall latency of each request to your Go service, you will need to
 break a request's processing time down by placing small benchmarks into your code. To do so, first
-start or continue a `Trace` (the root `Span`), then create a series of `Span`s (or `Profile`
-timings) to capture the time used by different parts of the app's stack as it is processed.
+start or continue a `Trace` (the root `Span`), then create a series of `Span`s to capture the time used by different parts of the app's stack as it is processed.
 
 AppOptics provides two ways of measuring time spent by your code: a `Span` can measure e.g. a
 single DB query or cache request, an outgoing HTTP or RPC request, the entire time spent within a
 controller method, or the time used by a middleware method between calls to child Spans. A
-`Profile` provides a named measurement of time spent inside a `Span`, and is typically used to
+`Profile` is a special type of `Span` providing a named measurement of time spent and is typically used to
 measure a single function call or code block, e.g. to represent the time used by expensive
 computation(s) occurring in a `Span`. Spans can be created as children of other Spans, but a
 `Profile` cannot have children.
 
 AppOptics identifies a reported Span's type from its key-value pairs; if keys named "Query" and
 "RemoteHost" are used, a Span is assumed to measure the extent of a DB query. KV pairs can be
-appended to Span and Profile extents as optional extra variadic arguments to methods such as
+appended to Spans and Profiles as optional extra variadic arguments to methods such as
 [BeginSpan()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginSpan) or
 [BeginProfile()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginProfile),
 [Info()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Span), and
@@ -280,15 +275,6 @@ These environment variables may be set:
 |APPOPTICS_TRUSTEDPATH|No||Path to the certificate used to verify the collector endpoint.|
 |APPOPTICS_INSECURE_SKIP_VERIFY|No|false|Skip verification of the collector endpoint. Possible values: true, false|
 
-### Metrics
-
-In addition to distributed tracing and latency measurement, this package also provides Go metrics
-monitoring for runtime metrics such as memory and number of goroutines. Below is a screenshot from
-our [blog's release announcement]() of a latency
-heatmap underlaid with memory metrics, just after fixing a memory leak and restarting a service
-inside a staging environment.
-
-<img width=729 src="https://github.com/appoptics/appoptics-apm-go/raw/master/img/metrics-screenshot1.png">
 
 ## Help and examples
 
@@ -314,20 +300,22 @@ You should see these requests appear on your AppOptics dashboard.
 ### Distributed app
 
 There is also a demonstration of distributed tracing in examples/distributed_app, a sample system
-comprised of two Go services, a Node.js service, and a Python service. It can be built and run from
+comprised of three Go services and two Python services. It can be built and run from
 source in each service's subdirectory, or by using docker-compose:
 
     $ cd $GOPATH/src/github.com/appoptics/appoptics-apm-go/examples/distributed_app
     $ docker-compose build
     # ... (building)
-    $ APPOPTICS_SERVICE_KEY=xxx docker-compose up -d
+    $ APPOPTICS_API_TOKEN=xxx docker-compose up -d
     Starting distributedapp_alice_1
     Starting distributedapp_bob_1
     Starting distributedapp_caroljs_1
     Starting distributedapp_davepy_1
     Starting distributedapp_redis_1
 
-and substituting "xxx" with your AppOptics access key. This app currently provides two HTTP handlers:
+and substituting "xxx" with your AppOptics API token.  Note that because this spins up multiple services, the service name is provided in the `docker-compose.yml` file.
+
+This app currently provides two HTTP handlers:
 `aliceHandler`, which randomly forwards requests to either of "bob" (Go), "caroljs", or "davepy",
 and `concurrentAliceHandler`, which makes requests to all three in parallel.
 
@@ -343,7 +331,7 @@ and `concurrentAliceHandler`, which makes requests to all three in parallel.
 You should see traces for these appear on your AppOptics dashboard. Here is an example trace of the
 concurrent handler:
 
-<img width=729 src="https://github.com/appoptics/appoptics-apm-go/raw/master/img/concurrent-tracedetails.gif">
+<img width=729 src="https://github.com/appoptics/appoptics-apm-go/raw/master/img/readme-ao-screenshot3.png">
 
 ### OpenTracing
 
@@ -372,11 +360,10 @@ func tracer() stdopentracing.Tracer {
 ```
 
 Currently, `opentracing.NewTracer()` does not accept any options, but this may change in the future.
-Please let us know if you are using this package while it is in preview by contacting us at opentracing@tracelytics.com.
+Please let us know if you are using this package while it is in preview by contacting us at support@appoptics.com.
 
 ## License
 
-Copyright (c) 2017 Librato, Inc.
+Copyright (c) 2018 Librato, Inc.
 
 Released under the [Librato Open License](http://docs.traceview.solarwinds.com/Instrumentation/librato-open-license.html), Version 1.0
-
