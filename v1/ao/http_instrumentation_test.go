@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
-	"gopkg.in/mgo.v2/bson"
 )
 
 func handler404(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(404) }
@@ -122,33 +121,31 @@ func TestHTTPSpan(t *testing.T) {
 
 	r.Close(5)
 
-	m := make(map[string]interface{})
-	bson.Unmarshal(r.StatusBufs[1], m)
+	require.Len(t, r.SpanMessages, 5)
 
-	nullDuration := m["duration"].(int64)
+	m, ok := r.SpanMessages[1].(*reporter.HTTPSpanMessage)
+	assert.True(t, ok)
+	nullDuration := m.Duration
 
-	m = make(map[string]interface{})
-	bson.Unmarshal(r.StatusBufs[2], m)
+	m, ok = r.SpanMessages[2].(*reporter.HTTPSpanMessage)
+	assert.True(t, ok)
+	assert.Equal(t, "ao_test.handlerDelay200", m.Transaction)
+	assert.Equal(t, "", m.URL)
+	assert.Equal(t, 200, m.Status)
+	assert.Equal(t, "GET", m.Method)
+	assert.False(t, m.HasError)
+	assert.InDelta(t, (25*time.Millisecond + nullDuration).Seconds(), m.Duration.Seconds(), (10 * time.Millisecond).Seconds())
 
-	assert.Equal(t, "ao_test.handlerDelay200", m["transaction"])
-	assert.Equal(t, "", m["url"])
-	assert.Equal(t, 200, m["status"])
-	assert.Equal(t, "GET", m["method"])
-	assert.False(t, m["hasError"].(bool))
-	assert.InDelta(t, 25*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
+	m, ok = r.SpanMessages[3].(*reporter.HTTPSpanMessage)
+	assert.True(t, ok)
+	assert.InDelta(t, (456*time.Millisecond + nullDuration).Seconds(), m.Duration.Seconds(), (10 * time.Millisecond).Seconds())
 
-	m = make(map[string]interface{})
-	bson.Unmarshal(r.StatusBufs[3], m)
-
-	assert.InDelta(t, 456*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
-
-	m = make(map[string]interface{})
-	bson.Unmarshal(r.StatusBufs[4], m)
-
-	assert.Equal(t, "ao_test.handlerDelay503", m["transaction"])
-	assert.Equal(t, 503, m["status"])
-	assert.True(t, m["hasError"].(bool))
-	assert.InDelta(t, 54*int64(time.Millisecond)+nullDuration, m["duration"], float64(10*time.Millisecond))
+	m, ok = r.SpanMessages[4].(*reporter.HTTPSpanMessage)
+	assert.True(t, ok)
+	assert.Equal(t, "ao_test.handlerDelay503", m.Transaction)
+	assert.Equal(t, 503, m.Status)
+	assert.True(t, m.HasError)
+	assert.InDelta(t, (54*time.Millisecond + nullDuration).Seconds(), m.Duration.Seconds(), (10 * time.Millisecond).Seconds())
 }
 
 func TestSingleHTTPSpan(t *testing.T) {
@@ -156,7 +153,7 @@ func TestSingleHTTPSpan(t *testing.T) {
 	httpTest(handlerDoubleWrapped)
 	r.Close(1)
 
-	assert.Equal(t, 1, len(r.StatusBufs))
+	assert.Equal(t, 1, len(r.SpanMessages))
 }
 
 // testServer tests creating a span/trace from inside an HTTP handler (using ao.TraceFromHTTPRequest)

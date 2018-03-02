@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -80,6 +81,29 @@ func TestReportEvent(t *testing.T) {
 	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{
 		{"go_test", "exit"}: {},
 	})
+}
+
+func TestReportMetric(t *testing.T) {
+	r := SetTestReporter()
+	spanMsg := &HTTPSpanMessage{
+		BaseSpanMessage: BaseSpanMessage{
+			Duration: time.Second,
+			HasError: false,
+		},
+		Transaction: "tname",
+		URL:         "/path/to/url",
+		Status:      203,
+		Method:      "HEAD",
+	}
+	err := ReportSpan(spanMsg)
+	assert.NoError(t, err)
+	r.Close(1)
+	assert.Len(t, r.SpanMessages, 1)
+	sp, ok := r.SpanMessages[0].(*HTTPSpanMessage)
+	require.True(t, ok)
+	require.NotNil(t, sp)
+	assert.True(t, reflect.DeepEqual(spanMsg, sp))
+	//sp.process()
 }
 
 // test behavior of the TestReporter

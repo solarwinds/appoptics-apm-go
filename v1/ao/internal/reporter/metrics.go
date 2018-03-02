@@ -227,7 +227,7 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	for _, m := range metricsHTTPMeasurements.measurements {
 		addMeasurementToBSON(bbuf, &index, m)
 	}
-	metricsHTTPMeasurements.measurements = make(map[string]*Measurement)
+	metricsHTTPMeasurements.measurements = make(map[string]*Measurement) // clear measurements
 	metricsHTTPMeasurements.lock.Unlock()
 
 	bsonAppendFinishObject(bbuf, start)
@@ -243,7 +243,7 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	for _, h := range metricsHTTPHistograms.histograms {
 		addHistogramToBSON(bbuf, &index, h)
 	}
-	metricsHTTPHistograms.histograms = make(map[string]*histogram)
+	metricsHTTPHistograms.histograms = make(map[string]*histogram) // clear histograms
 
 	metricsHTTPHistograms.lock.Unlock()
 	bsonAppendFinishObject(bbuf, start)
@@ -584,44 +584,44 @@ func isWithinLimit(m *map[string]bool, element string, max int) bool {
 }
 
 // processes an HttpSpanMessage
-func (httpSpan *HTTPSpanMessage) process() {
+func (s *HTTPSpanMessage) process() {
 	// always add to overall histogram
-	recordHistogram(metricsHTTPHistograms, "", httpSpan.Duration)
+	recordHistogram(metricsHTTPHistograms, "", s.Duration)
 
 	// check if we need to perform URL fingerprinting (no transaction name passed in)
-	if httpSpan.Transaction == "" && httpSpan.URL != "" {
-		httpSpan.Transaction = getTransactionFromURL(httpSpan.URL)
+	if s.Transaction == "" && s.URL != "" {
+		s.Transaction = getTransactionFromURL(s.URL)
 	}
-	if httpSpan.Transaction != "" {
+	if s.Transaction != "" {
 		// access transactionNameMax protected since it can be updated in updateSettings()
 		metricsHTTPMeasurements.transactionNameMaxLock.RLock()
 		max := metricsHTTPMeasurements.transactionNameMax
 		metricsHTTPMeasurements.transactionNameMaxLock.RUnlock()
 
 		transactionWithinLimit := isWithinLimit(
-			&metricsHTTPTransactions, httpSpan.Transaction, max)
+			&metricsHTTPTransactions, s.Transaction, max)
 
 		// only record the transaction-specific histogram and measurements if we are still within the limit
 		// otherwise report it as an 'other' measurement
 		if transactionWithinLimit {
-			recordHistogram(metricsHTTPHistograms, httpSpan.Transaction, httpSpan.Duration)
-			httpSpan.processMeasurements(httpSpan.Transaction)
+			recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
+			s.processMeasurements(s.Transaction)
 		} else {
-			httpSpan.processMeasurements("other")
+			s.processMeasurements("other")
 			// indicate we have overrun the transaction name limit
 			setTransactionNameOverflow(true)
 		}
 	} else {
 		// no transaction/url name given, record as 'unknown'
-		httpSpan.processMeasurements("unknown")
+		s.processMeasurements("unknown")
 	}
 }
 
 // processes HTTP measurements, record one for primary key, and one for each secondary key
 // transactionName	the transaction name to be used for these measurements
-func (httpSpan *HTTPSpanMessage) processMeasurements(transactionName string) {
+func (s *HTTPSpanMessage) processMeasurements(transactionName string) {
 	name := "TransactionResponseTime"
-	duration := float64((*httpSpan).Duration)
+	duration := float64(s.Duration)
 
 	metricsHTTPMeasurements.lock.Lock()
 	defer metricsHTTPMeasurements.lock.Unlock()
@@ -633,14 +633,14 @@ func (httpSpan *HTTPSpanMessage) processMeasurements(transactionName string) {
 
 	// secondary keys: HttpMethod, HttpStatus, Errors
 	withMethodTags := copyMap(&primaryTags)
-	withMethodTags["HttpMethod"] = httpSpan.Method
+	withMethodTags["HttpMethod"] = s.Method
 	recordMeasurement(metricsHTTPMeasurements, name, &withMethodTags, duration, 1, true)
 
 	withStatusTags := copyMap(&primaryTags)
-	withStatusTags["HttpStatus"] = strconv.Itoa(httpSpan.Status)
+	withStatusTags["HttpStatus"] = strconv.Itoa(s.Status)
 	recordMeasurement(metricsHTTPMeasurements, name, &withStatusTags, duration, 1, true)
 
-	if httpSpan.HasError {
+	if s.HasError {
 		withErrorTags := copyMap(&primaryTags)
 		withErrorTags["Errors"] = "true"
 		recordMeasurement(metricsHTTPMeasurements, name, &withErrorTags, duration, 1, true)
