@@ -249,7 +249,7 @@ func TestIsWithinLimit(t *testing.T) {
 
 func TestRecordMeasurement(t *testing.T) {
 	var me = &measurements{
-		measurements: make(map[string]*measurement),
+		measurements: make(map[string]*Measurement),
 	}
 
 	t1 := make(map[string]string)
@@ -259,21 +259,21 @@ func TestRecordMeasurement(t *testing.T) {
 	recordMeasurement(me, "name1", &t1, 222, 1, false)
 	assert.NotNil(t, me.measurements["name1&false&t1:tag1&t2:tag2&"])
 	m := me.measurements["name1&false&t1:tag1&t2:tag2&"]
-	assert.Equal(t, "tag1", m.tags["t1"])
-	assert.Equal(t, "tag2", m.tags["t2"])
-	assert.Equal(t, 333.11, m.sum)
-	assert.Equal(t, 2, m.count)
-	assert.False(t, m.reportSum)
+	assert.Equal(t, "tag1", m.Tags["t1"])
+	assert.Equal(t, "tag2", m.Tags["t2"])
+	assert.Equal(t, 333.11, m.Sum)
+	assert.Equal(t, 2, m.Count)
+	assert.False(t, m.ReportSum)
 
 	t2 := make(map[string]string)
 	t2["t3"] = "tag3"
 	recordMeasurement(me, "name2", &t2, 123.456, 3, true)
 	assert.NotNil(t, me.measurements["name2&true&t3:tag3&"])
 	m = me.measurements["name2&true&t3:tag3&"]
-	assert.Equal(t, "tag3", m.tags["t3"])
-	assert.Equal(t, 123.456, m.sum)
-	assert.Equal(t, 3, m.count)
-	assert.True(t, m.reportSum)
+	assert.Equal(t, "tag3", m.Tags["t3"])
+	assert.Equal(t, 123.456, m.Sum)
+	assert.Equal(t, 3, m.Count)
+	assert.True(t, m.ReportSum)
 }
 
 func TestRecordHistogram(t *testing.T) {
@@ -317,19 +317,19 @@ func TestAddMeasurementToBSON(t *testing.T) {
 	tags2 := make(map[string]string)
 	tags2[veryLongTagName] = veryLongTagValue
 
-	measurement1 := &measurement{
-		name:      "name1",
-		tags:      tags1,
-		count:     45,
-		sum:       592.42,
-		reportSum: false,
+	measurement1 := &Measurement{
+		Name:      "name1",
+		Tags:      tags1,
+		Count:     45,
+		Sum:       592.42,
+		ReportSum: false,
 	}
-	measurement2 := &measurement{
-		name:      "name2",
-		tags:      tags2,
-		count:     777,
-		sum:       6530.3,
-		reportSum: true,
+	measurement2 := &Measurement{
+		Name:      "name2",
+		Tags:      tags2,
+		Count:     777,
+		Sum:       6530.3,
+		ReportSum: true,
 	}
 
 	index := 0

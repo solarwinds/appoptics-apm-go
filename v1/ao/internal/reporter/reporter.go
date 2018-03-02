@@ -18,7 +18,7 @@ type reporter interface {
 	// called when a status (e.g. __Init message) should be reported
 	reportStatus(ctx *oboeContext, e *event) error
 	// called when a Span message should be reported
-	reportSpan(span *SpanMessage) error
+	reportSpan(span SpanMessage) error
 }
 
 // currently used reporter
@@ -41,7 +41,7 @@ type nullReporter struct{}
 
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
-func (r *nullReporter) reportSpan(span *SpanMessage) error            { return nil }
+func (r *nullReporter) reportSpan(span SpanMessage) error             { return nil }
 
 // init() is called only once on program startup. Here we create the reporter
 // that will be used throughout the runtime of the app. Default is 'ssl' but
@@ -69,7 +69,7 @@ func setGlobalReporter(reporterType string) {
 //
 // returns	error if channel is full
 func ReportSpan(span SpanMessage) error {
-	return globalReporter.reportSpan(&span)
+	return globalReporter.reportSpan(span)
 }
 
 // cache hostname

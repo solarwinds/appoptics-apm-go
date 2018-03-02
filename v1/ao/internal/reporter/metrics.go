@@ -56,30 +56,30 @@ type BaseSpanMessage struct {
 	HasError bool          // boolean flag whether this transaction contains an error or not
 }
 
-// HttpSpanMessage is used for inbound metrics
-type HttpSpanMessage struct {
+// HTTPSpanMessage is used for inbound metrics
+type HTTPSpanMessage struct {
 	BaseSpanMessage
 	Transaction string // transaction name (e.g. controller.action)
-	Url         string // the raw url which will be processed and used as transaction (if Transaction is empty)
+	URL         string // the raw url which will be processed and used as transaction (if Transaction is empty)
 	Status      int    // HTTP status code (e.g. 200, 500, ...)
 	Method      string // HTTP method (e.g. GET, POST, ...)
 }
 
-// a single measurement
-type measurement struct {
-	name      string            // the name of the measurement (e.g. TransactionResponseTime)
-	tags      map[string]string // map of KVs
-	count     int               // count of this measurement
-	sum       float64           // sum for this measurement
-	reportSum bool              // include the sum in the report?
+// Measurement is a single measurement for reporting
+type Measurement struct {
+	Name      string            // the name of the measurement (e.g. TransactionResponseTime)
+	Tags      map[string]string // map of KVs
+	Count     int               // count of this measurement
+	Sum       float64           // sum for this measurement
+	ReportSum bool              // include the sum in the report?
 }
 
 // a collection of measurements
 type measurements struct {
-	measurements            map[string]*measurement
+	measurements            map[string]*Measurement
 	transactionNameMax      int            // max transaction names
 	transactionNameOverflow bool           // have we hit the limit of allowable transaction names?
-	uRLRegex                *regexp.Regexp // regular expression used for URL fingerprinting
+	urlRegex                *regexp.Regexp // regular expression used for URL fingerprinting
 	lock                    sync.Mutex     // protect access to this collection
 	transactionNameMaxLock  sync.RWMutex   // lock to ensure sequential access
 }
@@ -124,9 +124,9 @@ var metricsHTTPTransactions = make(map[string]bool)
 
 // collection of currently stored measurements (flushed on each metrics report cycle)
 var metricsHTTPMeasurements = &measurements{
-	measurements:       make(map[string]*measurement),
+	measurements:       make(map[string]*Measurement),
 	transactionNameMax: metricsTransactionsMaxDefault,
-	uRLRegex:           regexp.MustCompile(`^(https?://)?[^/]+(/([^/\?]+))?(/([^/\?]+))?`),
+	urlRegex:           regexp.MustCompile(`^(https?://)?[^/]+(/([^/\?]+))?(/([^/\?]+))?`),
 }
 
 // collection of currently stored histograms (flushed on each metrics report cycle)
@@ -227,7 +227,7 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	for _, m := range metricsHTTPMeasurements.measurements {
 		addMeasurementToBSON(bbuf, &index, m)
 	}
-	metricsHTTPMeasurements.measurements = make(map[string]*measurement)
+	metricsHTTPMeasurements.measurements = make(map[string]*Measurement)
 	metricsHTTPMeasurements.lock.Unlock()
 
 	bsonAppendFinishObject(bbuf, start)
@@ -550,7 +550,7 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 // performs URL fingerprinting on a given URL to extract the transaction name
 // e.g. https://github.com/appoptics/appoptics-apm-go/blob/metrics becomes /appoptics/appoptics-apm-go
 func getTransactionFromURL(url string) string {
-	matches := metricsHTTPMeasurements.uRLRegex.FindStringSubmatch(url)
+	matches := metricsHTTPMeasurements.urlRegex.FindStringSubmatch(url)
 	var ret string
 	if matches[3] != "" {
 		ret += "/" + matches[3]
@@ -584,13 +584,13 @@ func isWithinLimit(m *map[string]bool, element string, max int) bool {
 }
 
 // processes an HttpSpanMessage
-func (httpSpan *HttpSpanMessage) process() {
+func (httpSpan *HTTPSpanMessage) process() {
 	// always add to overall histogram
 	recordHistogram(metricsHTTPHistograms, "", httpSpan.Duration)
 
 	// check if we need to perform URL fingerprinting (no transaction name passed in)
-	if httpSpan.Transaction == "" && httpSpan.Url != "" {
-		httpSpan.Transaction = getTransactionFromURL(httpSpan.Url)
+	if httpSpan.Transaction == "" && httpSpan.URL != "" {
+		httpSpan.Transaction = getTransactionFromURL(httpSpan.URL)
 	}
 	if httpSpan.Transaction != "" {
 		// access transactionNameMax protected since it can be updated in updateSettings()
@@ -619,7 +619,7 @@ func (httpSpan *HttpSpanMessage) process() {
 
 // processes HTTP measurements, record one for primary key, and one for each secondary key
 // transactionName	the transaction name to be used for these measurements
-func (httpSpan *HttpSpanMessage) processMeasurements(transactionName string) {
+func (httpSpan *HTTPSpanMessage) processMeasurements(transactionName string) {
 	name := "TransactionResponseTime"
 	duration := float64((*httpSpan).Duration)
 
@@ -675,22 +675,22 @@ func recordMeasurement(me *measurements, name string, tags *map[string]string,
 		id += t + "&"
 	}
 
-	var m *measurement
+	var m *Measurement
 	var ok bool
 
 	// create a new measurement if it doesn't exist
 	if m, ok = measurements[id]; !ok {
-		m = &measurement{
-			name:      name,
-			tags:      *tags,
-			reportSum: reportValue,
+		m = &Measurement{
+			Name:      name,
+			Tags:      *tags,
+			ReportSum: reportValue,
 		}
 		measurements[id] = m
 	}
 
 	// add count and value
-	m.count += count
-	m.sum += value
+	m.Count += count
+	m.Sum += value
 }
 
 // records a histogram
@@ -745,18 +745,18 @@ func setTransactionNameOverflow(flag bool) {
 // bbuf		the BSON buffer to append the metric to
 // index	a running integer (0,1,2,...) which is needed for BSON arrays
 // m		measurement to be added
-func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *measurement) {
+func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
 	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
 
-	bsonAppendString(bbuf, "name", m.name)
-	bsonAppendInt(bbuf, "count", m.count)
-	if m.reportSum {
-		bsonAppendFloat64(bbuf, "sum", m.sum)
+	bsonAppendString(bbuf, "name", m.Name)
+	bsonAppendInt(bbuf, "count", m.Count)
+	if m.ReportSum {
+		bsonAppendFloat64(bbuf, "sum", m.Sum)
 	}
 
-	if len(m.tags) > 0 {
+	if len(m.Tags) > 0 {
 		start := bsonAppendStartObject(bbuf, "tags")
-		for k, v := range m.tags {
+		for k, v := range m.Tags {
 			if len(k) > metricsTagNameLenghtMax {
 				k = k[0:metricsTagNameLenghtMax]
 			}

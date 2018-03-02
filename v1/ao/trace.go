@@ -56,7 +56,7 @@ type Trace interface {
 type KVMap map[string]interface{}
 
 type traceHTTPSpan struct {
-	span       reporter.HttpSpanMessage
+	span       reporter.HTTPSpanMessage
 	start      time.Time
 	controller string
 	action     string
