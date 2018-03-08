@@ -35,17 +35,16 @@ type Trace interface {
 	// method to set a response header in advance of calling End().
 	ExitMetadata() string
 
-	// SetStartTime sets the start time of a trace.
-	SetStartTime(start time.Time)
-
-	// SetMethod sets the request's HTTP method of the trace, if any
+	// SetMethod sets the request's HTTP method of the trace, if any.
+	// It is used for categorizing service metrics and traces in AppOptics.
 	SetMethod(method string)
 
-	// SetStatus sets the request's HTTP status code of the trace, if any
+	// SetStatus sets the request's HTTP status code of the trace, if any.
+	// It is used for categorizing service metrics and traces in AppOptics.
 	SetStatus(status int)
 
-	// SetControllerAction sets controller/action for the trace
-	SetControllerAction(controller, action string)
+	// SetStartTime sets the start time of a span.
+	SetStartTime(start time.Time)
 }
 
 // KVMap is a map of additional key-value pairs to report along with the event data provided
@@ -139,12 +138,6 @@ func (t *aoTrace) SetStatus(status int) {
 	t.httpSpan.span.Status = status
 }
 
-// SetControllerAction sets the controller and action
-func (t *aoTrace) SetControllerAction(controller, action string) {
-	t.httpSpan.controller = controller
-	t.httpSpan.action = action
-}
-
 func (t *aoTrace) reportExit() {
 	if t.ok() {
 		t.lock.Lock()
@@ -230,13 +223,12 @@ func (t *aoTrace) recordHTTPSpan() {
 // A nullTrace is not tracing.
 type nullTrace struct{ nullSpan }
 
-func (t *nullTrace) EndCallback(f func() KVMap)                    {}
-func (t *nullTrace) ExitMetadata() string                          { return "" }
-func (t *nullTrace) SetStartTime(start time.Time)                  {}
-func (t *nullTrace) SetMethod(method string)                       {}
-func (t *nullTrace) SetStatus(status int)                          {}
-func (t *nullTrace) SetControllerAction(controller, action string) {}
-func (t *nullTrace) recordMetrics()                                {}
+func (t *nullTrace) EndCallback(f func() KVMap)   {}
+func (t *nullTrace) ExitMetadata() string         { return "" }
+func (t *nullTrace) SetStartTime(start time.Time) {}
+func (t *nullTrace) SetMethod(method string)      {}
+func (t *nullTrace) SetStatus(status int)         {}
+func (t *nullTrace) recordMetrics()               {}
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }

@@ -44,6 +44,10 @@ type Span interface {
 	// concurrent overlapping child Spans.
 	SetAsync(bool)
 
+	// SetTransactionName sets this service's transaction name.
+	// It is used for categorizing service metrics and traces in AppOptics.
+	SetTransactionName(string)
+
 	IsReporting() bool
 	addChildEdge(reporter.Context)
 	addProfile(Profile)
@@ -161,10 +165,17 @@ func (s *layerSpan) IsSampled() bool {
 	return false
 }
 
-// SetAsync(true) provides a hint that this Span is a parent of concurrent overlapping child Spans.
+// SetAsync provides a hint that this Span is a parent of concurrent overlapping child Spans.
 func (s *layerSpan) SetAsync(val bool) {
 	if val {
 		s.AddEndArgs("Async", true)
+	}
+}
+
+// SetTransactionName sets the transaction name used to categorize service requests in AppOptics.
+func (s *span) SetTransactionName(name string) {
+	if name != "" {
+		s.aoCtx.SetTransactionName(name)
 	}
 }
 
@@ -215,6 +226,7 @@ func (s nullSpan) aoContext() reporter.Context                           { retur
 func (s nullSpan) MetadataString() string                                { return "" }
 func (s nullSpan) IsSampled() bool                                       { return false }
 func (s nullSpan) SetAsync(bool)                                         {}
+func (s nullSpan) SetTransactionName(string)                             {}
 
 // is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool {

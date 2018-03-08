@@ -110,7 +110,7 @@ func TestMetadata(t *testing.T) {
 	assert.NoError(t, err)     // no error
 
 	// context.String()
-	ctx := &oboeContext{md2}
+	ctx := &oboeContext{metadata: md2}
 	assert.Equal(t, md1Str, ctx.MetadataString())
 	nctx := &nullContext{}
 	assert.Equal(t, "", nctx.MetadataString())
@@ -134,7 +134,7 @@ func TestMetadata(t *testing.T) {
 	// isSampled()
 	var md3 oboeMetadata
 	md3.FromString(md1Str)
-	ctx3 := &oboeContext{md3}
+	ctx3 := &oboeContext{metadata: md3}
 	ctx3.SetSampled(true)
 	assert.True(t, ctx3.IsSampled())
 	assert.Equal(t, "01", ctx3.MetadataString()[58:])
