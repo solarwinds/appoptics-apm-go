@@ -121,10 +121,6 @@ func TestIsEC2Instance(t *testing.T) {
 	file1 := "/tmp/TestIsEC2Instance1"
 	file2 := "/tmp/TestIsEC2Instance2"
 
-	// assuming this test isn't running on an EC2 instance
-	assert.False(t, isEC2Instance(nil))
-	cachedIsEC2Instance = nil
-
 	// test with one file that contains garbage
 	ioutil.WriteFile(file1, []byte("garbage"), 0644)
 	assert.False(t, isEC2Instance([]string{file1}))
