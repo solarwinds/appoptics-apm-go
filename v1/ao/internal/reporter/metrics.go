@@ -432,7 +432,7 @@ func getAWSInstanceID() string {
 	}
 
 	cachedAWSInstanceID = ""
-	if isEC2Instance() {
+	if isEC2Instance(nil) {
 		client := http.Client{Timeout: time.Second}
 		resp, err := client.Get(ec2MetadataInstanceIDURL)
 		if err == nil {
@@ -454,7 +454,7 @@ func getAWSInstanceZone() string {
 	}
 
 	cachedAWSInstanceZone = ""
-	if isEC2Instance() {
+	if isEC2Instance(nil) {
 		client := http.Client{Timeout: time.Second}
 		resp, err := client.Get(ec2MetadataZoneURL)
 		if err == nil {
@@ -470,12 +470,37 @@ func getAWSInstanceZone() string {
 }
 
 // check if this an EC2 instance
-func isEC2Instance() bool {
+func isEC2Instance(customFiles []string) bool {
 	if cachedIsEC2Instance != nil {
 		return *cachedIsEC2Instance
 	}
-	match := getLineByKeyword("/sys/hypervisor/uuid", "ec2")
-	isEC2 := match != "" && strings.HasPrefix(match, "ec2")
+
+	// default files to check
+	files := []string{"/sys/hypervisor/uuid", "/sys/devices/virtual/dmi/id/product_uuid"}
+
+	// overwrite list of files to check
+	if customFiles != nil {
+		files = customFiles
+	}
+
+	isEC2 := false
+	for _, path := range files {
+		if isEC2 {
+			break
+		}
+		if uuid, err := ioutil.ReadFile(path); err == nil {
+			tokens := strings.Split(strings.ToLower(string(uuid)), "-")
+			if len(tokens[0]) == 8 {
+				prefix := tokens[0][0:3]
+				isEC2 = prefix == "ec2"
+				if !isEC2 {
+					// try little-endian format
+					prefix = tokens[0][6:8] + tokens[0][4:5]
+					isEC2 = prefix == "ec2"
+				}
+			}
+		}
+	}
 	cachedIsEC2Instance = &isEC2
 	return isEC2
 }
