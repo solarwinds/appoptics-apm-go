@@ -470,7 +470,7 @@ func getAWSInstanceZone() string {
 }
 
 // check if this an EC2 instance
-func isEC2Instance(cutomFiles []string) bool {
+func isEC2Instance(customFiles []string) bool {
 	if cachedIsEC2Instance != nil {
 		return *cachedIsEC2Instance
 	}
@@ -479,8 +479,8 @@ func isEC2Instance(cutomFiles []string) bool {
 	files := []string{"/sys/hypervisor/uuid", "/sys/devices/virtual/dmi/id/product_uuid"}
 
 	// overwrite list of files to check
-	if cutomFiles != nil {
-		files = cutomFiles
+	if customFiles != nil {
+		files = customFiles
 	}
 
 	isEC2 := false
