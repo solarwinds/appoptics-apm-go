@@ -204,10 +204,6 @@ func newGRPCReporter() reporter {
 		insecureSkipVerify: insecureSkipVerify,
 	}
 
-	// send connection init message
-	reporter.eventConnection.sendConnectionInit()
-	reporter.metricConnection.sendConnectionInit()
-
 	// start up long-running goroutine eventSender() which listens on the events message channel
 	// and reports incoming events to the collector using GRPC
 	go reporter.eventSender()
@@ -417,6 +413,9 @@ type grpcResult struct {
 // long-running goroutine that listens on the events message channel, collects all messages
 // on that channel and attempts to send them to the collector using the GRPC method PostEvents()
 func (r *grpcReporter) eventSender() {
+	// send connection init message before doing anything else
+	r.eventConnection.sendConnectionInit()
+
 	batches := make(chan [][]byte)
 	results := r.eventBatchSender(batches)
 	inProgress := false
@@ -808,6 +807,9 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 // long-running goroutine that listens on the status message channel, collects all messages
 // on that channel and attempts to send them to the collector using the GRPC method PostStatus()
 func (r *grpcReporter) statusSender() {
+	// send connection init message before doing anything else
+	r.metricConnection.sendConnectionInit()
+
 	for {
 		var messages [][]byte
 
@@ -830,10 +832,6 @@ func (r *grpcReporter) statusSender() {
 		if len(messages) == 0 {
 			continue
 		}
-
-		//		for _, aaa := range messages {
-		//			printBson(aaa)
-		//		}
 
 		request := &collector.MessageRequest{
 			ApiKey:   r.metricConnection.serviceKey,
