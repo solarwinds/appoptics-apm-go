@@ -73,10 +73,17 @@ func readEnvSettings() {
 	}
 
 	if level := os.Getenv("APPOPTICS_DEBUG_LEVEL"); level != "" {
+		// We don not want to break backward-compatibility so keep accepting integer value
 		if i, err := strconv.Atoi(level); err == nil {
+			// Protect the debug level from some invalid value, e.g., 1000
+			if i >= len(dbgLevels) {
+				i = len(dbgLevels) - 1
+			}
 			debugLevel = DebugLevel(i)
+		} else if offset := ElemOffset(dbgLevels, strings.ToUpper(level)); offset != -1 {
+			debugLevel = DebugLevel(offset)
 		} else {
-			OboeLog(WARNING, "The debug level should be an integer.")
+			OboeLog(WARNING, "invalid debug level: %s", level)
 		}
 	}
 }

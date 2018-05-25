@@ -427,3 +427,56 @@ func TestOboeTracingMode(t *testing.T) {
 
 	r.Close(0)
 }
+
+func TestDebugLevel(t *testing.T) {
+	r := SetTestReporter()
+	defer r.Close(0)
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "DEBUG")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(0))
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "Info")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(1))
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "warn")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(2))
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "erroR")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(3))
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "HelloWorld")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(0))
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "0")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(0))
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "1")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(1))
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "2")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(2))
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "3")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(3))
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "4")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(3))
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "1000")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(3))
+
+	os.Unsetenv("APPOPTICS_DEBUG_LEVEL")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(0))
+}

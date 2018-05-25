@@ -40,19 +40,29 @@ const (
 	ERROR
 )
 
-var dbgLevels = map[DebugLevel]string{
+var dbgLevels = []string{
 	DEBUG:   "DEBUG",
 	INFO:    "INFO ",
 	WARNING: "WARN ",
 	ERROR:   "ERROR",
 }
 
-var debugLevel DebugLevel = ERROR
-var debugLog bool = true
+var debugLevel = ERROR
+var debugLog = true
+
+// ElemOffset is a simple helper function to check if a slice contains a specific element
+func ElemOffset(s []string, e string) int {
+	for idx, i := range s {
+		if e == i {
+			return idx
+		}
+	}
+	return -1
+}
 
 // OboeLog print logs based on the debug level.
 func OboeLog(level DebugLevel, msg string, args ...interface{}) {
-	if !debugLog || level < debugLevel {
+	if !debugLog || level < debugLevel { // debugLog is always true for now.
 		return
 	}
 	var p string
