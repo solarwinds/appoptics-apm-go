@@ -450,7 +450,7 @@ func TestDebugLevel(t *testing.T) {
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "HelloWorld")
 	readEnvSettings()
-	assert.EqualValues(t, debugLevel, DebugLevel(0))
+	assert.EqualValues(t, debugLevel, DebugLevel(3))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "0")
 	readEnvSettings()
@@ -478,5 +478,5 @@ func TestDebugLevel(t *testing.T) {
 
 	os.Unsetenv("APPOPTICS_DEBUG_LEVEL")
 	readEnvSettings()
-	assert.EqualValues(t, debugLevel, DebugLevel(0))
+	assert.EqualValues(t, debugLevel, DebugLevel(3))
 }

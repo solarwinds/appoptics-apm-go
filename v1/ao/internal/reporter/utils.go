@@ -42,8 +42,8 @@ const (
 
 var dbgLevels = []string{
 	DEBUG:   "DEBUG",
-	INFO:    "INFO ",
-	WARNING: "WARN ",
+	INFO:    "INFO",
+	WARNING: "WARN",
 	ERROR:   "ERROR",
 }
 
