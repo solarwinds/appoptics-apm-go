@@ -4,7 +4,6 @@ package reporter
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -213,6 +212,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	assert.Error(t, r.reportStatus(nil, nil))
 	assert.Error(t, r.reportStatus(ctx, nil))
+	time.Sleep(time.Millisecond * 100)
 	assert.NoError(t, r.reportStatus(ctx, ev2))
 
 	assert.Equal(t, addr, r.eventConnection.address)
@@ -263,8 +263,8 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, dec2["Distro"], getDistro())
 	assert.Equal(t, dec3["Distro"], getDistro())
 
-	fmt.Println("dec1: ", dec1)
-	fmt.Println("dec2: ", dec2)
-	fmt.Println("dec3: ", dec3)
-	fmt.Println("dec4: ", dec4)
+	t.Logf("dec1: ", dec1)
+	t.Logf("dec2: ", dec2)
+	t.Logf("dec3: ", dec3)
+	t.Logf("dec4: ", dec4)
 }
