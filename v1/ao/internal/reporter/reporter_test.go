@@ -4,6 +4,7 @@ package reporter
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -261,4 +262,9 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, dec3["Hostname"], cachedHostname)
 	assert.Equal(t, dec2["Distro"], getDistro())
 	assert.Equal(t, dec3["Distro"], getDistro())
+
+	fmt.Println("dec1: ", dec1)
+	fmt.Println("dec2: ", dec2)
+	fmt.Println("dec3: ", dec3)
+	fmt.Println("dec4: ", dec4)
 }
