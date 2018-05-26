@@ -448,6 +448,10 @@ func TestDebugLevel(t *testing.T) {
 	readEnvSettings()
 	assert.EqualValues(t, debugLevel, DebugLevel(3))
 
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", " erroR  ")
+	readEnvSettings()
+	assert.EqualValues(t, debugLevel, DebugLevel(3))
+
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "HelloWorld")
 	readEnvSettings()
 	assert.EqualValues(t, debugLevel, DebugLevel(3))

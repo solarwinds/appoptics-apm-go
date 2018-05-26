@@ -80,7 +80,7 @@ func readEnvSettings() {
 				i = len(dbgLevels) - 1
 			}
 			debugLevel = DebugLevel(i)
-		} else if offset := ElemOffset(dbgLevels, strings.ToUpper(level)); offset != -1 {
+		} else if offset := ElemOffset(dbgLevels, strings.ToUpper(strings.TrimSpace(level))); offset != -1 {
 			debugLevel = DebugLevel(offset)
 		} else {
 			OboeLog(WARNING, fmt.Sprintf("invalid debug level: %s", level))
