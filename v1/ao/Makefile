@@ -55,9 +55,9 @@ tag-and-release: are-you-sure
 	# Replace the version with the value provided by you
 	# Please note that this does not work with sed on a Mac.
 	# Install the GNU sed with `brew install gnu-sed --with-default-names` first
-	@sed -i 's/const initVersion = ".*"/const initVersion = "${VERSION}"/' v1/ao/internal/reporter/version.go
+	@sed -i 's/const initVersion = ".*"/const initVersion = "${VERSION}"/' internal/reporter/version.go
 	# And commit it
-	@git add v1/ao/internal/reporter/version.go
+	@git add internal/reporter/version.go
 	@git commit -m "Changed version to ${VERSION}"
 	# Now we create tags as a release
 	@git tag -a ${VERSION} -m "Version: ${VERSION}"
