@@ -36,7 +36,7 @@ are-you-sure:
 		$(eval confirmed := "Yes")
 
 # Change the value of initVersion and tag it with the version number.
-# Usage: make VERSION=blabla tag-and-release
+# Usage: make VERSION=1.2.3 tag-and-release
 tag-and-release: are-you-sure
 	# VERSION must be set
 	@if [ -z "$$VERSION" ]; then \
