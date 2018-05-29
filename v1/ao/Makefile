@@ -1,3 +1,7 @@
+SHELL=bash
+
+prev_branch :=$(shell git rev-parse --abbrev-ref HEAD)
+
 coverpkg="github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing"
 cov_args=-covermode=atomic -coverpkg=$(coverpkg)
 cov_out=-coverprofile=cov.out
@@ -21,3 +25,43 @@ $(cov_merge): test $(cov_files)
 
 coverhtml: $(cov_merge)
 	go tool cover -html=$(cov_merge)
+
+are-you-sure:
+	@read -p "I suppose you know what you are doing. Are you sure? [Y/n]" -n 1 -r; \
+	if [[ $$REPLY != "Y" ]]; then \
+		echo -e -n "\nSee you. >> "; \
+		exit 1; \
+	fi
+	@echo -e "\nGood, proceeding..."; \
+		$(eval confirmed := "Yes")
+
+# Change the value of initVersion and tag it with the version number.
+# Usage: make VERSION=1.2.3 tag-and-release
+tag-and-release: are-you-sure
+	# VERSION must be set
+	@if [ -z "$$VERSION" ]; then \
+		echo -e "The VERSION is unset or an empty string"; \
+		exit 1; \
+	fi
+	# Let you know what you are doing.
+	@echo -e "Changing the version number and tag it with ${VERSION}."
+	# Stash your current work, in case of any
+	@git stash
+	# We tag and release on the master branch
+	@git checkout master
+	# Make sure it's up-to-date
+	@git fetch origin
+	@git reset --hard origin/master
+	# Replace the version with the value provided by you
+	@sed -i.bak -e 's/const initVersion = ".*"/const initVersion = "${VERSION}"/' internal/reporter/version.go \
+		&& rm internal/reporter/version.go.bak
+	# And commit it
+	@git add internal/reporter/version.go
+	@git commit -m "Changed version to ${VERSION}"
+	# Now we create tags as a release
+	@git tag -a ${VERSION} -m "Version: ${VERSION}"
+	# Push it to the remote master branch
+	@git push origin master --follow-tags
+	# Resume your workspace
+	@git checkout ${prev_branch}
+	@git stash pop

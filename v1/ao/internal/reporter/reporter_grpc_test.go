@@ -83,8 +83,8 @@ func (s *TestGRPCServer) GetSettings(ctx context.Context, req *pb.SettingsReques
 			// Timestamp: XXX,
 			Value:     1000000,
 			Arguments: map[string][]byte{
-			//   "BucketCapacity": XXX,
-			//   "BucketRate":     XXX,
+				//   "BucketCapacity": XXX,
+				//   "BucketRate":     XXX,
 			},
 			Ttl: 120,
 		}},
