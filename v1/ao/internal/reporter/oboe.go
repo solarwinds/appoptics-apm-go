@@ -73,7 +73,7 @@ func readEnvSettings() {
 	}
 
 	if level := os.Getenv("APPOPTICS_DEBUG_LEVEL"); level != "" {
-		// We don not want to break backward-compatibility so keep accepting integer value
+		// We do not want to break backward-compatibility so keep accepting integer values.
 		if i, err := strconv.Atoi(level); err == nil {
 			// Protect the debug level from some invalid value, e.g., 1000
 			if i >= len(dbgLevels) {
