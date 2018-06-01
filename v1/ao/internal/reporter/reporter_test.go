@@ -339,7 +339,7 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 
 	s := buf.String()
 	assert.True(t, strings.Contains(s, "Error calling PostEvents"))
-	assert.True(t, strings.Contains(s, "Error resumed in PostEvents"))
+	assert.True(t, strings.Contains(s, "Error recovered in PostEvents"))
 
 	for i := 0; i < len(server.events); i++ {
 		for j := 0; j < len(server.events[i].Messages); j++ {
