@@ -64,7 +64,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 	grpcRetryDelayMultiplier                = 1.5 // backoff multiplier for unsuccessful retries
 	grpcRetryDelayMax                       = 60  // max connection/send retry delay in seconds
 	grpcRedirectMax                         = 20  // max allowed collector redirects
-	grpcRetryTimesWarning                   = 10  // warning logs after this number of retries
+	grpcRetryLogThreshold                   = 10  // log prints after this number of retries (about 56.7s)
 )
 
 // ID of first goroutine that attempts to reconnect a given GRPC client (eventConnection
@@ -133,7 +133,7 @@ func newGRPCReporter() reporter {
 	// service key is required, so bail out if not found
 	serviceKey := os.Getenv("APPOPTICS_SERVICE_KEY")
 	if serviceKey == "" {
-		OboeLog(WARNING, "No service key found, check environment variable APPOPTICS_SERVICE_KEY.")
+		OboeLog(ERROR, "No service key found, check environment variable APPOPTICS_SERVICE_KEY.")
 		return &nullReporter{}
 	}
 
@@ -509,7 +509,7 @@ func (r *grpcReporter) eventRetrySender(
 			if err != nil {
 				// gRPC handles the reconnection automatically.
 				failsNum++
-				if failsNum > grpcRetryTimesWarning && !failsPrinted {
+				if failsNum > grpcRetryLogThreshold && !failsPrinted {
 					OboeLog(WARNING, fmt.Sprintf("Error calling PostEvents(): %v", err))
 					failsPrinted = true
 				} else {
@@ -657,7 +657,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		if err != nil {
 			// gRPC handles the reconnection automatically.
 			failsNum++
-			if failsNum > grpcRetryTimesWarning && !failsPrinted {
+			if failsNum > grpcRetryLogThreshold && !failsPrinted {
 				OboeLog(WARNING, fmt.Sprintf("Error calling PostMetrics(): %v", err))
 				failsPrinted = true
 			} else {
@@ -744,7 +744,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		if err != nil {
 			// gRPC handles the reconnection automatically.
 			failsNum++
-			if failsNum > grpcRetryTimesWarning && !failsPrinted {
+			if failsNum > grpcRetryLogThreshold && !failsPrinted {
 				OboeLog(WARNING, fmt.Sprintf("Error calling PostEvents(): %v", err))
 				failsPrinted = true
 			} else {
@@ -908,7 +908,7 @@ func (r *grpcReporter) statusSender() {
 			if err != nil {
 				// gRPC handles the reconnection automatically.
 				failsNum++
-				if failsNum > grpcRetryTimesWarning && !failsPrinted {
+				if failsNum > grpcRetryLogThreshold && !failsPrinted {
 					OboeLog(WARNING, fmt.Sprintf("Error calling PostStatus(): %v", err))
 					failsPrinted = true
 				} else {
