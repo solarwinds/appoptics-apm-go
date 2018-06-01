@@ -517,8 +517,8 @@ func (r *grpcReporter) eventRetrySender(
 				}
 			} else {
 				if failsPrinted {
-					OboeLog(WARNING, fmt.Sprintf("Error resumed in PostEvents()"))
-					// Reset the flags here as there might be extra retries even the transport layer is resumed.
+					OboeLog(WARNING, fmt.Sprintf("Error recovered in PostEvents()"))
+					// Reset the flags here as there might be extra retries even the transport layer is recovered.
 					failsPrinted = false
 					failsNum = 0
 				}
@@ -665,8 +665,8 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			}
 		} else {
 			if failsPrinted {
-				OboeLog(WARNING, fmt.Sprintf("Error resumed in PostMetrics()"))
-				// Reset the flags here as there might be extra retries even the transport layer is resumed.
+				OboeLog(WARNING, fmt.Sprintf("Error recovered in PostMetrics()"))
+				// Reset the flags here as there might be extra retries even the transport layer is recovered.
 				failsPrinted = false
 				failsNum = 0
 			}
@@ -752,8 +752,8 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 			}
 		} else {
 			if failsPrinted {
-				OboeLog(WARNING, fmt.Sprintf("Error resumed in PostEvents()"))
-				// Reset the flags here as there might be extra retries even the transport layer is resumed.
+				OboeLog(WARNING, fmt.Sprintf("Error recovered in PostEvents()"))
+				// Reset the flags here as there might be extra retries even the transport layer is recovered.
 				failsPrinted = false
 				failsNum = 0
 			}
@@ -916,8 +916,8 @@ func (r *grpcReporter) statusSender() {
 				}
 			} else {
 				if failsPrinted {
-					OboeLog(WARNING, fmt.Sprintf("Error resumed in PostStatus()"))
-					// Reset the flags here as there might be extra retries even the transport layer is resumed.
+					OboeLog(WARNING, fmt.Sprintf("Error recovered in PostStatus()"))
+					// Reset the flags here as there might be extra retries even the transport layer is recovered.
 					failsPrinted = false
 					failsNum = 0
 				}
