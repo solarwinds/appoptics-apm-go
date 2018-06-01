@@ -64,6 +64,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 	grpcRetryDelayMultiplier                = 1.5 // backoff multiplier for unsuccessful retries
 	grpcRetryDelayMax                       = 60  // max connection/send retry delay in seconds
 	grpcRedirectMax                         = 20  // max allowed collector redirects
+	grpcRetryTimesWarning                   = 10  // warning logs after this number of retries
 )
 
 // ID of first goroutine that attempts to reconnect a given GRPC client (eventConnection
@@ -302,11 +303,13 @@ func (r *grpcReporter) redirect(c *grpcConnection, authority reconnectAuthority,
 
 	// set new connection (need to be protected)
 	c.lock.Lock()
+	oldConn := c.connection
 	c.connection = conn
 	c.lock.Unlock()
 
 	// attempt reconnect using the new connection
 	r.reconnect(c, authority)
+	oldConn.Close()
 }
 
 // long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
@@ -506,7 +509,7 @@ func (r *grpcReporter) eventRetrySender(
 			if err != nil {
 				// gRPC handles the reconnection automatically.
 				failsNum++
-				if failsNum > 10 && !failsPrinted {
+				if failsNum > grpcRetryTimesWarning && !failsPrinted {
 					OboeLog(WARNING, fmt.Sprintf("Error calling PostEvents(): %v", err))
 					failsPrinted = true
 				} else {
@@ -654,7 +657,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		if err != nil {
 			// gRPC handles the reconnection automatically.
 			failsNum++
-			if failsNum > 10 && !failsPrinted {
+			if failsNum > grpcRetryTimesWarning && !failsPrinted {
 				OboeLog(WARNING, fmt.Sprintf("Error calling PostMetrics(): %v", err))
 				failsPrinted = true
 			} else {
@@ -741,7 +744,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		if err != nil {
 			// gRPC handles the reconnection automatically.
 			failsNum++
-			if failsNum > 10 && !failsPrinted {
+			if failsNum > grpcRetryTimesWarning && !failsPrinted {
 				OboeLog(WARNING, fmt.Sprintf("Error calling PostEvents(): %v", err))
 				failsPrinted = true
 			} else {
@@ -905,7 +908,7 @@ func (r *grpcReporter) statusSender() {
 			if err != nil {
 				// gRPC handles the reconnection automatically.
 				failsNum++
-				if failsNum > 10 && !failsPrinted {
+				if failsNum > grpcRetryTimesWarning && !failsPrinted {
 					OboeLog(WARNING, fmt.Sprintf("Error calling PostStatus(): %v", err))
 					failsPrinted = true
 				} else {
