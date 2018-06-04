@@ -432,15 +432,13 @@ func getAWSInstanceID() string {
 	}
 
 	cachedAWSInstanceID = ""
-	if isEC2Instance(nil) {
-		client := http.Client{Timeout: time.Second}
-		resp, err := client.Get(ec2MetadataInstanceIDURL)
+	client := http.Client{Timeout: time.Second}
+	resp, err := client.Get(ec2MetadataInstanceIDURL)
+	if err == nil {
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
 		if err == nil {
-			defer resp.Body.Close()
-			body, err := ioutil.ReadAll(resp.Body)
-			if err == nil {
-				cachedAWSInstanceID = string(body)
-			}
+			cachedAWSInstanceID = string(body)
 		}
 	}
 
@@ -454,55 +452,17 @@ func getAWSInstanceZone() string {
 	}
 
 	cachedAWSInstanceZone = ""
-	if isEC2Instance(nil) {
-		client := http.Client{Timeout: time.Second}
-		resp, err := client.Get(ec2MetadataZoneURL)
+	client := http.Client{Timeout: time.Second}
+	resp, err := client.Get(ec2MetadataZoneURL)
+	if err == nil {
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
 		if err == nil {
-			defer resp.Body.Close()
-			body, err := ioutil.ReadAll(resp.Body)
-			if err == nil {
-				cachedAWSInstanceZone = string(body)
-			}
+			cachedAWSInstanceZone = string(body)
 		}
 	}
 
 	return cachedAWSInstanceZone
-}
-
-// check if this an EC2 instance
-func isEC2Instance(customFiles []string) bool {
-	if cachedIsEC2Instance != nil {
-		return *cachedIsEC2Instance
-	}
-
-	// default files to check
-	files := []string{"/sys/hypervisor/uuid", "/sys/devices/virtual/dmi/id/product_uuid"}
-
-	// overwrite list of files to check
-	if customFiles != nil {
-		files = customFiles
-	}
-
-	isEC2 := false
-	for _, path := range files {
-		if isEC2 {
-			break
-		}
-		if uuid, err := ioutil.ReadFile(path); err == nil {
-			tokens := strings.Split(strings.ToLower(string(uuid)), "-")
-			if len(tokens[0]) == 8 {
-				prefix := tokens[0][0:3]
-				isEC2 = prefix == "ec2"
-				if !isEC2 {
-					// try little-endian format
-					prefix = tokens[0][6:8] + tokens[0][4:5]
-					isEC2 = prefix == "ec2"
-				}
-			}
-		}
-	}
-	cachedIsEC2Instance = &isEC2
-	return isEC2
 }
 
 // gets the docker container ID (or empty string if not a docker/ecs container)
