@@ -745,14 +745,14 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 			// gRPC handles the reconnection automatically.
 			failsNum++
 			if failsNum > grpcRetryLogThreshold && !failsPrinted {
-				OboeLog(WARNING, fmt.Sprintf("Error calling PostEvents(): %v", err))
+				OboeLog(WARNING, fmt.Sprintf("Error calling GetSettings(): %v", err))
 				failsPrinted = true
 			} else {
-				OboeLog(DEBUG, fmt.Sprintf("(%v) Error calling PostEvents(): %v", failsNum, err))
+				OboeLog(DEBUG, fmt.Sprintf("(%v) Error calling GetSettings(): %v", failsNum, err))
 			}
 		} else {
 			if failsPrinted {
-				OboeLog(WARNING, fmt.Sprintf("Error recovered in PostEvents()"))
+				OboeLog(WARNING, fmt.Sprintf("Error recovered in GetSettings()"))
 				// Reset the flags here as there might be extra retries even the transport layer is recovered.
 				failsPrinted = false
 				failsNum = 0
