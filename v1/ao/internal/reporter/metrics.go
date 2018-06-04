@@ -430,18 +430,21 @@ func getAWSMeta(cached *string, url string) string {
 		return *cached
 	}
 	// Fetch it from the specified URL if the cache is uninitialized or no cache at all.
-	*cached = ""
+	meta := ""
+	if cached != nil {
+		defer func() { *cached = meta }()
+	}
 	client := http.Client{Timeout: time.Second}
 	resp, err := client.Get(url)
 	if err == nil {
 		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
 		if err == nil {
-			*cached = string(body)
+			meta = string(body)
 		}
 	}
 
-	return *cached
+	return meta
 }
 
 // gets the AWS instance ID (or empty string if not an AWS instance)

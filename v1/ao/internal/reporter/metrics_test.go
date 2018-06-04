@@ -143,7 +143,12 @@ func TestGetAWSMetadata(t *testing.T) {
 
 	id := getAWSInstanceID()
 	assert.Equal(t, id, "i-12345678")
+	assert.Equal(t, "i-12345678", cachedAWSInstanceID)
 	zone := getAWSInstanceZone()
+	assert.Equal(t, zone, "us-east-7")
+	assert.Equal(t, "us-east-7", cachedAWSInstanceZone)
+	// test the helper function
+	zone = getAWSMeta(nil, ec2MetadataZoneURL)
 	assert.Equal(t, zone, "us-east-7")
 }
 
