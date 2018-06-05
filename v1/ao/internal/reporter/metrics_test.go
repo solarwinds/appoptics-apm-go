@@ -5,7 +5,6 @@ package reporter
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"net"
@@ -117,63 +116,6 @@ func TestAppendMACAddresses(t *testing.T) {
 	}
 }
 
-func TestIsEC2Instance(t *testing.T) {
-	file1 := "/tmp/TestIsEC2Instance1"
-	file2 := "/tmp/TestIsEC2Instance2"
-
-	// test with one file that contains garbage
-	ioutil.WriteFile(file1, []byte("garbage"), 0644)
-	assert.False(t, isEC2Instance([]string{file1}))
-	cachedIsEC2Instance = nil
-	os.Remove(file1)
-
-	// test with one file that contains valid EC2 UUID (lowercase)
-	ioutil.WriteFile(file1, []byte("ec2e1916-9099-7caf-fd21-012345abcdef"), 0644)
-	assert.True(t, isEC2Instance([]string{file1}))
-	cachedIsEC2Instance = nil
-	os.Remove(file1)
-
-	// test with one file that contains valid EC2 UUID (uppercase)
-	ioutil.WriteFile(file1, []byte("EC2E1916-9099-7CAF-FD21-01234ABCDEF"), 0644)
-	assert.True(t, isEC2Instance([]string{file1}))
-	cachedIsEC2Instance = nil
-	os.Remove(file1)
-
-	// test with one file that contains invalid EC2 UUID
-	ioutil.WriteFile(file1, []byte("EC3E1916-9099-7CAF-FD21-01234ABCDEF"), 0644)
-	assert.False(t, isEC2Instance([]string{file1}))
-	cachedIsEC2Instance = nil
-	os.Remove(file1)
-
-	// test with one file that contains valid EC2 UUID (lowercase, little endian format)
-	ioutil.WriteFile(file1, []byte("45e12aec-dcd1-b213-94ed-01234abcdef"), 0644)
-	assert.True(t, isEC2Instance([]string{file1}))
-	cachedIsEC2Instance = nil
-	os.Remove(file1)
-
-	// test with one file that contains valid EC2 UUID (uppercase, little endian format)
-	ioutil.WriteFile(file1, []byte("45E12AEC-DCD1-B213-94ED-01234ABCDEF"), 0644)
-	assert.True(t, isEC2Instance([]string{file1}))
-	cachedIsEC2Instance = nil
-	os.Remove(file1)
-
-	// test with two files with the second one containing valid EC2 UUID
-	ioutil.WriteFile(file1, []byte("garbage"), 0644)
-	ioutil.WriteFile(file2, []byte("ec2e1916-9099-7caf-fd21-012345abcdef"), 0644)
-	assert.True(t, isEC2Instance([]string{file1, file2}))
-	cachedIsEC2Instance = nil
-	os.Remove(file1)
-	os.Remove(file2)
-
-	// test with two files with both containing invalid EC2 UUID
-	ioutil.WriteFile(file1, []byte("garbage"), 0644)
-	ioutil.WriteFile(file2, []byte("ec3e1916-9099-7caf-fd21-012345abcdef"), 0644)
-	assert.False(t, isEC2Instance([]string{file1, file2}))
-	cachedIsEC2Instance = nil
-	os.Remove(file1)
-	os.Remove(file2)
-}
-
 func TestGetAWSMetadata(t *testing.T) {
 	sm := http.NewServeMux()
 	sm.HandleFunc("/latest/meta-data/instance-id", func(w http.ResponseWriter, r *http.Request) {
@@ -189,9 +131,6 @@ func TestGetAWSMetadata(t *testing.T) {
 
 	s := &http.Server{Addr: addr, Handler: sm}
 	// change EC2 MD URLs
-	origIsEC2 := cachedIsEC2Instance
-	True := true
-	cachedIsEC2Instance = &True
 	ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, "169.254.169.254", addr, 1)
 	ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, "169.254.169.254", addr, 1)
 	go s.Serve(ln)
@@ -199,13 +138,17 @@ func TestGetAWSMetadata(t *testing.T) {
 		ln.Close()
 		ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, addr, "169.254.169.254", 1)
 		ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, addr, "169.254.169.254", 1)
-		cachedIsEC2Instance = origIsEC2
 	}()
 	time.Sleep(50 * time.Millisecond)
 
 	id := getAWSInstanceID()
 	assert.Equal(t, id, "i-12345678")
+	assert.Equal(t, "i-12345678", cachedAWSInstanceID)
 	zone := getAWSInstanceZone()
+	assert.Equal(t, zone, "us-east-7")
+	assert.Equal(t, "us-east-7", cachedAWSInstanceZone)
+	// test the helper function
+	zone = getAWSMeta(nil, ec2MetadataZoneURL)
 	assert.Equal(t, zone, "us-east-7")
 }
 

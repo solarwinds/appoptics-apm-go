@@ -113,7 +113,6 @@ type rateCounts struct{ requested, sampled, limited, traced, through int64 }
 var (
 	cachedDistro          string            // cached distribution name
 	cachedMACAddresses    = "uninitialized" // cached list MAC addresses
-	cachedIsEC2Instance   *bool             // cached EC2 instance check
 	cachedAWSInstanceID   = "uninitialized" // cached EC2 instance ID (if applicable)
 	cachedAWSInstanceZone = "uninitialized" // cached EC2 instance zone (if applicable)
 	cachedContainerID     = "uninitialized" // cached docker container ID (if applicable)
@@ -425,84 +424,37 @@ func getMACAddressList() string {
 	return cachedMACAddresses
 }
 
-// gets the AWS instance ID (or empty string if not an AWS instance)
-func getAWSInstanceID() string {
-	if cachedAWSInstanceID != "uninitialized" {
-		return cachedAWSInstanceID
+// getAWSMeta fetches the metadata from a specific AWS URL and cache it into a provided variable
+func getAWSMeta(cached *string, url string) string {
+	if cached != nil && *cached != "uninitialized" {
+		return *cached
 	}
-
-	cachedAWSInstanceID = ""
-	if isEC2Instance(nil) {
-		client := http.Client{Timeout: time.Second}
-		resp, err := client.Get(ec2MetadataInstanceIDURL)
+	// Fetch it from the specified URL if the cache is uninitialized or no cache at all.
+	meta := ""
+	if cached != nil {
+		defer func() { *cached = meta }()
+	}
+	client := http.Client{Timeout: time.Second}
+	resp, err := client.Get(url)
+	if err == nil {
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
 		if err == nil {
-			defer resp.Body.Close()
-			body, err := ioutil.ReadAll(resp.Body)
-			if err == nil {
-				cachedAWSInstanceID = string(body)
-			}
+			meta = string(body)
 		}
 	}
 
-	return cachedAWSInstanceID
+	return meta
+}
+
+// gets the AWS instance ID (or empty string if not an AWS instance)
+func getAWSInstanceID() string {
+	return getAWSMeta(&cachedAWSInstanceID, ec2MetadataInstanceIDURL)
 }
 
 // gets the AWS instance zone (or empty string if not an AWS instance)
 func getAWSInstanceZone() string {
-	if cachedAWSInstanceZone != "uninitialized" {
-		return cachedAWSInstanceZone
-	}
-
-	cachedAWSInstanceZone = ""
-	if isEC2Instance(nil) {
-		client := http.Client{Timeout: time.Second}
-		resp, err := client.Get(ec2MetadataZoneURL)
-		if err == nil {
-			defer resp.Body.Close()
-			body, err := ioutil.ReadAll(resp.Body)
-			if err == nil {
-				cachedAWSInstanceZone = string(body)
-			}
-		}
-	}
-
-	return cachedAWSInstanceZone
-}
-
-// check if this an EC2 instance
-func isEC2Instance(customFiles []string) bool {
-	if cachedIsEC2Instance != nil {
-		return *cachedIsEC2Instance
-	}
-
-	// default files to check
-	files := []string{"/sys/hypervisor/uuid", "/sys/devices/virtual/dmi/id/product_uuid"}
-
-	// overwrite list of files to check
-	if customFiles != nil {
-		files = customFiles
-	}
-
-	isEC2 := false
-	for _, path := range files {
-		if isEC2 {
-			break
-		}
-		if uuid, err := ioutil.ReadFile(path); err == nil {
-			tokens := strings.Split(strings.ToLower(string(uuid)), "-")
-			if len(tokens[0]) == 8 {
-				prefix := tokens[0][0:3]
-				isEC2 = prefix == "ec2"
-				if !isEC2 {
-					// try little-endian format
-					prefix = tokens[0][6:8] + tokens[0][4:5]
-					isEC2 = prefix == "ec2"
-				}
-			}
-		}
-	}
-	cachedIsEC2Instance = &isEC2
-	return isEC2
+	return getAWSMeta(&cachedAWSInstanceZone, ec2MetadataZoneURL)
 }
 
 // gets the docker container ID (or empty string if not a docker/ecs container)
