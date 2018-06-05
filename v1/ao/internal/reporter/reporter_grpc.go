@@ -64,6 +64,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 	grpcRetryDelayMultiplier                = 1.5 // backoff multiplier for unsuccessful retries
 	grpcRetryDelayMax                       = 60  // max connection/send retry delay in seconds
 	grpcRedirectMax                         = 20  // max allowed collector redirects
+	grpcRetryLogThreshold                   = 10  // log prints after this number of retries (about 56.7s)
 )
 
 // ID of first goroutine that attempts to reconnect a given GRPC client (eventConnection
@@ -132,7 +133,7 @@ func newGRPCReporter() reporter {
 	// service key is required, so bail out if not found
 	serviceKey := os.Getenv("APPOPTICS_SERVICE_KEY")
 	if serviceKey == "" {
-		OboeLog(WARNING, "No service key found, check environment variable APPOPTICS_SERVICE_KEY.")
+		OboeLog(ERROR, "No service key found, check environment variable APPOPTICS_SERVICE_KEY.")
 		return &nullReporter{}
 	}
 
@@ -302,11 +303,13 @@ func (r *grpcReporter) redirect(c *grpcConnection, authority reconnectAuthority,
 
 	// set new connection (need to be protected)
 	c.lock.Lock()
+	oldConn := c.connection
 	c.connection = conn
 	c.lock.Unlock()
 
 	// attempt reconnect using the new connection
 	r.reconnect(c, authority)
+	oldConn.Close()
 }
 
 // long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
@@ -490,6 +493,9 @@ func (r *grpcReporter) eventRetrySender(
 
 		// we'll stay in this loop until the call to PostEvents() succeeds
 		resultOk := false
+		failsNum := 0
+		failsPrinted := false
+
 		for !resultOk {
 			// protect the call to the client object or we could run into problems if
 			// another goroutine is messing with it at the same time, e.g. doing a reconnect()
@@ -501,10 +507,21 @@ func (r *grpcReporter) eventRetrySender(
 			connection.resetPing()
 
 			if err != nil {
-				OboeLog(INFO, fmt.Sprintf("Error calling PostEvents(): %v", err))
-				// some server connection error, attempt reconnect
-				r.reconnect(connection, authority)
+				// gRPC handles the reconnection automatically.
+				failsNum++
+				if failsNum > grpcRetryLogThreshold && !failsPrinted {
+					OboeLog(WARNING, fmt.Sprintf("Error calling PostEvents(): %v", err))
+					failsPrinted = true
+				} else {
+					OboeLog(DEBUG, fmt.Sprintf("(%v) Error calling PostEvents(): %v", failsNum, err))
+				}
 			} else {
+				if failsPrinted {
+					OboeLog(WARNING, fmt.Sprintf("Error recovered in PostEvents()"))
+					// Reset the flags here as there might be extra retries even the transport layer is recovered.
+					failsPrinted = false
+					failsNum = 0
+				}
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
@@ -623,6 +640,10 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 
 	// we'll stay in this loop until the call to PostMetrics() succeeds
 	resultOk := false
+	failsNum := 0
+	failsPrinted := false
+
+	// TODO: boilerplate code refactor as events/metrics/settings share similar processes.
 	for !resultOk {
 		// protect the call to the client object or we could run into problems if
 		// another goroutine is messing with it at the same time, e.g. doing a reconnect()
@@ -634,10 +655,21 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		r.metricConnection.resetPing()
 
 		if err != nil {
-			OboeLog(INFO, fmt.Sprintf("Error calling PostMetrics(): %v", err))
-			// some server connection error, attempt reconnect
-			r.reconnect(r.metricConnection, POSTMETRICS)
+			// gRPC handles the reconnection automatically.
+			failsNum++
+			if failsNum > grpcRetryLogThreshold && !failsPrinted {
+				OboeLog(WARNING, fmt.Sprintf("Error calling PostMetrics(): %v", err))
+				failsPrinted = true
+			} else {
+				OboeLog(DEBUG, fmt.Sprintf("(%v) Error calling PostMetrics(): %v", failsNum, err))
+			}
 		} else {
+			if failsPrinted {
+				OboeLog(WARNING, fmt.Sprintf("Error recovered in PostMetrics()"))
+				// Reset the flags here as there might be extra retries even the transport layer is recovered.
+				failsPrinted = false
+				failsNum = 0
+			}
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
@@ -696,6 +728,9 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 
 	// we'll stay in this loop until the call to GetSettings() succeeds
 	resultOK := false
+	failsNum := 0
+	failsPrinted := false
+
 	for !resultOK {
 		// protect the call to the client object or we could run into problems if
 		// another goroutine is messing with it at the same time, e.g. doing a reconnect()
@@ -707,10 +742,21 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		r.metricConnection.resetPing()
 
 		if err != nil {
-			OboeLog(INFO, fmt.Sprintf("Error calling GetSettings(): %v", err))
-			// some server connection error, attempt reconnect
-			r.reconnect(r.metricConnection, GETSETTINGS)
+			// gRPC handles the reconnection automatically.
+			failsNum++
+			if failsNum > grpcRetryLogThreshold && !failsPrinted {
+				OboeLog(WARNING, fmt.Sprintf("Error calling GetSettings(): %v", err))
+				failsPrinted = true
+			} else {
+				OboeLog(DEBUG, fmt.Sprintf("(%v) Error calling GetSettings(): %v", failsNum, err))
+			}
 		} else {
+			if failsPrinted {
+				OboeLog(WARNING, fmt.Sprintf("Error recovered in GetSettings()"))
+				// Reset the flags here as there might be extra retries even the transport layer is recovered.
+				failsPrinted = false
+				failsNum = 0
+			}
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
@@ -846,6 +892,9 @@ func (r *grpcReporter) statusSender() {
 
 		// we'll stay in this loop until the call to PostEvents() succeeds
 		resultOk := false
+		failsNum := 0
+		failsPrinted := false
+
 		for !resultOk {
 			// protect the call to the client object or we could run into problems if
 			// another goroutine is messing with it at the same time, e.g. doing a reconnect()
@@ -857,10 +906,21 @@ func (r *grpcReporter) statusSender() {
 			r.metricConnection.resetPing()
 
 			if err != nil {
-				OboeLog(INFO, fmt.Sprintf("Error calling PostStatus(): %v", err))
-				// some server connection error, attempt reconnect
-				r.reconnect(r.metricConnection, POSTSTATUS)
+				// gRPC handles the reconnection automatically.
+				failsNum++
+				if failsNum > grpcRetryLogThreshold && !failsPrinted {
+					OboeLog(WARNING, fmt.Sprintf("Error calling PostStatus(): %v", err))
+					failsPrinted = true
+				} else {
+					OboeLog(DEBUG, fmt.Sprintf("(%v) Error calling PostStatus(): %v", failsNum, err))
+				}
 			} else {
+				if failsPrinted {
+					OboeLog(WARNING, fmt.Sprintf("Error recovered in PostStatus()"))
+					// Reset the flags here as there might be extra retries even the transport layer is recovered.
+					failsPrinted = false
+					failsNum = 0
+				}
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:

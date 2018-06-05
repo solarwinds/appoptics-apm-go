@@ -10,6 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"strconv"
+
+	"bytes"
+
+	"strings"
+
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/stretchr/testify/assert"
@@ -262,9 +268,155 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, dec3["Hostname"], cachedHostname)
 	assert.Equal(t, dec2["Distro"], getDistro())
 	assert.Equal(t, dec3["Distro"], getDistro())
+}
 
-	t.Logf("dec1: ", dec1)
-	t.Logf("dec2: ", dec2)
-	t.Logf("dec3: ", dec3)
-	t.Logf("dec4: ", dec4)
+func TestInterruptedGRPCReporter(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() {
+		log.SetOutput(os.Stderr)
+	}()
+
+	// start test gRPC server
+	debugLevel = INFO
+	addr := "localhost:4567"
+	// Open it if for verbose print of gRPC
+	//grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
+	server := StartTestGRPCServer(t, addr)
+	time.Sleep(100 * time.Millisecond)
+
+	// set gRPC reporter
+	reportingDisabled = false
+	os.Setenv("APPOPTICS_COLLECTOR", addr)
+	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
+	oldReporter := globalReporter
+	setGlobalReporter("ssl")
+
+	require.IsType(t, &grpcReporter{}, globalReporter)
+
+	r := globalReporter.(*grpcReporter)
+	var bsonArr []bson.M
+
+	for i := 1; i <= 10; i++ {
+		ctx := newTestContext(t)
+		ev1, _ := ctx.newEvent(LabelInfo, "layer-"+strconv.Itoa(i))
+		assert.NoError(t, r.reportEvent(ctx, ev1))
+		time.Sleep(time.Millisecond * 50)
+	}
+	time.Sleep(time.Second * 10)
+	// stop test reporter
+	server.Stop()
+
+	for i := 0; i < len(server.events); i++ {
+		for j := 0; j < len(server.events[i].Messages); j++ {
+			bs := bson.M{}
+			bson.Unmarshal(server.events[i].Messages[j], &bs)
+			bsonArr = append(bsonArr, bs)
+		}
+	}
+
+	for i := 11; i <= 20; i++ {
+		ctx := newTestContext(t)
+		ev1, _ := ctx.newEvent(LabelInfo, "layer-"+strconv.Itoa(i))
+		assert.NoError(t, r.reportEvent(ctx, ev1))
+		time.Sleep(time.Millisecond * 50)
+	}
+	time.Sleep(time.Second * 60)
+
+	server = StartTestGRPCServer(t, addr)
+	time.Sleep(time.Second * 10)
+
+	for i := 21; i <= 30; i++ {
+		ctx := newTestContext(t)
+		ev1, _ := ctx.newEvent(LabelInfo, "layer-"+strconv.Itoa(i))
+		assert.NoError(t, r.reportEvent(ctx, ev1))
+		time.Sleep(time.Millisecond * 50)
+	}
+
+	time.Sleep(time.Second * 30)
+	globalReporter = oldReporter
+	server.Stop()
+
+	s := buf.String()
+	assert.True(t, strings.Contains(s, "Error calling PostEvents"))
+	assert.True(t, strings.Contains(s, "Error recovered in PostEvents"))
+
+	for i := 0; i < len(server.events); i++ {
+		for j := 0; j < len(server.events[i].Messages); j++ {
+			bs := bson.M{}
+			bson.Unmarshal(server.events[i].Messages[j], &bs)
+			bsonArr = append(bsonArr, bs)
+		}
+	}
+	assert.Equal(t, 30, len(bsonArr))
+
+}
+
+func TestRedirect(t *testing.T) {
+	// start test gRPC server
+	debugLevel = INFO
+
+	addr := "localhost:4567"
+	// Open it if for verbose print of gRPC
+	//grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
+	server := StartTestGRPCServer(t, addr)
+	time.Sleep(100 * time.Millisecond)
+
+	// set gRPC reporter
+	reportingDisabled = false
+	os.Setenv("APPOPTICS_COLLECTOR", addr)
+	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
+	oldReporter := globalReporter
+	setGlobalReporter("ssl")
+
+	require.IsType(t, &grpcReporter{}, globalReporter)
+
+	r := globalReporter.(*grpcReporter)
+	var bsonArr []bson.M
+
+	for i := 1; i <= 10; i++ {
+		ctx := newTestContext(t)
+		ev1, _ := ctx.newEvent(LabelInfo, "layer-"+strconv.Itoa(i))
+		assert.NoError(t, r.reportEvent(ctx, ev1))
+		time.Sleep(time.Millisecond * 50)
+	}
+	time.Sleep(time.Second * 10)
+	// stop test reporter
+	server.Stop()
+
+	for i := 0; i < len(server.events); i++ {
+		for j := 0; j < len(server.events[i].Messages); j++ {
+			bs := bson.M{}
+			bson.Unmarshal(server.events[i].Messages[j], &bs)
+			bsonArr = append(bsonArr, bs)
+		}
+	}
+
+	addr2 := "localhost:4568"
+	server = StartTestGRPCServer(t, addr2)
+	time.Sleep(time.Second * 10)
+
+	// Call redirect directly
+	r.redirect(r.eventConnection, POSTEVENTS, addr2)
+
+	for i := 11; i <= 20; i++ {
+		ctx := newTestContext(t)
+		ev1, _ := ctx.newEvent(LabelInfo, "layer-"+strconv.Itoa(i))
+		assert.NoError(t, r.reportEvent(ctx, ev1))
+		time.Sleep(time.Millisecond * 50)
+	}
+	time.Sleep(time.Second * 10)
+
+	globalReporter = oldReporter
+	server.Stop()
+
+	for i := 0; i < len(server.events); i++ {
+		for j := 0; j < len(server.events[i].Messages); j++ {
+			bs := bson.M{}
+			bson.Unmarshal(server.events[i].Messages[j], &bs)
+			bsonArr = append(bsonArr, bs)
+		}
+	}
+	assert.Equal(t, 20, len(bsonArr))
+
 }
