@@ -3,6 +3,7 @@
 package ao
 
 import (
+	"strings"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
@@ -38,6 +39,12 @@ type Trace interface {
 	// SetMethod sets the request's HTTP method of the trace, if any.
 	// It is used for categorizing service metrics and traces in AppOptics.
 	SetMethod(method string)
+
+	// SetURL extracts the full URL from http.Request
+	SetURL(url string)
+
+	// SetHost extracts the host information from http.Request
+	SetHost(host string)
 
 	// SetStatus sets the request's HTTP status code of the trace, if any.
 	// It is used for categorizing service metrics and traces in AppOptics.
@@ -133,6 +140,16 @@ func (t *aoTrace) SetMethod(method string) {
 	t.httpSpan.span.Method = method
 }
 
+// SetURL extracts the URL from http.Request
+func (t *aoTrace) SetURL(url string) {
+	t.httpSpan.span.URL = url
+}
+
+// SetHost extracts the host information from http.Request
+func (t *aoTrace) SetHost(host string) {
+	t.httpSpan.span.Host = host
+}
+
 // SetStatus sets the request's HTTP status code of the trace, if any
 func (t *aoTrace) SetStatus(status int) {
 	t.httpSpan.span.Status = status
@@ -207,7 +224,21 @@ func (t *aoTrace) recordHTTPSpan() {
 		}
 	}
 
-	t.httpSpan.span.Transaction = reporter.UnknownTransactionName
+	t.finalizeTxnName(controller, action)
+
+	if t.httpSpan.span.Status >= 500 && t.httpSpan.span.Status < 600 {
+		t.httpSpan.span.HasError = true
+	}
+
+	reporter.ReportSpan(&t.httpSpan.span)
+
+	// This will add the TransactionName KV into the exit event.
+	t.endArgs = append(t.endArgs, "TransactionName", t.httpSpan.span.Transaction)
+}
+
+// finalizeTxnName finalizes the transaction name based on the following factors:
+// custom transaction name, action/controller, URL and the value of APPOPTICS_PREPEND_DOMAIN
+func (t *aoTrace) finalizeTxnName(controller string, action string) {
 	// The precedence:
 	// custom transaction name > framework specific transaction naming > controller.action > 1st and 2nd segment of URL
 	customTxnName := t.aoCtx.GetTransactionName()
@@ -221,14 +252,25 @@ func (t *aoTrace) recordHTTPSpan() {
 		t.httpSpan.span.Transaction = reporter.GetTransactionFromURL(t.httpSpan.span.URL)
 	}
 
-	if t.httpSpan.span.Status >= 500 && t.httpSpan.span.Status < 600 {
-		t.httpSpan.span.HasError = true
+	if t.httpSpan.span.Transaction == "" {
+		t.httpSpan.span.Transaction = reporter.UnknownTransactionName
 	}
+	t.prependDomainToTxnName()
+}
 
-	reporter.ReportSpan(&t.httpSpan.span)
-
-	// This will report TransactionName KV in the exit event.
-	t.endArgs = append(t.endArgs, "TransactionName", t.httpSpan.span.Transaction)
+// prependDomainToTxnName prepends the domain to the transaction name if APPOPTICS_PREPEND_DOMAIN = true
+func (t *aoTrace) prependDomainToTxnName() {
+	if !reporter.NeedPrependDomain() ||
+		t.httpSpan.span.Transaction == reporter.UnknownTransactionName ||
+		t.httpSpan.span.Host == "" {
+		return
+	}
+	if strings.HasSuffix(t.httpSpan.span.Host, "/") ||
+		strings.HasPrefix(t.httpSpan.span.Transaction, "/") {
+		t.httpSpan.span.Transaction = t.httpSpan.span.Host + t.httpSpan.span.Transaction
+	} else {
+		t.httpSpan.span.Transaction = t.httpSpan.span.Host + "/" + t.httpSpan.span.Transaction
+	}
 }
 
 // A nullTrace is not tracing.
@@ -238,6 +280,8 @@ func (t *nullTrace) EndCallback(f func() KVMap)   {}
 func (t *nullTrace) ExitMetadata() string         { return "" }
 func (t *nullTrace) SetStartTime(start time.Time) {}
 func (t *nullTrace) SetMethod(method string)      {}
+func (t *nullTrace) SetURL(url string)            {}
+func (t *nullTrace) SetHost(host string)          {}
 func (t *nullTrace) SetStatus(status int)         {}
 func (t *nullTrace) recordMetrics()               {}
 

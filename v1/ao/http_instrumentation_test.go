@@ -130,7 +130,7 @@ func TestHTTPSpan(t *testing.T) {
 	m, ok = r.SpanMessages[2].(*reporter.HTTPSpanMessage)
 	assert.True(t, ok)
 	assert.Equal(t, "ao_test.handlerDelay200", m.Transaction)
-	assert.Equal(t, "", m.URL)
+	assert.Equal(t, "http://test.com/hello?testq", m.URL)
 	assert.Equal(t, 200, m.Status)
 	assert.Equal(t, "GET", m.Method)
 	assert.False(t, m.HasError)

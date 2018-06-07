@@ -35,9 +35,12 @@ var cachedPid = os.Getpid()
 
 // for hostname alias
 var configuredHostname string
+var prependDomainForTransactionName bool
 
 // a noop reporter
 type nullReporter struct{}
+
+func NeedPrependDomain() bool { return prependDomainForTransactionName }
 
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }

@@ -140,6 +140,8 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewcontext bool) T
 	})
 	// set the start time and method for metrics collection
 	t.SetMethod(r.Method)
+	t.SetURL(r.URL.String())
+	t.SetHost(r.Host)
 	if isNewcontext {
 		t.SetStartTime(time.Now())
 	}

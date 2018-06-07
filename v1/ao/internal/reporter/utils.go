@@ -47,8 +47,8 @@ var dbgLevels = map[DebugLevel]string{
 	ERROR:   "ERROR",
 }
 
-var debugLevel DebugLevel = ERROR
-var debugLog bool = true
+var debugLevel = ERROR
+var debugLog = true
 
 // OboeLog print logs based on the debug level.
 func OboeLog(level DebugLevel, msg string, args ...interface{}) {

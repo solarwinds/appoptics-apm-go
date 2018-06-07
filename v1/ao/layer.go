@@ -7,8 +7,14 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"errors"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"golang.org/x/net/context"
+)
+
+const (
+	MaxCustomTransactionNameLength = 255
 )
 
 // Span is used to measure a span of time associated with an actvity
@@ -46,7 +52,7 @@ type Span interface {
 
 	// SetTransactionName sets this service's transaction name.
 	// It is used for categorizing service metrics and traces in AppOptics.
-	SetTransactionName(string)
+	SetTransactionName(string) error
 
 	IsReporting() bool
 	addChildEdge(reporter.Context)
@@ -173,16 +179,15 @@ func (s *layerSpan) SetAsync(val bool) {
 }
 
 // SetTransactionName sets the transaction name used to categorize service requests in AppOptics.
-func (s *span) SetTransactionName(name string) {
+func (s *span) SetTransactionName(name string) error {
 	if !s.ok() {
-		reporter.OboeLog(reporter.DEBUG, "failed to set custom transaction name, invalid span")
-		return
+		return errors.New("failed to set custom transaction name, invalid span")
 	}
-	if name == "" || len(name) > 255 {
-		reporter.OboeLog(reporter.DEBUG, "valid length for custom transaction name: 1~255")
-		return
+	if name == "" || len(name) > MaxCustomTransactionNameLength {
+		return errors.New("valid length for custom transaction name: 1~255")
 	}
 	s.aoCtx.SetTransactionName(name)
+	return nil
 }
 
 // Error reports an error, distinguished by its class and message
@@ -232,7 +237,7 @@ func (s nullSpan) aoContext() reporter.Context                           { retur
 func (s nullSpan) MetadataString() string                                { return "" }
 func (s nullSpan) IsSampled() bool                                       { return false }
 func (s nullSpan) SetAsync(bool)                                         {}
-func (s nullSpan) SetTransactionName(string)                             {}
+func (s nullSpan) SetTransactionName(string) error                       { return nil }
 
 // is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool {

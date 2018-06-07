@@ -68,6 +68,7 @@ type HTTPSpanMessage struct {
 	Transaction string // transaction name (e.g. controller.action)
 	URL         string // the raw url which will be processed and used as transaction (if Transaction is empty)
 	Status      int    // HTTP status code (e.g. 200, 500, ...)
+	Host        string // HTTP-Host
 	Method      string // HTTP method (e.g. GET, POST, ...)
 }
 
@@ -557,6 +558,9 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 // e.g. https://github.com/appoptics/appoptics-apm-go/blob/metrics becomes /appoptics/appoptics-apm-go
 func GetTransactionFromURL(url string) string {
 	matches := metricsHTTPMeasurements.urlRegex.FindStringSubmatch(url)
+	if len(matches) < 6 {
+		return ""
+	}
 	var ret string
 	if matches[3] != "" {
 		ret += "/" + matches[3]
