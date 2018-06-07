@@ -182,7 +182,7 @@ func (s *span) SetTransactionName(name string) {
 // Error reports an error, distinguished by its class and message
 func (s *span) Error(class, msg string) {
 	if s.ok() {
-		_ = s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
+		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
 			"ErrorClass", class, "ErrorMsg", msg, "Backtrace", debug.Stack())
 	}
 }
@@ -190,7 +190,7 @@ func (s *span) Error(class, msg string) {
 // Err reports the provided error type
 func (s *span) Err(err error) {
 	if s.ok() && err != nil {
-		_ = s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
+		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
 			"ErrorClass", "error", "ErrorMsg", err.Error(), "Backtrace", debug.Stack())
 	}
 }
@@ -230,9 +230,12 @@ func (s nullSpan) SetTransactionName(string)                             {}
 
 // is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool {
+	if s == nil {
+		return false
+	}
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	return s != nil && !s.ended
+	return !s.ended
 }
 func (s *span) IsReporting() bool           { return s.ok() }
 func (s *span) aoContext() reporter.Context { return s.aoCtx }

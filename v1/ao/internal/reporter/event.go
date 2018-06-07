@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 )
 
@@ -263,7 +262,7 @@ func (e *event) AddKV(key, value interface{}) error {
 	default:
 		// silently skip unsupported value type
 		if debugLog {
-			log.Printf("Unrecognized Event key %v val %v", k, v)
+			OboeLog(DEBUG, "Unrecognized Event key %v val %v", k, v)
 		}
 	}
 	return nil

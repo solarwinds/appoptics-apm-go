@@ -153,9 +153,9 @@ func (t *aoTrace) reportExit() {
 			t.endArgs = append(t.endArgs, "Edge", edge)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
-			_ = t.exitEvent.ReportContext(t.aoCtx, true, t.endArgs...)
+			t.exitEvent.ReportContext(t.aoCtx, true, t.endArgs...)
 		} else {
-			_ = t.aoCtx.ReportEvent(reporter.LabelExit, t.layerName(), t.endArgs...)
+			t.aoCtx.ReportEvent(reporter.LabelExit, t.layerName(), t.endArgs...)
 		}
 
 		t.childEdges = nil // clear child edge list
@@ -223,6 +223,9 @@ func (t *aoTrace) recordHTTPSpan() {
 	}
 
 	reporter.ReportSpan(&t.httpSpan.span)
+
+	// This will report TransactionName KV in the exit event.
+	t.endArgs = append(t.endArgs, "TransactionName", t.httpSpan.span.Transaction)
 }
 
 // A nullTrace is not tracing.
