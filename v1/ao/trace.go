@@ -207,6 +207,7 @@ func (t *aoTrace) recordHTTPSpan() {
 		}
 	}
 
+	t.httpSpan.span.Transaction = reporter.UnknownTransactionName
 	// The precedence:
 	// custom transaction name > framework specific transaction naming > controller.action > 1st and 2nd segment of URL
 	customTxnName := t.aoCtx.GetTransactionName()
@@ -216,6 +217,8 @@ func (t *aoTrace) recordHTTPSpan() {
 		t.httpSpan.span.Transaction = t.httpSpan.controller + "." + t.httpSpan.action
 	} else if controller != "" && action != "" {
 		t.httpSpan.span.Transaction = controller + "." + action
+	} else if t.httpSpan.span.URL != "" {
+		t.httpSpan.span.Transaction = reporter.GetTransactionFromURL(t.httpSpan.span.URL)
 	}
 
 	if t.httpSpan.span.Status >= 500 && t.httpSpan.span.Status < 600 {

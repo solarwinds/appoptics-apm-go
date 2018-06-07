@@ -234,7 +234,7 @@ func TestGetTransactionFromURL(t *testing.T) {
 	}
 
 	for _, r := range test {
-		assert.Equal(t, r.transaction, getTransactionFromURL(r.url), "url: "+r.url)
+		assert.Equal(t, r.transaction, GetTransactionFromURL(r.url), "url: "+r.url)
 	}
 }
 

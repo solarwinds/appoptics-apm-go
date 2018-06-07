@@ -174,9 +174,15 @@ func (s *layerSpan) SetAsync(val bool) {
 
 // SetTransactionName sets the transaction name used to categorize service requests in AppOptics.
 func (s *span) SetTransactionName(name string) {
-	if name != "" {
-		s.aoCtx.SetTransactionName(name)
+	if !s.ok() {
+		reporter.OboeLog(reporter.DEBUG, "failed to set custom transaction name, invalid span")
+		return
 	}
+	if name == "" || len(name) > 255 {
+		reporter.OboeLog(reporter.DEBUG, "valid length for custom transaction name: 1~255")
+		return
+	}
+	s.aoCtx.SetTransactionName(name)
 }
 
 // Error reports an error, distinguished by its class and message

@@ -38,6 +38,12 @@ const (
 	metricsTagValueLenghtMax = 255 // max number of characters for tag values
 )
 
+// Special transaction names
+const (
+	UnknownTransactionName = "unknown"
+	OtherTransactionName   = "other"
+)
+
 // EC2 Metadata URLs, overridable for testing
 var (
 	ec2MetadataInstanceIDURL = "http://169.254.169.254/latest/meta-data/instance-id"
@@ -549,7 +555,7 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 
 // performs URL fingerprinting on a given URL to extract the transaction name
 // e.g. https://github.com/appoptics/appoptics-apm-go/blob/metrics becomes /appoptics/appoptics-apm-go
-func getTransactionFromURL(url string) string {
+func GetTransactionFromURL(url string) string {
 	matches := metricsHTTPMeasurements.urlRegex.FindStringSubmatch(url)
 	var ret string
 	if matches[3] != "" {
@@ -588,11 +594,7 @@ func (s *HTTPSpanMessage) process() {
 	// always add to overall histogram
 	recordHistogram(metricsHTTPHistograms, "", s.Duration)
 
-	// check if we need to perform URL fingerprinting (no transaction name passed in)
-	if s.Transaction == "" && s.URL != "" {
-		s.Transaction = getTransactionFromURL(s.URL)
-	}
-	if s.Transaction != "" {
+	if s.Transaction != UnknownTransactionName {
 		// access transactionNameMax protected since it can be updated in updateSettings()
 		metricsHTTPMeasurements.transactionNameMaxLock.RLock()
 		max := metricsHTTPMeasurements.transactionNameMax
@@ -607,13 +609,13 @@ func (s *HTTPSpanMessage) process() {
 			recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
 			s.processMeasurements(s.Transaction)
 		} else {
-			s.processMeasurements("other")
+			s.processMeasurements(OtherTransactionName)
 			// indicate we have overrun the transaction name limit
 			setTransactionNameOverflow(true)
 		}
 	} else {
 		// no transaction/url name given, record as 'unknown'
-		s.processMeasurements("unknown")
+		s.processMeasurements(UnknownTransactionName)
 	}
 }
 
