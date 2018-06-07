@@ -42,7 +42,7 @@ type oboeMetadata struct {
 
 type oboeContext struct {
 	metadata oboeMetadata
-	txCtx    *transactionContext
+	txCtx    transactionContext
 }
 
 type transactionContext struct {
@@ -256,6 +256,7 @@ type Context interface {
 	IsSampled() bool
 	SetSampled(trace bool)
 	SetTransactionName(name string)
+	GetTransactionName() string
 	MetadataString() string
 	NewEvent(label Label, layer string, addCtxEdge bool) Event
 	GetVersion() uint8
@@ -281,6 +282,7 @@ func (e *nullContext) Copy() Context                                         { r
 func (e *nullContext) IsSampled() bool                                       { return false }
 func (e *nullContext) SetSampled(trace bool)                                 {}
 func (e *nullContext) SetTransactionName(name string)                        {}
+func (e *nullContext) GetTransactionName() string                            { return "" }
 func (e *nullContext) MetadataString() string                                { return "" }
 func (e *nullContext) NewEvent(l Label, y string, g bool) Event              { return &nullEvent{} }
 func (e *nullContext) GetVersion() uint8                                     { return 0 }
@@ -378,6 +380,10 @@ func (ctx *oboeContext) SetSampled(trace bool) {
 
 func (ctx *oboeContext) SetTransactionName(name string) {
 	ctx.txCtx.name = name
+}
+
+func (ctx *oboeContext) GetTransactionName() string {
+	return ctx.txCtx.name
 }
 
 func (ctx *oboeContext) newEvent(label Label, layer string) (*event, error) {
