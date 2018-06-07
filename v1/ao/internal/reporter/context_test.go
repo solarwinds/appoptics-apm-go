@@ -195,6 +195,9 @@ func TestMetadataRandom(t *testing.T) {
 func newTestContext(t *testing.T) *oboeContext {
 	ctx := newContext(true)
 	assert.True(t, ctx.IsSampled())
+	assert.Equal(t, "", ctx.GetTransactionName())
+	ctx.SetTransactionName("my-custom-transaction-name")
+	assert.Equal(t, "my-custom-transaction-name", ctx.GetTransactionName())
 	assert.IsType(t, ctx, &oboeContext{})
 	return ctx.(*oboeContext)
 }

@@ -207,7 +207,12 @@ func (t *aoTrace) recordHTTPSpan() {
 		}
 	}
 
-	if t.httpSpan.controller != "" && t.httpSpan.action != "" {
+	// The precedence:
+	// custom transaction name > framework specific transaction naming > controller.action > 1st and 2nd segment of URL
+	customTxnName := t.aoCtx.GetTransactionName()
+	if customTxnName != "" {
+		t.httpSpan.span.Transaction = customTxnName
+	} else if t.httpSpan.controller != "" && t.httpSpan.action != "" {
 		t.httpSpan.span.Transaction = t.httpSpan.controller + "." + t.httpSpan.action
 	} else if controller != "" && action != "" {
 		t.httpSpan.span.Transaction = controller + "." + action
