@@ -42,7 +42,7 @@ type oboeMetadata struct {
 
 type oboeContext struct {
 	metadata oboeMetadata
-	txCtx    transactionContext
+	txCtx    *transactionContext
 }
 
 type transactionContext struct {
@@ -294,7 +294,7 @@ func NewNullContext() Context { return &nullContext{} }
 
 // newContext allocates a context with random metadata (for a new trace).
 func newContext(sampled bool) Context {
-	ctx := &oboeContext{}
+	ctx := &oboeContext{txCtx: &transactionContext{}}
 	ctx.metadata.Init()
 	if err := ctx.metadata.SetRandom(); err != nil {
 		if debugLog {
@@ -307,7 +307,7 @@ func newContext(sampled bool) Context {
 }
 
 func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
-	ctx := &oboeContext{}
+	ctx := &oboeContext{txCtx: &transactionContext{}}
 	ctx.metadata.Init()
 	err := ctx.metadata.FromString(mdstr)
 	return ctx, err
