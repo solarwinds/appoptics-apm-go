@@ -140,11 +140,6 @@ func newGRPCReporter() reporter {
 	// see if a hostname alias is configured
 	configuredHostname = os.Getenv("APPOPTICS_HOSTNAME_ALIAS")
 
-	prepend := os.Getenv("APPOPTICS_PREPEND_DOMAIN")
-	if strings.ToLower(prepend) == "true" {
-		prependDomainForTransactionName = true
-	}
-
 	// collector address override
 	collectorAddress := os.Getenv("APPOPTICS_COLLECTOR")
 	if collectorAddress == "" {

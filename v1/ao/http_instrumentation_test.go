@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"os"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
@@ -124,6 +126,25 @@ func TestHTTPHandler200(t *testing.T) {
 			assert.Equal(t, "handler200", n.Map["Action"])
 			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string), "final-my-custom-transaction-name"))
 			assert.True(t, reporter.ValidMetadata(response.Body.String()))
+		}},
+	})
+}
+
+func TestCustomTransactionNameWithDomain(t *testing.T) {
+	os.Setenv("APPOPTICS_PREPEND_DOMAIN", "true")
+
+	r := reporter.SetTestReporter() // set up test reporter
+	httpTestWithEndpoint(handler200, "http://test.com/hello world/one/two/three?testq")
+
+	r.Close(2)
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+		// entry event should have no edges
+		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
+			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+		}},
+		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
+			// assert that response X-Trace header matches trace exit event
+			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string), "test.com/final-my-custom-transaction-name"))
 		}},
 	})
 }
