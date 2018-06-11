@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
+	"github.com/pkg/errors"
+	"golang.org/x/net/context"
 )
 
 // Trace represents a distributed trace for this request that reports
@@ -109,6 +111,26 @@ func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
 	}
 	t.SetStartTime(time.Now())
 	return t
+}
+
+// SetTransactionName can be called inside a http handler to set the custom transaction name.
+func SetTransactionName(ctx context.Context, name string) error {
+	var t Trace
+	if t = TraceFromContext(ctx); t == nil {
+		return errors.New("no trace metadata found in your context")
+	}
+
+	return t.SetTransactionName(name)
+}
+
+// GetTransactionName fetches the current transaction name from the context
+func GetTransactionName(ctx context.Context) (string, error) {
+	var t Trace
+	if t = TraceFromContext(ctx); t == nil {
+		return "", errors.New("no trace metadata found in your context")
+	}
+
+	return t.GetTransactionName(), nil
 }
 
 // End reports the exit event for the span name that was used when calling NewTrace().

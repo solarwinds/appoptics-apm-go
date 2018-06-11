@@ -40,22 +40,24 @@ func handlerDelay503(w http.ResponseWriter, r *http.Request) {
 func checkAOContextAndSetCustomTxnName(w http.ResponseWriter, r *http.Request) {
 	xtrace := ""
 	var t ao.Trace
-	defer func() {
-		fmt.Fprint(w, xtrace)
-	}()
 	if t = ao.TraceFromContext(r.Context()); t == nil {
 		return
 	}
+
+	defer func() {
+		fmt.Fprint(w, xtrace)
+	}()
 
 	// Concurrently set custom transaction names
 	for i := 0; i < 10; i++ {
 		go func(i int) {
 			time.Sleep(time.Duration(rand.Intn(5)) * time.Millisecond)
-			t.SetTransactionName("my-custom-transaction-name-" + strconv.Itoa(i))
+			ao.SetTransactionName(r.Context(), "my-custom-transaction-name-"+strconv.Itoa(i))
 		}(i)
 	}
 	time.Sleep(10 * time.Millisecond)
-	t.SetTransactionName("final-" + t.GetTransactionName())
+	old, _ := ao.GetTransactionName(r.Context())
+	ao.SetTransactionName(r.Context(), "final-"+old)
 	xtrace = t.MetadataString()
 }
 
@@ -147,6 +149,7 @@ func TestCustomTransactionNameWithDomain(t *testing.T) {
 			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string), "test.com/final-my-custom-transaction-name"))
 		}},
 	})
+	os.Unsetenv("APPOPTICS_PREPEND_DOMAIN")
 }
 
 func TestHTTPHandlerNoTrace(t *testing.T) {

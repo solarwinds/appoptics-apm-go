@@ -91,6 +91,8 @@ func readEnvSettings() {
 	prepend := os.Getenv("APPOPTICS_PREPEND_DOMAIN")
 	if strings.ToLower(prepend) == "true" {
 		prependDomainForTransactionName = true
+	} else {
+		prependDomainForTransactionName = false
 	}
 }
 
