@@ -91,7 +91,7 @@ func TestReportMetric(t *testing.T) {
 			HasError: false,
 		},
 		Transaction: "tname",
-		URL:         "/path/to/url",
+		Path:        "/path/to/url",
 		Status:      203,
 		Method:      "HEAD",
 	}

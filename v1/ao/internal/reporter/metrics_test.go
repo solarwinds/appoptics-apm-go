@@ -208,33 +208,29 @@ func TestGetTransactionFromURL(t *testing.T) {
 	}
 	var test = []record{
 		{
-			"https://github.com/appoptics/appoptics-apm-go/blob/metrics/reporter.go#L867",
+			"/appoptics/appoptics-apm-go/blob/metrics/reporter.go#L867",
 			"/appoptics/appoptics-apm-go",
 		},
 		{
-			"http://github.com/librato",
+			"/librato",
 			"/librato",
 		},
 		{
-			"http://github.com",
+			"",
 			"/",
 		},
 		{
-			"github.com/appoptics/appoptics-apm-go/blob",
+			"/appoptics/appoptics-apm-go/blob",
 			"/appoptics/appoptics-apm-go",
 		},
 		{
-			"github.com:8080/appoptics/appoptics-apm-go/blob",
+			"/appoptics/appoptics-apm-go/blob",
 			"/appoptics/appoptics-apm-go",
-		},
-		{
-			" ",
-			"/",
 		},
 	}
 
 	for _, r := range test {
-		assert.Equal(t, r.transaction, GetTransactionFromURL(r.url), "url: "+r.url)
+		assert.Equal(t, r.transaction, GetTransactionFromPath(r.url), "url: "+r.url)
 	}
 }
 

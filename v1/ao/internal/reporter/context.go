@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"sync"
 )
 
 const (
@@ -47,6 +48,7 @@ type oboeContext struct {
 
 type transactionContext struct {
 	name string
+	sync.RWMutex
 }
 
 // ValidMetadata checks if a metadata string is valid.
@@ -379,10 +381,14 @@ func (ctx *oboeContext) SetSampled(trace bool) {
 }
 
 func (ctx *oboeContext) SetTransactionName(name string) {
+	ctx.txCtx.Lock()
+	defer ctx.txCtx.Unlock()
 	ctx.txCtx.name = name
 }
 
 func (ctx *oboeContext) GetTransactionName() string {
+	ctx.txCtx.RLock()
+	defer ctx.txCtx.RUnlock()
 	return ctx.txCtx.name
 }
 

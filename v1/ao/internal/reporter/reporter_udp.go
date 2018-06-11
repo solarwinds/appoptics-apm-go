@@ -67,7 +67,7 @@ func (r *udpReporter) reportSpan(span SpanMessage) error {
 	s := span.(*HTTPSpanMessage)
 	bbuf := NewBsonBuffer()
 	bsonAppendString(bbuf, "transaction", s.Transaction)
-	bsonAppendString(bbuf, "url", s.URL)
+	bsonAppendString(bbuf, "url", s.Path)
 	bsonAppendInt(bbuf, "status", s.Status)
 	bsonAppendString(bbuf, "method", s.Method)
 	bsonAppendBool(bbuf, "hasError", s.HasError)

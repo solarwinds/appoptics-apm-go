@@ -91,6 +91,7 @@ func TestHTTPHandler200(t *testing.T) {
 			assert.EqualValues(t, 200, n.Map["Status"])
 			assert.Equal(t, "ao_test", n.Map["Controller"])
 			assert.Equal(t, "handler200", n.Map["Action"])
+			assert.Equal(t, "ao_test.handler200", n.Map["TransactionName"])
 		}},
 	})
 }
@@ -130,7 +131,7 @@ func TestHTTPSpan(t *testing.T) {
 	m, ok = r.SpanMessages[2].(*reporter.HTTPSpanMessage)
 	assert.True(t, ok)
 	assert.Equal(t, "ao_test.handlerDelay200", m.Transaction)
-	assert.Equal(t, "http://test.com/hello?testq", m.URL)
+	assert.Equal(t, "/hello", m.Path)
 	assert.Equal(t, 200, m.Status)
 	assert.Equal(t, "GET", m.Method)
 	assert.False(t, m.HasError)

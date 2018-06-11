@@ -40,8 +40,8 @@ type Trace interface {
 	// It is used for categorizing service metrics and traces in AppOptics.
 	SetMethod(method string)
 
-	// SetURL extracts the full URL from http.Request
-	SetURL(url string)
+	// SetPath extracts the full Path from http.Request
+	SetPath(url string)
 
 	// SetHost extracts the host information from http.Request
 	SetHost(host string)
@@ -84,9 +84,11 @@ func NewTrace(spanName string) Trace {
 	if !ok {
 		return &nullTrace{}
 	}
-	return &aoTrace{
+	t := &aoTrace{
 		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
 	}
+	t.SetStartTime(time.Now())
+	return t
 }
 
 // NewTraceFromID creates a new Trace for reporting to AppOptics, provided an
@@ -102,12 +104,14 @@ func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
 	if !ok {
 		return &nullTrace{}
 	}
-	return &aoTrace{
+	t := &aoTrace{
 		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
 	}
+	t.SetStartTime(time.Now())
+	return t
 }
 
-// EndTrace reports the exit event for the span name that was used when calling NewTrace().
+// End reports the exit event for the span name that was used when calling NewTrace().
 // No more events should be reported from this trace.
 func (t *aoTrace) End(args ...interface{}) {
 	if t.ok() {
@@ -140,9 +144,9 @@ func (t *aoTrace) SetMethod(method string) {
 	t.httpSpan.span.Method = method
 }
 
-// SetURL extracts the URL from http.Request
-func (t *aoTrace) SetURL(url string) {
-	t.httpSpan.span.URL = url
+// SetPath extracts the Path from http.Request
+func (t *aoTrace) SetPath(path string) {
+	t.httpSpan.span.Path = path
 }
 
 // SetHost extracts the host information from http.Request
@@ -237,10 +241,10 @@ func (t *aoTrace) recordHTTPSpan() {
 }
 
 // finalizeTxnName finalizes the transaction name based on the following factors:
-// custom transaction name, action/controller, URL and the value of APPOPTICS_PREPEND_DOMAIN
+// custom transaction name, action/controller, Path and the value of APPOPTICS_PREPEND_DOMAIN
 func (t *aoTrace) finalizeTxnName(controller string, action string) {
 	// The precedence:
-	// custom transaction name > framework specific transaction naming > controller.action > 1st and 2nd segment of URL
+	// custom transaction name > framework specific transaction naming > controller.action > 1st and 2nd segment of Path
 	customTxnName := t.aoCtx.GetTransactionName()
 	if customTxnName != "" {
 		t.httpSpan.span.Transaction = customTxnName
@@ -248,8 +252,8 @@ func (t *aoTrace) finalizeTxnName(controller string, action string) {
 		t.httpSpan.span.Transaction = t.httpSpan.controller + "." + t.httpSpan.action
 	} else if controller != "" && action != "" {
 		t.httpSpan.span.Transaction = controller + "." + action
-	} else if t.httpSpan.span.URL != "" {
-		t.httpSpan.span.Transaction = reporter.GetTransactionFromURL(t.httpSpan.span.URL)
+	} else if t.httpSpan.span.Path != "" {
+		t.httpSpan.span.Transaction = reporter.GetTransactionFromPath(t.httpSpan.span.Path)
 	}
 
 	if t.httpSpan.span.Transaction == "" {
@@ -280,7 +284,7 @@ func (t *nullTrace) EndCallback(f func() KVMap)   {}
 func (t *nullTrace) ExitMetadata() string         { return "" }
 func (t *nullTrace) SetStartTime(start time.Time) {}
 func (t *nullTrace) SetMethod(method string)      {}
-func (t *nullTrace) SetURL(url string)            {}
+func (t *nullTrace) SetPath(path string)          {}
 func (t *nullTrace) SetHost(host string)          {}
 func (t *nullTrace) SetStatus(status int)         {}
 func (t *nullTrace) recordMetrics()               {}

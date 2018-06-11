@@ -133,17 +133,18 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewcontext bool) T
 		return KVMap{
 			"Method":       r.Method,
 			"HTTP-Host":    r.Host,
-			"URL":          r.URL.Path,
+			"URL":          r.URL.EscapedPath(),
 			"Remote-Host":  r.RemoteAddr,
 			"Query-String": r.URL.RawQuery,
 		}
 	})
 	// set the start time and method for metrics collection
 	t.SetMethod(r.Method)
-	t.SetURL(r.URL.String())
+	t.SetPath(r.URL.EscapedPath())
 	t.SetHost(r.Host)
-	if isNewcontext {
-		t.SetStartTime(time.Now())
+	// Clear the start time if it is not a new context
+	if !isNewcontext {
+		t.SetStartTime(time.Time{})
 	}
 	// update incoming metadata in request headers for any downstream readers
 	r.Header.Set(HTTPHeaderName, t.MetadataString())

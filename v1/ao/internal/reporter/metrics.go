@@ -40,8 +40,9 @@ const (
 
 // Special transaction names
 const (
-	UnknownTransactionName = "unknown"
-	OtherTransactionName   = "other"
+	UnknownTransactionName       = "unknown"
+	OtherTransactionName         = "other"
+	maxPathLenForTransactionName = 3
 )
 
 // EC2 Metadata URLs, overridable for testing
@@ -66,7 +67,7 @@ type BaseSpanMessage struct {
 type HTTPSpanMessage struct {
 	BaseSpanMessage
 	Transaction string // transaction name (e.g. controller.action)
-	URL         string // the raw url which will be processed and used as transaction (if Transaction is empty)
+	Path        string // the url path which will be processed and used as transaction (if Transaction is empty)
 	Status      int    // HTTP status code (e.g. 200, 500, ...)
 	Host        string // HTTP-Host
 	Method      string // HTTP method (e.g. GET, POST, ...)
@@ -84,11 +85,10 @@ type Measurement struct {
 // a collection of measurements
 type measurements struct {
 	measurements            map[string]*Measurement
-	transactionNameMax      int            // max transaction names
-	transactionNameOverflow bool           // have we hit the limit of allowable transaction names?
-	urlRegex                *regexp.Regexp // regular expression used for URL fingerprinting
-	lock                    sync.Mutex     // protect access to this collection
-	transactionNameMaxLock  sync.RWMutex   // lock to ensure sequential access
+	transactionNameMax      int          // max transaction names
+	transactionNameOverflow bool         // have we hit the limit of allowable transaction names?
+	lock                    sync.Mutex   // protect access to this collection
+	transactionNameMaxLock  sync.RWMutex // lock to ensure sequential access
 }
 
 // a single histogram
@@ -133,7 +133,6 @@ var metricsHTTPTransactions = make(map[string]bool)
 var metricsHTTPMeasurements = &measurements{
 	measurements:       make(map[string]*Measurement),
 	transactionNameMax: metricsTransactionsMaxDefault,
-	urlRegex:           regexp.MustCompile(`^(https?://)?[^/]+(/([^/\?]+))?(/([^/\?]+))?`),
 }
 
 // collection of currently stored histograms (flushed on each metrics report cycle)
@@ -554,24 +553,19 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 	*index += 1
 }
 
-// performs URL fingerprinting on a given URL to extract the transaction name
-// e.g. https://github.com/appoptics/appoptics-apm-go/blob/metrics becomes /appoptics/appoptics-apm-go
-func GetTransactionFromURL(url string) string {
-	matches := metricsHTTPMeasurements.urlRegex.FindStringSubmatch(url)
-	if len(matches) < 6 {
-		return ""
+// GetTransactionFromPath performs fingerprinting on a given escaped path to extract the transaction name
+// We can get the path so there is no need to parse the full URL.
+// e.g. Escaped Path path: /appoptics/appoptics-apm-go/blob/metrics becomes /appoptics/appoptics-apm-go
+func GetTransactionFromPath(path string) string {
+	if path == "" || path == "/" {
+		return "/"
 	}
-	var ret string
-	if matches[3] != "" {
-		ret += "/" + matches[3]
-		if matches[5] != "" {
-			ret += "/" + matches[5]
-		}
-	} else {
-		ret = "/"
+	p := strings.Split(path, "/")
+	lp := len(p)
+	if lp > maxPathLenForTransactionName {
+		lp = maxPathLenForTransactionName
 	}
-
-	return ret
+	return strings.Join(p[0:lp], "/")
 }
 
 // check if an element is found in a list, add if the list limit hasn't been reached yet
