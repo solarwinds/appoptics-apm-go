@@ -5,7 +5,6 @@ package reporter
 import (
 	"bytes"
 	"errors"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -80,7 +79,7 @@ func cacheHostname(hn hostnamer) {
 	h, err := hn.Hostname()
 	if err != nil {
 		if debugLog {
-			log.Printf("Unable to get hostname, AppOptics tracing disabled: %v", err)
+			OboeLog(ERROR, "Unable to get hostname, AppOptics tracing disabled: %v", err)
 		}
 		reportingDisabled = true
 	}

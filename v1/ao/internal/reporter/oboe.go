@@ -73,15 +73,20 @@ func readEnvSettings() {
 	}
 
 	if level := os.Getenv("APPOPTICS_DEBUG_LEVEL"); level != "" {
+		// We do not want to break backward-compatibility so keep accepting integer values.
 		if i, err := strconv.Atoi(level); err == nil {
+			// Protect the debug level from some invalid value, e.g., 1000
+			if i >= len(dbgLevels) {
+				i = len(dbgLevels) - 1
+			}
 			debugLevel = DebugLevel(i)
+		} else if offset := ElemOffset(dbgLevels, strings.ToUpper(strings.TrimSpace(level))); offset != -1 {
+			debugLevel = DebugLevel(offset)
 		} else {
-			OboeLog(WARNING, "The debug level should be an integer.")
+			OboeLog(WARNING, fmt.Sprintf("invalid debug level: %s", level))
 		}
 	}
 }
-
-const initVersion = 1
 
 func sendInitMessage() {
 	ctx := newContext(true)
@@ -94,7 +99,7 @@ func sendInitMessage() {
 
 		e.AddKV("__Init", 1)
 		e.AddKV("Go.Version", runtime.Version())
-		e.AddKV("Go.Oboe.Version", strconv.Itoa(initVersion))
+		e.AddKV("Go.Oboe.Version", initVersion)
 
 		e.ReportStatus(c)
 	}

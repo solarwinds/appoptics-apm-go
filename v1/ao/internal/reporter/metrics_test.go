@@ -131,9 +131,6 @@ func TestGetAWSMetadata(t *testing.T) {
 
 	s := &http.Server{Addr: addr, Handler: sm}
 	// change EC2 MD URLs
-	origIsEC2 := cachedIsEC2Instance
-	True := true
-	cachedIsEC2Instance = &True
 	ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, "169.254.169.254", addr, 1)
 	ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, "169.254.169.254", addr, 1)
 	go s.Serve(ln)
@@ -141,13 +138,17 @@ func TestGetAWSMetadata(t *testing.T) {
 		ln.Close()
 		ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, addr, "169.254.169.254", 1)
 		ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, addr, "169.254.169.254", 1)
-		cachedIsEC2Instance = origIsEC2
 	}()
 	time.Sleep(50 * time.Millisecond)
 
 	id := getAWSInstanceID()
 	assert.Equal(t, id, "i-12345678")
+	assert.Equal(t, "i-12345678", cachedAWSInstanceID)
 	zone := getAWSInstanceZone()
+	assert.Equal(t, zone, "us-east-7")
+	assert.Equal(t, "us-east-7", cachedAWSInstanceZone)
+	// test the helper function
+	zone = getAWSMeta(nil, ec2MetadataZoneURL)
 	assert.Equal(t, zone, "us-east-7")
 }
 
