@@ -228,6 +228,14 @@ func TestGetTransactionFromURL(t *testing.T) {
 			"/appoptics/appoptics-apm-go/blob",
 			"/appoptics/appoptics-apm-go",
 		},
+		{
+			"http://test.com/appoptics/appoptics-apm-go/blob",
+			"http://test.com",
+		},
+		{
+			"$%@#%/$%#^*$&/ 1234 4!@ 145412! / 13%1 /14%!$#%^#%& ? 6/``/ ?dfgdf",
+			"$%@#%/$%#^*$&/ 1234 4!@ 145412! ",
+		},
 	}
 
 	for _, r := range test {
