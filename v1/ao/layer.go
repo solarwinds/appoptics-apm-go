@@ -54,6 +54,9 @@ type Span interface {
 	// It is used for categorizing service metrics and traces in AppOptics.
 	SetTransactionName(string) error
 
+	// GetTransactionName returns the current value of the transaction name
+	GetTransactionName() string
+
 	IsReporting() bool
 	addChildEdge(reporter.Context)
 	addProfile(Profile)
@@ -190,6 +193,11 @@ func (s *span) SetTransactionName(name string) error {
 	return nil
 }
 
+// GetTransactionName returns the current value of the transaction name
+func (s *span) GetTransactionName() string {
+	return s.aoCtx.GetTransactionName()
+}
+
 // Error reports an error, distinguished by its class and message
 func (s *span) Error(class, msg string) {
 	if s.ok() {
@@ -238,6 +246,7 @@ func (s nullSpan) MetadataString() string                                { retur
 func (s nullSpan) IsSampled() bool                                       { return false }
 func (s nullSpan) SetAsync(bool)                                         {}
 func (s nullSpan) SetTransactionName(string) error                       { return nil }
+func (s nullSpan) GetTransactionName() string                            { return "" }
 
 // is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool {

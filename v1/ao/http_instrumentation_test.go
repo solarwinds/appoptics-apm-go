@@ -6,9 +6,12 @@ package ao_test
 import (
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -23,26 +26,54 @@ import (
 
 func handler404(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(404) }
 func handler403(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(403) }
-func handler200(w http.ResponseWriter, r *http.Request)      {} // do nothing (default should be 200)
+func handler200(w http.ResponseWriter, r *http.Request)      { checkAOContextAndSetCustomTxnName(w, r) }
 func handlerPanic(w http.ResponseWriter, r *http.Request)    { panic("panicking!") }
 func handlerDelay200(w http.ResponseWriter, r *http.Request) { time.Sleep(httpSpanSleep) }
 func handlerDelay503(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(503)
 	time.Sleep(httpSpanSleep)
 }
+
+// checkAOContext checks if the AO context is attached
+func checkAOContextAndSetCustomTxnName(w http.ResponseWriter, r *http.Request) {
+	xtrace := ""
+	var t ao.Trace
+	defer func() {
+		fmt.Fprint(w, xtrace)
+	}()
+	if t = ao.TraceFromContext(r.Context()); t == nil {
+		return
+	}
+
+	// Concurrently set custom transaction names
+	for i := 0; i < 10; i++ {
+		go func(i int) {
+			time.Sleep(time.Duration(rand.Intn(5)) * time.Millisecond)
+			t.SetTransactionName("my-custom-transaction-name-" + strconv.Itoa(i))
+		}(i)
+	}
+	time.Sleep(10 * time.Millisecond)
+	t.SetTransactionName("final-" + t.GetTransactionName())
+	xtrace = t.MetadataString()
+}
+
 func handlerDoubleWrapped(w http.ResponseWriter, r *http.Request) {
 	t, _, _ := ao.TraceFromHTTPRequestResponse("myHandler", w, r)
 	ao.NewContext(context.Background(), t)
 	defer t.End()
 }
 
-func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
+func httpTestWithEndpoint(f http.HandlerFunc, ep string) *httptest.ResponseRecorder {
 	h := http.HandlerFunc(ao.HTTPHandler(f))
 	// test a single GET request
-	req, _ := http.NewRequest("GET", "http://test.com/hello?testq", nil)
+	req, _ := http.NewRequest("GET", ep, nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	return w
+}
+
+func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
+	return httpTestWithEndpoint(f, "http://test.com/hello?testq")
 }
 
 func TestHTTPHandler404(t *testing.T) {
@@ -72,13 +103,13 @@ func TestHTTPHandler404(t *testing.T) {
 
 func TestHTTPHandler200(t *testing.T) {
 	r := reporter.SetTestReporter() // set up test reporter
-	response := httpTest(handler200)
+	response := httpTestWithEndpoint(handler200, "http://test.com/hello world/one/two/three?testq")
 
 	r.Close(2)
 	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-			assert.Equal(t, "/hello", n.Map["URL"])
+			assert.Equal(t, "/hello%20world/one/two/three", n.Map["URL"])
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
 			assert.Equal(t, "GET", n.Map["Method"])
 			assert.Equal(t, "testq", n.Map["Query-String"])
@@ -91,7 +122,8 @@ func TestHTTPHandler200(t *testing.T) {
 			assert.EqualValues(t, 200, n.Map["Status"])
 			assert.Equal(t, "ao_test", n.Map["Controller"])
 			assert.Equal(t, "handler200", n.Map["Action"])
-			assert.Equal(t, "ao_test.handler200", n.Map["TransactionName"])
+			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string), "final-my-custom-transaction-name"))
+			assert.True(t, reporter.ValidMetadata(response.Body.String()))
 		}},
 	})
 }
