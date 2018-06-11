@@ -56,8 +56,7 @@ func checkAOContextAndSetCustomTxnName(w http.ResponseWriter, r *http.Request) {
 		}(i)
 	}
 	time.Sleep(10 * time.Millisecond)
-	old, _ := ao.GetTransactionName(r.Context())
-	ao.SetTransactionName(r.Context(), "final-"+old)
+	ao.SetTransactionName(r.Context(), "final-"+ao.GetTransactionName(r.Context()))
 	xtrace = t.MetadataString()
 }
 
