@@ -109,7 +109,6 @@ func TestReportMetric(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, sp)
 	assert.True(t, reflect.DeepEqual(spanMsg, sp))
-	//sp.process()
 }
 
 // test behavior of the TestReporter
