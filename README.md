@@ -274,6 +274,7 @@ These environment variables may be set:
 |APPOPTICS_COLLECTOR_UDP|No|127.0.0.1:7831|UDP collector endpoint address and port (only used if APPOPTICS_REPORTER = udp).|
 |APPOPTICS_TRUSTEDPATH|No||Path to the certificate used to verify the collector endpoint.|
 |APPOPTICS_INSECURE_SKIP_VERIFY|No|false|Skip verification of the collector endpoint. Possible values: true, false|
+|APPOPTICS_PREPEND_DOMAIN|No|false|Prepend the domain name to the transaction name. Possible values: true, false|
 
 
 ## Help and examples
