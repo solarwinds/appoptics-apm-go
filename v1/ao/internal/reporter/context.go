@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"sync"
 )
 
 const (
@@ -42,6 +43,12 @@ type oboeMetadata struct {
 
 type oboeContext struct {
 	metadata oboeMetadata
+	txCtx    *transactionContext
+}
+
+type transactionContext struct {
+	name string
+	sync.RWMutex
 }
 
 // ValidMetadata checks if a metadata string is valid.
@@ -250,6 +257,8 @@ type Context interface {
 	Copy() Context
 	IsSampled() bool
 	SetSampled(trace bool)
+	SetTransactionName(name string)
+	GetTransactionName() string
 	MetadataString() string
 	NewEvent(label Label, layer string, addCtxEdge bool) Event
 	GetVersion() uint8
@@ -274,6 +283,8 @@ func (e *nullContext) ReportEventMap(label Label, layer string, keys map[string]
 func (e *nullContext) Copy() Context                                         { return &nullContext{} }
 func (e *nullContext) IsSampled() bool                                       { return false }
 func (e *nullContext) SetSampled(trace bool)                                 {}
+func (e *nullContext) SetTransactionName(name string)                        {}
+func (e *nullContext) GetTransactionName() string                            { return "" }
 func (e *nullContext) MetadataString() string                                { return "" }
 func (e *nullContext) NewEvent(l Label, y string, g bool) Event              { return &nullEvent{} }
 func (e *nullContext) GetVersion() uint8                                     { return 0 }
@@ -285,7 +296,7 @@ func NewNullContext() Context { return &nullContext{} }
 
 // newContext allocates a context with random metadata (for a new trace).
 func newContext(sampled bool) Context {
-	ctx := &oboeContext{}
+	ctx := &oboeContext{txCtx: &transactionContext{}}
 	ctx.metadata.Init()
 	if err := ctx.metadata.SetRandom(); err != nil {
 		if debugLog {
@@ -298,7 +309,7 @@ func newContext(sampled bool) Context {
 }
 
 func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
-	ctx := &oboeContext{}
+	ctx := &oboeContext{txCtx: &transactionContext{}}
 	ctx.metadata.Init()
 	err := ctx.metadata.FromString(mdstr)
 	return ctx, err
@@ -357,7 +368,7 @@ func (ctx *oboeContext) Copy() Context {
 	copy(md.ids.taskID, ctx.metadata.ids.taskID)
 	copy(md.ids.opID, ctx.metadata.ids.opID)
 	md.flags = ctx.metadata.flags
-	return &oboeContext{metadata: md}
+	return &oboeContext{metadata: md, txCtx: ctx.txCtx}
 }
 func (ctx *oboeContext) IsSampled() bool { return ctx.metadata.isSampled() }
 
@@ -367,6 +378,18 @@ func (ctx *oboeContext) SetSampled(trace bool) {
 	} else {
 		ctx.metadata.flags ^= XTR_FLAGS_SAMPLED // clear sampled bit
 	}
+}
+
+func (ctx *oboeContext) SetTransactionName(name string) {
+	ctx.txCtx.Lock()
+	defer ctx.txCtx.Unlock()
+	ctx.txCtx.name = name
+}
+
+func (ctx *oboeContext) GetTransactionName() string {
+	ctx.txCtx.RLock()
+	defer ctx.txCtx.RUnlock()
+	return ctx.txCtx.name
 }
 
 func (ctx *oboeContext) newEvent(label Label, layer string) (*event, error) {

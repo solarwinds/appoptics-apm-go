@@ -3,9 +3,11 @@
 package ao
 
 import (
+	"strings"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
+	"golang.org/x/net/context"
 )
 
 // Trace represents a distributed trace for this request that reports
@@ -35,17 +37,22 @@ type Trace interface {
 	// method to set a response header in advance of calling End().
 	ExitMetadata() string
 
-	// SetStartTime sets the start time of a trace.
-	SetStartTime(start time.Time)
-
-	// SetMethod sets the request's HTTP method of the trace, if any
+	// SetMethod sets the request's HTTP method of the trace, if any.
+	// It is used for categorizing service metrics and traces in AppOptics.
 	SetMethod(method string)
 
-	// SetStatus sets the request's HTTP status code of the trace, if any
+	// SetPath extracts the full Path from http.Request
+	SetPath(url string)
+
+	// SetHost extracts the host information from http.Request
+	SetHost(host string)
+
+	// SetStatus sets the request's HTTP status code of the trace, if any.
+	// It is used for categorizing service metrics and traces in AppOptics.
 	SetStatus(status int)
 
-	// SetControllerAction sets controller/action for the trace
-	SetControllerAction(controller, action string)
+	// SetStartTime sets the start time of a span.
+	SetStartTime(start time.Time)
 }
 
 // KVMap is a map of additional key-value pairs to report along with the event data provided
@@ -56,7 +63,7 @@ type Trace interface {
 type KVMap map[string]interface{}
 
 type traceHTTPSpan struct {
-	span       reporter.HttpSpanMessage
+	span       reporter.HTTPSpanMessage
 	start      time.Time
 	controller string
 	action     string
@@ -78,9 +85,11 @@ func NewTrace(spanName string) Trace {
 	if !ok {
 		return &nullTrace{}
 	}
-	return &aoTrace{
+	t := &aoTrace{
 		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
 	}
+	t.SetStartTime(time.Now())
+	return t
 }
 
 // NewTraceFromID creates a new Trace for reporting to AppOptics, provided an
@@ -96,12 +105,24 @@ func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
 	if !ok {
 		return &nullTrace{}
 	}
-	return &aoTrace{
+	t := &aoTrace{
 		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
 	}
+	t.SetStartTime(time.Now())
+	return t
 }
 
-// EndTrace reports the exit event for the span name that was used when calling NewTrace().
+// SetTransactionName can be called inside a http handler to set the custom transaction name.
+func SetTransactionName(ctx context.Context, name string) error {
+	return TraceFromContext(ctx).SetTransactionName(name)
+}
+
+// GetTransactionName fetches the current transaction name from the context
+func GetTransactionName(ctx context.Context) string {
+	return TraceFromContext(ctx).GetTransactionName()
+}
+
+// End reports the exit event for the span name that was used when calling NewTrace().
 // No more events should be reported from this trace.
 func (t *aoTrace) End(args ...interface{}) {
 	if t.ok() {
@@ -134,15 +155,19 @@ func (t *aoTrace) SetMethod(method string) {
 	t.httpSpan.span.Method = method
 }
 
+// SetPath extracts the Path from http.Request
+func (t *aoTrace) SetPath(path string) {
+	t.httpSpan.span.Path = path
+}
+
+// SetHost extracts the host information from http.Request
+func (t *aoTrace) SetHost(host string) {
+	t.httpSpan.span.Host = host
+}
+
 // SetStatus sets the request's HTTP status code of the trace, if any
 func (t *aoTrace) SetStatus(status int) {
 	t.httpSpan.span.Status = status
-}
-
-// SetControllerAction sets the controller and action
-func (t *aoTrace) SetControllerAction(controller, action string) {
-	t.httpSpan.controller = controller
-	t.httpSpan.action = action
 }
 
 func (t *aoTrace) reportExit() {
@@ -160,9 +185,9 @@ func (t *aoTrace) reportExit() {
 			t.endArgs = append(t.endArgs, "Edge", edge)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
-			_ = t.exitEvent.ReportContext(t.aoCtx, true, t.endArgs...)
+			t.exitEvent.ReportContext(t.aoCtx, true, t.endArgs...)
 		} else {
-			_ = t.aoCtx.ReportEvent(reporter.LabelExit, t.layerName(), t.endArgs...)
+			t.aoCtx.ReportEvent(reporter.LabelExit, t.layerName(), t.endArgs...)
 		}
 
 		t.childEdges = nil // clear child edge list
@@ -214,29 +239,66 @@ func (t *aoTrace) recordHTTPSpan() {
 		}
 	}
 
-	if t.httpSpan.controller != "" && t.httpSpan.action != "" {
-		t.httpSpan.span.Transaction = t.httpSpan.controller + "." + t.httpSpan.action
-	} else if controller != "" && action != "" {
-		t.httpSpan.span.Transaction = controller + "." + action
-	}
+	t.finalizeTxnName(controller, action)
 
 	if t.httpSpan.span.Status >= 500 && t.httpSpan.span.Status < 600 {
 		t.httpSpan.span.HasError = true
 	}
 
 	reporter.ReportSpan(&t.httpSpan.span)
+
+	// This will add the TransactionName KV into the exit event.
+	t.endArgs = append(t.endArgs, "TransactionName", t.httpSpan.span.Transaction)
+}
+
+// finalizeTxnName finalizes the transaction name based on the following factors:
+// custom transaction name, action/controller, Path and the value of APPOPTICS_PREPEND_DOMAIN
+func (t *aoTrace) finalizeTxnName(controller string, action string) {
+	// The precedence:
+	// custom transaction name > framework specific transaction naming > controller.action > 1st and 2nd segment of Path
+	customTxnName := t.aoCtx.GetTransactionName()
+	if customTxnName != "" {
+		t.httpSpan.span.Transaction = customTxnName
+	} else if t.httpSpan.controller != "" && t.httpSpan.action != "" {
+		t.httpSpan.span.Transaction = t.httpSpan.controller + "." + t.httpSpan.action
+	} else if controller != "" && action != "" {
+		t.httpSpan.span.Transaction = controller + "." + action
+	} else if t.httpSpan.span.Path != "" {
+		t.httpSpan.span.Transaction = reporter.GetTransactionFromPath(t.httpSpan.span.Path)
+	}
+
+	if t.httpSpan.span.Transaction == "" {
+		t.httpSpan.span.Transaction = reporter.UnknownTransactionName
+	}
+	t.prependDomainToTxnName()
+}
+
+// prependDomainToTxnName prepends the domain to the transaction name if APPOPTICS_PREPEND_DOMAIN = true
+func (t *aoTrace) prependDomainToTxnName() {
+	if !reporter.NeedPrependDomain() ||
+		t.httpSpan.span.Transaction == reporter.UnknownTransactionName ||
+		t.httpSpan.span.Host == "" {
+		return
+	}
+	if strings.HasSuffix(t.httpSpan.span.Host, "/") ||
+		strings.HasPrefix(t.httpSpan.span.Transaction, "/") {
+		t.httpSpan.span.Transaction = t.httpSpan.span.Host + t.httpSpan.span.Transaction
+	} else {
+		t.httpSpan.span.Transaction = t.httpSpan.span.Host + "/" + t.httpSpan.span.Transaction
+	}
 }
 
 // A nullTrace is not tracing.
 type nullTrace struct{ nullSpan }
 
-func (t *nullTrace) EndCallback(f func() KVMap)                    {}
-func (t *nullTrace) ExitMetadata() string                          { return "" }
-func (t *nullTrace) SetStartTime(start time.Time)                  {}
-func (t *nullTrace) SetMethod(method string)                       {}
-func (t *nullTrace) SetStatus(status int)                          {}
-func (t *nullTrace) SetControllerAction(controller, action string) {}
-func (t *nullTrace) recordMetrics()                                {}
+func (t *nullTrace) EndCallback(f func() KVMap)   {}
+func (t *nullTrace) ExitMetadata() string         { return "" }
+func (t *nullTrace) SetStartTime(start time.Time) {}
+func (t *nullTrace) SetMethod(method string)      {}
+func (t *nullTrace) SetPath(path string)          {}
+func (t *nullTrace) SetHost(host string)          {}
+func (t *nullTrace) SetStatus(status int)         {}
+func (t *nullTrace) recordMetrics()               {}
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }

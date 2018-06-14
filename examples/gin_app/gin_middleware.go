@@ -11,14 +11,14 @@ import (
 
 const (
 	ginContextKey = "AppOptics"
-	ginLayerName  = "gin"
+	ginSpanName   = "gin"
 )
 
 func tracer() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		t, w, _ := ao.TraceFromHTTPRequestResponse("gin", c.Writer, c.Request)
+		t, w, _ := ao.TraceFromHTTPRequestResponse(ginSpanName, c.Writer, c.Request)
 		c.Writer = &ginResponseWriter{w.(*ao.HTTPResponseWriter), c.Writer}
-		t.SetControllerAction(ginLayerName, c.HandlerName())
+		t.SetTransactionName(c.HandlerName())
 		defer t.End()
 		// create a context.Context and bind it to the gin.Context
 		c.Set(ginContextKey, ao.NewContext(context.Background(), t))

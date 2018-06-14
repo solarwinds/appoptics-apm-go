@@ -7,8 +7,14 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"errors"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"golang.org/x/net/context"
+)
+
+const (
+	MaxCustomTransactionNameLength = 255
 )
 
 // Span is used to measure a span of time associated with an actvity
@@ -43,6 +49,13 @@ type Span interface {
 	// SetAsync(true) provides a hint that this Span is a parent of
 	// concurrent overlapping child Spans.
 	SetAsync(bool)
+
+	// SetTransactionName sets this service's transaction name.
+	// It is used for categorizing service metrics and traces in AppOptics.
+	SetTransactionName(string) error
+
+	// GetTransactionName returns the current value of the transaction name
+	GetTransactionName() string
 
 	IsReporting() bool
 	addChildEdge(reporter.Context)
@@ -161,17 +174,34 @@ func (s *layerSpan) IsSampled() bool {
 	return false
 }
 
-// SetAsync(true) provides a hint that this Span is a parent of concurrent overlapping child Spans.
+// SetAsync provides a hint that this Span is a parent of concurrent overlapping child Spans.
 func (s *layerSpan) SetAsync(val bool) {
 	if val {
 		s.AddEndArgs("Async", true)
 	}
 }
 
+// SetTransactionName sets the transaction name used to categorize service requests in AppOptics.
+func (s *span) SetTransactionName(name string) error {
+	if !s.ok() {
+		return errors.New("failed to set custom transaction name, invalid span")
+	}
+	if name == "" || len(name) > MaxCustomTransactionNameLength {
+		return errors.New("valid length for custom transaction name: 1~255")
+	}
+	s.aoCtx.SetTransactionName(name)
+	return nil
+}
+
+// GetTransactionName returns the current value of the transaction name
+func (s *span) GetTransactionName() string {
+	return s.aoCtx.GetTransactionName()
+}
+
 // Error reports an error, distinguished by its class and message
 func (s *span) Error(class, msg string) {
 	if s.ok() {
-		_ = s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
+		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
 			"ErrorClass", class, "ErrorMsg", msg, "Backtrace", debug.Stack())
 	}
 }
@@ -179,7 +209,7 @@ func (s *span) Error(class, msg string) {
 // Err reports the provided error type
 func (s *span) Err(err error) {
 	if s.ok() && err != nil {
-		_ = s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
+		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
 			"ErrorClass", "error", "ErrorMsg", err.Error(), "Backtrace", debug.Stack())
 	}
 }
@@ -215,12 +245,17 @@ func (s nullSpan) aoContext() reporter.Context                           { retur
 func (s nullSpan) MetadataString() string                                { return "" }
 func (s nullSpan) IsSampled() bool                                       { return false }
 func (s nullSpan) SetAsync(bool)                                         {}
+func (s nullSpan) SetTransactionName(string) error                       { return nil }
+func (s nullSpan) GetTransactionName() string                            { return "" }
 
 // is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool {
+	if s == nil {
+		return false
+	}
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	return s != nil && !s.ended
+	return !s.ended
 }
 func (s *span) IsReporting() bool           { return s.ok() }
 func (s *span) aoContext() reporter.Context { return s.aoCtx }

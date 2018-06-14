@@ -66,14 +66,17 @@ func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *htt
 
 	// determine if this is a new context, if so set flag isNewcontext to start a new HTTP Span
 	isNewcontext := false
-	ctx := r.Context()
-	if b, ok := ctx.Value(httpSpanKey).(bool); !ok || !b {
+	if b, ok := r.Context().Value(httpSpanKey).(bool); !ok || !b {
 		// save KV to ensure future calls won't treat as new context
-		r = r.WithContext(context.WithValue(ctx, httpSpanKey, true))
+		r = r.WithContext(context.WithValue(r.Context(), httpSpanKey, true))
 		isNewcontext = true
 	}
 
 	t := traceFromHTTPRequest(spanName, r, isNewcontext)
+
+	// Associate the trace with http.Request to expose it to the handler
+	r = r.WithContext(NewContext(r.Context(), t))
+
 	wrapper := newResponseWriter(w, t) // wrap writer with response-observing writer
 	return t, wrapper, r
 }
@@ -133,15 +136,18 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewcontext bool) T
 		return KVMap{
 			"Method":       r.Method,
 			"HTTP-Host":    r.Host,
-			"URL":          r.URL.Path,
+			"URL":          r.URL.EscapedPath(),
 			"Remote-Host":  r.RemoteAddr,
 			"Query-String": r.URL.RawQuery,
 		}
 	})
 	// set the start time and method for metrics collection
 	t.SetMethod(r.Method)
-	if isNewcontext {
-		t.SetStartTime(time.Now())
+	t.SetPath(r.URL.EscapedPath())
+	t.SetHost(r.Host)
+	// Clear the start time if it is not a new context
+	if !isNewcontext {
+		t.SetStartTime(time.Time{})
 	}
 	// update incoming metadata in request headers for any downstream readers
 	r.Header.Set(HTTPHeaderName, t.MetadataString())

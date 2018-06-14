@@ -86,6 +86,14 @@ func readEnvSettings() {
 			OboeLog(WARNING, fmt.Sprintf("invalid debug level: %s", level))
 		}
 	}
+
+	// Prepend the domain name onto transaction names
+	prepend := os.Getenv("APPOPTICS_PREPEND_DOMAIN")
+	if strings.ToLower(prepend) == "true" {
+		prependDomainForTransactionName = true
+	} else {
+		prependDomainForTransactionName = false
+	}
 }
 
 func sendInitMessage() {

@@ -963,9 +963,9 @@ func (r *grpcReporter) statusSender() {
 // span		span message to be put on the channel
 //
 // returns	error if channel is full
-func (r *grpcReporter) reportSpan(span *SpanMessage) error {
+func (r *grpcReporter) reportSpan(span SpanMessage) error {
 	select {
-	case r.spanMessages <- *span:
+	case r.spanMessages <- span:
 		return nil
 	default:
 		return errors.New("Span message queue is full")

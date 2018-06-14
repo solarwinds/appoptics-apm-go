@@ -9,6 +9,7 @@ env:
   global:
     - GO15VENDOREXPERIMENT=1
     - APPOPTICS_DEBUG_LEVEL=1
+    - APPOPTICS_SERVICE_KEY=123abc:Go
         
 install:
   - go get golang.org/x/tools/cmd/cover
