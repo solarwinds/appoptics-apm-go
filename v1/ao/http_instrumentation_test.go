@@ -65,9 +65,16 @@ func handlerDoubleWrapped(w http.ResponseWriter, r *http.Request) {
 }
 
 func httpTestWithEndpoint(f http.HandlerFunc, ep string) *httptest.ResponseRecorder {
+	return httpTestWithEndpointWithHeaders(f, ep, nil)
+}
+
+func httpTestWithEndpointWithHeaders(f http.HandlerFunc, ep string, hd map[string]string) *httptest.ResponseRecorder {
 	h := http.HandlerFunc(ao.HTTPHandler(f))
 	// test a single GET request
 	req, _ := http.NewRequest("GET", ep, nil)
+	for k, v := range hd {
+		req.Header.Set(k, v)
+	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	return w

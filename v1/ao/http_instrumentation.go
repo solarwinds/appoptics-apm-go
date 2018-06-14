@@ -144,7 +144,13 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewcontext bool) T
 	// set the start time and method for metrics collection
 	t.SetMethod(r.Method)
 	t.SetPath(r.URL.EscapedPath())
-	t.SetHost(r.Host)
+
+	var host string
+	if host = r.Header.Get("X-Forwarded-Host"); host == "" {
+		host = r.Host
+	}
+	t.SetHost(host)
+
 	// Clear the start time if it is not a new context
 	if !isNewcontext {
 		t.SetStartTime(time.Time{})
