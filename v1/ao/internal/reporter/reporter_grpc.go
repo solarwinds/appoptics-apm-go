@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"unicode/utf8"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -120,6 +122,39 @@ type grpcReporter struct {
 	done           chan struct{}    // channel to stop the reporter
 
 	insecureSkipVerify bool // for testing only: if true, skip verifying TLS cert hostname
+}
+
+// verifyServiceKey verifies if the service key is valid
+func verifyServiceKey(key string) error {
+	var sep = ":"
+
+	if key == "" {
+		return errors.New("invalid service key: empty string")
+	}
+	s := strings.Split(key, sep)
+	if len(s) != 2 || s[0] == "" || s[1] == "" {
+		return errors.New("invalid service key: no colon found or tk/service name is missing")
+	}
+	return nil
+}
+
+// verifyAndMaskServiceKey verifies if the service key is valid. If so, it then masks the
+// middle part of the token and returns the masked service key
+func maskServiceKey(validKey string) string {
+	var sep = ":"
+	var hLen, tLen = 4, 4
+	var mask = "*"
+
+	s := strings.Split(validKey, sep)
+	tk := s[0]
+
+	if len(tk) <= hLen+tLen {
+		return validKey
+	}
+
+	tk = tk[0:4] + strings.Repeat(mask, utf8.RuneCountInString(tk)-hLen-tLen) + tk[len(tk)-4:]
+
+	return tk + sep + s[1]
 }
 
 // initializes a new GRPC reporter from scratch (called once on program startup)
