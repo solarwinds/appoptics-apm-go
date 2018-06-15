@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 )
 
 type event struct {
@@ -260,10 +262,8 @@ func (e *event) AddKV(key, value interface{}) error {
 			e.AddBool(k, *v)
 		}
 	default:
-		// silently skip unsupported value type
-		if debugLog {
-			OboeLog(DEBUG, "Unrecognized Event key %v val %v", k, v)
-		}
+		s := fmt.Sprintf("Ignoring unrecognized Event key %v val %v valType %T", k, v, v)
+		agent.Log(agent.DEBUG, s)
 	}
 	return nil
 }

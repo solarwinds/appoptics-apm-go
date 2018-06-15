@@ -7,10 +7,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -28,58 +26,6 @@ func printBson(message []byte) {
 }
 
 ///////////////////////
-
-// DebugLevel is a type that defines the log level.
-type DebugLevel uint8
-
-// log levels
-const (
-	DEBUG DebugLevel = iota
-	INFO
-	WARNING
-	ERROR
-)
-
-var dbgLevels = []string{
-	DEBUG:   "DEBUG",
-	INFO:    "INFO",
-	WARNING: "WARN",
-	ERROR:   "ERROR",
-}
-
-var debugLevel = ERROR
-var debugLog = true
-
-// ElemOffset is a simple helper function to check if a slice contains a specific element
-func ElemOffset(s []string, e string) int {
-	for idx, i := range s {
-		if e == i {
-			return idx
-		}
-	}
-	return -1
-}
-
-// OboeLog print logs based on the debug level.
-func OboeLog(level DebugLevel, msg string, args ...interface{}) {
-	if !debugLog || level < debugLevel { // debugLog is always true for now.
-		return
-	}
-	var p string
-	pc, f, l, ok := runtime.Caller(1)
-	if ok {
-		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
-		name := path[len(path)-1]
-		p = fmt.Sprintf("%s %s#%d %s(): ", dbgLevels[level], filepath.Base(f), l, name)
-	} else {
-		p = fmt.Sprintf("%s %s#%s %s(): ", dbgLevels[level], "na", "na", "na")
-	}
-	if len(args) == 0 {
-		log.Printf("%s%s", p, msg)
-	} else {
-		log.Printf("%s%s %v", p, msg, args)
-	}
-}
 
 // getLineByKeword reads a file, searches for the keyword and returns the matched line.
 // It returns empty string "" if no match found or failed to open the path.

@@ -4,6 +4,7 @@ package reporter
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -149,6 +150,7 @@ func (r *TestReporter) Close(numBufs int) {
 }
 
 func (r *TestReporter) report(ctx *oboeContext, e *event) error {
+	fmt.Println("Before TestReporter............")
 	if err := prepareEvent(ctx, e); err != nil {
 		// don't continue if preparation failed
 		return err
@@ -159,6 +161,7 @@ func (r *TestReporter) report(ctx *oboeContext, e *event) error {
 		(r.ErrorEvents != nil && r.ErrorEvents[(int(r.eventCount)-1)]) { // error certain specified events
 		return errors.New("TestReporter error")
 	}
+	fmt.Println("In TestReporter, sending ............", e.bbuf.GetBuf())
 	r.eventChan <- (*e).bbuf.GetBuf() // a send to a closed channel panics.
 	return nil
 }

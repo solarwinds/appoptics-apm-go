@@ -5,10 +5,11 @@ package reporter
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 )
 
 // defines what methods a reporter should offer (internal to reporter package)
@@ -51,10 +52,7 @@ func (r *nullReporter) reportSpan(span SpanMessage) error             { return n
 // can be overridden via APPOPTICS_REPORTER
 func init() {
 	cacheHostname(osHostnamer{})
-	r := os.Getenv("APPOPTICS_REPORTER")
-	if r != "" {
-		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_REPORTER: %s", r))
-	}
+	r := agent.GetConfig(agent.AppOpticsReporter)
 	setGlobalReporter(r)
 	sendInitMessage()
 }
@@ -83,9 +81,7 @@ func ReportSpan(span SpanMessage) error {
 func cacheHostname(hn hostnamer) {
 	h, err := hn.Hostname()
 	if err != nil {
-		if debugLog {
-			OboeLog(ERROR, "Unable to get hostname, AppOptics tracing disabled: %v", err)
-		}
+		agent.Log(agent.ERROR, "Unable to get hostname, AppOptics tracing disabled: %v", err)
 		reportingDisabled = true
 	}
 	cachedHostname = h
