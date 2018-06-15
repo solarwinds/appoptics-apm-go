@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 )
 
 // gets and appends UnameSysName/UnameVersion to a BSON buffer
@@ -72,7 +74,7 @@ func isPhysicalInterface(ifname string) bool {
 	fn := "/sys/class/net/" + ifname
 	link, err := os.Readlink(fn)
 	if err != nil {
-		OboeLog(ERROR, fmt.Sprintf("cannot readlink %s", fn))
+		agent.Log(agent.ERROR, fmt.Sprintf("cannot readlink %s", fn))
 		return false
 	}
 	if strings.Contains(link, "/virtual/") {
