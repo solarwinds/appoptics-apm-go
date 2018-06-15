@@ -63,6 +63,9 @@ func init() {
 func readEnvSettings() {
 	// Configure tracing mode setting using environment variable
 	mode := strings.ToLower(os.Getenv("APPOPTICS_TRACING_MODE"))
+	if mode != "" {
+		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_TRACING_MODE: %s", mode))
+	}
 	switch mode {
 	case "always":
 		fallthrough
@@ -73,6 +76,7 @@ func readEnvSettings() {
 	}
 
 	if level := os.Getenv("APPOPTICS_DEBUG_LEVEL"); level != "" {
+		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_DEBUG_LEVEL: %s", level))
 		// We do not want to break backward-compatibility so keep accepting integer values.
 		if i, err := strconv.Atoi(level); err == nil {
 			// Protect the debug level from some invalid value, e.g., 1000
@@ -89,6 +93,9 @@ func readEnvSettings() {
 
 	// Prepend the domain name onto transaction names
 	prepend := os.Getenv("APPOPTICS_PREPEND_DOMAIN")
+	if prepend != "" {
+		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_PREPEND_DOMAIN: %s", prepend))
+	}
 	if strings.ToLower(prepend) == "true" {
 		prependDomainForTransactionName = true
 	} else {

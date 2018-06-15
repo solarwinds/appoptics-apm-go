@@ -148,6 +148,7 @@ func init() {
 	pEnv := "APPOPTICS_HISTOGRAM_PRECISION"
 	precision := os.Getenv(pEnv)
 	if precision != "" {
+		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_HISTOGRAM_PRECISION: %s", precision))
 		if p, err := strconv.Atoi(precision); err == nil {
 			if p >= 0 && p <= 5 {
 				metricsHTTPHistograms.precision = p

@@ -167,23 +167,29 @@ func newGRPCReporter() reporter {
 
 	// service key is required, so bail out if not found
 	serviceKey := os.Getenv("APPOPTICS_SERVICE_KEY")
-	if serviceKey == "" {
-		OboeLog(ERROR, "No service key found, check environment variable APPOPTICS_SERVICE_KEY.")
+	if err := verifyServiceKey(serviceKey); err != nil {
+		OboeLog(ERROR, fmt.Sprintf("%s, check environment variable APPOPTICS_SERVICE_KEY.", err))
 		return &nullReporter{}
 	}
+	OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_SERVICE_KEY[masked]: %s", maskServiceKey(serviceKey)))
 
 	// see if a hostname alias is configured
-	configuredHostname = os.Getenv("APPOPTICS_HOSTNAME_ALIAS")
+	if configuredHostname = os.Getenv("APPOPTICS_HOSTNAME_ALIAS"); configuredHostname != "" {
+		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_HOSTNAME_ALIAS: %s", configuredHostname))
+	}
 
 	// collector address override
 	collectorAddress := os.Getenv("APPOPTICS_COLLECTOR")
 	if collectorAddress == "" {
 		collectorAddress = grpcAddressDefault
+	} else {
+		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_COLLECTOR: %s", collectorAddress))
 	}
 
 	// certificate override
 	var cert []byte
 	if certPath := os.Getenv("APPOPTICS_TRUSTEDPATH"); certPath != "" {
+		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_TRUSTEDPATH: %s", certPath))
 		var err error
 		cert, err = ioutil.ReadFile(certPath)
 		if err != nil {
@@ -198,6 +204,7 @@ func newGRPCReporter() reporter {
 	switch strings.ToLower(os.Getenv("APPOPTICS_INSECURE_SKIP_VERIFY")) {
 	case "true", "1", "yes":
 		insecureSkipVerify = true
+		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_INSECURE_SKIP_VERIFY: %v", insecureSkipVerify))
 	}
 
 	// create connection object for events client and metrics client

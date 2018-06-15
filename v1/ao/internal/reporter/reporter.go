@@ -5,6 +5,7 @@ package reporter
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -50,7 +51,11 @@ func (r *nullReporter) reportSpan(span SpanMessage) error             { return n
 // can be overridden via APPOPTICS_REPORTER
 func init() {
 	cacheHostname(osHostnamer{})
-	setGlobalReporter(os.Getenv("APPOPTICS_REPORTER"))
+	r := os.Getenv("APPOPTICS_REPORTER")
+	if r != "" {
+		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_REPORTER: %s", r))
+	}
+	setGlobalReporter(r)
 	sendInitMessage()
 }
 

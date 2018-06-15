@@ -26,6 +26,8 @@ func udpNewReporter() reporter {
 	udpAddress := os.Getenv("APPOPTICS_COLLECTOR_UDP")
 	if udpAddress == "" {
 		udpAddress = udpAddrDefault
+	} else {
+		OboeLog(INFO, fmt.Sprintf("Non-default APPOPTICS_COLLECTOR_UDP: %s", udpAddress))
 	}
 
 	serverAddr, err := net.ResolveUDPAddr("udp4", udpAddress)
