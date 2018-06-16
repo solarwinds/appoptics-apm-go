@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"os"
 
 	"strings"
@@ -76,7 +75,7 @@ func initConf(cf *conf) {
 				if k == "APPOPTICS_SERVICE_KEY" {
 					val = maskServiceKey(val)
 				}
-				Log(WARNING, fmt.Sprintf("non-default configuration used %v=%v", k, val))
+				Warning("non-default configuration used %v=%v", k, val)
 
 				break
 			}

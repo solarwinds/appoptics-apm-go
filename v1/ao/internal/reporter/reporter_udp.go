@@ -3,7 +3,6 @@
 package reporter
 
 import (
-	"fmt"
 	"net"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
@@ -34,7 +33,7 @@ func udpNewReporter() reporter {
 		conn, err = net.DialUDP("udp4", nil, serverAddr)
 	}
 	if err != nil {
-		agent.Log(agent.ERROR, fmt.Sprintf("AppOptics failed to initialize UDP reporter: %v", err))
+		agent.Error("AppOptics failed to initialize UDP reporter: %v", err)
 		return &nullReporter{}
 	}
 

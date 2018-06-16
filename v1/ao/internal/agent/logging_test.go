@@ -10,6 +10,8 @@ import (
 
 	"strings"
 
+	"fmt"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -76,4 +78,21 @@ func TestLog(t *testing.T) {
 	str := "hello world"
 	Log(INFO, str)
 	assert.True(t, strings.HasSuffix(buffer.String(), str+"\n"))
+
+	buffer.Reset()
+	str = ""
+	Log(INFO, "")
+	assert.True(t, strings.HasSuffix(buffer.String(), str+"\n"))
+
+	buffer.Reset()
+	str = ""
+	Log(INFO, "", nil)
+	assert.True(t, strings.HasSuffix(buffer.String(), str+"\n"))
+
+	buffer.Reset()
+	str = "hello %s"
+	Log(INFO, "hello %s", nil)
+	fmt.Println("----" + buffer.String() + "----")
+	assert.True(t, strings.HasSuffix(buffer.String(), "hello %!s(<nil>)"+"\n"))
+
 }

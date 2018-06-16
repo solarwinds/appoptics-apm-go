@@ -6,7 +6,6 @@ package reporter
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
 	"math/rand"
 	"runtime"
@@ -87,7 +86,7 @@ func sendInitMessage() {
 		// create new event from context
 		e, err := c.newEvent("single", "go")
 		if err != nil {
-			agent.Log(agent.ERROR, "Error while creating the init message")
+			agent.Error("Error while creating the init message")
 		}
 
 		e.AddKV("__Init", 1)
@@ -168,7 +167,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		agent.Log(agent.DEBUG, fmt.Sprintf("Sampling disabled for %v until valid settings are retrieved.", layer))
+		agent.Debug("Sampling disabled for %v until valid settings are retrieved.", layer)
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
 
@@ -207,7 +206,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
-	agent.Log(agent.DEBUG, fmt.Sprintf("Sampling with rate=%v, source=%v", sampleRate, sampleSource))
+	agent.Debug("Sampling with rate=%v, source=%v", sampleRate, sampleSource)
 	return retval, sampleRate, sampleSource
 }
 
@@ -254,7 +253,7 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 		setting.bucket.capacity = bucketCapacity
 	} else {
 		setting.bucket.capacity = 0
-		agent.Log(agent.WARNING, fmt.Sprintf("Invalid bucket capacity (%v). Using %v.", bucketCapacity, 0))
+		agent.Warning("Invalid bucket capacity (%v). Using %v.", bucketCapacity, 0)
 	}
 	if setting.bucket.available > setting.bucket.capacity {
 		setting.bucket.available = setting.bucket.capacity
@@ -263,7 +262,7 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 		setting.bucket.ratePerSec = bucketRatePerSec
 	} else {
 		setting.bucket.ratePerSec = 0
-		agent.Log(agent.WARNING, fmt.Sprintf("Invalid bucket rate (%v). Using %v.", bucketRatePerSec, 0))
+		agent.Warning("Invalid bucket rate (%v). Using %v.", bucketRatePerSec, 0)
 	}
 	setting.bucket.lock.Unlock()
 }
@@ -295,7 +294,7 @@ func getSetting(layer string) (*oboeSettings, bool) {
 
 func shouldSample(sampleRate int) bool {
 	retval := sampleRate == maxSamplingRate || rand.Intn(maxSamplingRate) <= sampleRate
-	agent.Log(agent.DEBUG, fmt.Sprintf("shouldSample(%v) => %v", sampleRate, retval))
+	agent.Debug("shouldSample(%v) => %v", sampleRate, retval)
 	return retval
 }
 

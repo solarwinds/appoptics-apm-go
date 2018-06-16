@@ -81,7 +81,7 @@ func ReportSpan(span SpanMessage) error {
 func cacheHostname(hn hostnamer) {
 	h, err := hn.Hostname()
 	if err != nil {
-		agent.Log(agent.ERROR, "Unable to get hostname, AppOptics tracing disabled: %v", err)
+		agent.Error("Unable to get hostname, AppOptics tracing disabled: %v", err)
 		reportingDisabled = true
 	}
 	cachedHostname = h
@@ -94,17 +94,17 @@ func cacheHostname(hn hostnamer) {
 // returns	error if invalid context or event
 func prepareEvent(ctx *oboeContext, e *event) error {
 	if ctx == nil || e == nil {
-		return errors.New("Invalid context, event")
+		return errors.New("invalid context, event")
 	}
 
 	// The context metadata must have the same task_id as the event.
 	if !bytes.Equal(ctx.metadata.ids.taskID, e.metadata.ids.taskID) {
-		return errors.New("Invalid event, different task_id from context")
+		return errors.New("invalid event, different task_id from context")
 	}
 
 	// The context metadata must have a different op_id than the event.
 	if bytes.Equal(ctx.metadata.ids.opID, e.metadata.ids.opID) {
-		return errors.New("Invalid event, same as context")
+		return errors.New("invalid event, same as context")
 	}
 
 	us := time.Now().UnixNano() / 1000

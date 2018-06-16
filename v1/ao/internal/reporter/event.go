@@ -262,8 +262,7 @@ func (e *event) AddKV(key, value interface{}) error {
 			e.AddBool(k, *v)
 		}
 	default:
-		s := fmt.Sprintf("Ignoring unrecognized Event key %v val %v valType %T", k, v, v)
-		agent.Log(agent.DEBUG, s)
+		agent.Debug("Ignoring unrecognized Event key %v val %v valType %T", k, v, v)
 	}
 	return nil
 }

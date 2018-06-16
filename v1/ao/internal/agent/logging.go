@@ -55,8 +55,8 @@ func elemOffset(s []string, e string) int {
 	return -1
 }
 
-// Log print logs based on the debug level.
-func Log(level DebugLevel, msg string, args ...interface{}) {
+// log print logs based on the debug level.
+func logit(level DebugLevel, msg string, args []interface{}) {
 	if level < debugLevel {
 		return
 	}
@@ -69,9 +69,37 @@ func Log(level DebugLevel, msg string, args ...interface{}) {
 	} else {
 		p = fmt.Sprintf("%s %s#%s %s(): ", dbgLevels[level], "na", "na", "na")
 	}
-	if len(args) == 0 {
-		log.Printf("%s%s", p, msg)
-	} else {
-		log.Printf("%s%s %v", p, msg, args)
+
+	s := msg
+	if msg == "" && len(args) > 0 {
+		s = fmt.Sprint(args...)
+	} else if msg != "" && len(args) > 0 {
+		s = fmt.Sprintf(msg, args...)
 	}
+	log.Print(p + s)
+}
+
+// Log prints the log message with specified level
+func Log(level DebugLevel, msg string, args ...interface{}) {
+	logit(level, msg, args)
+}
+
+// Debug prints the log message in DEBUG level
+func Debug(msg string, args ...interface{}) {
+	logit(DEBUG, msg, args)
+}
+
+// Info prints the log message in INFO level
+func Info(msg string, args ...interface{}) {
+	logit(INFO, msg, args)
+}
+
+// Warning prints the log message in WARNING level
+func Warning(msg string, args ...interface{}) {
+	logit(WARNING, msg, args)
+}
+
+// Error prints the log message in ERROR level
+func Error(msg string, args ...interface{}) {
+	logit(ERROR, msg, args)
 }

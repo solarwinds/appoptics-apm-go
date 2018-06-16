@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"strings"
 	"sync"
@@ -158,7 +157,7 @@ func newGRPCReporter() reporter {
 		var err error
 		cert, err = ioutil.ReadFile(certPath)
 		if err != nil {
-			agent.Log(agent.ERROR, fmt.Sprintf("Error reading cert file %s: %v", certPath, err))
+			agent.Error("Error reading cert file %s: %v", certPath, err)
 			return &nullReporter{}
 		}
 	} else {
@@ -175,7 +174,7 @@ func newGRPCReporter() reporter {
 	eventConn, err1 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
 	metricConn, err2 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
 	if err1 != nil || err2 != nil {
-		agent.Log(agent.ERROR, fmt.Sprintf("Failed to initialize gRPC reporter %v: %v; %v", collectorAddress, err1, err2))
+		agent.Error("Failed to initialize gRPC reporter %v: %v; %v", collectorAddress, err1, err2)
 		return &nullReporter{}
 	}
 
@@ -282,7 +281,7 @@ func (r *grpcReporter) reconnect(c *grpcConnection, authority reconnectAuthority
 	if c.reconnectAuthority == authority {
 		// we are authorized to attempt a reconnect
 		c.lock.Lock()
-		agent.Log(agent.INFO, "Lost connection -- attempting reconnect...")
+		agent.Info("Lost connection -- attempting reconnect...")
 		c.client = collector.NewTraceCollectorClient(c.connection)
 		c.lock.Unlock()
 
@@ -304,7 +303,7 @@ func (r *grpcReporter) redirect(c *grpcConnection, authority reconnectAuthority,
 	// create a new connection object for this client
 	conn, err := grpcCreateClientConnection(c.certificate, address, r.insecureSkipVerify)
 	if err != nil {
-		agent.Log(agent.ERROR, fmt.Sprintf("Failed redirect to: %v %v", address, err))
+		agent.Error("Failed redirect to: %v %v", address, err)
 	}
 
 	// set new connection (need to be protected)
@@ -516,14 +515,14 @@ func (r *grpcReporter) eventRetrySender(
 				// gRPC handles the reconnection automatically.
 				failsNum++
 				if failsNum > grpcRetryLogThreshold && !failsPrinted {
-					agent.Log(agent.WARNING, fmt.Sprintf("Error calling PostEvents(): %v", err))
+					agent.Warning("Error calling PostEvents(): %v", err)
 					failsPrinted = true
 				} else {
-					agent.Log(agent.DEBUG, fmt.Sprintf("(%v) Error calling PostEvents(): %v", failsNum, err))
+					agent.Debug("(%v) Error calling PostEvents(): %v", failsNum, err)
 				}
 			} else {
 				if failsPrinted {
-					agent.Log(agent.WARNING, fmt.Sprintf("Error recovered in PostEvents()"))
+					agent.Warning("Error recovered in PostEvents()")
 					// Reset the flags here as there might be extra retries even the transport layer is recovered.
 					failsPrinted = false
 					failsNum = 0
@@ -531,22 +530,22 @@ func (r *grpcReporter) eventRetrySender(
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
-					agent.Log(agent.DEBUG, fmt.Sprintf("Sent %d events", len(messages)))
+					agent.Debug("Sent %d events", len(messages))
 					resultOk = true
 					connection.reconnectAuthority = UNSET
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
 					results <- grpcResult{ret: result}
 				case collector.ResultCode_TRY_LATER:
-					agent.Log(agent.INFO, "Server responded: Try later")
+					agent.Info("Server responded: Try later")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
 				case collector.ResultCode_LIMIT_EXCEEDED:
-					agent.Log(agent.INFO, "Server responded: Limit exceeded")
+					agent.Info("Server responded: Limit exceeded")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
 				case collector.ResultCode_INVALID_API_KEY:
-					agent.Log(agent.ERROR, "Server responded: Invalid API key")
+					agent.Error("Server responded: Invalid API key")
 				case collector.ResultCode_REDIRECT:
 					if redirects > grpcRedirectMax {
-						agent.Log(agent.ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+						agent.Error("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
 						r.redirect(connection, authority, response.GetArg())
 						// a proper redirect shouldn't cause delays
@@ -554,7 +553,7 @@ func (r *grpcReporter) eventRetrySender(
 						redirects++
 					}
 				default:
-					agent.Log(agent.INFO, "Unknown Server response")
+					agent.Info("Unknown Server response")
 				}
 			}
 
@@ -664,14 +663,14 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			// gRPC handles the reconnection automatically.
 			failsNum++
 			if failsNum > grpcRetryLogThreshold && !failsPrinted {
-				agent.Log(agent.WARNING, fmt.Sprintf("Error calling PostMetrics(): %v", err))
+				agent.Warning("Error calling PostMetrics(): %v", err)
 				failsPrinted = true
 			} else {
-				agent.Log(agent.DEBUG, fmt.Sprintf("(%v) Error calling PostMetrics(): %v", failsNum, err))
+				agent.Debug("(%v) Error calling PostMetrics(): %v", failsNum, err)
 			}
 		} else {
 			if failsPrinted {
-				agent.Log(agent.WARNING, fmt.Sprintf("Error recovered in PostMetrics()"))
+				agent.Warning("Error recovered in PostMetrics()")
 				// Reset the flags here as there might be extra retries even the transport layer is recovered.
 				failsPrinted = false
 				failsNum = 0
@@ -679,18 +678,18 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
-				agent.Log(agent.DEBUG, "Sent metrics")
+				agent.Debug("Sent metrics")
 				resultOk = true
 				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
-				agent.Log(agent.INFO, "Server responded: Try later")
+				agent.Info("Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
-				agent.Log(agent.INFO, "Server responded: Limit exceeded")
+				agent.Info("Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
-				agent.Log(agent.ERROR, "Server responded: Invalid API key")
+				agent.Error("Server responded: Invalid API key")
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
-					agent.Log(agent.ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+					agent.Error("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
 					r.redirect(r.metricConnection, POSTMETRICS, response.GetArg())
 					// a proper redirect shouldn't cause delays
@@ -698,7 +697,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 					redirects++
 				}
 			default:
-				agent.Log(agent.INFO, "Unknown Server response")
+				agent.Info("Unknown Server response")
 			}
 		}
 
@@ -751,14 +750,14 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 			// gRPC handles the reconnection automatically.
 			failsNum++
 			if failsNum > grpcRetryLogThreshold && !failsPrinted {
-				agent.Log(agent.WARNING, fmt.Sprintf("Error calling GetSettings(): %v", err))
+				agent.Warning("Error calling GetSettings(): %v", err)
 				failsPrinted = true
 			} else {
-				agent.Log(agent.DEBUG, fmt.Sprintf("(%v) Error calling GetSettings(): %v", failsNum, err))
+				agent.Debug("(%v) Error calling GetSettings(): %v", failsNum, err)
 			}
 		} else {
 			if failsPrinted {
-				agent.Log(agent.WARNING, fmt.Sprintf("Error recovered in GetSettings()"))
+				agent.Warning("Error recovered in GetSettings()")
 				// Reset the flags here as there might be extra retries even the transport layer is recovered.
 				failsPrinted = false
 				failsNum = 0
@@ -766,19 +765,19 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
-				agent.Log(agent.DEBUG, fmt.Sprintf("Got new settings from server %v", r.metricConnection.address))
+				agent.Debug("Got new settings from server %v", r.metricConnection.address)
 				r.updateSettings(response)
 				resultOK = true
 				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
-				agent.Log(agent.INFO, "Server responded: Try later")
+				agent.Info("Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
-				agent.Log(agent.INFO, "Server responded: Limit exceeded")
+				agent.Info("Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
-				agent.Log(agent.ERROR, "Server responded: Invalid API key")
+				agent.Error("Server responded: Invalid API key")
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
-					agent.Log(agent.ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+					agent.Error("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
 					r.redirect(r.metricConnection, GETSETTINGS, response.GetArg())
 					// a proper redirect shouldn't cause delays
@@ -786,7 +785,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 					redirects++
 				}
 			default:
-				agent.Log(agent.INFO, "Unknown Server response")
+				agent.Info("Unknown Server response")
 			}
 		}
 
@@ -915,14 +914,14 @@ func (r *grpcReporter) statusSender() {
 				// gRPC handles the reconnection automatically.
 				failsNum++
 				if failsNum > grpcRetryLogThreshold && !failsPrinted {
-					agent.Log(agent.WARNING, fmt.Sprintf("Error calling PostStatus(): %v", err))
+					agent.Warning("Error calling PostStatus(): %v", err)
 					failsPrinted = true
 				} else {
-					agent.Log(agent.DEBUG, fmt.Sprintf("(%v) Error calling PostStatus(): %v", failsNum, err))
+					agent.Debug("(%v) Error calling PostStatus(): %v", failsNum, err)
 				}
 			} else {
 				if failsPrinted {
-					agent.Log(agent.WARNING, fmt.Sprintf("Error recovered in PostStatus()"))
+					agent.Warning("Error recovered in PostStatus()")
 					// Reset the flags here as there might be extra retries even the transport layer is recovered.
 					failsPrinted = false
 					failsNum = 0
@@ -930,18 +929,18 @@ func (r *grpcReporter) statusSender() {
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
-					agent.Log(agent.DEBUG, "Sent status")
+					agent.Debug("Sent status")
 					resultOk = true
 					r.metricConnection.reconnectAuthority = UNSET
 				case collector.ResultCode_TRY_LATER:
-					agent.Log(agent.INFO, "Server responded: Try later")
+					agent.Info("Server responded: Try later")
 				case collector.ResultCode_LIMIT_EXCEEDED:
-					agent.Log(agent.INFO, "Server responded: Limit exceeded")
+					agent.Info("Server responded: Limit exceeded")
 				case collector.ResultCode_INVALID_API_KEY:
-					agent.Log(agent.ERROR, "Server responded: Invalid API key")
+					agent.Error("Server responded: Invalid API key")
 				case collector.ResultCode_REDIRECT:
 					if redirects > grpcRedirectMax {
-						agent.Log(agent.ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+						agent.Error("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
 						r.redirect(r.metricConnection, POSTSTATUS, response.GetArg())
 						// a proper redirect shouldn't cause delays
@@ -949,7 +948,7 @@ func (r *grpcReporter) statusSender() {
 						redirects++
 					}
 				default:
-					agent.Log(agent.INFO, "Unknown Server response")
+					agent.Info("Unknown Server response")
 				}
 			}
 

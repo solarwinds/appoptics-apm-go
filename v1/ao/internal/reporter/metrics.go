@@ -3,7 +3,6 @@
 package reporter
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -149,17 +148,15 @@ func init() {
 	pEnv := "APPOPTICS_HISTOGRAM_PRECISION"
 	precision := os.Getenv(pEnv)
 	if precision != "" {
-		agent.Log(agent.INFO, fmt.Sprintf("Non-default APPOPTICS_HISTOGRAM_PRECISION: %s", precision))
+		agent.Info("Non-default APPOPTICS_HISTOGRAM_PRECISION: %s", precision)
 		if p, err := strconv.Atoi(precision); err == nil {
 			if p >= 0 && p <= 5 {
 				metricsHTTPHistograms.precision = p
 			} else {
-				agent.Log(agent.ERROR, fmt.Sprintf(
-					"value of %v must be between 0 and 5: %v", pEnv, precision))
+				agent.Error("value of %v must be between 0 and 5: %v", pEnv, precision)
 			}
 		} else {
-			agent.Log(agent.ERROR, fmt.Sprintf(
-				"value of %v is not an int: %v", pEnv, precision))
+			agent.Error("value of %v is not an int: %v", pEnv, precision)
 		}
 	}
 }
@@ -508,7 +505,7 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
 	defer func() {
 		if err := recover(); err != nil {
-			agent.Log(agent.ERROR, fmt.Sprintf("%v", err))
+			agent.Error("%v", err)
 		}
 	}()
 
@@ -681,7 +678,7 @@ func recordHistogram(hi *histograms, name string, duration time.Duration) {
 	defer func() {
 		hi.lock.Unlock()
 		if err := recover(); err != nil {
-			agent.Log(agent.ERROR, fmt.Sprintf("Failed to record histogram: %v", err))
+			agent.Error("Failed to record histogram: %v", err)
 		}
 	}()
 
@@ -759,7 +756,7 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	// get 64-base encoded representation of the histogram
 	data, err := hdrhist.EncodeCompressed(h.hist)
 	if err != nil {
-		agent.Log(agent.ERROR, fmt.Sprintf("Failed to encode histogram: %v", err))
+		agent.Error("Failed to encode histogram: %v", err)
 		return
 	}
 
