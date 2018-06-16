@@ -167,7 +167,7 @@ func (e *event) AddKV(key, value interface{}) error {
 	// load key name
 	k, isStr := key.(string)
 	if !isStr {
-		return fmt.Errorf("Key %v (type %T) not a string", k, k)
+		return fmt.Errorf("key %v (type %T) not a string", k, k)
 	}
 	// load value and add KV to event
 	switch v := value.(type) {

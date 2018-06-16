@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -9,39 +10,39 @@ import (
 	"strings"
 )
 
-// DebugLevel is a type that defines the log level.
-type DebugLevel uint8
+// LogLevel is a type that defines the log level.
+type LogLevel uint8
 
 // log levels
 const (
-	DEBUG DebugLevel = iota
+	DEBUG LogLevel = iota
 	INFO
 	WARNING
 	ERROR
 )
 
-var dbgLevels = []string{
+var logLevels = []string{
 	DEBUG:   "DEBUG",
 	INFO:    "INFO",
 	WARNING: "WARN",
 	ERROR:   "ERROR",
 }
 
-var debugLevel = DebugLevel(elemOffset(dbgLevels, strings.ToUpper(strings.TrimSpace(defaultDebugLevel))))
+var logLevel = LogLevel(elemOffset(logLevels, strings.ToUpper(strings.TrimSpace(defaultLogLevel))))
 
 func initLogging() {
-	level := GetConfig(AppOpticsDebugLevel)
+	level := GetConfig(AppOpticsLogLevel)
 	// We do not want to break backward-compatibility so keep accepting integer values.
 	if i, err := strconv.Atoi(level); err == nil {
 		// Protect the debug level from some invalid value, e.g., 1000
-		if i >= len(dbgLevels) {
-			i = len(dbgLevels) - 1
+		if i >= len(logLevels) {
+			i = len(logLevels) - 1
 		}
-		debugLevel = DebugLevel(i)
-	} else if offset := elemOffset(dbgLevels, strings.ToUpper(strings.TrimSpace(level))); offset != -1 {
-		debugLevel = DebugLevel(offset)
+		logLevel = LogLevel(i)
+	} else if offset := elemOffset(logLevels, strings.ToUpper(strings.TrimSpace(level))); offset != -1 {
+		logLevel = LogLevel(offset)
 	} else {
-		Log(WARNING, fmt.Sprintf("invalid debug level: %s", level))
+		Warning("invalid debug level: %s", level)
 	}
 }
 
@@ -55,19 +56,20 @@ func elemOffset(s []string, e string) int {
 	return -1
 }
 
-// log print logs based on the debug level.
-func logit(level DebugLevel, msg string, args []interface{}) {
-	if level < debugLevel {
+// logit prints logs based on the debug level.
+func logit(level LogLevel, msg string, args []interface{}) {
+	if level < logLevel {
 		return
 	}
-	var p string
+
+	var buffer bytes.Buffer
 	pc, f, l, ok := runtime.Caller(1)
 	if ok {
 		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
 		name := path[len(path)-1]
-		p = fmt.Sprintf("%s %s#%d %s(): ", dbgLevels[level], filepath.Base(f), l, name)
+		buffer.WriteString(fmt.Sprintf("%s %s#%d %s(): ", logLevels[level], filepath.Base(f), l, name))
 	} else {
-		p = fmt.Sprintf("%s %s#%s %s(): ", dbgLevels[level], "na", "na", "na")
+		buffer.WriteString(fmt.Sprintf("%s %s#%s %s(): ", logLevels[level], "na", "na", "na"))
 	}
 
 	s := msg
@@ -76,11 +78,12 @@ func logit(level DebugLevel, msg string, args []interface{}) {
 	} else if msg != "" && len(args) > 0 {
 		s = fmt.Sprintf(msg, args...)
 	}
-	log.Print(p + s)
+	buffer.WriteString(s)
+	log.Print(buffer.String())
 }
 
 // Log prints the log message with specified level
-func Log(level DebugLevel, msg string, args ...interface{}) {
+func Log(level LogLevel, msg string, args ...interface{}) {
 	logit(level, msg, args)
 }
 

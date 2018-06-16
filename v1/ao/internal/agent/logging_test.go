@@ -1,3 +1,5 @@
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
+
 package agent
 
 import (
@@ -18,55 +20,55 @@ import (
 func TestDebugLevel(t *testing.T) {
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "DEBUG")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(0))
+	assert.EqualValues(t, logLevel, LogLevel(0))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "Info")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(1))
+	assert.EqualValues(t, logLevel, LogLevel(1))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "warn")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(2))
+	assert.EqualValues(t, logLevel, LogLevel(2))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "erroR")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(3))
+	assert.EqualValues(t, logLevel, LogLevel(3))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", " erroR  ")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(3))
+	assert.EqualValues(t, logLevel, LogLevel(3))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "HelloWorld")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(3))
+	assert.EqualValues(t, logLevel, LogLevel(3))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "0")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(0))
+	assert.EqualValues(t, logLevel, LogLevel(0))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "1")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(1))
+	assert.EqualValues(t, logLevel, LogLevel(1))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "2")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(2))
+	assert.EqualValues(t, logLevel, LogLevel(2))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "3")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(3))
+	assert.EqualValues(t, logLevel, LogLevel(3))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "4")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(3))
+	assert.EqualValues(t, logLevel, LogLevel(3))
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "1000")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(3))
+	assert.EqualValues(t, logLevel, LogLevel(3))
 
 	os.Unsetenv("APPOPTICS_DEBUG_LEVEL")
 	Init()
-	assert.EqualValues(t, debugLevel, DebugLevel(2))
+	assert.EqualValues(t, logLevel, LogLevel(2))
 }
 
 func TestLog(t *testing.T) {

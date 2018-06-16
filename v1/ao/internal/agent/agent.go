@@ -1,3 +1,5 @@
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
+
 // Package agent is the place to manage all the agent properties, which include:
 // 1. static configurations (loaded from system environment variables and (in future) configuration files, etc.
 // 2. dynamic settings pushed down by the AppOptics server.

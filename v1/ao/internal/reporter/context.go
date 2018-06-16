@@ -237,14 +237,14 @@ func (md *oboeMetadata) ToString() (string, error) {
 	}
 	// encode as hex
 	enc := make([]byte, 2*result)
-	len := hex.Encode(enc, buf[:result])
-	return strings.ToUpper(string(enc[:len])), nil
+	l := hex.Encode(enc, buf[:result])
+	return strings.ToUpper(string(enc[:l])), nil
 }
 
 func (md *oboeMetadata) opString() string {
 	enc := make([]byte, 2*md.opLen)
-	len := hex.Encode(enc, md.ids.opID[:md.opLen])
-	return strings.ToUpper(string(enc[:len]))
+	l := hex.Encode(enc, md.ids.opID[:md.opLen])
+	return strings.ToUpper(string(enc[:l]))
 }
 
 func (md *oboeMetadata) isSampled() bool {

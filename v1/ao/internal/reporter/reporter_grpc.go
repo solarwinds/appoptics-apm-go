@@ -241,7 +241,7 @@ func grpcCreateClientConnection(cert []byte, addr string, insecureSkipVerify boo
 	certPool := x509.NewCertPool()
 
 	if ok := certPool.AppendCertsFromPEM(cert); !ok {
-		return nil, errors.New("Unable to append the certificate to pool.")
+		return nil, errors.New("unable to append the certificate to pool")
 	}
 
 	// trim port from server name used for TLS verification
@@ -409,7 +409,7 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 		return nil
 	default:
 		go atomic.AddInt64(&r.eventConnection.queueStats.numOverflowed, int64(1)) // use goroutine so this won't block on the critical path
-		return errors.New("Event message queue is full")
+		return errors.New("event message queue is full")
 	}
 }
 
@@ -851,7 +851,7 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 	case r.statusMessages <- (*e).bbuf.GetBuf():
 		return nil
 	default:
-		return errors.New("Status message queue is full")
+		return errors.New("status message queue is full")
 	}
 }
 
@@ -973,7 +973,7 @@ func (r *grpcReporter) reportSpan(span SpanMessage) error {
 	case r.spanMessages <- span:
 		return nil
 	default:
-		return errors.New("Span message queue is full")
+		return errors.New("span message queue is full")
 	}
 }
 

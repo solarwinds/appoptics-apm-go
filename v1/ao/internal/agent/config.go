@@ -1,6 +1,5 @@
-// This package is used to initialize and fetch the static conf options
-// which will not be changed once initialized.
-// So mutexes/locks are not required to access the values
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
+
 package agent
 
 type ConfName string
@@ -9,7 +8,7 @@ type ConfName string
 const (
 	AppOpticsCollector          = ConfName("APPOPTICS_COLLECTOR")
 	AppOpticsServiceKey         = ConfName("APPOPTICS_SERVICE_KEY")
-	AppOpticsDebugLevel         = ConfName("APPOPTICS_DEBUG_LEVEL")
+	AppOpticsLogLevel           = ConfName("APPOPTICS_DEBUG_LEVEL")
 	AppOpticsTrustedPath        = ConfName("APPOPTICS_TRUSTEDPATH")
 	AppOpticsCollectorUDP       = ConfName("APPOPTICS_COLLECTOR_UDP")
 	AppOpticsReporter           = ConfName("APPOPTICS_REPORTER")

@@ -1,3 +1,5 @@
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
+
 package agent
 
 import (
@@ -31,7 +33,7 @@ var envVar initFunc = func(n ConfName) string {
 const (
 	defaultSSLCollector       = "collector.appoptics.com:443"
 	defaultServiceKey         = ""
-	defaultDebugLevel         = "WARN"
+	defaultLogLevel           = "WARN"
 	defaultTrustedPath        = ""
 	defaultCollectorUDP       = "127.0.0.1:7831"
 	defaultReporter           = "ssl"
@@ -45,7 +47,7 @@ const (
 var cb = []configBuilder{
 	{AppOpticsCollector, defaultSSLCollector, []initFunc{envVar}},
 	{AppOpticsServiceKey, defaultServiceKey, []initFunc{envVar}},
-	{AppOpticsDebugLevel, defaultDebugLevel, []initFunc{envVar}},
+	{AppOpticsLogLevel, defaultLogLevel, []initFunc{envVar}},
 	{AppOpticsTrustedPath, defaultTrustedPath, []initFunc{envVar}},
 	{AppOpticsCollectorUDP, defaultCollectorUDP, []initFunc{envVar}},
 	{AppOpticsReporter, defaultReporter, []initFunc{envVar}},
