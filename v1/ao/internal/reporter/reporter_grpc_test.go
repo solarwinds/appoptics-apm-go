@@ -117,15 +117,3 @@ func TestVerifyServiceKey(t *testing.T) {
 		assert.Equal(t, err, verifyServiceKey(key))
 	}
 }
-
-func TestMaskServiceKey(t *testing.T) {
-	keyPairs := map[string]string{
-		"1234567890abcdef:Go": "1234********cdef:Go",
-		"abc:Go":              "abc:Go",
-		"abcd1234:Go":         "abcd1234:Go",
-	}
-
-	for key, masked := range keyPairs {
-		assert.Equal(t, masked, maskServiceKey(key))
-	}
-}

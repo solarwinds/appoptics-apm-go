@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"strings"
+	"unicode/utf8"
 )
 
 type configBuilder struct {
@@ -71,7 +72,12 @@ func initConf(cf *conf) {
 		for i := l; i >= 0; i-- {
 			v = item.builders[i](k)
 			if v != "" {
-				Log(WARNING, fmt.Sprintf("non-default configuration used %v=%v", k, v))
+				val := v
+				if k == "APPOPTICS_SERVICE_KEY" {
+					val = maskServiceKey(val)
+				}
+				Log(WARNING, fmt.Sprintf("non-default configuration used %v=%v", k, val))
+
 				break
 			}
 		}
@@ -81,4 +87,23 @@ func initConf(cf *conf) {
 		cf.items[k] = v
 	}
 	cf.initialized = true
+}
+
+// verifyAndMaskServiceKey verifies if the service key is valid. If so, it then masks the
+// middle part of the token and returns the masked service key
+func maskServiceKey(validKey string) string {
+	var sep = ":"
+	var hLen, tLen = 4, 4
+	var mask = "*"
+
+	s := strings.Split(validKey, sep)
+	tk := s[0]
+
+	if len(tk) <= hLen+tLen {
+		return validKey
+	}
+
+	tk = tk[0:4] + strings.Repeat(mask, utf8.RuneCountInString(tk)-hLen-tLen) + tk[len(tk)-4:]
+
+	return tk + sep + s[1]
 }

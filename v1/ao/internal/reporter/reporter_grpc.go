@@ -14,8 +14,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"unicode/utf8"
-
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"golang.org/x/net/context"
@@ -134,25 +132,6 @@ func verifyServiceKey(key string) error {
 	return nil
 }
 
-// verifyAndMaskServiceKey verifies if the service key is valid. If so, it then masks the
-// middle part of the token and returns the masked service key
-func maskServiceKey(validKey string) string {
-	var sep = ":"
-	var hLen, tLen = 4, 4
-	var mask = "*"
-
-	s := strings.Split(validKey, sep)
-	tk := s[0]
-
-	if len(tk) <= hLen+tLen {
-		return validKey
-	}
-
-	tk = tk[0:4] + strings.Repeat(mask, utf8.RuneCountInString(tk)-hLen-tLen) + tk[len(tk)-4:]
-
-	return tk + sep + s[1]
-}
-
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
@@ -166,7 +145,6 @@ func newGRPCReporter() reporter {
 	if err := verifyServiceKey(serviceKey); err != nil {
 		return &nullReporter{}
 	}
-	agent.Log(agent.INFO, fmt.Sprintf("Non-default APPOPTICS_SERVICE_KEY[masked]: %s", maskServiceKey(serviceKey)))
 
 	// see if a hostname alias is configured
 	configuredHostname = agent.GetConfig(agent.AppOpticsHostnameAlias)
