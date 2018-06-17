@@ -6,9 +6,8 @@ import (
 	"bytes"
 	"log"
 	"os"
-	"testing"
-
 	"strings"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 )

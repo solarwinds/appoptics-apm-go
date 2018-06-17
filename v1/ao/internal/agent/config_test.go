@@ -3,9 +3,8 @@
 package agent
 
 import (
-	"testing"
-
 	"os"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 )

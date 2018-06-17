@@ -1,3 +1,5 @@
+// Copyright (C) 2017 Librato, Inc. All rights reserved.
+
 package agent
 
 import (
@@ -113,14 +115,17 @@ func logIt(level LogLevel, msg string, args []interface{}) {
 	}
 
 	var buffer bytes.Buffer
+
+	var pre string
 	pc, f, l, ok := runtime.Caller(2)
 	if ok {
 		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
 		name := path[len(path)-1]
-		buffer.WriteString(fmt.Sprintf("%s %s#%d %s(): ", levelStr[level], filepath.Base(f), l, name))
+		pre = fmt.Sprintf("%s %s#%d %s(): ", levelStr[level], filepath.Base(f), l, name)
 	} else {
-		buffer.WriteString(fmt.Sprintf("%s %s#%s %s(): ", levelStr[level], "na", "na", "na"))
+		pre = fmt.Sprintf("%s %s#%s %s(): ", levelStr[level], "na", "na", "na")
 	}
+	buffer.WriteString(pre)
 
 	s := msg
 	if msg == "" && len(args) > 0 {
@@ -129,6 +134,7 @@ func logIt(level LogLevel, msg string, args []interface{}) {
 		s = fmt.Sprintf(msg, args...)
 	}
 	buffer.WriteString(s)
+
 	log.Print(buffer.String())
 }
 

@@ -3,69 +3,42 @@
 package agent
 
 import (
-	"os"
-	"testing"
-
-	"log"
-
 	"bytes"
-
-	"strings"
-
+	"log"
 	"math/rand"
+	"os"
+	"strings"
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestDebugLevel(t *testing.T) {
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "DEBUG")
-	Init()
-	assert.EqualValues(t, Level(), LogLevel(0))
+	tests := []struct {
+		key      string
+		val      string
+		expected LogLevel
+	}{
+		{"APPOPTICS_DEBUG_LEVEL", "DEBUG", DEBUG},
+		{"APPOPTICS_DEBUG_LEVEL", "Info", INFO},
+		{"APPOPTICS_DEBUG_LEVEL", "warn", WARNING},
+		{"APPOPTICS_DEBUG_LEVEL", "erroR", ERROR},
+		{"APPOPTICS_DEBUG_LEVEL", "erroR  ", ERROR},
+		{"APPOPTICS_DEBUG_LEVEL", "HelloWorld", _defaultLogLevel},
+		{"APPOPTICS_DEBUG_LEVEL", "0", DEBUG},
+		{"APPOPTICS_DEBUG_LEVEL", "1", INFO},
+		{"APPOPTICS_DEBUG_LEVEL", "2", WARNING},
+		{"APPOPTICS_DEBUG_LEVEL", "3", ERROR},
+		{"APPOPTICS_DEBUG_LEVEL", "4", _defaultLogLevel},
+		{"APPOPTICS_DEBUG_LEVEL", "1000", _defaultLogLevel},
+	}
 
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "Info")
-	Init()
-	assert.EqualValues(t, Level(), LogLevel(1))
-
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "warn")
-	Init()
-	assert.EqualValues(t, Level(), LogLevel(2))
-
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "erroR")
-	Init()
-	assert.EqualValues(t, Level(), LogLevel(3))
-
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", " erroR  ")
-	Init()
-	assert.EqualValues(t, Level(), LogLevel(3))
-
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "HelloWorld")
-	Init()
-	assert.EqualValues(t, Level(), _defaultLogLevel)
-
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "0")
-	Init()
-	assert.EqualValues(t, Level(), LogLevel(0))
-
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "1")
-	Init()
-	assert.EqualValues(t, Level(), LogLevel(1))
-
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "2")
-	Init()
-	assert.EqualValues(t, Level(), LogLevel(2))
-
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "3")
-	Init()
-	assert.EqualValues(t, Level(), LogLevel(3))
-
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "4")
-	Init()
-	assert.EqualValues(t, Level(), _defaultLogLevel)
-
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "1000")
-	Init()
-	assert.EqualValues(t, Level(), _defaultLogLevel)
+	for _, test := range tests {
+		os.Setenv(test.key, test.val)
+		Init()
+		assert.EqualValues(t, test.expected, Level())
+	}
 
 	os.Unsetenv("APPOPTICS_DEBUG_LEVEL")
 	Init()
@@ -74,29 +47,24 @@ func TestDebugLevel(t *testing.T) {
 
 func TestLog(t *testing.T) {
 	var buffer bytes.Buffer
+	log.SetOutput(&buffer)
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "info")
 	Init()
-	log.SetOutput(&buffer)
-	str := "hello world"
-	Log(INFO, str)
-	assert.True(t, strings.HasSuffix(buffer.String(), str+"\n"))
 
-	buffer.Reset()
-	str = ""
-	Log(INFO, "")
-	assert.True(t, strings.HasSuffix(buffer.String(), str+"\n"))
+	tests := map[string]string{
+		"hello world": "hello world\n",
+		"":            "\n",
+		"hello %s":    "hello %s\n",
+	}
 
-	buffer.Reset()
-	str = ""
-	Log(INFO, "", nil)
-	assert.True(t, strings.HasSuffix(buffer.String(), str+"\n"))
+	for str, expected := range tests {
+		buffer.Reset()
+		Log(INFO, str)
+		assert.True(t, strings.HasSuffix(buffer.String(), expected))
+	}
 
-	buffer.Reset()
-	str = "hello %s"
-	Log(INFO, "hello %s", nil)
-	assert.True(t, strings.HasSuffix(buffer.String(), "hello %!s(<nil>)"+"\n"))
-
+	log.SetOutput(os.Stderr)
 }
 
 func TestStrToLevel(t *testing.T) {

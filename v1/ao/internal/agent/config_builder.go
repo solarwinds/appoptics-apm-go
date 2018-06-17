@@ -4,7 +4,6 @@ package agent
 
 import (
 	"os"
-
 	"strings"
 	"unicode/utf8"
 )
@@ -13,7 +12,7 @@ type configBuilder struct {
 	name         ConfName
 	defaultValue string
 	builders     []initFunc
-	// TODO: validator func
+	// TODO: validation func
 }
 
 type conf struct {
