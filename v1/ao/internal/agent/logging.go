@@ -117,14 +117,19 @@ func logIt(level LogLevel, msg string, args []interface{}) {
 	var buffer bytes.Buffer
 
 	var pre string
-	pc, f, l, ok := runtime.Caller(2)
-	if ok {
-		path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
-		name := path[len(path)-1]
-		pre = fmt.Sprintf("%s %s#%d %s(): ", levelStr[level], filepath.Base(f), l, name)
-	} else {
-		pre = fmt.Sprintf("%s %s#%s %s(): ", levelStr[level], "na", "na", "na")
+	if level == DEBUG {
+		pc, f, l, ok := runtime.Caller(2)
+		if ok {
+			path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
+			name := path[len(path)-1]
+			pre = fmt.Sprintf("%s %s#%d %s(): ", levelStr[level], filepath.Base(f), l, name)
+		} else {
+			pre = fmt.Sprintf("%s %s#%s %s(): ", levelStr[level], "na", "na", "na")
+		}
+	} else { // avoid expensive reflections in production
+		pre = fmt.Sprintf("%s ", levelStr[level])
 	}
+
 	buffer.WriteString(pre)
 
 	s := msg
