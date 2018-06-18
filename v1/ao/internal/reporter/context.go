@@ -300,7 +300,7 @@ func newContext(sampled bool) Context {
 	ctx := &oboeContext{txCtx: &transactionContext{}}
 	ctx.metadata.Init()
 	if err := ctx.metadata.SetRandom(); err != nil {
-		agent.Info("AppOptics rand.Read error: %v", err)
+		agent.Infof("AppOptics rand.Read error: %v", err)
 		return &nullContext{}
 	}
 	ctx.SetSampled(sampled)

@@ -107,10 +107,10 @@ func TestVerifyServiceKey(t *testing.T) {
 		"":                  errors.New("invalid service key: empty string"),
 		"abc:Go":            nil,
 		"abcd1234:Go":       nil,
-		"1234567890abcdef":  errors.New("invalid service key: no colon found or tk/service name is missing"),
-		"1234567890abcdef:": errors.New("invalid service key: no colon found or tk/service name is missing"),
-		":Go":               errors.New("invalid service key: no colon found or tk/service name is missing"),
-		"abc:123:Go":        errors.New("invalid service key: no colon found or tk/service name is missing"),
+		"1234567890abcdef":  errors.New("invalid service key: no colon found or the token/service name is missing"),
+		"1234567890abcdef:": errors.New("invalid service key: no colon found or the token/service name is missing"),
+		":Go":               errors.New("invalid service key: no colon found or the token/service name is missing"),
+		"abc:123:Go":        errors.New("invalid service key: no colon found or the token/service name is missing"),
 	}
 
 	for key, err := range keyPairs {

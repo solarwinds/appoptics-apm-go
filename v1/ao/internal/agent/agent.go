@@ -15,6 +15,6 @@ func init() {
 // Init initializes the agent.
 // Make it visible to outside world only for the sake of testing. Don't call it manually anywhere else
 func Init() {
-	initConf(&agentConf)
+	initConf(agentConf)
 	initLogging()
 }

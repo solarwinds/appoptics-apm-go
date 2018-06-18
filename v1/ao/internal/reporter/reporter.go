@@ -52,8 +52,7 @@ func (r *nullReporter) reportSpan(span SpanMessage) error             { return n
 // can be overridden via APPOPTICS_REPORTER
 func init() {
 	cacheHostname(osHostnamer{})
-	r := agent.GetConfig(agent.AppOpticsReporter)
-	setGlobalReporter(r)
+	setGlobalReporter(agent.GetConfig(agent.AppOpticsReporter))
 	sendInitMessage()
 }
 
@@ -81,7 +80,7 @@ func ReportSpan(span SpanMessage) error {
 func cacheHostname(hn hostnamer) {
 	h, err := hn.Hostname()
 	if err != nil {
-		agent.Error("Unable to get hostname, AppOptics tracing disabled: %v", err)
+		agent.Errorf("Unable to get hostname, AppOptics tracing disabled: %v", err)
 		reportingDisabled = true
 	}
 	cachedHostname = h

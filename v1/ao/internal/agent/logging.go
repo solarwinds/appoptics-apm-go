@@ -79,7 +79,7 @@ func verifyLogLevel(level string) (lvl LogLevel) {
 	} else if l, err := StrToLevel(strings.ToUpper(strings.TrimSpace(level))); err == nil {
 		lvl = l
 	} else {
-		Warning("invalid debug level: %s", level)
+		Warningf("invalid debug level: %s", level)
 		lvl = _defaultLogLevel
 	}
 	return
@@ -134,9 +134,9 @@ func logIt(level LogLevel, msg string, args []interface{}) {
 	buffer.WriteString(pre)
 
 	s := msg
-	if msg == "" && len(args) > 0 {
+	if msg == "" {
 		s = fmt.Sprint(args...)
-	} else if msg != "" && len(args) > 0 {
+	} else {
 		s = fmt.Sprintf(msg, args...)
 	}
 	buffer.WriteString(s)
@@ -144,27 +144,57 @@ func logIt(level LogLevel, msg string, args []interface{}) {
 	log.Print(buffer.String())
 }
 
-// Log prints the log message with specified level
-func Log(level LogLevel, msg string, args ...interface{}) {
+// Logf formats the log message with specified args
+// and print it in the specified level
+func Logf(level LogLevel, msg string, args ...interface{}) {
 	logIt(level, msg, args)
 }
 
-// Debug prints the log message in DEBUG level
-func Debug(msg string, args ...interface{}) {
+// Log prints the log message in the specified level
+func Log(level LogLevel, args ...interface{}) {
+	logIt(level, "", args)
+}
+
+// Debugf formats the log message with specified args
+// and print it in the specified level
+func Debugf(msg string, args ...interface{}) {
 	logIt(DEBUG, msg, args)
 }
 
-// Info prints the log message in INFO level
-func Info(msg string, args ...interface{}) {
+// Debug prints the log message in the specified level
+func Debug(args ...interface{}) {
+	logIt(DEBUG, "", args)
+}
+
+// Infof formats the log message with specified args
+// and print it in the specified level
+func Infof(msg string, args ...interface{}) {
 	logIt(INFO, msg, args)
 }
 
-// Warning prints the log message in WARNING level
-func Warning(msg string, args ...interface{}) {
+// Info prints the log message in the specified level
+func Info(args ...interface{}) {
+	logIt(INFO, "", args)
+}
+
+// Warningf formats the log message with specified args
+// and print it in the specified level
+func Warningf(msg string, args ...interface{}) {
 	logIt(WARNING, msg, args)
 }
 
-// Error prints the log message in ERROR level
-func Error(msg string, args ...interface{}) {
+// Warning prints the log message in the specified level
+func Warning(args ...interface{}) {
+	logIt(WARNING, "", args)
+}
+
+// Errorf formats the log message with specified args
+// and print it in the specified level
+func Errorf(msg string, args ...interface{}) {
 	logIt(ERROR, msg, args)
+}
+
+// Error prints the log message in the specified level
+func Error(args ...interface{}) {
+	logIt(ERROR, "", args)
 }

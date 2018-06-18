@@ -262,7 +262,7 @@ func (e *event) AddKV(key, value interface{}) error {
 			e.AddBool(k, *v)
 		}
 	default:
-		agent.Debug("Ignoring unrecognized Event key %v val %v valType %T", k, v, v)
+		agent.Debugf("Ignoring unrecognized Event key %v val %v valType %T", k, v, v)
 	}
 	return nil
 }

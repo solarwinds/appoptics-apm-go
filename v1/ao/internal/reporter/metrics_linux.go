@@ -73,7 +73,7 @@ func isPhysicalInterface(ifname string) bool {
 	fn := "/sys/class/net/" + ifname
 	link, err := os.Readlink(fn)
 	if err != nil {
-		agent.Error("cannot readlink %s", fn)
+		agent.Errorf("cannot readlink %s", fn)
 		return false
 	}
 	if strings.Contains(link, "/virtual/") {

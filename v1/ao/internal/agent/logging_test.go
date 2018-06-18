@@ -13,6 +13,7 @@ import (
 
 	"sync"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -51,22 +52,44 @@ func TestLog(t *testing.T) {
 	var buffer bytes.Buffer
 	log.SetOutput(&buffer)
 
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "info")
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	Init()
 
 	tests := map[string]string{
 		"hello world": "hello world\n",
 		"":            "\n",
-		"hello %s":    "hello %s\n",
+		"hello %s":    "hello %!s(MISSING)\n",
 	}
 
 	for str, expected := range tests {
 		buffer.Reset()
-		Log(INFO, str)
+		Logf(INFO, str)
 		assert.True(t, strings.HasSuffix(buffer.String(), expected))
 	}
 
+	buffer.Reset()
+	Log(INFO, 1, 2, 3)
+	assert.True(t, strings.HasSuffix(buffer.String(), "1 2 3\n"))
+
+	buffer.Reset()
+	Debug(1, "abc", 3)
+	assert.True(t, strings.HasSuffix(buffer.String(), "1abc3\n"))
+
+	buffer.Reset()
+	Error(errors.New("hello"))
+	assert.True(t, strings.HasSuffix(buffer.String(), "hello\n"))
+
+	buffer.Reset()
+	Warning("Áú")
+	assert.True(t, strings.HasSuffix(buffer.String(), "Áú\n"))
+
+	buffer.Reset()
+	Info("hello")
+	assert.True(t, strings.HasSuffix(buffer.String(), "\n"))
+
 	log.SetOutput(os.Stderr)
+	os.Unsetenv("APPOPTICS_DEBUG_LEVEL")
+
 }
 
 func TestStrToLevel(t *testing.T) {

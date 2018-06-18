@@ -126,7 +126,7 @@ func verifyServiceKey(key string) error {
 	}
 	s := strings.Split(key, sep)
 	if len(s) != 2 || s[0] == "" || s[1] == "" {
-		return errors.New("invalid service key: no colon found or tk/service name is missing")
+		return errors.New("invalid service key: no colon found or the token/service name is missing")
 	}
 	return nil
 }
@@ -142,6 +142,7 @@ func newGRPCReporter() reporter {
 	// service key is required, so bail out if not found
 	serviceKey := agent.GetConfig(agent.AppOpticsServiceKey)
 	if err := verifyServiceKey(serviceKey); err != nil {
+		agent.Warning(err)
 		return &nullReporter{}
 	}
 
@@ -157,7 +158,7 @@ func newGRPCReporter() reporter {
 		var err error
 		cert, err = ioutil.ReadFile(certPath)
 		if err != nil {
-			agent.Error("Error reading cert file %s: %v", certPath, err)
+			agent.Errorf("Error reading cert file %s: %v", certPath, err)
 			return &nullReporter{}
 		}
 	} else {
@@ -174,7 +175,7 @@ func newGRPCReporter() reporter {
 	eventConn, err1 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
 	metricConn, err2 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
 	if err1 != nil || err2 != nil {
-		agent.Error("Failed to initialize gRPC reporter %v: %v; %v", collectorAddress, err1, err2)
+		agent.Errorf("Failed to initialize gRPC reporter %v: %v; %v", collectorAddress, err1, err2)
 		return &nullReporter{}
 	}
 
@@ -303,7 +304,7 @@ func (r *grpcReporter) redirect(c *grpcConnection, authority reconnectAuthority,
 	// create a new connection object for this client
 	conn, err := grpcCreateClientConnection(c.certificate, address, r.insecureSkipVerify)
 	if err != nil {
-		agent.Error("Failed redirect to: %v %v", address, err)
+		agent.Errorf("Failed redirect to: %v %v", address, err)
 	}
 
 	// set new connection (need to be protected)
@@ -515,10 +516,10 @@ func (r *grpcReporter) eventRetrySender(
 				// gRPC handles the reconnection automatically.
 				failsNum++
 				if failsNum > grpcRetryLogThreshold && !failsPrinted {
-					agent.Warning("Error calling PostEvents(): %v", err)
+					agent.Warningf("Error calling PostEvents(): %v", err)
 					failsPrinted = true
 				} else {
-					agent.Debug("(%v) Error calling PostEvents(): %v", failsNum, err)
+					agent.Debugf("(%v) Error calling PostEvents(): %v", failsNum, err)
 				}
 			} else {
 				if failsPrinted {
@@ -530,7 +531,7 @@ func (r *grpcReporter) eventRetrySender(
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
-					agent.Debug("Sent %d events", len(messages))
+					agent.Debugf("Sent %d events", len(messages))
 					resultOk = true
 					connection.reconnectAuthority = UNSET
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
@@ -545,7 +546,7 @@ func (r *grpcReporter) eventRetrySender(
 					agent.Error("Server responded: Invalid API key")
 				case collector.ResultCode_REDIRECT:
 					if redirects > grpcRedirectMax {
-						agent.Error("Max redirects of %v exceeded", grpcRedirectMax)
+						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
 						r.redirect(connection, authority, response.GetArg())
 						// a proper redirect shouldn't cause delays
@@ -663,10 +664,10 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			// gRPC handles the reconnection automatically.
 			failsNum++
 			if failsNum > grpcRetryLogThreshold && !failsPrinted {
-				agent.Warning("Error calling PostMetrics(): %v", err)
+				agent.Warningf("Error calling PostMetrics(): %v", err)
 				failsPrinted = true
 			} else {
-				agent.Debug("(%v) Error calling PostMetrics(): %v", failsNum, err)
+				agent.Debugf("(%v) Error calling PostMetrics(): %v", failsNum, err)
 			}
 		} else {
 			if failsPrinted {
@@ -689,7 +690,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 				agent.Error("Server responded: Invalid API key")
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
-					agent.Error("Max redirects of %v exceeded", grpcRedirectMax)
+					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
 					r.redirect(r.metricConnection, POSTMETRICS, response.GetArg())
 					// a proper redirect shouldn't cause delays
@@ -750,10 +751,10 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 			// gRPC handles the reconnection automatically.
 			failsNum++
 			if failsNum > grpcRetryLogThreshold && !failsPrinted {
-				agent.Warning("Error calling GetSettings(): %v", err)
+				agent.Warningf("Error calling GetSettings(): %v", err)
 				failsPrinted = true
 			} else {
-				agent.Debug("(%v) Error calling GetSettings(): %v", failsNum, err)
+				agent.Debugf("(%v) Error calling GetSettings(): %v", failsNum, err)
 			}
 		} else {
 			if failsPrinted {
@@ -765,7 +766,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
-				agent.Debug("Got new settings from server %v", r.metricConnection.address)
+				agent.Debugf("Got new settings from server %v", r.metricConnection.address)
 				r.updateSettings(response)
 				resultOK = true
 				r.metricConnection.reconnectAuthority = UNSET
@@ -777,7 +778,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 				agent.Error("Server responded: Invalid API key")
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
-					agent.Error("Max redirects of %v exceeded", grpcRedirectMax)
+					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
 					r.redirect(r.metricConnection, GETSETTINGS, response.GetArg())
 					// a proper redirect shouldn't cause delays
@@ -914,10 +915,10 @@ func (r *grpcReporter) statusSender() {
 				// gRPC handles the reconnection automatically.
 				failsNum++
 				if failsNum > grpcRetryLogThreshold && !failsPrinted {
-					agent.Warning("Error calling PostStatus(): %v", err)
+					agent.Warningf("Error calling PostStatus(): %v", err)
 					failsPrinted = true
 				} else {
-					agent.Debug("(%v) Error calling PostStatus(): %v", failsNum, err)
+					agent.Debugf("(%v) Error calling PostStatus(): %v", failsNum, err)
 				}
 			} else {
 				if failsPrinted {
@@ -940,7 +941,7 @@ func (r *grpcReporter) statusSender() {
 					agent.Error("Server responded: Invalid API key")
 				case collector.ResultCode_REDIRECT:
 					if redirects > grpcRedirectMax {
-						agent.Error("Max redirects of %v exceeded", grpcRedirectMax)
+						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
 						r.redirect(r.metricConnection, POSTSTATUS, response.GetArg())
 						// a proper redirect shouldn't cause delays

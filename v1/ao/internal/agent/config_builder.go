@@ -58,13 +58,13 @@ var cb = []configBuilder{
 }
 
 // The package variable to store all configurations, which is read only after initialized.
-var agentConf = conf{
+var agentConf = &conf{
 	initialized: false,
 	items:       make(map[ConfName]string),
 }
 
 func initConf(cf *conf) {
-	Log(INFO, "initializing the AppOptics agent")
+	Info("initializing the AppOptics agent")
 	for _, item := range cb {
 		k := item.name
 		v := ""
@@ -76,7 +76,7 @@ func initConf(cf *conf) {
 				if k == "APPOPTICS_SERVICE_KEY" {
 					val = maskServiceKey(val)
 				}
-				Warning("non-default configuration used %v=%v", k, val)
+				Warningf("non-default configuration used %v=%v", k, val)
 
 				break
 			}
