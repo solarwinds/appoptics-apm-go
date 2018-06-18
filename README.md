@@ -209,6 +209,46 @@ func main() {
 }
 ```
 
+### Custom transaction names
+
+Our out-of-the-box instrumentation assigns transaction name based on URL and Controller/Action values detected. However, you may want to override the transaction name to better describe your instrumented operation. Take note that transaction name is converted to lowercase, and might be truncated with invalid characters replaced.
+
+If multiple transaction names are set on the same trace, then the last one would be used.
+
+Empty string and null are considered invalid transaction name values and will be ignored.
+
+#### Set a custom transaction name from the HTTP handler
+
+`ao.SetTransactionName(ctx context.Context, name string)` is used to set the custom transaction name in
+the HTTP handler. The current http.Request context is needed to retrieve the AppOptics tracing context, if any.
+
+```go
+func slowHandler(w http.ResponseWriter, r *http.Request) {
+    ao.SetTransactionName(r.Context(), "my-custom-transaction-name")
+    time.Sleep(normalAround(2*time.Second, 100*time.Millisecond))
+    w.WriteHeader(404)
+    fmt.Fprintf(w, "Slow request... Path: %s", r.URL.Path)
+}
+```
+
+#### Set a custom transaction name from SDK
+
+When you use AppOptics SDK to create the Span by yourself, the `SetTransactionName(string)` method can be invoked
+to set the custom transaction name.
+
+```go
+    ...
+    // create new ao.Span and context.Context for this part of the request
+    L, ctxL := ao.BeginSpan(ctx, "myHandler")
+    L.SetTransactionName("my-custom-transaction-name")
+    defer L.End()
+    ...
+```
+
+You can also set the environment variable `APPOPTICS_PREPEND_DOMAIN` to `true` if you need to
+prepend the hostname to the transaction name. This works for both default transaction names and
+the custom transaction names provided by you.
+
 ### Distributed tracing and context propagation
 
 An AppOptics trace is defined by a context (a globally unique ID and metadata) that is persisted
