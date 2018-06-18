@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"sync"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -97,13 +99,19 @@ func TestVerifyLogLevel(t *testing.T) {
 }
 
 func TestSetLevel(t *testing.T) {
+	var wg = &sync.WaitGroup{}
+	wg.Add(100)
 	for i := 0; i < 100; i++ {
-		go func() {
+		go func(wg *sync.WaitGroup) {
 			time.Sleep(time.Millisecond * time.Duration(rand.Intn(5)))
 			SetLevel(LogLevel(rand.Intn(len(levelStr))))
-			Log(ERROR, "hello world")
-		}()
+			Debug("hello world")
+			wg.Done()
+		}(wg)
 	}
+	wg.Wait()
+
 	SetLevel(DEBUG)
-	assert.Equal(t, Level(), DEBUG)
+	Error("", "one", "two", "three")
+	assert.Equal(t, DEBUG, Level())
 }

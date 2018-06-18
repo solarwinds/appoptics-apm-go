@@ -18,6 +18,7 @@ import (
 type LogLevel uint8
 
 // logLevel is the type for protected log level
+// DO NOT COPY ME
 type logLevel struct {
 	LogLevel
 	sync.RWMutex
@@ -41,7 +42,7 @@ var levelStr = []string{
 // The global log level.
 var (
 	_defaultLogLevel, _ = StrToLevel(defaultLogLevel)
-	_globalLevel        = logLevel{LogLevel: _defaultLogLevel}
+	_globalLevel        = &logLevel{LogLevel: _defaultLogLevel}
 )
 
 func (l *logLevel) SetLevel(level LogLevel) {

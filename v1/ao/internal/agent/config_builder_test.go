@@ -18,6 +18,7 @@ func TestInitConf(t *testing.T) {
 	r := os.Getenv("APPOPTICS_REPORTER")
 	os.Unsetenv("APPOPTICS_REPORTER")
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
+	os.Setenv("APPOPTICS_SERVICE_KEY", "1234567890abcdef:go")
 	log.SetOutput(&buffer)
 	Init()
 	assert.True(t, strings.HasSuffix(buffer.String(), "non-default configuration used APPOPTICS_DEBUG_LEVEL=debug\n"))
