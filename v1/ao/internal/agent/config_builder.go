@@ -89,8 +89,9 @@ func initConf(cf *conf) {
 	cf.initialized = true
 }
 
-// verifyAndMaskServiceKey verifies if the service key is valid. If so, it then masks the
-// middle part of the token and returns the masked service key
+// maskServiceKey masks the middle part of the token and returns the masked service key
+// For example, the key "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go"
+// will be masked to "ae38********************************************************9217:go"
 func maskServiceKey(validKey string) string {
 	var sep = ":"
 	var hLen, tLen = 4, 4
