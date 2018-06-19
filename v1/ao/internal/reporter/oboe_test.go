@@ -58,8 +58,10 @@ func TestTokenBucket(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(consumers)
 	var dropped, allowed int64
+
 	for j := 0; j < consumers; j++ {
 		go func(id int) {
+			var slept []int64
 			perConsumerRate := newTokenBucket(15, 1)
 			for i := 0; i < iters; i++ {
 				sampled := perConsumerRate.consume(1)
@@ -71,14 +73,20 @@ func TestTokenBucket(t *testing.T) {
 					//t.Logf("--- DROP id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
 					atomic.AddInt64(&dropped, 1)
 				}
-				time.Sleep(sleepInterval)
+				before := time.Now().UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
+				time.Sleep(sleepInterval) //about 33.3 ms
+				slept = append(slept, time.Now().UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))-before)
 			}
+			t.Logf("[%v] Time slept: %v", id, slept)
+
 			wg.Done()
 		}(j)
 		time.Sleep(sleepInterval / time.Duration(consumers))
 	}
 	wg.Wait()
 	t.Logf("TB iters %d allowed %v dropped %v limited %v", iters, allowed, dropped, c.limited)
+	t.Logf("c.requested=%v, sampled=%v, limited=%v, trace=%v, through=%v",
+		c.requested, c.sampled, c.limited, c.traced, c.through)
 	assert.True(t, (iters == 100 && consumers == 5))
 	assert.True(t, (allowed == 20 && dropped == 480 && c.limited == 230 && c.traced == 20) ||
 		(allowed == 19 && dropped == 481 && c.limited == 231 && c.traced == 19) ||
