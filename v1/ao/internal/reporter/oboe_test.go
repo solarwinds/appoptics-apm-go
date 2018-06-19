@@ -71,7 +71,10 @@ func TestTokenBucket(t *testing.T) {
 					//t.Logf("--- DROP id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
 					atomic.AddInt64(&dropped, 1)
 				}
-				time.Sleep(sleepInterval)
+				t.Logf("[%v-%v] Time before sleep: %v\n", id, i, time.Now().UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)))
+				time.Sleep(sleepInterval) //about 33.3 ms
+				t.Logf("[%v-%v] Time after sleep: %v\n", id, i, time.Now().UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)))
+
 			}
 			wg.Done()
 		}(j)
