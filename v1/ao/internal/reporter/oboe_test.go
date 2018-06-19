@@ -58,8 +58,10 @@ func TestTokenBucket(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(consumers)
 	var dropped, allowed int64
+
 	for j := 0; j < consumers; j++ {
 		go func(id int) {
+			var slept []int64
 			perConsumerRate := newTokenBucket(15, 1)
 			for i := 0; i < iters; i++ {
 				sampled := perConsumerRate.consume(1)
@@ -71,11 +73,12 @@ func TestTokenBucket(t *testing.T) {
 					//t.Logf("--- DROP id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
 					atomic.AddInt64(&dropped, 1)
 				}
-				t.Logf("[%v-%v] Time before sleep: %v\n", id, i, time.Now().UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)))
+				before := time.Now().UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
 				time.Sleep(sleepInterval) //about 33.3 ms
-				t.Logf("[%v-%v] Time after sleep: %v\n", id, i, time.Now().UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond)))
-
+				slept = append(slept, time.Now().UnixNano()/(int64(time.Millisecond)/int64(time.Nanosecond))-before)
 			}
+			t.Logf("[%v] Time slept: %v", id, slept)
+
 			wg.Done()
 		}(j)
 		time.Sleep(sleepInterval / time.Duration(consumers))
