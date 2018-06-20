@@ -121,8 +121,8 @@ type grpcReporter struct {
 
 // A valid service key is something like 'service_token:service_name'.
 // The service_token should be of 64 characters long and the size of
-// service_name is larger than 0 but up to 256 characters.
-var isValidServiceKey = regexp.MustCompile(`^[a-zA-Z0-9]{64}:\S{1,256}$`).MatchString
+// service_name is larger than 0 but up to 255 characters.
+var isValidServiceKey = regexp.MustCompile(`^[a-zA-Z0-9]{64}:\S{1,255}$`).MatchString
 
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
@@ -135,7 +135,8 @@ func newGRPCReporter() reporter {
 	// service key is required, so bail out if not found
 	serviceKey := agent.GetConfig(agent.AppOpticsServiceKey)
 	if !isValidServiceKey(serviceKey) {
-		agent.Warningf("Invalid service key: %s", serviceKey)
+		agent.Warningf("Invalid service key (token:serviceName): <%s>. Reporter disabled.", serviceKey)
+		agent.Warning("Check AppOptics dashboard for your token and use a service name shorter than 256 characters.")
 		return &nullReporter{}
 	}
 
