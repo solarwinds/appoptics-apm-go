@@ -6,9 +6,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"log"
 	"strings"
 	"sync"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 )
 
 const (
@@ -236,14 +237,14 @@ func (md *oboeMetadata) ToString() (string, error) {
 	}
 	// encode as hex
 	enc := make([]byte, 2*result)
-	len := hex.Encode(enc, buf[:result])
-	return strings.ToUpper(string(enc[:len])), nil
+	l := hex.Encode(enc, buf[:result])
+	return strings.ToUpper(string(enc[:l])), nil
 }
 
 func (md *oboeMetadata) opString() string {
 	enc := make([]byte, 2*md.opLen)
-	len := hex.Encode(enc, md.ids.opID[:md.opLen])
-	return strings.ToUpper(string(enc[:len]))
+	l := hex.Encode(enc, md.ids.opID[:md.opLen])
+	return strings.ToUpper(string(enc[:l]))
 }
 
 func (md *oboeMetadata) isSampled() bool {
@@ -299,9 +300,7 @@ func newContext(sampled bool) Context {
 	ctx := &oboeContext{txCtx: &transactionContext{}}
 	ctx.metadata.Init()
 	if err := ctx.metadata.SetRandom(); err != nil {
-		if debugLog {
-			log.Printf("AppOptics rand.Read error: %v", err)
-		}
+		agent.Infof("AppOptics rand.Read error: %v", err)
 		return &nullContext{}
 	}
 	ctx.SetSampled(sampled)
@@ -324,14 +323,14 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 	if mdStr != "" {
 		var err error
 		if ctx, err = newContextFromMetadataString(mdStr); err != nil {
-			OboeLog(INFO, "passed in x-trace seems invalid, ignoring")
+			agent.Info("passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
-			OboeLog(INFO, "passed in x-trace has wrong version, ignoring")
+			agent.Info("passed in x-trace has wrong version, ignoring")
 		} else if ctx.IsSampled() {
 			traced = true
 			addCtxEdge = true
 		} else {
-			OboeLog(INFO, "passed in x-trace indicates that request is not being sampled")
+			agent.Info("passed in x-trace indicates that request is not being sampled")
 			return ctx, true
 		}
 	}
@@ -450,7 +449,6 @@ func (ctx *oboeContext) report(e *event, addCtxEdge bool, args ...interface{}) e
 	if addCtxEdge {
 		e.AddEdge(ctx)
 	}
-
 	// report event
 	return e.Report(ctx)
 }

@@ -65,8 +65,8 @@ func TestMetadata(t *testing.T) {
 	bufS := make([]byte, 128)          // buffer to pack
 	pkcnt, pkerr = mdS.Pack(bufS)
 	assert.NoError(t, pkerr)
-	assert.Equal(t, (2 + shortTaskLen + 8), pkcnt) // pack buf
-	mdSStr, err := mdS.ToString()                  // encode as string
+	assert.Equal(t, 2+shortTaskLen+8, pkcnt) // pack buf
+	mdSStr, err := mdS.ToString()            // encode as string
 	assert.NoError(t, err)
 	t.Logf("mdS: %s", mdSStr)                   // log 50 char hex string
 	assert.Len(t, mdSStr, (2+shortTaskLen+8)*2) // check len=(1 + 12 + 8)*2

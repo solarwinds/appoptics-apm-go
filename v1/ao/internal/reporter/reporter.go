@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 )
 
 // defines what methods a reporter should offer (internal to reporter package)
@@ -50,7 +52,7 @@ func (r *nullReporter) reportSpan(span SpanMessage) error             { return n
 // can be overridden via APPOPTICS_REPORTER
 func init() {
 	cacheHostname(osHostnamer{})
-	setGlobalReporter(os.Getenv("APPOPTICS_REPORTER"))
+	setGlobalReporter(agent.GetConfig(agent.AppOpticsReporter))
 	sendInitMessage()
 }
 
@@ -78,9 +80,7 @@ func ReportSpan(span SpanMessage) error {
 func cacheHostname(hn hostnamer) {
 	h, err := hn.Hostname()
 	if err != nil {
-		if debugLog {
-			OboeLog(ERROR, "Unable to get hostname, AppOptics tracing disabled: %v", err)
-		}
+		agent.Errorf("Unable to get hostname, AppOptics tracing disabled: %v", err)
 		reportingDisabled = true
 	}
 	cachedHostname = h
@@ -93,17 +93,17 @@ func cacheHostname(hn hostnamer) {
 // returns	error if invalid context or event
 func prepareEvent(ctx *oboeContext, e *event) error {
 	if ctx == nil || e == nil {
-		return errors.New("Invalid context, event")
+		return errors.New("invalid context, event")
 	}
 
 	// The context metadata must have the same task_id as the event.
 	if !bytes.Equal(ctx.metadata.ids.taskID, e.metadata.ids.taskID) {
-		return errors.New("Invalid event, different task_id from context")
+		return errors.New("invalid event, different task_id from context")
 	}
 
 	// The context metadata must have a different op_id than the event.
 	if bytes.Equal(ctx.metadata.ids.opID, e.metadata.ids.opID) {
-		return errors.New("Invalid event, same as context")
+		return errors.New("invalid event, same as context")
 	}
 
 	us := time.Now().UnixNano() / 1000

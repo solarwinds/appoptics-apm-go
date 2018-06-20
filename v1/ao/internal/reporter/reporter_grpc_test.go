@@ -98,3 +98,25 @@ func (s *TestGRPCServer) Ping(context.Context, *pb.PingRequest) (*pb.MessageResu
 
 func TestGrpcNewReporter(t *testing.T) {
 }
+
+func TestIsValidServiceKey(t *testing.T) {
+
+	keyPairs := map[string]bool{
+		"ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go": true,
+		"":       false,
+		"abc:Go": false,
+		"ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:" +
+			"Go0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": false,
+		"1234567890abcdef":  false,
+		"1234567890abcdef:": false,
+		":Go":               false,
+		"abc:123:Go":        false,
+	}
+
+	for key, valid := range keyPairs {
+		assert.Equal(t, valid, isValidServiceKey(key))
+	}
+}

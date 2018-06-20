@@ -6,16 +6,15 @@ package reporter
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
 	"math/rand"
-	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 )
 
 // Current settings configuration
@@ -62,7 +61,7 @@ func init() {
 
 func readEnvSettings() {
 	// Configure tracing mode setting using environment variable
-	mode := strings.ToLower(os.Getenv("APPOPTICS_TRACING_MODE"))
+	mode := agent.GetConfig(agent.AppOpticsTracingMode)
 	switch mode {
 	case "always":
 		fallthrough
@@ -72,24 +71,9 @@ func readEnvSettings() {
 		globalSettingsCfg.tracingMode = TRACE_NEVER
 	}
 
-	if level := os.Getenv("APPOPTICS_DEBUG_LEVEL"); level != "" {
-		// We do not want to break backward-compatibility so keep accepting integer values.
-		if i, err := strconv.Atoi(level); err == nil {
-			// Protect the debug level from some invalid value, e.g., 1000
-			if i >= len(dbgLevels) {
-				i = len(dbgLevels) - 1
-			}
-			debugLevel = DebugLevel(i)
-		} else if offset := ElemOffset(dbgLevels, strings.ToUpper(strings.TrimSpace(level))); offset != -1 {
-			debugLevel = DebugLevel(offset)
-		} else {
-			OboeLog(WARNING, fmt.Sprintf("invalid debug level: %s", level))
-		}
-	}
-
 	// Prepend the domain name onto transaction names
-	prepend := os.Getenv("APPOPTICS_PREPEND_DOMAIN")
-	if strings.ToLower(prepend) == "true" {
+	prepend := agent.GetConfig(agent.AppOpticsPrependDomain)
+	if prepend == "true" {
 		prependDomainForTransactionName = true
 	} else {
 		prependDomainForTransactionName = false
@@ -102,7 +86,7 @@ func sendInitMessage() {
 		// create new event from context
 		e, err := c.newEvent("single", "go")
 		if err != nil {
-			OboeLog(ERROR, "Error while creating the init message")
+			agent.Error("Error while creating the init message")
 		}
 
 		e.AddKV("__Init", 1)
@@ -183,7 +167,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		OboeLog(DEBUG, fmt.Sprintf("Sampling disabled for %v until valid settings are retrieved.", layer))
+		agent.Debugf("Sampling disabled for %v until valid settings are retrieved.", layer)
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
 
@@ -222,7 +206,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
-	OboeLog(DEBUG, fmt.Sprintf("Sampling with rate=%v, source=%v", sampleRate, sampleSource))
+	agent.Debugf("Sampling with rate=%v, source=%v", sampleRate, sampleSource)
 	return retval, sampleRate, sampleSource
 }
 
@@ -269,7 +253,7 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 		setting.bucket.capacity = bucketCapacity
 	} else {
 		setting.bucket.capacity = 0
-		OboeLog(WARNING, fmt.Sprintf("Invalid bucket capacity (%v). Using %v.", bucketCapacity, 0))
+		agent.Warningf("Invalid bucket capacity (%v). Using %v.", bucketCapacity, 0)
 	}
 	if setting.bucket.available > setting.bucket.capacity {
 		setting.bucket.available = setting.bucket.capacity
@@ -278,7 +262,7 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 		setting.bucket.ratePerSec = bucketRatePerSec
 	} else {
 		setting.bucket.ratePerSec = 0
-		OboeLog(WARNING, fmt.Sprintf("Invalid bucket rate (%v). Using %v.", bucketRatePerSec, 0))
+		agent.Warningf("Invalid bucket rate (%v). Using %v.", bucketRatePerSec, 0)
 	}
 	setting.bucket.lock.Unlock()
 }
@@ -310,7 +294,7 @@ func getSetting(layer string) (*oboeSettings, bool) {
 
 func shouldSample(sampleRate int) bool {
 	retval := sampleRate == maxSamplingRate || rand.Intn(maxSamplingRate) <= sampleRate
-	OboeLog(DEBUG, fmt.Sprintf("shouldSample(%v) => %v", sampleRate, retval))
+	agent.Debugf("shouldSample(%v) => %v", sampleRate, retval)
 	return retval
 }
 

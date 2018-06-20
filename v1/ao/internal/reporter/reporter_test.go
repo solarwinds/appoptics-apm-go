@@ -17,6 +17,7 @@ import (
 
 	"strings"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/stretchr/testify/assert"
@@ -26,13 +27,15 @@ import (
 )
 
 const (
-	serviceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
+	serviceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go"
 )
 
 // this runs before init()
 var _ = func() (_ struct{}) {
 	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
 	os.Setenv("APPOPTICS_REPORTER", "none")
+	// Call agent.Init() after changing any environment variables for testing.
+	agent.Init()
 	return
 }()
 
@@ -213,7 +216,8 @@ func assertSSLMode(t *testing.T) {
 
 func TestGRPCReporter(t *testing.T) {
 	// start test gRPC server
-	debugLevel = DEBUG
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
+	agent.Init()
 	addr := "localhost:4567"
 	grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
 	server := StartTestGRPCServer(t, addr)
@@ -223,6 +227,7 @@ func TestGRPCReporter(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
+	agent.Init()
 	oldReporter := globalReporter
 	setGlobalReporter("ssl")
 
@@ -301,7 +306,8 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 	}()
 
 	// start test gRPC server
-	debugLevel = INFO
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "info")
+	agent.Init()
 	addr := "localhost:4567"
 	// Open it if for verbose print of gRPC
 	//grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
@@ -312,6 +318,7 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
+	agent.Init()
 	oldReporter := globalReporter
 	setGlobalReporter("ssl")
 
@@ -377,8 +384,8 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 
 func TestRedirect(t *testing.T) {
 	// start test gRPC server
-	debugLevel = INFO
-
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "info")
+	agent.Init()
 	addr := "localhost:4567"
 	// Open it if for verbose print of gRPC
 	//grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
@@ -389,6 +396,7 @@ func TestRedirect(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
+	agent.Init()
 	oldReporter := globalReporter
 	setGlobalReporter("ssl")
 

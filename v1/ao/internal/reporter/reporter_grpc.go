@@ -7,14 +7,15 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io/ioutil"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"regexp"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -23,10 +24,6 @@ import (
 
 const (
 	grpcReporterVersion = "golang-v2"
-
-	// default collector endpoint address and port,
-	// can be overridded via APPOPTICS_COLLECTOR
-	grpcAddressDefault = "collector.appoptics.com:443"
 
 	// default certificate used to verify the collector endpoint,
 	// can be overridden via APPOPTICS_TRUSTEDPATH
@@ -122,6 +119,11 @@ type grpcReporter struct {
 	insecureSkipVerify bool // for testing only: if true, skip verifying TLS cert hostname
 }
 
+// A valid service key is something like 'service_token:service_name'.
+// The service_token should be of 64 characters long and the size of
+// service_name is larger than 0 but up to 255 characters.
+var isValidServiceKey = regexp.MustCompile(`^[a-zA-Z0-9]{64}:\S{1,255}$`).MatchString
+
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
@@ -131,28 +133,26 @@ func newGRPCReporter() reporter {
 	}
 
 	// service key is required, so bail out if not found
-	serviceKey := os.Getenv("APPOPTICS_SERVICE_KEY")
-	if serviceKey == "" {
-		OboeLog(ERROR, "No service key found, check environment variable APPOPTICS_SERVICE_KEY.")
+	serviceKey := agent.GetConfig(agent.AppOpticsServiceKey)
+	if !isValidServiceKey(serviceKey) {
+		agent.Warningf("Invalid service key (token:serviceName): <%s>. Reporter disabled.", serviceKey)
+		agent.Warning("Check AppOptics dashboard for your token and use a service name shorter than 256 characters.")
 		return &nullReporter{}
 	}
 
 	// see if a hostname alias is configured
-	configuredHostname = os.Getenv("APPOPTICS_HOSTNAME_ALIAS")
+	configuredHostname = agent.GetConfig(agent.AppOpticsHostnameAlias)
 
 	// collector address override
-	collectorAddress := os.Getenv("APPOPTICS_COLLECTOR")
-	if collectorAddress == "" {
-		collectorAddress = grpcAddressDefault
-	}
+	collectorAddress := agent.GetConfig(agent.AppOpticsCollector)
 
 	// certificate override
 	var cert []byte
-	if certPath := os.Getenv("APPOPTICS_TRUSTEDPATH"); certPath != "" {
+	if certPath := agent.GetConfig(agent.AppOpticsTrustedPath); certPath != "" {
 		var err error
 		cert, err = ioutil.ReadFile(certPath)
 		if err != nil {
-			OboeLog(ERROR, fmt.Sprintf("Error reading cert file %s: %v", certPath, err))
+			agent.Errorf("Error reading cert file %s: %v", certPath, err)
 			return &nullReporter{}
 		}
 	} else {
@@ -160,7 +160,7 @@ func newGRPCReporter() reporter {
 	}
 
 	var insecureSkipVerify bool
-	switch strings.ToLower(os.Getenv("APPOPTICS_INSECURE_SKIP_VERIFY")) {
+	switch agent.GetConfig(agent.AppOpticsInsecureSkipVerify) {
 	case "true", "1", "yes":
 		insecureSkipVerify = true
 	}
@@ -169,7 +169,7 @@ func newGRPCReporter() reporter {
 	eventConn, err1 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
 	metricConn, err2 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
 	if err1 != nil || err2 != nil {
-		OboeLog(ERROR, fmt.Sprintf("Failed to initialize gRPC reporter %v: %v; %v", collectorAddress, err1, err2))
+		agent.Errorf("Failed to initialize gRPC reporter %v: %v; %v", collectorAddress, err1, err2)
 		return &nullReporter{}
 	}
 
@@ -236,7 +236,7 @@ func grpcCreateClientConnection(cert []byte, addr string, insecureSkipVerify boo
 	certPool := x509.NewCertPool()
 
 	if ok := certPool.AppendCertsFromPEM(cert); !ok {
-		return nil, errors.New("Unable to append the certificate to pool.")
+		return nil, errors.New("unable to append the certificate to pool")
 	}
 
 	// trim port from server name used for TLS verification
@@ -276,7 +276,7 @@ func (r *grpcReporter) reconnect(c *grpcConnection, authority reconnectAuthority
 	if c.reconnectAuthority == authority {
 		// we are authorized to attempt a reconnect
 		c.lock.Lock()
-		OboeLog(INFO, "Lost connection -- attempting reconnect...")
+		agent.Info("Lost connection -- attempting reconnect...")
 		c.client = collector.NewTraceCollectorClient(c.connection)
 		c.lock.Unlock()
 
@@ -298,7 +298,7 @@ func (r *grpcReporter) redirect(c *grpcConnection, authority reconnectAuthority,
 	// create a new connection object for this client
 	conn, err := grpcCreateClientConnection(c.certificate, address, r.insecureSkipVerify)
 	if err != nil {
-		OboeLog(ERROR, fmt.Sprintf("Failed redirect to: %v %v", address, err))
+		agent.Errorf("Failed redirect to: %v %v", address, err)
 	}
 
 	// set new connection (need to be protected)
@@ -404,7 +404,7 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 		return nil
 	default:
 		go atomic.AddInt64(&r.eventConnection.queueStats.numOverflowed, int64(1)) // use goroutine so this won't block on the critical path
-		return errors.New("Event message queue is full")
+		return errors.New("event message queue is full")
 	}
 }
 
@@ -510,14 +510,14 @@ func (r *grpcReporter) eventRetrySender(
 				// gRPC handles the reconnection automatically.
 				failsNum++
 				if failsNum > grpcRetryLogThreshold && !failsPrinted {
-					OboeLog(WARNING, fmt.Sprintf("Error calling PostEvents(): %v", err))
+					agent.Warningf("Error calling PostEvents(): %v", err)
 					failsPrinted = true
 				} else {
-					OboeLog(DEBUG, fmt.Sprintf("(%v) Error calling PostEvents(): %v", failsNum, err))
+					agent.Debugf("(%v) Error calling PostEvents(): %v", failsNum, err)
 				}
 			} else {
 				if failsPrinted {
-					OboeLog(WARNING, fmt.Sprintf("Error recovered in PostEvents()"))
+					agent.Warning("Error recovered in PostEvents()")
 					// Reset the flags here as there might be extra retries even the transport layer is recovered.
 					failsPrinted = false
 					failsNum = 0
@@ -525,22 +525,22 @@ func (r *grpcReporter) eventRetrySender(
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
-					OboeLog(DEBUG, fmt.Sprintf("Sent %d events", len(messages)))
+					agent.Debugf("Sent %d events", len(messages))
 					resultOk = true
 					connection.reconnectAuthority = UNSET
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
 					results <- grpcResult{ret: result}
 				case collector.ResultCode_TRY_LATER:
-					OboeLog(INFO, "Server responded: Try later")
+					agent.Info("Server responded: Try later")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
 				case collector.ResultCode_LIMIT_EXCEEDED:
-					OboeLog(INFO, "Server responded: Limit exceeded")
+					agent.Info("Server responded: Limit exceeded")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
 				case collector.ResultCode_INVALID_API_KEY:
-					OboeLog(ERROR, "Server responded: Invalid API key")
+					agent.Error("Server responded: Invalid API key")
 				case collector.ResultCode_REDIRECT:
 					if redirects > grpcRedirectMax {
-						OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
 						r.redirect(connection, authority, response.GetArg())
 						// a proper redirect shouldn't cause delays
@@ -548,7 +548,7 @@ func (r *grpcReporter) eventRetrySender(
 						redirects++
 					}
 				default:
-					OboeLog(INFO, "Unknown Server response")
+					agent.Info("Unknown Server response")
 				}
 			}
 
@@ -658,14 +658,14 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			// gRPC handles the reconnection automatically.
 			failsNum++
 			if failsNum > grpcRetryLogThreshold && !failsPrinted {
-				OboeLog(WARNING, fmt.Sprintf("Error calling PostMetrics(): %v", err))
+				agent.Warningf("Error calling PostMetrics(): %v", err)
 				failsPrinted = true
 			} else {
-				OboeLog(DEBUG, fmt.Sprintf("(%v) Error calling PostMetrics(): %v", failsNum, err))
+				agent.Debugf("(%v) Error calling PostMetrics(): %v", failsNum, err)
 			}
 		} else {
 			if failsPrinted {
-				OboeLog(WARNING, fmt.Sprintf("Error recovered in PostMetrics()"))
+				agent.Warning("Error recovered in PostMetrics()")
 				// Reset the flags here as there might be extra retries even the transport layer is recovered.
 				failsPrinted = false
 				failsNum = 0
@@ -673,18 +673,18 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
-				OboeLog(DEBUG, "Sent metrics")
+				agent.Debug("Sent metrics")
 				resultOk = true
 				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
-				OboeLog(INFO, "Server responded: Try later")
+				agent.Info("Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
-				OboeLog(INFO, "Server responded: Limit exceeded")
+				agent.Info("Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
-				OboeLog(ERROR, "Server responded: Invalid API key")
+				agent.Error("Server responded: Invalid API key")
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
-					OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
 					r.redirect(r.metricConnection, POSTMETRICS, response.GetArg())
 					// a proper redirect shouldn't cause delays
@@ -692,7 +692,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 					redirects++
 				}
 			default:
-				OboeLog(INFO, "Unknown Server response")
+				agent.Info("Unknown Server response")
 			}
 		}
 
@@ -745,14 +745,14 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 			// gRPC handles the reconnection automatically.
 			failsNum++
 			if failsNum > grpcRetryLogThreshold && !failsPrinted {
-				OboeLog(WARNING, fmt.Sprintf("Error calling GetSettings(): %v", err))
+				agent.Warningf("Error calling GetSettings(): %v", err)
 				failsPrinted = true
 			} else {
-				OboeLog(DEBUG, fmt.Sprintf("(%v) Error calling GetSettings(): %v", failsNum, err))
+				agent.Debugf("(%v) Error calling GetSettings(): %v", failsNum, err)
 			}
 		} else {
 			if failsPrinted {
-				OboeLog(WARNING, fmt.Sprintf("Error recovered in GetSettings()"))
+				agent.Warning("Error recovered in GetSettings()")
 				// Reset the flags here as there might be extra retries even the transport layer is recovered.
 				failsPrinted = false
 				failsNum = 0
@@ -760,19 +760,19 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
-				OboeLog(DEBUG, fmt.Sprintf("Got new settings from server %v", r.metricConnection.address))
+				agent.Debugf("Got new settings from server %v", r.metricConnection.address)
 				r.updateSettings(response)
 				resultOK = true
 				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
-				OboeLog(INFO, "Server responded: Try later")
+				agent.Info("Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
-				OboeLog(INFO, "Server responded: Limit exceeded")
+				agent.Info("Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
-				OboeLog(ERROR, "Server responded: Invalid API key")
+				agent.Error("Server responded: Invalid API key")
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
-					OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
 					r.redirect(r.metricConnection, GETSETTINGS, response.GetArg())
 					// a proper redirect shouldn't cause delays
@@ -780,7 +780,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 					redirects++
 				}
 			default:
-				OboeLog(INFO, "Unknown Server response")
+				agent.Info("Unknown Server response")
 			}
 		}
 
@@ -846,7 +846,7 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 	case r.statusMessages <- (*e).bbuf.GetBuf():
 		return nil
 	default:
-		return errors.New("Status message queue is full")
+		return errors.New("status message queue is full")
 	}
 }
 
@@ -909,14 +909,14 @@ func (r *grpcReporter) statusSender() {
 				// gRPC handles the reconnection automatically.
 				failsNum++
 				if failsNum > grpcRetryLogThreshold && !failsPrinted {
-					OboeLog(WARNING, fmt.Sprintf("Error calling PostStatus(): %v", err))
+					agent.Warningf("Error calling PostStatus(): %v", err)
 					failsPrinted = true
 				} else {
-					OboeLog(DEBUG, fmt.Sprintf("(%v) Error calling PostStatus(): %v", failsNum, err))
+					agent.Debugf("(%v) Error calling PostStatus(): %v", failsNum, err)
 				}
 			} else {
 				if failsPrinted {
-					OboeLog(WARNING, fmt.Sprintf("Error recovered in PostStatus()"))
+					agent.Warning("Error recovered in PostStatus()")
 					// Reset the flags here as there might be extra retries even the transport layer is recovered.
 					failsPrinted = false
 					failsNum = 0
@@ -924,18 +924,18 @@ func (r *grpcReporter) statusSender() {
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
-					OboeLog(DEBUG, "Sent status")
+					agent.Debug("Sent status")
 					resultOk = true
 					r.metricConnection.reconnectAuthority = UNSET
 				case collector.ResultCode_TRY_LATER:
-					OboeLog(INFO, "Server responded: Try later")
+					agent.Info("Server responded: Try later")
 				case collector.ResultCode_LIMIT_EXCEEDED:
-					OboeLog(INFO, "Server responded: Limit exceeded")
+					agent.Info("Server responded: Limit exceeded")
 				case collector.ResultCode_INVALID_API_KEY:
-					OboeLog(ERROR, "Server responded: Invalid API key")
+					agent.Error("Server responded: Invalid API key")
 				case collector.ResultCode_REDIRECT:
 					if redirects > grpcRedirectMax {
-						OboeLog(ERROR, fmt.Sprintf("Max redirects of %v exceeded", grpcRedirectMax))
+						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
 						r.redirect(r.metricConnection, POSTSTATUS, response.GetArg())
 						// a proper redirect shouldn't cause delays
@@ -943,7 +943,7 @@ func (r *grpcReporter) statusSender() {
 						redirects++
 					}
 				default:
-					OboeLog(INFO, "Unknown Server response")
+					agent.Info("Unknown Server response")
 				}
 			}
 
@@ -968,7 +968,7 @@ func (r *grpcReporter) reportSpan(span SpanMessage) error {
 	case r.spanMessages <- span:
 		return nil
 	default:
-		return errors.New("Span message queue is full")
+		return errors.New("span message queue is full")
 	}
 }
 

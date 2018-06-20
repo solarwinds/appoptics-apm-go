@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
@@ -15,7 +16,7 @@ import (
 
 func TestCustomTransactionNameWithDomain(t *testing.T) {
 	os.Setenv("APPOPTICS_PREPEND_DOMAIN", "true")
-
+	agent.Init()
 	r := reporter.SetTestReporter() // set up test reporter
 
 	// Test prepending the domain to transaction names.
