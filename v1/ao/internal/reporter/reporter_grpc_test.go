@@ -3,7 +3,6 @@
 package reporter
 
 import (
-	"errors"
 	"net"
 	"os"
 	"path"
@@ -100,20 +99,24 @@ func (s *TestGRPCServer) Ping(context.Context, *pb.PingRequest) (*pb.MessageResu
 func TestGrpcNewReporter(t *testing.T) {
 }
 
-func TestVerifyServiceKey(t *testing.T) {
+func TestIsValidServiceKey(t *testing.T) {
 
-	keyPairs := map[string]error{
-		"1234567890abcdef:Go": nil,
-		"":                  errors.New("invalid service key: empty string"),
-		"abc:Go":            nil,
-		"abcd1234:Go":       nil,
-		"1234567890abcdef":  errors.New("invalid service key: no colon found or the token/service name is missing"),
-		"1234567890abcdef:": errors.New("invalid service key: no colon found or the token/service name is missing"),
-		":Go":               errors.New("invalid service key: no colon found or the token/service name is missing"),
-		"abc:123:Go":        errors.New("invalid service key: no colon found or the token/service name is missing"),
+	keyPairs := map[string]bool{
+		"ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go": true,
+		"":       false,
+		"abc:Go": false,
+		"ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:" +
+			"Go0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": false,
+		"1234567890abcdef":  false,
+		"1234567890abcdef:": false,
+		":Go":               false,
+		"abc:123:Go":        false,
 	}
 
-	for key, err := range keyPairs {
-		assert.Equal(t, err, verifyServiceKey(key))
+	for key, valid := range keyPairs {
+		assert.Equal(t, valid, isValidServiceKey(key))
 	}
 }

@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"regexp"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"golang.org/x/net/context"
@@ -117,19 +119,10 @@ type grpcReporter struct {
 	insecureSkipVerify bool // for testing only: if true, skip verifying TLS cert hostname
 }
 
-// verifyServiceKey verifies if the service key is valid
-func verifyServiceKey(key string) error {
-	var sep = ":"
-
-	if key == "" {
-		return errors.New("invalid service key: empty string")
-	}
-	s := strings.Split(key, sep)
-	if len(s) != 2 || s[0] == "" || s[1] == "" {
-		return errors.New("invalid service key: no colon found or the token/service name is missing")
-	}
-	return nil
-}
+// A valid service key is something like 'service_token:service_name'.
+// The service_token should be of 64 characters long and the size of
+// service_name is larger than 0 but up to 256 characters.
+var isValidServiceKey = regexp.MustCompile(`^[a-zA-Z0-9]{64}:\S{1,256}$`).MatchString
 
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
@@ -141,8 +134,8 @@ func newGRPCReporter() reporter {
 
 	// service key is required, so bail out if not found
 	serviceKey := agent.GetConfig(agent.AppOpticsServiceKey)
-	if err := verifyServiceKey(serviceKey); err != nil {
-		agent.Warning(err)
+	if !isValidServiceKey(serviceKey) {
+		agent.Warningf("Invalid service key: %s", serviceKey)
 		return &nullReporter{}
 	}
 

@@ -13,7 +13,9 @@ func init() {
 }
 
 // Init initializes the agent.
-// Make it visible to outside world only for the sake of testing. Don't call it manually anywhere else
+// Make it visible to outside world only for the sake of testing. Don't call it manually anywhere else.
+// ATTENTION: You need to call this function manually after changing the environment variables in your
+// test cases, as normally the configuration only initializes once when the program starts up.
 func Init() {
 	initConf(agentConf)
 	initLogging()
