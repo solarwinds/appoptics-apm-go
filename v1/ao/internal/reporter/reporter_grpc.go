@@ -809,13 +809,11 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 		r.collectMetricIntervalLock.Unlock()
 
 		// update MaxTransactions
-		metricsHTTPMeasurements.transactionNameMaxLock.Lock()
+		capacity := metricsTransactionsMaxDefault
 		if max, ok := s.Arguments["MaxTransactions"]; ok {
-			metricsHTTPMeasurements.transactionNameMax = int(binary.LittleEndian.Uint32(max))
-		} else {
-			metricsHTTPMeasurements.transactionNameMax = metricsTransactionsMaxDefault
+			capacity = int(binary.LittleEndian.Uint32(max))
 		}
-		metricsHTTPMeasurements.transactionNameMaxLock.Unlock()
+		mTransMap.SetCap(capacity)
 	}
 }
 

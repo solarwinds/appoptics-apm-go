@@ -84,11 +84,8 @@ type Measurement struct {
 
 // a collection of measurements
 type measurements struct {
-	measurements            map[string]*Measurement
-	transactionNameMax      int          // max transaction names
-	transactionNameOverflow bool         // have we hit the limit of allowable transaction names?
-	lock                    sync.Mutex   // protect access to this collection
-	transactionNameMaxLock  sync.RWMutex // lock to ensure sequential access
+	measurements map[string]*Measurement
+	lock         sync.Mutex // protect access to this collection
 }
 
 // a single histogram
@@ -125,13 +122,82 @@ var (
 	cachedContainerID     = "uninitialized" // cached docker container ID (if applicable)
 )
 
-// list of currently stored unique HTTP transaction names (flushed on each metrics report cycle)
-var metricsHTTPTransactions = make(map[string]bool)
+// TransMap records the received transaction names in a metrics report cycle. It will refuse
+// new transaction names if reaching the capacity.
+type TransMap struct {
+	// The map to store transaction names
+	mt map[string]bool
+	// The maximum capacity of the transaction map, the value is got from
+	// metricsHTTPMeasurements.transactionNameMax which is updated periodically.
+	// The default value metricsTransactionsMaxDefault is used when a new TransMap
+	// is initialized.
+	cap int
+	// Whether there is an overflow. Overflow means the user tried to store more transaction names
+	// than the capacity defined by settings.
+	// This flag is cleared in every metrics cycle.
+	overflow bool
+	// The mutex to protect this struct
+	mu *sync.Mutex
+}
+
+func NewTransMap(cap int) *TransMap {
+	return &TransMap{
+		mt:       make(map[string]bool),
+		cap:      cap,
+		overflow: false,
+		mu:       &sync.Mutex{},
+	}
+}
+
+// SetCap sets the capacity of the transaction map
+func (t *TransMap) SetCap(cap int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.cap = cap
+}
+
+// ResetTransMap resets the transaction map to a initialized state.
+func (t *TransMap) Reset() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.mt = make(map[string]bool)
+	t.overflow = false
+}
+
+// IsWithinLimit checks if the transaction name is stored in the TransMap. It will store this new
+// transaction name if not stored before and the map isn't full, or return false otherwise.
+func (t *TransMap) IsWithinLimit(name string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if _, ok := t.mt[name]; !ok {
+		// only record if we haven't reached the limits yet
+		if len(t.mt) < t.cap {
+			t.mt[name] = true
+			return true
+		}
+		t.overflow = true
+		return false
+	}
+
+	return true
+}
+
+// Overflow returns true is the transaction map is overflow (reached its limit)
+// or false if otherwise.
+func (t *TransMap) Overflow() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.overflow
+}
+
+// mTransMap is the list of currently stored unique HTTP transaction names
+// (flushed on each metrics report cycle)
+var mTransMap = NewTransMap(metricsTransactionsMaxDefault)
 
 // collection of currently stored measurements (flushed on each metrics report cycle)
 var metricsHTTPMeasurements = &measurements{
-	measurements:       make(map[string]*Measurement),
-	transactionNameMax: metricsTransactionsMaxDefault,
+	measurements: make(map[string]*Measurement),
 }
 
 // collection of currently stored histograms (flushed on each metrics report cycle)
@@ -224,10 +290,7 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	debug.ReadGCStats(&gc)
 	addMetricsValue(bbuf, &index, "JMX.type=count,name=GCStats.NumGC", gc.NumGC)
 
-	// service / transaction measurements
 	metricsHTTPMeasurements.lock.Lock()
-	transactionNameOverflow := metricsHTTPMeasurements.transactionNameOverflow
-
 	for _, m := range metricsHTTPMeasurements.measurements {
 		addMeasurementToBSON(bbuf, &index, m)
 	}
@@ -253,9 +316,11 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	bsonAppendFinishObject(bbuf, start)
 	// ==========================================
 
-	if transactionNameOverflow {
+	if mTransMap.Overflow() {
 		bsonAppendBool(bbuf, "TransactionNameOverflow", true)
 	}
+	// The transaction map is reset in every metrics cycle.
+	mTransMap.Reset()
 
 	bsonBufferFinish(bbuf)
 	return bbuf.buf
@@ -544,38 +609,13 @@ func GetTransactionFromPath(path string) string {
 	return strings.Join(p[0:lp], "/")
 }
 
-// check if an element is found in a list, add if the list limit hasn't been reached yet
-// m		list of elements
-// element	element to look up or add
-// max		max allowable elements in the list
-//
-// return	true if element has been found or has been added to the list successfully, false otherwise
-func isWithinLimit(m *map[string]bool, element string, max int) bool {
-	if _, ok := (*m)[element]; !ok {
-		// only record if we haven't reached the limits yet
-		if len(*m) < max {
-			(*m)[element] = true
-			return true
-		}
-		return false
-	}
-
-	return true
-}
-
 // processes an HttpSpanMessage
 func (s *HTTPSpanMessage) process() {
 	// always add to overall histogram
 	recordHistogram(metricsHTTPHistograms, "", s.Duration)
 
 	if s.Transaction != UnknownTransactionName {
-		// access transactionNameMax protected since it can be updated in updateSettings()
-		metricsHTTPMeasurements.transactionNameMaxLock.RLock()
-		max := metricsHTTPMeasurements.transactionNameMax
-		metricsHTTPMeasurements.transactionNameMaxLock.RUnlock()
-
-		transactionWithinLimit := isWithinLimit(
-			&metricsHTTPTransactions, s.Transaction, max)
+		transactionWithinLimit := mTransMap.IsWithinLimit(s.Transaction)
 
 		// only record the transaction-specific histogram and measurements if we are still within the limit
 		// otherwise report it as an 'other' measurement
@@ -584,8 +624,6 @@ func (s *HTTPSpanMessage) process() {
 			s.processMeasurements(s.Transaction)
 		} else {
 			s.processMeasurements(OtherTransactionName)
-			// indicate we have overrun the transaction name limit
-			setTransactionNameOverflow(true)
 		}
 	} else {
 		// no transaction/url name given, record as 'unknown'
@@ -708,13 +746,6 @@ func recordHistogram(hi *histograms, name string, duration time.Duration) {
 
 	// record histogram
 	h.hist.Record(int64(duration / time.Microsecond))
-}
-
-// sets the transactionNameOverflow flag
-func setTransactionNameOverflow(flag bool) {
-	metricsHTTPMeasurements.lock.Lock()
-	metricsHTTPMeasurements.transactionNameOverflow = flag
-	metricsHTTPMeasurements.lock.Unlock()
 }
 
 // adds a measurement to a BSON buffer
