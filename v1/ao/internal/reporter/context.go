@@ -350,6 +350,9 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 			}
 			kvs["SampleRate"] = rate
 			kvs["SampleSource"] = source
+			if _, ok = ctx.(*oboeContext); !ok {
+				return &nullContext{}, false
+			}
 			if err := ctx.(*oboeContext).reportEventMap(LabelEntry, layer, addCtxEdge, kvs); err != nil {
 				return &nullContext{}, false
 			}

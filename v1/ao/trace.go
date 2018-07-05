@@ -175,6 +175,14 @@ func (t *aoTrace) reportExit() {
 		t.lock.Lock()
 		defer t.lock.Unlock()
 
+		// The trace may have been ended by another goroutine (?) after the last
+		// check (t.ok()) but before we acquire the lock. So a double check is
+		// worthwhile.
+		// However, we need to check t.ended directly as t.ok() will cause deadlock.
+		if t.ended {
+			return
+		}
+
 		// if this is an HTTP trace, record a new span
 		if !t.httpSpan.start.IsZero() {
 			t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)

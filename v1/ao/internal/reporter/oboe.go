@@ -86,7 +86,8 @@ func sendInitMessage() {
 		// create new event from context
 		e, err := c.newEvent("single", "go")
 		if err != nil {
-			agent.Error("Error while creating the init message")
+			agent.Error("Error while creating the init message: %v", err)
+			return
 		}
 
 		e.AddKV("__Init", 1)

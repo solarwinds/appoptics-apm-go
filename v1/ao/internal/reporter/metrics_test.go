@@ -12,6 +12,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -243,13 +244,17 @@ func TestGetTransactionFromURL(t *testing.T) {
 	}
 }
 
-func TestIsWithinLimit(t *testing.T) {
-	m := make(map[string]bool)
-	assert.True(t, isWithinLimit(&m, "t1", 3))
-	assert.True(t, isWithinLimit(&m, "t2", 3))
-	assert.True(t, isWithinLimit(&m, "t3", 3))
-	assert.False(t, isWithinLimit(&m, "t4", 3))
-	assert.True(t, isWithinLimit(&m, "t2", 3))
+func TestTransMap(t *testing.T) {
+	m := NewTransMap(3)
+	assert.True(t, m.IsWithinLimit("t1"))
+	assert.True(t, m.IsWithinLimit("t2"))
+	assert.True(t, m.IsWithinLimit("t3"))
+	assert.False(t, m.IsWithinLimit("t4"))
+	assert.True(t, m.IsWithinLimit("t2"))
+	assert.True(t, m.Overflow())
+
+	m.Reset()
+	assert.False(t, m.Overflow())
 }
 
 func TestRecordMeasurement(t *testing.T) {
@@ -487,10 +492,15 @@ func TestGenerateMetricsMessage(t *testing.T) {
 
 	assert.Nil(t, m["TransactionNameOverflow"])
 
-	metricsHTTPMeasurements.transactionNameOverflow = true
+	for i := 0; i <= metricsTransactionsMaxDefault; i++ {
+		if !mTransMap.IsWithinLimit("Transaction-" + strconv.Itoa(i)) {
+			break
+		}
+	}
 	bbuf.buf = generateMetricsMessage(15, &eventQueueStats{})
 	m = bsonToMap(bbuf)
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))
+	mTransMap.Reset()
 }
