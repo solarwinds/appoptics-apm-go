@@ -126,24 +126,32 @@ var (
 // new transaction names if reaching the capacity.
 type TransMap struct {
 	// The map to store transaction names
-	mt map[string]bool
-	// The maximum capacity of the transaction map, the value is got from
-	// metricsHTTPMeasurements.transactionNameMax which is updated periodically.
+	mt map[string]struct{}
+	// The maximum capacity of the transaction map. The value is got from server settings which
+	// is updated periodically.
 	// The default value metricsTransactionsMaxDefault is used when a new TransMap
 	// is initialized.
-	cap int
+	currCap int
+	// The maximum capacity which is set by the server settings. This update usually happens in
+	// between two metrics reporting cycles. To avoid affecting the map capacity of the current reporting
+	// cycle, the new capacity got from the server is stored in nextCap and will only be flushed to currCap
+	// when the Reset() is called.
+	nextCap int
 	// Whether there is an overflow. Overflow means the user tried to store more transaction names
 	// than the capacity defined by settings.
 	// This flag is cleared in every metrics cycle.
 	overflow bool
-	// The mutex to protect this struct
+	// The mutex to protect this whole struct. If the performance is a concern we should use separate
+	// mutexes for each of the fields. But for now it seems not necessary.
 	mu *sync.Mutex
 }
 
+// NewTransMap initializes a new TransMap struct
 func NewTransMap(cap int) *TransMap {
 	return &TransMap{
-		mt:       make(map[string]bool),
-		cap:      cap,
+		mt:       make(map[string]struct{}),
+		currCap:  cap,
+		nextCap:  cap,
 		overflow: false,
 		mu:       &sync.Mutex{},
 	}
@@ -153,27 +161,30 @@ func NewTransMap(cap int) *TransMap {
 func (t *TransMap) SetCap(cap int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.cap = cap
+	t.nextCap = cap
 }
 
-// ResetTransMap resets the transaction map to a initialized state.
+// ResetTransMap resets the transaction map to a initialized state. The new capacity got from the
+// server will be used in next metrics reporting cycle after reset.
 func (t *TransMap) Reset() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.mt = make(map[string]bool)
+	t.mt = make(map[string]struct{})
+	t.currCap = t.nextCap
 	t.overflow = false
 }
 
 // IsWithinLimit checks if the transaction name is stored in the TransMap. It will store this new
-// transaction name if not stored before and the map isn't full, or return false otherwise.
+// transaction name and return true if not stored before and the map isn't full, or return false
+// otherwise.
 func (t *TransMap) IsWithinLimit(name string) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	if _, ok := t.mt[name]; !ok {
 		// only record if we haven't reached the limits yet
-		if len(t.mt) < t.cap {
-			t.mt[name] = true
+		if len(t.mt) < t.currCap {
+			t.mt[name] = struct{}{}
 			return true
 		}
 		t.overflow = true
@@ -615,11 +626,9 @@ func (s *HTTPSpanMessage) process() {
 	recordHistogram(metricsHTTPHistograms, "", s.Duration)
 
 	if s.Transaction != UnknownTransactionName {
-		transactionWithinLimit := mTransMap.IsWithinLimit(s.Transaction)
-
 		// only record the transaction-specific histogram and measurements if we are still within the limit
 		// otherwise report it as an 'other' measurement
-		if transactionWithinLimit {
+		if mTransMap.IsWithinLimit(s.Transaction) {
 			recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
 			s.processMeasurements(s.Transaction)
 		} else {
