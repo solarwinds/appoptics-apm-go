@@ -126,7 +126,7 @@ var (
 // new transaction names if reaching the capacity.
 type TransMap struct {
 	// The map to store transaction names
-	mt map[string]struct{}
+	transactionNames map[string]struct{}
 	// The maximum capacity of the transaction map. The value is got from server settings which
 	// is updated periodically.
 	// The default value metricsTransactionsMaxDefault is used when a new TransMap
@@ -143,33 +143,33 @@ type TransMap struct {
 	overflow bool
 	// The mutex to protect this whole struct. If the performance is a concern we should use separate
 	// mutexes for each of the fields. But for now it seems not necessary.
-	mu *sync.Mutex
+	mutex *sync.Mutex
 }
 
 // NewTransMap initializes a new TransMap struct
 func NewTransMap(cap int) *TransMap {
 	return &TransMap{
-		mt:       make(map[string]struct{}),
-		currCap:  cap,
-		nextCap:  cap,
-		overflow: false,
-		mu:       &sync.Mutex{},
+		transactionNames: make(map[string]struct{}),
+		currCap:          cap,
+		nextCap:          cap,
+		overflow:         false,
+		mutex:            &sync.Mutex{},
 	}
 }
 
 // SetCap sets the capacity of the transaction map
 func (t *TransMap) SetCap(cap int) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	t.nextCap = cap
 }
 
 // ResetTransMap resets the transaction map to a initialized state. The new capacity got from the
 // server will be used in next metrics reporting cycle after reset.
 func (t *TransMap) Reset() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.mt = make(map[string]struct{})
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	t.transactionNames = make(map[string]struct{})
 	t.currCap = t.nextCap
 	t.overflow = false
 }
@@ -178,13 +178,13 @@ func (t *TransMap) Reset() {
 // transaction name and return true if not stored before and the map isn't full, or return false
 // otherwise.
 func (t *TransMap) IsWithinLimit(name string) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 
-	if _, ok := t.mt[name]; !ok {
+	if _, ok := t.transactionNames[name]; !ok {
 		// only record if we haven't reached the limits yet
-		if len(t.mt) < t.currCap {
-			t.mt[name] = struct{}{}
+		if len(t.transactionNames) < t.currCap {
+			t.transactionNames[name] = struct{}{}
 			return true
 		}
 		t.overflow = true
@@ -197,8 +197,8 @@ func (t *TransMap) IsWithinLimit(name string) bool {
 // Overflow returns true is the transaction map is overflow (reached its limit)
 // or false if otherwise.
 func (t *TransMap) Overflow() bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 	return t.overflow
 }
 
