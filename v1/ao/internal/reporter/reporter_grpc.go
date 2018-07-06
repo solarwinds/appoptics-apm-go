@@ -116,11 +116,17 @@ type grpcReporter struct {
 	statusMessages chan []byte      // channel for status messages (sent from agent)
 	metricMessages chan []byte      // channel for metrics messages (internal to reporter)
 	// The channel to stop the reporter. All the long-running goroutines monitor this channel.
-	// They will exit if this channel is closed.
+	// Don't send data into this channel, just close it to notify all goroutines.
 	done chan struct{}
 
 	insecureSkipVerify bool // for testing only: if true, skip verifying TLS cert hostname
 }
+
+// gRPC reporter errors
+var (
+	// You are trying to close a reporter which had been closed before.
+	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed reporter")
+)
 
 // A valid service key is something like 'service_token:service_name'.
 // The service_token should be of 64 characters long and the size of
@@ -260,6 +266,36 @@ func grpcCreateClientConnection(cert []byte, addr string, insecureSkipVerify boo
 	creds := credentials.NewTLS(tlsConfig)
 
 	return grpc.Dial(addr, grpc.WithTransportCredentials(creds))
+}
+
+// Shutdown closes the reporter by close the `done` channel. All long-running goroutines
+// monitor the channel `done` in the reporter and close themselves when the channel is closed.
+func (r *grpcReporter) Shutdown() error {
+	select {
+	case <-r.done:
+		return ErrShutdownClosedReporter
+	default:
+		agent.Info("Closing the gRPC reporter.")
+		close(r.done)
+		r.closeConns()
+		return nil
+	}
+}
+
+// closeConns closes all the gRPC connections of a reporter
+func (r *grpcReporter) closeConns() {
+	r.eventConnection.connection.Close()
+	r.metricConnection.connection.Close()
+}
+
+// Closed return true if the reporter is already closed, or false otherwise.
+func (r *grpcReporter) Closed() bool {
+	select {
+	case <-r.done:
+		return true
+	default:
+		return false
+	}
 }
 
 // attempts to restore a lost client connection
@@ -589,8 +625,10 @@ func (r *grpcReporter) eventRetrySender(
 					agent.Info("Server responded: Limit exceeded")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
 				case collector.ResultCode_INVALID_API_KEY:
-					agent.Error("Server responded: Invalid API key")
+					agent.Error("Server responded: Invalid API key. Reporter is closing.")
+					r.Shutdown()
 				case collector.ResultCode_REDIRECT:
+					agent.Warningf("Reporter is redirecting to %s", response.GetArg())
 					if redirects > grpcRedirectMax {
 						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
@@ -742,8 +780,10 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			case collector.ResultCode_LIMIT_EXCEEDED:
 				agent.Info("Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
-				agent.Error("Server responded: Invalid API key")
+				agent.Error("Server responded: Invalid API key. Reporter is closing.")
+				r.Shutdown()
 			case collector.ResultCode_REDIRECT:
+				agent.Warningf("Reporter is redirecting to %s", response.GetArg())
 				if redirects > grpcRedirectMax {
 					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
@@ -839,8 +879,10 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 			case collector.ResultCode_LIMIT_EXCEEDED:
 				agent.Info("Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
-				agent.Error("Server responded: Invalid API key")
+				agent.Error("Server responded: Invalid API key. Reporter is closing.")
+				r.Shutdown()
 			case collector.ResultCode_REDIRECT:
+				agent.Warningf("Reporter is redirecting to %s", response.GetArg())
 				if redirects > grpcRedirectMax {
 					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
@@ -1008,8 +1050,10 @@ func (r *grpcReporter) statusSender() {
 				case collector.ResultCode_LIMIT_EXCEEDED:
 					agent.Info("Server responded: Limit exceeded")
 				case collector.ResultCode_INVALID_API_KEY:
-					agent.Error("Server responded: Invalid API key")
+					agent.Error("Server responded: Invalid API key. Reporter is closing.")
+					r.Shutdown()
 				case collector.ResultCode_REDIRECT:
+					agent.Warningf("Reporter is redirecting to %s", response.GetArg())
 					if redirects > grpcRedirectMax {
 						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
