@@ -583,8 +583,6 @@ func (r *grpcReporter) eventRetrySender(
 		failsNum := 0
 		// Number of retries, including gRPC errors and collector errors
 		retriesNum := 0
-		// The flag to turn on/off high level logging for fails
-		failsPrinted := false
 
 		for !resultOK {
 			// Fail-fast in case the reporter has been closed, avoid retrying in this case.
@@ -605,19 +603,17 @@ func (r *grpcReporter) eventRetrySender(
 			if err != nil {
 				// gRPC handles the reconnection automatically.
 				failsNum++
-				if failsNum > grpcRetryLogThreshold && !failsPrinted {
+				if failsNum == grpcRetryLogThreshold {
 					agent.Warningf("Error calling PostEvents(): %v", err)
-					failsPrinted = true
 				} else {
 					agent.Debugf("(%v) Error calling PostEvents(): %v", failsNum, err)
 				}
 			} else {
-				if failsPrinted {
+				if failsNum >= grpcRetryLogThreshold {
 					agent.Warning("Error recovered in PostEvents()")
-					// Reset the flags here as there might be extra retries even the transport layer is recovered.
-					failsPrinted = false
-					failsNum = 0
 				}
+				failsNum = 0
+
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
@@ -748,8 +744,6 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 	failsNum := 0
 	// Number of retries, including gRPC errors and collector errors
 	retriesNum := 0
-	// The flag to turn on/off high level logging for fails
-	failsPrinted := false
 
 	// TODO: boilerplate code refactor as events/metrics/settings share similar processes.
 	for !resultOK {
@@ -771,19 +765,17 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		if err != nil {
 			// gRPC handles the reconnection automatically.
 			failsNum++
-			if failsNum > grpcRetryLogThreshold && !failsPrinted {
+			if failsNum == grpcRetryLogThreshold {
 				agent.Warningf("Error calling PostMetrics(): %v", err)
-				failsPrinted = true
 			} else {
 				agent.Debugf("(%v) Error calling PostMetrics(): %v", failsNum, err)
 			}
 		} else {
-			if failsPrinted {
+			if failsNum >= grpcRetryLogThreshold {
 				agent.Warning("Error recovered in PostMetrics()")
-				// Reset the flags here as there might be extra retries even the transport layer is recovered.
-				failsPrinted = false
-				failsNum = 0
 			}
+			failsNum = 0
+
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
@@ -850,8 +842,6 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	failsNum := 0
 	// Number of retries, including gRPC errors and collector errors
 	retriesNum := 0
-	// The flag to turn on/off high level logging for fails
-	failsPrinted := false
 
 	for !resultOK {
 		// Fail-fast in case the reporter has been closed, avoid retrying in this case.
@@ -872,19 +862,17 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		if err != nil {
 			// gRPC handles the reconnection automatically.
 			failsNum++
-			if failsNum > grpcRetryLogThreshold && !failsPrinted {
+			if failsNum == grpcRetryLogThreshold {
 				agent.Warningf("Error calling GetSettings(): %v", err)
-				failsPrinted = true
 			} else {
 				agent.Debugf("(%v) Error calling GetSettings(): %v", failsNum, err)
 			}
 		} else {
-			if failsPrinted {
+			if failsNum >= grpcRetryLogThreshold {
 				agent.Warning("Error recovered in GetSettings()")
-				// Reset the flags here as there might be extra retries even the transport layer is recovered.
-				failsPrinted = false
-				failsNum = 0
 			}
+			failsNum = 0
+
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
@@ -1028,8 +1016,6 @@ func (r *grpcReporter) statusSender() {
 		failsNum := 0
 		// Number of retries, including gRPC errors and collector errors
 		retriesNum := 0
-		// The flag to turn on/off high level logging for fails
-		failsPrinted := false
 
 		for !resultOK {
 			// Fail-fast in case the reporter has been closed, avoid retrying in this case.
@@ -1050,19 +1036,17 @@ func (r *grpcReporter) statusSender() {
 			if err != nil {
 				// gRPC handles the reconnection automatically.
 				failsNum++
-				if failsNum > grpcRetryLogThreshold && !failsPrinted {
+				if failsNum == grpcRetryLogThreshold {
 					agent.Warningf("Error calling PostStatus(): %v", err)
-					failsPrinted = true
 				} else {
 					agent.Debugf("(%v) Error calling PostStatus(): %v", failsNum, err)
 				}
 			} else {
-				if failsPrinted {
+				if failsNum >= grpcRetryLogThreshold {
 					agent.Warning("Error recovered in PostStatus()")
-					// Reset the flags here as there might be extra retries even the transport layer is recovered.
-					failsPrinted = false
-					failsNum = 0
 				}
+				failsNum = 0
+
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
@@ -1100,7 +1084,6 @@ func (r *grpcReporter) statusSender() {
 			}
 		}
 	}
-	agent.Warning("statusSender goroutine exiting.")
 }
 
 // ========================= Span Message Handling =============================

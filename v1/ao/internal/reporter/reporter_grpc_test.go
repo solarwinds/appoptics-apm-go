@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"sync"
 	"testing"
 
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
@@ -26,10 +27,14 @@ type TestGRPCServer struct {
 	t          *testing.T
 	grpcServer *grpc.Server
 	addr       string
-	events     []*pb.MessageRequest
-	metrics    []*pb.MessageRequest
-	status     []*pb.MessageRequest
-	pings      int
+	// The mutex to protect the other fields, mainly the slices below as gRPC needs concurrency-safe
+	// Performance is not a concern for a testing reporter, so we are fine with a single mutex for all
+	// the fields.
+	mutex   sync.Mutex
+	events  []*pb.MessageRequest
+	metrics []*pb.MessageRequest
+	status  []*pb.MessageRequest
+	pings   int
 }
 
 func StartTestGRPCServer(t *testing.T, addr string) *TestGRPCServer {
@@ -55,18 +60,24 @@ func StartTestGRPCServer(t *testing.T, addr string) *TestGRPCServer {
 func (s *TestGRPCServer) Stop() { s.grpcServer.Stop() }
 
 func (s *TestGRPCServer) PostEvents(ctx context.Context, req *pb.MessageRequest) (*pb.MessageResult, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	s.t.Logf("TestGRPCServer.PostEvents req %+v", req)
 	s.events = append(s.events, req)
 	return &pb.MessageResult{Result: pb.ResultCode_OK}, nil
 }
 
 func (s *TestGRPCServer) PostMetrics(ctx context.Context, req *pb.MessageRequest) (*pb.MessageResult, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	s.t.Logf("TestGRPCServer.PostMetrics req %+v", req)
 	s.metrics = append(s.metrics, req)
 	return &pb.MessageResult{Result: pb.ResultCode_OK}, nil
 }
 
 func (s *TestGRPCServer) PostStatus(ctx context.Context, req *pb.MessageRequest) (*pb.MessageResult, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	s.t.Logf("TestGRPCServer.PostStatus req %+v", req)
 	s.status = append(s.status, req)
 	return &pb.MessageResult{Result: pb.ResultCode_OK}, nil
