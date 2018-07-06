@@ -115,17 +115,21 @@ type grpcReporter struct {
 	spanMessages   chan SpanMessage // channel for span messages (sent from agent)
 	statusMessages chan []byte      // channel for status messages (sent from agent)
 	metricMessages chan []byte      // channel for metrics messages (internal to reporter)
-	// The channel to stop the reporter. All the long-running goroutines monitor this channel.
-	// Don't send data into this channel, just close it to notify all goroutines.
+	// The reporter doesn't have a explicit field to record its state. This channel is used to notify all the
+	// long-running goroutines to stop themselves. All the goroutines will check this channel and close if the
+	// channel is closed.
+	// Don't send data into this channel, just close it by calling Shutdown().
 	done chan struct{}
-
-	insecureSkipVerify bool // for testing only: if true, skip verifying TLS cert hostname
+	// for testing only: if true, skip verifying TLS cert hostname
+	insecureSkipVerify bool
 }
 
 // gRPC reporter errors
 var (
 	// You are trying to close a reporter which had been closed before.
 	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed reporter")
+	ErrReporterIsClosed       = errors.New("the reporter is closed")
+	ErrMaxRetriesExceeded     = errors.New("maximum retries exceeded")
 )
 
 // A valid service key is something like 'service_token:service_name'.
@@ -277,6 +281,7 @@ func (r *grpcReporter) Shutdown() error {
 	default:
 		agent.Info("Closing the gRPC reporter.")
 		close(r.done)
+		// There may be messages
 		r.closeConns()
 		return nil
 	}
@@ -432,12 +437,16 @@ func (r *grpcReporter) periodicTasks() {
 // oldDelay	the old delay in milliseconds
 //
 // returns	the new delay in milliseconds
-func (r *grpcReporter) setRetryDelay(oldDelay int) int {
+func (r *grpcReporter) setRetryDelay(oldDelay int, retryNum *int) (int, error) {
+	if *retryNum > grpcMaxRetries {
+		return 0, ErrMaxRetriesExceeded
+	}
+
 	newDelay := int(float64(oldDelay) * grpcRetryDelayMultiplier)
 	if newDelay > grpcRetryDelayMax*1000 {
 		newDelay = grpcRetryDelayMax * 1000
 	}
-	return newDelay
+	return newDelay, nil
 }
 
 // ================================ Event Handling ====================================
@@ -566,12 +575,15 @@ func (r *grpcReporter) eventRetrySender(
 		redirects := 0
 
 		// we'll stay in this loop until the call to PostEvents() succeeds
-		resultOk := false
+		resultOK := false
+		// Number of gRPC errors encountered
 		failsNum := 0
+		// Number of retries, including gRPC errors and collector errors
+		retriesNum := 0
+		// The flag to turn on/off high level logging for fails
 		failsPrinted := false
 
-		// TODO: This loop will quit after a certain number of retries
-		for !resultOk {
+		for !resultOK {
 			// Fail-fast in case the reporter has been closed, avoid retrying in this case.
 			select {
 			case <-r.done:
@@ -596,9 +608,6 @@ func (r *grpcReporter) eventRetrySender(
 				} else {
 					agent.Debugf("(%v) Error calling PostEvents(): %v", failsNum, err)
 				}
-				if failsNum >= grpcMaxRetries {
-					break
-				}
 			} else {
 				if failsPrinted {
 					agent.Warning("Error recovered in PostEvents()")
@@ -610,7 +619,7 @@ func (r *grpcReporter) eventRetrySender(
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
 					agent.Debugf("Sent %d events", len(messages))
-					resultOk = true
+					resultOK = true
 					connection.reconnectAuthority = UNSET
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
 					select {
@@ -638,14 +647,16 @@ func (r *grpcReporter) eventRetrySender(
 						redirects++
 					}
 				default:
-					agent.Info("Unknown Server response")
+					agent.Infof("Unknown Server response in eventRetrySender: %v", result)
 				}
 			}
 
-			if !resultOk {
+			if !resultOK {
 				// wait a little before retrying
 				time.Sleep(time.Duration(delay) * time.Millisecond)
-				delay = r.setRetryDelay(delay)
+				if delay, err = r.setRetryDelay(delay, &retriesNum); err != nil {
+					break
+				}
 			}
 		}
 	}
@@ -729,12 +740,16 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 	redirects := 0
 
 	// we'll stay in this loop until the call to PostMetrics() succeeds
-	resultOk := false
+	resultOK := false
+	// Number of gRPC errors encountered
 	failsNum := 0
+	// Number of retries, including gRPC errors and collector errors
+	retriesNum := 0
+	// The flag to turn on/off high level logging for fails
 	failsPrinted := false
 
 	// TODO: boilerplate code refactor as events/metrics/settings share similar processes.
-	for !resultOk {
+	for !resultOK {
 		// Fail-fast in case the reporter has been closed, otherwise it may retry until being aborted.
 		select {
 		case <-r.done:
@@ -759,9 +774,6 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			} else {
 				agent.Debugf("(%v) Error calling PostMetrics(): %v", failsNum, err)
 			}
-			if failsNum >= grpcMaxRetries {
-				break
-			}
 		} else {
 			if failsPrinted {
 				agent.Warning("Error recovered in PostMetrics()")
@@ -773,7 +785,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
 				agent.Debug("Sent metrics")
-				resultOk = true
+				resultOK = true
 				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
 				agent.Info("Server responded: Try later")
@@ -793,14 +805,16 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 					redirects++
 				}
 			default:
-				agent.Info("Unknown Server response")
+				agent.Infof("Unknown Server response in sendMetrics: %v", result)
 			}
 		}
 
-		if !resultOk {
+		if !resultOK {
 			// wait a little before retrying
 			time.Sleep(time.Duration(delay) * time.Millisecond)
-			delay = r.setRetryDelay(delay)
+			if delay, err = r.setRetryDelay(delay, &retriesNum); err != nil {
+				break
+			}
 		}
 	}
 }
@@ -829,7 +843,11 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 
 	// we'll stay in this loop until the call to GetSettings() succeeds
 	resultOK := false
+	// Number of gRPC errors encountered
 	failsNum := 0
+	// Number of retries, including gRPC errors and collector errors
+	retriesNum := 0
+	// The flag to turn on/off high level logging for fails
 	failsPrinted := false
 
 	for !resultOK {
@@ -856,9 +874,6 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 				failsPrinted = true
 			} else {
 				agent.Debugf("(%v) Error calling GetSettings(): %v", failsNum, err)
-			}
-			if failsNum >= grpcMaxRetries {
-				break
 			}
 		} else {
 			if failsPrinted {
@@ -892,14 +907,16 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 					redirects++
 				}
 			default:
-				agent.Info("Unknown Server response")
+				agent.Infof("Unknown Server response in getSettings: %v", result)
 			}
 		}
 
 		if !resultOK {
 			// wait a little before retrying
 			time.Sleep(time.Duration(delay) * time.Millisecond)
-			delay = r.setRetryDelay(delay)
+			if delay, err = r.setRetryDelay(delay, &retriesNum); err != nil {
+				break
+			}
 		}
 	}
 
@@ -999,12 +1016,16 @@ func (r *grpcReporter) statusSender() {
 		// counter for redirects so we know when the limit has been reached
 		redirects := 0
 
-		// we'll stay in this loop until the call to PostEvents() succeeds
-		resultOk := false
+		// we'll stay in this loop until the call to PostStatus() succeeds
+		resultOK := false
+		// Number of gRPC errors encountered
 		failsNum := 0
+		// Number of retries, including gRPC errors and collector errors
+		retriesNum := 0
+		// The flag to turn on/off high level logging for fails
 		failsPrinted := false
 
-		for !resultOk {
+		for !resultOK {
 			// Fail-fast in case the reporter has been closed, avoid retrying in this case.
 			select {
 			case <-r.done:
@@ -1029,9 +1050,6 @@ func (r *grpcReporter) statusSender() {
 				} else {
 					agent.Debugf("(%v) Error calling PostStatus(): %v", failsNum, err)
 				}
-				if failsNum >= grpcMaxRetries {
-					break
-				}
 			} else {
 				if failsPrinted {
 					agent.Warning("Error recovered in PostStatus()")
@@ -1043,7 +1061,7 @@ func (r *grpcReporter) statusSender() {
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
 					agent.Debug("Sent status")
-					resultOk = true
+					resultOK = true
 					r.metricConnection.reconnectAuthority = UNSET
 				case collector.ResultCode_TRY_LATER:
 					agent.Info("Server responded: Try later")
@@ -1063,14 +1081,16 @@ func (r *grpcReporter) statusSender() {
 						redirects++
 					}
 				default:
-					agent.Info("Unknown Server response")
+					agent.Infof("Unknown Server response in statusSender: %v", result)
 				}
 			}
 
-			if !resultOk {
+			if !resultOK {
 				// wait a little before retrying
 				time.Sleep(time.Duration(delay) * time.Millisecond)
-				delay = r.setRetryDelay(delay)
+				if delay, err = r.setRetryDelay(delay, &retriesNum); err != nil {
+					break
+				}
 			}
 		}
 	}
