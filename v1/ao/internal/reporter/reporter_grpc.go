@@ -458,6 +458,9 @@ func (r *grpcReporter) setRetryDelay(oldDelay int, retryNum *int) (int, error) {
 //
 // returns	error if something goes wrong during preparation or if channel is full
 func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
+	if r.Closed() {
+		return ErrReporterIsClosed
+	}
 	if err := prepareEvent(ctx, e); err != nil {
 		// don't continue if preparation failed
 		return err
@@ -964,6 +967,9 @@ func (r *grpcReporter) checkSettingsTimeout(ready chan bool) {
 //
 // returns	error if something goes wrong during preparation or if channel is full
 func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
+	if r.Closed() {
+		return ErrReporterIsClosed
+	}
 	if err := prepareEvent(ctx, e); err != nil {
 		// don't continue if preparation failed
 		return err
@@ -1105,6 +1111,9 @@ func (r *grpcReporter) statusSender() {
 //
 // returns	error if channel is full
 func (r *grpcReporter) reportSpan(span SpanMessage) error {
+	if r.Closed() {
+		return ErrReporterIsClosed
+	}
 	select {
 	case r.spanMessages <- span:
 		return nil
