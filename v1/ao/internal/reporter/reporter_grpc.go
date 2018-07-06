@@ -62,6 +62,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 	grpcRetryDelayMax                       = 60  // max connection/send retry delay in seconds
 	grpcRedirectMax                         = 20  // max allowed collector redirects
 	grpcRetryLogThreshold                   = 10  // log prints after this number of retries (about 56.7s)
+	grpcMaxRetries                          = 20  // The message will be dropped after this number of retries
 )
 
 // ID of first goroutine that attempts to reconnect a given GRPC client (eventConnection
@@ -559,6 +560,9 @@ func (r *grpcReporter) eventRetrySender(
 				} else {
 					agent.Debugf("(%v) Error calling PostEvents(): %v", failsNum, err)
 				}
+				if failsNum >= grpcMaxRetries {
+					break
+				}
 			} else {
 				if failsPrinted {
 					agent.Warning("Error recovered in PostEvents()")
@@ -717,6 +721,9 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			} else {
 				agent.Debugf("(%v) Error calling PostMetrics(): %v", failsNum, err)
 			}
+			if failsNum >= grpcMaxRetries {
+				break
+			}
 		} else {
 			if failsPrinted {
 				agent.Warning("Error recovered in PostMetrics()")
@@ -809,6 +816,9 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 				failsPrinted = true
 			} else {
 				agent.Debugf("(%v) Error calling GetSettings(): %v", failsNum, err)
+			}
+			if failsNum >= grpcMaxRetries {
+				break
 			}
 		} else {
 			if failsPrinted {
@@ -976,6 +986,9 @@ func (r *grpcReporter) statusSender() {
 					failsPrinted = true
 				} else {
 					agent.Debugf("(%v) Error calling PostStatus(): %v", failsNum, err)
+				}
+				if failsNum >= grpcMaxRetries {
+					break
 				}
 			} else {
 				if failsPrinted {
