@@ -114,7 +114,9 @@ type grpcReporter struct {
 	spanMessages   chan SpanMessage // channel for span messages (sent from agent)
 	statusMessages chan []byte      // channel for status messages (sent from agent)
 	metricMessages chan []byte      // channel for metrics messages (internal to reporter)
-	done           chan struct{}    // channel to stop the reporter
+	// The channel to stop the reporter. All the long-running goroutines monitor this channel.
+	// They will exit if this channel is closed.
+	done chan struct{}
 
 	insecureSkipVerify bool // for testing only: if true, skip verifying TLS cert hostname
 }
@@ -314,12 +316,22 @@ func (r *grpcReporter) redirect(c *grpcConnection, authority reconnectAuthority,
 
 // long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
 func (r *grpcReporter) periodicTasks() {
+	defer agent.Warning("periodicTasks goroutine exiting.")
+
 	// set up tickers
 	collectMetricsTicker := time.NewTimer(r.collectMetricsNextInterval())
 	getSettingsTicker := time.NewTimer(0)
 	settingsTimeoutCheckTicker := time.NewTimer(time.Duration(r.settingsTimeoutCheckInterval) * time.Second)
 	r.eventConnection.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
 	r.metricConnection.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
+
+	defer func() {
+		collectMetricsTicker.Stop()
+		getSettingsTicker.Stop()
+		settingsTimeoutCheckTicker.Stop()
+		r.eventConnection.pingTicker.Stop()
+		r.metricConnection.pingTicker.Stop()
+	}()
 
 	// set up 'ready' channels to indicate if a goroutine has terminated
 	collectMetricsReady := make(chan bool, 1)
@@ -332,6 +344,13 @@ func (r *grpcReporter) periodicTasks() {
 	settingsTimeoutCheckReady <- true
 
 	for {
+		// Exit if the reporter's done channel is closed.
+		select {
+		case <-r.done:
+			return
+		default:
+		}
+
 		select {
 		case <-collectMetricsTicker.C: // collect and send metrics
 			// set up ticker for next round
@@ -416,6 +435,7 @@ type grpcResult struct {
 // long-running goroutine that listens on the events message channel, collects all messages
 // on that channel and attempts to send them to the collector using the GRPC method PostEvents()
 func (r *grpcReporter) eventSender() {
+	defer agent.Warning("eventSender goroutine exiting.")
 	// send connection init message before doing anything else
 	r.eventConnection.sendConnectionInit()
 
@@ -423,6 +443,9 @@ func (r *grpcReporter) eventSender() {
 	results := r.eventBatchSender(batches)
 	inProgress := false
 	var messages [][]byte
+
+	maxBatchTicker := time.NewTicker(r.eventMaxBatchInterval)
+	defer maxBatchTicker.Stop()
 
 	for {
 		select {
@@ -435,22 +458,33 @@ func (r *grpcReporter) eventSender() {
 			// if pending entries, make next Log()
 			if len(messages) > 0 {
 				inProgress = true
-				batches <- messages
+				select {
+				case batches <- messages:
+				case <-r.done:
+					return
+				}
 				messages = [][]byte{}
 			} else {
 				// remember that we need to make one
 				inProgress = false
 			}
-
-		case <-time.After(r.eventMaxBatchInterval):
+		// When the postEvents returns and no more messages are waiting to be sent out at that
+		// time, the subsequent messages will be accumulated and a ticker is needed to trigger
+		// another action of postEvents.
+		case <-maxBatchTicker.C:
 			if !inProgress && len(messages) > 0 {
 				// kick off Log(), none was made after last return
 				inProgress = true
-				batches <- messages
+				select {
+				case batches <- messages:
+				case <-r.done:
+					return
+				}
 				messages = [][]byte{}
 			}
+		// The goroutine exits when the done channel is closed.
 		case <-r.done:
-			break
+			return
 		}
 	}
 }
@@ -469,13 +503,16 @@ func (r *grpcReporter) eventRetrySender(
 	authority reconnectAuthority,
 	connection *grpcConnection,
 ) {
+	defer agent.Warning("eventRetrySender goroutine exiting.")
+
 	for {
 		var messages [][]byte
-
+		// this will block until a message arrives or the reporter is closed
 		select {
-		// this will block until a message arrives
 		case b := <-batches:
 			messages = b
+		case <-r.done:
+			return
 		}
 
 		connection.queueStats.setQueueLargest(len(messages))
@@ -496,7 +533,14 @@ func (r *grpcReporter) eventRetrySender(
 		failsNum := 0
 		failsPrinted := false
 
+		// TODO: This loop will quit after a certain number of retries
 		for !resultOk {
+			// Fail-fast in case the reporter has been closed, avoid retrying in this case.
+			select {
+			case <-r.done:
+				return
+			default:
+			}
 			// protect the call to the client object or we could run into problems if
 			// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 			connection.lock.RLock()
@@ -529,7 +573,11 @@ func (r *grpcReporter) eventRetrySender(
 					resultOk = true
 					connection.reconnectAuthority = UNSET
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
-					results <- grpcResult{ret: result}
+					select {
+					case results <- grpcResult{ret: result}:
+					case <-r.done:
+						return
+					}
 				case collector.ResultCode_TRY_LATER:
 					agent.Info("Server responded: Try later")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
@@ -645,6 +693,12 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 
 	// TODO: boilerplate code refactor as events/metrics/settings share similar processes.
 	for !resultOk {
+		// Fail-fast in case the reporter has been closed, otherwise it may retry until being aborted.
+		select {
+		case <-r.done:
+			return
+		default:
+		}
 		// protect the call to the client object or we could run into problems if
 		// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 		r.metricConnection.lock.RLock()
@@ -732,6 +786,12 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	failsPrinted := false
 
 	for !resultOK {
+		// Fail-fast in case the reporter has been closed, avoid retrying in this case.
+		select {
+		case <-r.done:
+			return
+		default:
+		}
 		// protect the call to the client object or we could run into problems if
 		// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 		r.metricConnection.lock.RLock()
@@ -851,6 +911,7 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 // long-running goroutine that listens on the status message channel, collects all messages
 // on that channel and attempts to send them to the collector using the GRPC method PostStatus()
 func (r *grpcReporter) statusSender() {
+	defer agent.Warning("statusSender goroutine exiting.")
 	// send connection init message before doing anything else
 	r.metricConnection.sendConnectionInit()
 
@@ -861,6 +922,8 @@ func (r *grpcReporter) statusSender() {
 		// this will block until a message arrives
 		case e := <-r.statusMessages:
 			messages = append(messages, e)
+		case <-r.done: // Exit if the reporter's done channel is closed.
+			return
 		}
 		// one message detected, see if there are more and get them all!
 		done := false
@@ -871,10 +934,6 @@ func (r *grpcReporter) statusSender() {
 			default:
 				done = true
 			}
-		}
-		// if for some reason there's no message go back to top
-		if len(messages) == 0 {
-			continue
 		}
 
 		request := &collector.MessageRequest{
@@ -894,6 +953,12 @@ func (r *grpcReporter) statusSender() {
 		failsPrinted := false
 
 		for !resultOk {
+			// Fail-fast in case the reporter has been closed, avoid retrying in this case.
+			select {
+			case <-r.done:
+				return
+			default:
+			}
 			// protect the call to the client object or we could run into problems if
 			// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 			r.metricConnection.lock.RLock()
@@ -952,6 +1017,7 @@ func (r *grpcReporter) statusSender() {
 			}
 		}
 	}
+	agent.Warning("statusSender goroutine exiting.")
 }
 
 // ========================= Span Message Handling =============================
@@ -973,10 +1039,13 @@ func (r *grpcReporter) reportSpan(span SpanMessage) error {
 // long-running goroutine that listens on the span message channel and processes (aggregates)
 // incoming span messages
 func (r *grpcReporter) spanMessageAggregator() {
+	defer agent.Warning("spanMessageAggregator goroutine exiting.")
 	for {
 		select {
 		case span := <-r.spanMessages:
 			span.process()
+		case <-r.done:
+			return
 		}
 	}
 }
