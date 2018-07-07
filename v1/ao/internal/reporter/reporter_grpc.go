@@ -13,8 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"regexp"
-
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"golang.org/x/net/context"
@@ -65,21 +63,6 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 	grpcMaxRetries                          = 20  // The message will be dropped after this number of retries
 )
 
-// ID of first goroutine that attempts to reconnect a given GRPC client (eventConnection
-// or metricConnection). This is to prevent multiple goroutines from messing with the same
-// client connection (e.g. sendMetrics() and getSettings() both use the metricConnection)
-type reconnectAuthority int
-
-// possible IDs for reconnectAuthority.
-// UNSET means no goroutine is attempting a reconnect
-const (
-	UNSET       reconnectAuthority = iota
-	POSTEVENTS                     // eventSender() routine
-	POSTSTATUS                     // statusSender() routine
-	POSTMETRICS                    // sendMetrics() routine
-	GETSETTINGS                    // getSettings() routine
-)
-
 type reporterChannel int
 
 // a channel the reporter is listening on for messages from the agent
@@ -90,16 +73,15 @@ const (
 
 // everything needed for a GRPC connection
 type grpcConnection struct {
-	client             collector.TraceCollectorClient // GRPC client instance
-	connection         *grpc.ClientConn               //GRPC connection object
-	address            string                         // collector address
-	certificate        []byte                         // collector certificate
-	serviceKey         string                         // service key
-	reconnectAuthority reconnectAuthority             // ID of the goroutine attempting a reconnect on this connection
-	pingTicker         *time.Timer                    // timer for keep alive pings in seconds
-	pingTickerLock     sync.Mutex                     // lock to ensure sequential access of pingTicker
-	lock               sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
-	queueStats         *eventQueueStats               // queue stats (reset on each metrics report cycle)
+	client         collector.TraceCollectorClient // GRPC client instance
+	connection     *grpc.ClientConn               //GRPC connection object
+	address        string                         // collector address
+	certificate    []byte                         // collector certificate
+	serviceKey     string                         // service key
+	pingTicker     *time.Timer                    // timer for keep alive pings in seconds
+	pingTickerLock sync.Mutex                     // lock to ensure sequential access of pingTicker
+	lock           sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
+	queueStats     *eventQueueStats               // queue stats (reset on each metrics report cycle)
 }
 
 type grpcReporter struct {
@@ -132,11 +114,6 @@ var (
 	ErrMaxRetriesExceeded     = errors.New("maximum retries exceeded")
 )
 
-// A valid service key is something like 'service_token:service_name'.
-// The service_token should be of 64 characters long and the size of
-// service_name is larger than 0 but up to 255 characters.
-var isValidServiceKey = regexp.MustCompile(`^[a-zA-Z0-9]{64}:\S{1,255}$`).MatchString
-
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
@@ -147,9 +124,9 @@ func newGRPCReporter() reporter {
 
 	// service key is required, so bail out if not found
 	serviceKey := agent.GetConfig(agent.AppOpticsServiceKey)
-	if !isValidServiceKey(serviceKey) {
-		agent.Warningf("Invalid service key (token:serviceName): <%s>. Reporter disabled.", serviceKey)
-		agent.Warning("Check AppOptics dashboard for your token and use a service name shorter than 256 characters.")
+	if !agent.IsValidServiceKey(serviceKey) {
+		agent.Errorf("Invalid service key (token:serviceName): <%s>. Reporter disabled.", serviceKey)
+		agent.Error("Check AppOptics dashboard for your token and use a service name shorter than 256 characters.")
 		return &nullReporter{}
 	}
 
@@ -215,6 +192,8 @@ func newGRPCReporter() reporter {
 		statusMessages: make(chan []byte, 1024),
 		metricMessages: make(chan []byte, 1024),
 
+		done: make(chan struct{}),
+
 		insecureSkipVerify: insecureSkipVerify,
 	}
 
@@ -236,6 +215,7 @@ func newGRPCReporter() reporter {
 	// channel and processes incoming span messages
 	go reporter.spanMessageAggregator()
 
+	agent.Infof("AppOptics reporter is started: %v", reporter.done)
 	return reporter
 }
 
@@ -279,7 +259,7 @@ func (r *grpcReporter) Shutdown() error {
 	case <-r.done:
 		return ErrShutdownClosedReporter
 	default:
-		agent.Info("Closing the gRPC reporter.")
+		agent.Warningf("Shutting down the gRPC reporter: %v", r.done)
 		close(r.done)
 		// There may be messages
 		r.closeConns()
@@ -303,57 +283,30 @@ func (r *grpcReporter) Closed() bool {
 	}
 }
 
-// attempts to restore a lost client connection
-// c			client connection to perform the reconnect
-// authority	ID of the goroutine attempting a reconnect
-func (r *grpcReporter) reconnect(c *grpcConnection, authority reconnectAuthority) {
-	if c.reconnectAuthority == UNSET {
-		// we might be the first goroutine attempting a reconnect, lock and check again
-		c.lock.Lock()
-		if c.reconnectAuthority == UNSET {
-			// yes, we are indeed the first, so take ownership of the reconnecting procedure
-			c.reconnectAuthority = authority
-		}
-		c.lock.Unlock()
-	}
-
-	if c.reconnectAuthority == authority {
-		// we are authorized to attempt a reconnect
-		c.lock.Lock()
-		agent.Info("Lost connection -- attempting reconnect...")
-		c.client = collector.NewTraceCollectorClient(c.connection)
-		c.lock.Unlock()
-
-		c.sendConnectionInit()
-	} else {
-		// we are not authorized to attempt a reconnect, so simply
-		// wait until the connection has been restored
-		for c.reconnectAuthority != UNSET {
-			time.Sleep(time.Second)
-		}
-	}
-}
-
 // redirect to a different collector
 // c			client connection to perform the redirect
-// authority	ID of the goroutine attempting a redirect
 // address		redirect address
-func (r *grpcReporter) redirect(c *grpcConnection, authority reconnectAuthority, address string) {
+func (r *grpcReporter) redirect(c *grpcConnection, address string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	// Someone else has done it.
+	if c.address == address {
+		return
+	}
 	// create a new connection object for this client
 	conn, err := grpcCreateClientConnection(c.certificate, address, r.insecureSkipVerify)
 	if err != nil {
 		agent.Errorf("Failed redirect to: %v %v", address, err)
 	}
 
+	// close the old connection
+	c.connection.Close()
 	// set new connection (need to be protected)
-	c.lock.Lock()
-	oldConn := c.connection
 	c.connection = conn
-	c.lock.Unlock()
-
-	// attempt reconnect using the new connection
-	r.reconnect(c, authority)
-	oldConn.Close()
+	c.client = collector.NewTraceCollectorClient(c.connection)
+	c.address = address
+	c.sendConnectionInit()
 }
 
 // long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
@@ -392,7 +345,6 @@ func (r *grpcReporter) periodicTasks() {
 			return
 		default:
 		}
-
 		select {
 		case <-collectMetricsTicker.C: // collect and send metrics
 			// set up ticker for next round
@@ -429,6 +381,8 @@ func (r *grpcReporter) periodicTasks() {
 			// set up ticker for next round
 			r.metricConnection.resetPing()
 			go r.metricConnection.ping()
+		case <-r.done:
+			return
 		}
 	}
 }
@@ -468,10 +422,10 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 
 	select {
 	case r.eventMessages <- (*e).bbuf.GetBuf():
-		go atomic.AddInt64(&r.eventConnection.queueStats.totalEvents, int64(1)) // use goroutine so this won't block on the critical path
+		atomic.AddInt64(&r.eventConnection.queueStats.totalEvents, int64(1)) // use goroutine so this won't block on the critical path
 		return nil
 	default:
-		go atomic.AddInt64(&r.eventConnection.queueStats.numOverflowed, int64(1)) // use goroutine so this won't block on the critical path
+		atomic.AddInt64(&r.eventConnection.queueStats.numOverflowed, int64(1)) // use goroutine so this won't block on the critical path
 		return errors.New("event message queue is full")
 	}
 }
@@ -541,7 +495,7 @@ func (r *grpcReporter) eventSender() {
 func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan grpcResult {
 	results := make(chan grpcResult)
 	go func() {
-		r.eventRetrySender(batches, results, POSTEVENTS, r.eventConnection)
+		r.eventRetrySender(batches, results, r.eventConnection)
 	}()
 	return results
 }
@@ -549,7 +503,6 @@ func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan grpcResult {
 func (r *grpcReporter) eventRetrySender(
 	batches <-chan [][]byte,
 	results chan<- grpcResult,
-	authority reconnectAuthority,
 	connection *grpcConnection,
 ) {
 	defer agent.Warning("eventRetrySender goroutine exiting.")
@@ -619,7 +572,6 @@ func (r *grpcReporter) eventRetrySender(
 				case collector.ResultCode_OK:
 					agent.Debugf("Sent %d events", len(messages))
 					resultOK = true
-					connection.reconnectAuthority = UNSET
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
 					select {
 					case results <- grpcResult{ret: result}:
@@ -640,7 +592,7 @@ func (r *grpcReporter) eventRetrySender(
 					if redirects > grpcRedirectMax {
 						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
-						r.redirect(connection, authority, response.GetArg())
+						r.redirect(connection, response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++
@@ -781,7 +733,6 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 			case collector.ResultCode_OK:
 				agent.Debug("Sent metrics")
 				resultOK = true
-				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
 				agent.Info("Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
@@ -794,7 +745,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 				if redirects > grpcRedirectMax {
 					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
-					r.redirect(r.metricConnection, POSTMETRICS, response.GetArg())
+					r.redirect(r.metricConnection, response.GetArg())
 					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
@@ -879,7 +830,6 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 				agent.Debugf("Got new settings from server %v", r.metricConnection.address)
 				r.updateSettings(response)
 				resultOK = true
-				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
 				agent.Info("Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
@@ -892,7 +842,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 				if redirects > grpcRedirectMax {
 					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
-					r.redirect(r.metricConnection, GETSETTINGS, response.GetArg())
+					r.redirect(r.metricConnection, response.GetArg())
 					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
@@ -1052,7 +1002,6 @@ func (r *grpcReporter) statusSender() {
 				case collector.ResultCode_OK:
 					agent.Debug("Sent status")
 					resultOK = true
-					r.metricConnection.reconnectAuthority = UNSET
 				case collector.ResultCode_TRY_LATER:
 					agent.Info("Server responded: Try later")
 				case collector.ResultCode_LIMIT_EXCEEDED:
@@ -1065,7 +1014,7 @@ func (r *grpcReporter) statusSender() {
 					if redirects > grpcRedirectMax {
 						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
-						r.redirect(r.metricConnection, POSTSTATUS, response.GetArg())
+						r.redirect(r.metricConnection, response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++

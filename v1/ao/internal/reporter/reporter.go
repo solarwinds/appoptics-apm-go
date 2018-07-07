@@ -63,6 +63,11 @@ func init() {
 }
 
 func setGlobalReporter(reporterType string) {
+	// Close the previous reporter
+	if globalReporter != nil {
+		globalReporter.Shutdown()
+	}
+
 	switch strings.ToLower(reporterType) {
 	case "ssl":
 		fallthrough // using fallthrough since the SSL reporter (GRPC) is our default reporter

@@ -4,10 +4,12 @@ package reporter
 
 import (
 	"errors"
+	"io"
 	"log"
 	"net"
 	"os"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -309,8 +311,6 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "info")
 	agent.Init()
 	addr := "localhost:4567"
-	// Open it if for verbose print of gRPC
-	//grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
 
@@ -428,7 +428,7 @@ func TestRedirect(t *testing.T) {
 	time.Sleep(time.Second * 10)
 
 	// Call redirect directly
-	r.redirect(r.eventConnection, POSTEVENTS, addr2)
+	r.redirect(r.eventConnection, addr2)
 
 	for i := 11; i <= 20; i++ {
 		ctx := newTestContext(t)
@@ -450,4 +450,142 @@ func TestRedirect(t *testing.T) {
 	}
 	assert.Equal(t, 20, len(bsonArr))
 
+}
+
+func TestShutdownGRPCReporter(t *testing.T) {
+	// var buf bytes.Buffer
+	// log.SetOutput(&buf)
+	// defer func() {
+	// 	log.SetOutput(os.Stderr)
+	// }()
+
+	// start test gRPC server
+	periodicTasksDisabled = false
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
+	addr := "localhost:4567"
+	server := StartTestGRPCServer(t, addr)
+	time.Sleep(100 * time.Millisecond)
+
+	// set gRPC reporter
+	reportingDisabled = false
+	os.Setenv("APPOPTICS_COLLECTOR", addr)
+	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
+	agent.Init()
+	oldReporter := globalReporter
+	// numGo := runtime.NumGoroutine()
+	setGlobalReporter("ssl")
+
+	require.IsType(t, &grpcReporter{}, globalReporter)
+	time.Sleep(time.Second * 5)
+
+	r := globalReporter.(*grpcReporter)
+	r.Shutdown()
+	time.Sleep(time.Second * 5)
+	assert.Equal(t, true, r.Closed())
+
+	// // Print current goroutines stack
+	// buf := make([]byte, 1<<16)
+	// runtime.Stack(buf, true)
+	// fmt.Printf("%s", buf)
+
+	e := r.Shutdown()
+	assert.NotEqual(t, nil, e)
+
+	// stop test reporter
+	server.Stop()
+	globalReporter = oldReporter
+	periodicTasksDisabled = true
+	// fmt.Println(buf)
+}
+
+func TestInvalidKey(t *testing.T) {
+	var buf SafeBuffer
+	var writers []io.Writer
+
+	writers = append(writers, &buf)
+	writers = append(writers, os.Stderr)
+
+	log.SetOutput(io.MultiWriter(writers...))
+
+	defer func() {
+		log.SetOutput(os.Stderr)
+	}()
+
+	invalidKey := "invalidf6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
+	periodicTasksDisabled = false
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
+	oldKey := os.Getenv("APPOPTICS_SERVICE_KEY")
+	os.Setenv("APPOPTICS_SERVICE_KEY", invalidKey)
+	addr := "localhost:4567"
+	os.Setenv("APPOPTICS_COLLECTOR", addr)
+	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
+	reportingDisabled = false
+
+	// start test gRPC server
+	server := StartTestGRPCServer(t, addr)
+	time.Sleep(100 * time.Millisecond)
+
+	// set gRPC reporter
+	agent.Init()
+	oldReporter := globalReporter
+	// numGo := runtime.NumGoroutine()
+	setGlobalReporter("ssl")
+
+	require.IsType(t, &grpcReporter{}, globalReporter)
+	time.Sleep(time.Second * 5)
+
+	r := globalReporter.(*grpcReporter)
+	ctx := newTestContext(t)
+	ev1, _ := ctx.newEvent(LabelInfo, "hello-from-invalid-key")
+	assert.NoError(t, r.reportEvent(ctx, ev1))
+
+	time.Sleep(5 * time.Second)
+	// assert.Equal(t, numGo, runtime.NumGoroutine())
+	assert.Equal(t, true, r.Closed())
+	e := r.Shutdown()
+	assert.NotEqual(t, nil, e)
+
+	// Tear down everything.
+	server.Stop()
+	globalReporter = oldReporter
+	periodicTasksDisabled = true
+	os.Setenv("APPOPTICS_SERVICE_KEY", oldKey)
+
+	patterns := []string{
+		"Server responded: Invalid API key. Reporter is closing",
+		"Shutting down the gRPC reporter",
+		"periodicTasks goroutine exiting",
+		"eventSender goroutine exiting",
+		"spanMessageAggregator goroutine exiting",
+		"statusSender goroutine exiting",
+		"eventRetrySender goroutine exiting",
+	}
+	for _, ptn := range patterns {
+		assert.True(t, strings.Contains(buf.String(), ptn))
+	}
+
+}
+
+// SafeBuffer is goroutine-safe buffer. It is for internal test use only.
+type SafeBuffer struct {
+	buf bytes.Buffer
+	sync.Mutex
+}
+
+func (b *SafeBuffer) Read(p []byte) (int, error) {
+	b.Lock()
+	defer b.Unlock()
+	return b.buf.Read(p)
+}
+
+func (b *SafeBuffer) Write(p []byte) (int, error) {
+	b.Lock()
+	defer b.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *SafeBuffer) String() string {
+	b.Lock()
+	defer b.Unlock()
+	return b.buf.String()
 }
