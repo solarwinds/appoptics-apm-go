@@ -384,11 +384,11 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 
 func TestRedirect(t *testing.T) {
 	// start test gRPC server
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "info")
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	agent.Init()
 	addr := "localhost:4567"
 	// Open it if for verbose print of gRPC
-	//grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
+	grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
 
@@ -426,9 +426,8 @@ func TestRedirect(t *testing.T) {
 	addr2 := "localhost:4568"
 	server = StartTestGRPCServer(t, addr2)
 	time.Sleep(time.Second * 10)
-
 	// Call redirect directly
-	r.redirect(r.eventConnection, addr2)
+	r.redirectTo(r.eventConnection, addr2)
 
 	for i := 11; i <= 20; i++ {
 		ctx := newTestContext(t)

@@ -290,8 +290,11 @@ func (r *grpcReporter) redirect(c *grpcConnection, address string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
+	agent.Debugf("Redirecting to %s", address)
+
 	// Someone else has done it.
 	if c.address == address {
+		agent.Debug("Someone else has done the redirection.")
 		return
 	}
 	// create a new connection object for this client
@@ -306,6 +309,12 @@ func (r *grpcReporter) redirect(c *grpcConnection, address string) {
 	c.connection = conn
 	c.client = collector.NewTraceCollectorClient(c.connection)
 	c.address = address
+}
+
+// redirectTo redirects the gRPC connection to the new address and send a
+// ConnectionInit message to the collector.
+func (r *grpcReporter) redirectTo(c *grpcConnection, address string) {
+	r.redirect(c, address)
 	c.sendConnectionInit()
 }
 
@@ -592,7 +601,7 @@ func (r *grpcReporter) eventRetrySender(
 					if redirects > grpcRedirectMax {
 						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
-						r.redirect(connection, response.GetArg())
+						r.redirectTo(connection, response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++
@@ -745,7 +754,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 				if redirects > grpcRedirectMax {
 					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
-					r.redirect(r.metricConnection, response.GetArg())
+					r.redirectTo(r.metricConnection, response.GetArg())
 					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
@@ -842,7 +851,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 				if redirects > grpcRedirectMax {
 					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
-					r.redirect(r.metricConnection, response.GetArg())
+					r.redirectTo(r.metricConnection, response.GetArg())
 					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
@@ -1014,7 +1023,7 @@ func (r *grpcReporter) statusSender() {
 					if redirects > grpcRedirectMax {
 						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
-						r.redirect(r.metricConnection, response.GetArg())
+						r.redirectTo(r.metricConnection, response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++
