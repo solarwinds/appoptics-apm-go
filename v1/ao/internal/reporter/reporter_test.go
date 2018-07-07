@@ -24,7 +24,6 @@ import (
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/grpclog"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -221,7 +220,6 @@ func TestGRPCReporter(t *testing.T) {
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	agent.Init()
 	addr := "localhost:4567"
-	grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
 
@@ -387,8 +385,6 @@ func TestRedirect(t *testing.T) {
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	agent.Init()
 	addr := "localhost:4567"
-	// Open it if for verbose print of gRPC
-	grpclog.SetLogger(log.New(os.Stdout, "grpc: ", log.LstdFlags))
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
 
