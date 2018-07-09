@@ -17,15 +17,12 @@ import (
 )
 
 // for testing only
-
 func printBson(message []byte) {
 	m := make(map[string]interface{})
 	bson.Unmarshal(message, m)
 	b, _ := json.MarshalIndent(m, "", "  ")
 	fmt.Println(time.Now().Format("15:04:05"), string(b))
 }
-
-///////////////////////
 
 // getLineByKeword reads a file, searches for the keyword and returns the matched line.
 // It returns empty string "" if no match found or failed to open the path.

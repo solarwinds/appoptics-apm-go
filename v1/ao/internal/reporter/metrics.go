@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
@@ -102,13 +103,13 @@ type histograms struct {
 }
 
 // counters of the event queue stats
+// All the fields are supposed to be accessed through atomic operations
 type eventQueueStats struct {
-	numSent       int64      // number of messages that were successfully sent
-	numOverflowed int64      // number of messages that overflowed the queue
-	numFailed     int64      // number of messages that failed to send
-	totalEvents   int64      // number of messages queued to send
-	queueLargest  int64      // maximum number of messages that were in the queue at one time
-	lock          sync.Mutex // protect access to the counters
+	numSent       int64 // number of messages that were successfully sent
+	numOverflowed int64 // number of messages that overflowed the queue
+	numFailed     int64 // number of messages that failed to send
+	totalEvents   int64 // number of messages queued to send
+	queueLargest  int64 // maximum number of messages that were in the queue at one time
 }
 
 // rate counts reported by trace sampler
@@ -262,22 +263,13 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	addMetricsValue(bbuf, &index, "SampleCount", rc.sampled)
 	addMetricsValue(bbuf, &index, "ThroughTraceCount", rc.through)
 
-	// event queue stats
-	queueStats.lock.Lock()
-
-	addMetricsValue(bbuf, &index, "NumSent", queueStats.numSent)
-	addMetricsValue(bbuf, &index, "NumOverflowed", queueStats.numOverflowed)
-	addMetricsValue(bbuf, &index, "NumFailed", queueStats.numFailed)
-	addMetricsValue(bbuf, &index, "TotalEvents", queueStats.totalEvents)
-	addMetricsValue(bbuf, &index, "QueueLargest", queueStats.queueLargest)
-
-	queueStats.numSent = 0
-	queueStats.numOverflowed = 0
-	queueStats.numFailed = 0
-	queueStats.totalEvents = 0
-	queueStats.queueLargest = 0
-
-	queueStats.lock.Unlock()
+	// Queue states
+	q := queueStats.copyAndReset()
+	addMetricsValue(bbuf, &index, "NumSent", q.numSent)
+	addMetricsValue(bbuf, &index, "NumOverflowed", q.numOverflowed)
+	addMetricsValue(bbuf, &index, "NumFailed", q.numFailed)
+	addMetricsValue(bbuf, &index, "TotalEvents", q.totalEvents)
+	addMetricsValue(bbuf, &index, "QueueLargest", q.queueLargest)
 
 	addHostMetrics(bbuf, &index)
 
@@ -825,9 +817,28 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 }
 
 func (s *eventQueueStats) setQueueLargest(count int) {
-	s.lock.Lock()
-	if int64(count) > s.queueLargest {
-		s.queueLargest = int64(count)
+	newVal := int64(count)
+
+	for {
+		currVal := atomic.LoadInt64(&s.queueLargest)
+		if newVal <= currVal {
+			return
+		}
+		if atomic.CompareAndSwapInt64(&s.queueLargest, currVal, newVal) {
+			return
+		}
 	}
-	s.lock.Unlock()
+}
+
+// copyAndReset returns a copy of its current values and reset itself.
+func (s *eventQueueStats) copyAndReset() eventQueueStats {
+	c := eventQueueStats{}
+
+	c.numSent = atomic.SwapInt64(&s.numSent, 0)
+	c.numFailed = atomic.SwapInt64(&s.numFailed, 0)
+	c.totalEvents = atomic.SwapInt64(&s.totalEvents, 0)
+	c.numOverflowed = atomic.SwapInt64(&s.numOverflowed, 0)
+	c.queueLargest = atomic.SwapInt64(&s.queueLargest, 0)
+
+	return c
 }
