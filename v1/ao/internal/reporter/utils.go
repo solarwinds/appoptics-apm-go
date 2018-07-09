@@ -16,7 +16,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-// for testing only
+// printBson prints the BSON message. It's not concurrent-safe and is for testing only
 func printBson(message []byte) {
 	m := make(map[string]interface{})
 	bson.Unmarshal(message, m)
