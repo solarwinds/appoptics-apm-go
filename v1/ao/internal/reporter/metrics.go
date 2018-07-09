@@ -532,7 +532,11 @@ func getAWSInstanceZone() string {
 
 // getContainerID call the initializer if not yet called, and return getContainerID
 func getContainerID() string {
-	onceContainerID.Do(initContainerID)
+	onceContainerID.Do(func() {
+		initContainerID(func(keyword string) string {
+			return getLineByKeyword("/proc/self/cgroup", keyword)
+		}, []string{"/docker/", "/ecs/", "/kubepods/"})
+	})
 	return cachedContainerID
 }
 
@@ -540,12 +544,11 @@ func getContainerID() string {
 var onceContainerID sync.Once
 
 // initContainerID initializes the docker container ID (or empty string if not a docker/ecs container)
-func initContainerID() {
-	keywords := []string{"/docker/", "/ecs/", "kubepods"}
+func initContainerID(getContainerMeta func(string) string, keywords []string) {
 	line := ""
 	cachedContainerID = ""
 	for _, keyword := range keywords {
-		if line = getLineByKeyword("/proc/self/cgroup", keyword); line != "" {
+		if line = getContainerMeta(keyword); line != "" {
 			break
 		}
 	}
