@@ -530,17 +530,26 @@ func getAWSInstanceZone() string {
 	return getAWSMeta(&cachedAWSInstanceZone, ec2MetadataZoneURL)
 }
 
-// gets the docker container ID (or empty string if not a docker/ecs container)
+// getContainerID call the initializer if not yet called, and return getContainerID
 func getContainerID() string {
-	if cachedContainerID != "uninitialized" {
-		return cachedContainerID
+	onceContainerID.Do(initContainerID)
+	return cachedContainerID
+}
+
+// onceContainerID is used to initialize the cachedContainerID only once.
+var onceContainerID sync.Once
+
+// initContainerID initializes the docker container ID (or empty string if not a docker/ecs container)
+func initContainerID() {
+	keywords := []string{"/docker/", "/ecs/", "kubepods"}
+	line := ""
+	cachedContainerID = ""
+	for _, keyword := range keywords {
+		if line = getLineByKeyword("/proc/self/cgroup", keyword); line != "" {
+			break
+		}
 	}
 
-	cachedContainerID = ""
-	line := getLineByKeyword("/proc/self/cgroup", "/docker/")
-	if line == "" {
-		line = getLineByKeyword("/proc/self/cgroup", "/ecs/")
-	}
 	if line != "" {
 		tokens := strings.Split(line, "/")
 		// A typical line returned by cat /proc/self/cgroup:
@@ -556,8 +565,6 @@ func getContainerID() string {
 			}
 		}
 	}
-
-	return cachedContainerID
 }
 
 // appends a metric to a BSON buffer, the form will be:
