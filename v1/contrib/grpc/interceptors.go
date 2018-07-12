@@ -47,7 +47,8 @@ func tracingContext(ctx context.Context, serverName string, methodName string, s
 	return ao.NewContext(ctx, t)
 }
 
-// UnaryServerInterceptor returns an interceptor that traces gRPC unary RPCs using AppOptics.
+// UnaryServerInterceptor returns an interceptor that traces gRPC unary server RPCs using AppOptics.
+// If the client is using UnaryClientInterceptor, the distributed trace's context will be read from the client.
 func UnaryServerInterceptor(serverName string) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
@@ -86,8 +87,8 @@ func wrapServerStream(stream grpc.ServerStream) *wrappedServerStream {
 	return &wrappedServerStream{ServerStream: stream, WrappedContext: stream.Context()}
 }
 
-// StreamServerInterceptor returns an interceptor that traces a gRPC streaming server using AppOptics.
-// The server span starts with the first request and ends when all request and response messages have finished streaming.
+// StreamServerInterceptor returns an interceptor that traces gRPC streaming server RPCs using AppOptics.
+// Each server span starts with the first message and ends when all request and response messages have finished streaming.
 func StreamServerInterceptor(serverName string) grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		var err error
@@ -140,7 +141,7 @@ func UnaryClientInterceptor(target string, serviceName string) grpc.UnaryClientI
 
 // StreamClientInterceptor returns an interceptor that traces a streaming RPC from a gRPC client to a server using
 // AppOptics, by propagating the distributed trace's context from client to server using gRPC metadata.
-// The client span starts with the first request and ends when all request and response messages have finished streaming.
+// The client span starts with the first message and ends when all request and response messages have finished streaming.
 func StreamClientInterceptor(target string, serviceName string) grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 		action := actionFromMethod(method)
