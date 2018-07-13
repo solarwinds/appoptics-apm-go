@@ -407,4 +407,4 @@ Please let us know if you are using this package while it is in preview by conta
 
 Copyright (c) 2018 Librato, Inc.
 
-Released under the [Librato Open License](http://docs.traceview.solarwinds.com/Instrumentation/librato-open-license.html), Version 1.0
+Released under the [Librato Open License](https://docs.appoptics.com/kb/apm_tracing/librato-open-license/), Version 1.0
