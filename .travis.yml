@@ -22,19 +22,19 @@ install:
 script:
   - cd $GOPATH/src/github.com/appoptics/appoptics-apm-go/v1/ao
   - go build -v github.com/appoptics/appoptics-apm-go/v1/ao github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent
-  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent,github.com/appoptics/appoptics-apm-go/v1/ao
-  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covao.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent,github.com/appoptics/appoptics-apm-go/v1/ao
+  - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent,github.com/appoptics/appoptics-apm-go/v1/ao
+  - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent,github.com/appoptics/appoptics-apm-go/v1/ao
   - pushd internal/reporter/
-  - go test -v -covermode=atomic -coverprofile=cov.out
-  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covao.out
+  - go test -v -race -covermode=atomic -coverprofile=cov.out
+  - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out
   - popd
   - pushd internal/agent/
-  - go test -v -covermode=atomic -coverprofile=cov.out
-  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covao.out
+  - go test -v -race -covermode=atomic -coverprofile=cov.out
+  - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out
   - popd
   - pushd opentracing
-  - go test -v -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao
-  - go test -v -tags disable_tracing -covermode=atomic -coverprofile=covao.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao
+  - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao
+  - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao
   - popd
   - gocovmerge cov.out covao.out internal/reporter/cov.out internal/reporter/covao.out internal/agent/cov.out internal/agent/covao.out opentracing/cov.out opentracing/covao.out > coverage.txt
 

@@ -13,8 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"regexp"
-
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"golang.org/x/net/context"
@@ -62,21 +60,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 	grpcRetryDelayMax                       = 60  // max connection/send retry delay in seconds
 	grpcRedirectMax                         = 20  // max allowed collector redirects
 	grpcRetryLogThreshold                   = 10  // log prints after this number of retries (about 56.7s)
-)
-
-// ID of first goroutine that attempts to reconnect a given GRPC client (eventConnection
-// or metricConnection). This is to prevent multiple goroutines from messing with the same
-// client connection (e.g. sendMetrics() and getSettings() both use the metricConnection)
-type reconnectAuthority int
-
-// possible IDs for reconnectAuthority.
-// UNSET means no goroutine is attempting a reconnect
-const (
-	UNSET       reconnectAuthority = iota
-	POSTEVENTS                     // eventSender() routine
-	POSTSTATUS                     // statusSender() routine
-	POSTMETRICS                    // sendMetrics() routine
-	GETSETTINGS                    // getSettings() routine
+	grpcMaxRetries                          = 20  // The message will be dropped after this number of retries
 )
 
 type reporterChannel int
@@ -89,16 +73,15 @@ const (
 
 // everything needed for a GRPC connection
 type grpcConnection struct {
-	client             collector.TraceCollectorClient // GRPC client instance
-	connection         *grpc.ClientConn               //GRPC connection object
-	address            string                         // collector address
-	certificate        []byte                         // collector certificate
-	serviceKey         string                         // service key
-	reconnectAuthority reconnectAuthority             // ID of the goroutine attempting a reconnect on this connection
-	pingTicker         *time.Timer                    // timer for keep alive pings in seconds
-	pingTickerLock     sync.Mutex                     // lock to ensure sequential access of pingTicker
-	lock               sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
-	queueStats         *eventQueueStats               // queue stats (reset on each metrics report cycle)
+	client         collector.TraceCollectorClient // GRPC client instance
+	connection     *grpc.ClientConn               //GRPC connection object
+	address        string                         // collector address
+	certificate    []byte                         // collector certificate
+	serviceKey     string                         // service key
+	pingTicker     *time.Timer                    // timer for keep alive pings in seconds
+	pingTickerLock sync.Mutex                     // lock to ensure sequential access of pingTicker
+	lock           sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
+	queueStats     *eventQueueStats               // queue stats (reset on each metrics report cycle)
 }
 
 type grpcReporter struct {
@@ -114,15 +97,22 @@ type grpcReporter struct {
 	spanMessages   chan SpanMessage // channel for span messages (sent from agent)
 	statusMessages chan []byte      // channel for status messages (sent from agent)
 	metricMessages chan []byte      // channel for metrics messages (internal to reporter)
-	done           chan struct{}    // channel to stop the reporter
-
-	insecureSkipVerify bool // for testing only: if true, skip verifying TLS cert hostname
+	// The reporter doesn't have a explicit field to record its state. This channel is used to notify all the
+	// long-running goroutines to stop themselves. All the goroutines will check this channel and close if the
+	// channel is closed.
+	// Don't send data into this channel, just close it by calling Shutdown().
+	done chan struct{}
+	// for testing only: if true, skip verifying TLS cert hostname
+	insecureSkipVerify bool
 }
 
-// A valid service key is something like 'service_token:service_name'.
-// The service_token should be of 64 characters long and the size of
-// service_name is larger than 0 but up to 255 characters.
-var isValidServiceKey = regexp.MustCompile(`^[a-zA-Z0-9]{64}:\S{1,255}$`).MatchString
+// gRPC reporter errors
+var (
+	// You are trying to close a reporter which had been closed before.
+	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed reporter")
+	ErrReporterIsClosed       = errors.New("the reporter is closed")
+	ErrMaxRetriesExceeded     = errors.New("maximum retries exceeded")
+)
 
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
@@ -134,9 +124,9 @@ func newGRPCReporter() reporter {
 
 	// service key is required, so bail out if not found
 	serviceKey := agent.GetConfig(agent.AppOpticsServiceKey)
-	if !isValidServiceKey(serviceKey) {
-		agent.Warningf("Invalid service key (token:serviceName): <%s>. Reporter disabled.", serviceKey)
-		agent.Warning("Check AppOptics dashboard for your token and use a service name shorter than 256 characters.")
+	if !agent.IsValidServiceKey(serviceKey) {
+		agent.Errorf("Invalid service key (token:serviceName): <%s>. Reporter disabled.", serviceKey)
+		agent.Error("Check AppOptics dashboard for your token and use a service name shorter than 256 characters.")
 		return &nullReporter{}
 	}
 
@@ -202,6 +192,8 @@ func newGRPCReporter() reporter {
 		statusMessages: make(chan []byte, 1024),
 		metricMessages: make(chan []byte, 1024),
 
+		done: make(chan struct{}),
+
 		insecureSkipVerify: insecureSkipVerify,
 	}
 
@@ -223,6 +215,7 @@ func newGRPCReporter() reporter {
 	// channel and processes incoming span messages
 	go reporter.spanMessageAggregator()
 
+	agent.Infof("AppOptics reporter is started: %v", reporter.done)
 	return reporter
 }
 
@@ -259,67 +252,90 @@ func grpcCreateClientConnection(cert []byte, addr string, insecureSkipVerify boo
 	return grpc.Dial(addr, grpc.WithTransportCredentials(creds))
 }
 
-// attempts to restore a lost client connection
-// c			client connection to perform the reconnect
-// authority	ID of the goroutine attempting a reconnect
-func (r *grpcReporter) reconnect(c *grpcConnection, authority reconnectAuthority) {
-	if c.reconnectAuthority == UNSET {
-		// we might be the first goroutine attempting a reconnect, lock and check again
-		c.lock.Lock()
-		if c.reconnectAuthority == UNSET {
-			// yes, we are indeed the first, so take ownership of the reconnecting procedure
-			c.reconnectAuthority = authority
-		}
-		c.lock.Unlock()
+// Shutdown closes the reporter by close the `done` channel. All long-running goroutines
+// monitor the channel `done` in the reporter and close themselves when the channel is closed.
+func (r *grpcReporter) Shutdown() error {
+	select {
+	case <-r.done:
+		return ErrShutdownClosedReporter
+	default:
+		agent.Warningf("Shutting down the gRPC reporter: %v", r.done)
+		close(r.done)
+		// There may be messages
+		r.closeConns()
+		return nil
 	}
+}
 
-	if c.reconnectAuthority == authority {
-		// we are authorized to attempt a reconnect
-		c.lock.Lock()
-		agent.Info("Lost connection -- attempting reconnect...")
-		c.client = collector.NewTraceCollectorClient(c.connection)
-		c.lock.Unlock()
+// closeConns closes all the gRPC connections of a reporter
+func (r *grpcReporter) closeConns() {
+	r.eventConnection.connection.Close()
+	r.metricConnection.connection.Close()
+}
 
-		c.sendConnectionInit()
-	} else {
-		// we are not authorized to attempt a reconnect, so simply
-		// wait until the connection has been restored
-		for c.reconnectAuthority != UNSET {
-			time.Sleep(time.Second)
-		}
+// Closed return true if the reporter is already closed, or false otherwise.
+func (r *grpcReporter) Closed() bool {
+	select {
+	case <-r.done:
+		return true
+	default:
+		return false
 	}
 }
 
 // redirect to a different collector
 // c			client connection to perform the redirect
-// authority	ID of the goroutine attempting a redirect
 // address		redirect address
-func (r *grpcReporter) redirect(c *grpcConnection, authority reconnectAuthority, address string) {
+func (r *grpcReporter) redirect(c *grpcConnection, address string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	agent.Debugf("Redirecting to %s", address)
+
+	// Someone else has done it.
+	if c.address == address {
+		agent.Debug("Someone else has done the redirection.")
+		return
+	}
 	// create a new connection object for this client
 	conn, err := grpcCreateClientConnection(c.certificate, address, r.insecureSkipVerify)
 	if err != nil {
 		agent.Errorf("Failed redirect to: %v %v", address, err)
 	}
 
+	// close the old connection
+	c.connection.Close()
 	// set new connection (need to be protected)
-	c.lock.Lock()
-	oldConn := c.connection
 	c.connection = conn
-	c.lock.Unlock()
+	c.client = collector.NewTraceCollectorClient(c.connection)
+	c.address = address
+}
 
-	// attempt reconnect using the new connection
-	r.reconnect(c, authority)
-	oldConn.Close()
+// redirectTo redirects the gRPC connection to the new address and send a
+// ConnectionInit message to the collector.
+func (r *grpcReporter) redirectTo(c *grpcConnection, address string) {
+	r.redirect(c, address)
+	c.sendConnectionInit()
 }
 
 // long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
 func (r *grpcReporter) periodicTasks() {
+	defer agent.Warning("periodicTasks goroutine exiting.")
+
 	// set up tickers
 	collectMetricsTicker := time.NewTimer(r.collectMetricsNextInterval())
 	getSettingsTicker := time.NewTimer(0)
 	settingsTimeoutCheckTicker := time.NewTimer(time.Duration(r.settingsTimeoutCheckInterval) * time.Second)
 	r.eventConnection.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
 	r.metricConnection.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
+
+	defer func() {
+		collectMetricsTicker.Stop()
+		getSettingsTicker.Stop()
+		settingsTimeoutCheckTicker.Stop()
+		r.eventConnection.pingTicker.Stop()
+		r.metricConnection.pingTicker.Stop()
+	}()
 
 	// set up 'ready' channels to indicate if a goroutine has terminated
 	collectMetricsReady := make(chan bool, 1)
@@ -332,6 +348,12 @@ func (r *grpcReporter) periodicTasks() {
 	settingsTimeoutCheckReady <- true
 
 	for {
+		// Exit if the reporter's done channel is closed.
+		select {
+		case <-r.done:
+			return
+		default:
+		}
 		select {
 		case <-collectMetricsTicker.C: // collect and send metrics
 			// set up ticker for next round
@@ -368,6 +390,8 @@ func (r *grpcReporter) periodicTasks() {
 			// set up ticker for next round
 			r.metricConnection.resetPing()
 			go r.metricConnection.ping()
+		case <-r.done:
+			return
 		}
 	}
 }
@@ -376,12 +400,16 @@ func (r *grpcReporter) periodicTasks() {
 // oldDelay	the old delay in milliseconds
 //
 // returns	the new delay in milliseconds
-func (r *grpcReporter) setRetryDelay(oldDelay int) int {
+func (r *grpcReporter) setRetryDelay(oldDelay int, retryNum *int) (int, error) {
+	if *retryNum > grpcMaxRetries {
+		return 0, ErrMaxRetriesExceeded
+	}
+
 	newDelay := int(float64(oldDelay) * grpcRetryDelayMultiplier)
 	if newDelay > grpcRetryDelayMax*1000 {
 		newDelay = grpcRetryDelayMax * 1000
 	}
-	return newDelay
+	return newDelay, nil
 }
 
 // ================================ Event Handling ====================================
@@ -393,6 +421,9 @@ func (r *grpcReporter) setRetryDelay(oldDelay int) int {
 //
 // returns	error if something goes wrong during preparation or if channel is full
 func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
+	if r.Closed() {
+		return ErrReporterIsClosed
+	}
 	if err := prepareEvent(ctx, e); err != nil {
 		// don't continue if preparation failed
 		return err
@@ -400,10 +431,10 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 
 	select {
 	case r.eventMessages <- (*e).bbuf.GetBuf():
-		go atomic.AddInt64(&r.eventConnection.queueStats.totalEvents, int64(1)) // use goroutine so this won't block on the critical path
+		atomic.AddInt64(&r.eventConnection.queueStats.totalEvents, int64(1)) // use goroutine so this won't block on the critical path
 		return nil
 	default:
-		go atomic.AddInt64(&r.eventConnection.queueStats.numOverflowed, int64(1)) // use goroutine so this won't block on the critical path
+		atomic.AddInt64(&r.eventConnection.queueStats.numOverflowed, int64(1)) // use goroutine so this won't block on the critical path
 		return errors.New("event message queue is full")
 	}
 }
@@ -416,6 +447,7 @@ type grpcResult struct {
 // long-running goroutine that listens on the events message channel, collects all messages
 // on that channel and attempts to send them to the collector using the GRPC method PostEvents()
 func (r *grpcReporter) eventSender() {
+	defer agent.Warning("eventSender goroutine exiting.")
 	// send connection init message before doing anything else
 	r.eventConnection.sendConnectionInit()
 
@@ -423,6 +455,9 @@ func (r *grpcReporter) eventSender() {
 	results := r.eventBatchSender(batches)
 	inProgress := false
 	var messages [][]byte
+
+	maxBatchTicker := time.NewTicker(r.eventMaxBatchInterval)
+	defer maxBatchTicker.Stop()
 
 	for {
 		select {
@@ -435,22 +470,33 @@ func (r *grpcReporter) eventSender() {
 			// if pending entries, make next Log()
 			if len(messages) > 0 {
 				inProgress = true
-				batches <- messages
+				select {
+				case batches <- messages:
+				case <-r.done:
+					return
+				}
 				messages = [][]byte{}
 			} else {
 				// remember that we need to make one
 				inProgress = false
 			}
-
-		case <-time.After(r.eventMaxBatchInterval):
+		// When the postEvents returns and no more messages are waiting to be sent out at that
+		// time, the subsequent messages will be accumulated and a ticker is needed to trigger
+		// another action of postEvents.
+		case <-maxBatchTicker.C:
 			if !inProgress && len(messages) > 0 {
 				// kick off Log(), none was made after last return
 				inProgress = true
-				batches <- messages
+				select {
+				case batches <- messages:
+				case <-r.done:
+					return
+				}
 				messages = [][]byte{}
 			}
+		// The goroutine exits when the done channel is closed.
 		case <-r.done:
-			break
+			return
 		}
 	}
 }
@@ -458,7 +504,7 @@ func (r *grpcReporter) eventSender() {
 func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan grpcResult {
 	results := make(chan grpcResult)
 	go func() {
-		r.eventRetrySender(batches, results, POSTEVENTS, r.eventConnection)
+		r.eventRetrySender(batches, results, r.eventConnection)
 	}()
 	return results
 }
@@ -466,16 +512,18 @@ func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan grpcResult {
 func (r *grpcReporter) eventRetrySender(
 	batches <-chan [][]byte,
 	results chan<- grpcResult,
-	authority reconnectAuthority,
 	connection *grpcConnection,
 ) {
+	defer agent.Warning("eventRetrySender goroutine exiting.")
+
 	for {
 		var messages [][]byte
-
+		// this will block until a message arrives or the reporter is closed
 		select {
-		// this will block until a message arrives
 		case b := <-batches:
 			messages = b
+		case <-r.done:
+			return
 		}
 
 		connection.queueStats.setQueueLargest(len(messages))
@@ -492,11 +540,19 @@ func (r *grpcReporter) eventRetrySender(
 		redirects := 0
 
 		// we'll stay in this loop until the call to PostEvents() succeeds
-		resultOk := false
+		resultOK := false
+		// Number of gRPC errors encountered
 		failsNum := 0
-		failsPrinted := false
+		// Number of retries, including gRPC errors and collector errors
+		retriesNum := 0
 
-		for !resultOk {
+		for !resultOK {
+			// Fail-fast in case the reporter has been closed, avoid retrying in this case.
+			select {
+			case <-r.done:
+				return
+			default:
+			}
 			// protect the call to the client object or we could run into problems if
 			// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 			connection.lock.RLock()
@@ -509,27 +565,28 @@ func (r *grpcReporter) eventRetrySender(
 			if err != nil {
 				// gRPC handles the reconnection automatically.
 				failsNum++
-				if failsNum > grpcRetryLogThreshold && !failsPrinted {
+				if failsNum == grpcRetryLogThreshold {
 					agent.Warningf("Error calling PostEvents(): %v", err)
-					failsPrinted = true
 				} else {
 					agent.Debugf("(%v) Error calling PostEvents(): %v", failsNum, err)
 				}
 			} else {
-				if failsPrinted {
+				if failsNum >= grpcRetryLogThreshold {
 					agent.Warning("Error recovered in PostEvents()")
-					// Reset the flags here as there might be extra retries even the transport layer is recovered.
-					failsPrinted = false
-					failsNum = 0
 				}
+				failsNum = 0
+
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
 					agent.Debugf("Sent %d events", len(messages))
-					resultOk = true
-					connection.reconnectAuthority = UNSET
+					resultOK = true
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
-					results <- grpcResult{ret: result}
+					select {
+					case results <- grpcResult{ret: result}:
+					case <-r.done:
+						return
+					}
 				case collector.ResultCode_TRY_LATER:
 					agent.Info("Server responded: Try later")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
@@ -537,25 +594,29 @@ func (r *grpcReporter) eventRetrySender(
 					agent.Info("Server responded: Limit exceeded")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
 				case collector.ResultCode_INVALID_API_KEY:
-					agent.Error("Server responded: Invalid API key")
+					agent.Error("Server responded: Invalid API key. Reporter is closing.")
+					r.Shutdown()
 				case collector.ResultCode_REDIRECT:
+					agent.Warningf("Reporter is redirecting to %s", response.GetArg())
 					if redirects > grpcRedirectMax {
 						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
-						r.redirect(connection, authority, response.GetArg())
+						r.redirectTo(connection, response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++
 					}
 				default:
-					agent.Info("Unknown Server response")
+					agent.Infof("Unknown Server response in eventRetrySender: %v", result)
 				}
 			}
 
-			if !resultOk {
+			if !resultOK {
 				// wait a little before retrying
 				time.Sleep(time.Duration(delay) * time.Millisecond)
-				delay = r.setRetryDelay(delay)
+				if delay, err = r.setRetryDelay(delay, &retriesNum); err != nil {
+					break
+				}
 			}
 		}
 	}
@@ -639,12 +700,20 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 	redirects := 0
 
 	// we'll stay in this loop until the call to PostMetrics() succeeds
-	resultOk := false
+	resultOK := false
+	// Number of gRPC errors encountered
 	failsNum := 0
-	failsPrinted := false
+	// Number of retries, including gRPC errors and collector errors
+	retriesNum := 0
 
 	// TODO: boilerplate code refactor as events/metrics/settings share similar processes.
-	for !resultOk {
+	for !resultOK {
+		// Fail-fast in case the reporter has been closed, otherwise it may retry until being aborted.
+		select {
+		case <-r.done:
+			return
+		default:
+		}
 		// protect the call to the client object or we could run into problems if
 		// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 		r.metricConnection.lock.RLock()
@@ -657,49 +726,50 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		if err != nil {
 			// gRPC handles the reconnection automatically.
 			failsNum++
-			if failsNum > grpcRetryLogThreshold && !failsPrinted {
+			if failsNum == grpcRetryLogThreshold {
 				agent.Warningf("Error calling PostMetrics(): %v", err)
-				failsPrinted = true
 			} else {
 				agent.Debugf("(%v) Error calling PostMetrics(): %v", failsNum, err)
 			}
 		} else {
-			if failsPrinted {
+			if failsNum >= grpcRetryLogThreshold {
 				agent.Warning("Error recovered in PostMetrics()")
-				// Reset the flags here as there might be extra retries even the transport layer is recovered.
-				failsPrinted = false
-				failsNum = 0
 			}
+			failsNum = 0
+
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
 				agent.Debug("Sent metrics")
-				resultOk = true
-				r.metricConnection.reconnectAuthority = UNSET
+				resultOK = true
 			case collector.ResultCode_TRY_LATER:
 				agent.Info("Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
 				agent.Info("Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
-				agent.Error("Server responded: Invalid API key")
+				agent.Error("Server responded: Invalid API key. Reporter is closing.")
+				r.Shutdown()
 			case collector.ResultCode_REDIRECT:
+				agent.Warningf("Reporter is redirecting to %s", response.GetArg())
 				if redirects > grpcRedirectMax {
 					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
-					r.redirect(r.metricConnection, POSTMETRICS, response.GetArg())
+					r.redirectTo(r.metricConnection, response.GetArg())
 					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
 				}
 			default:
-				agent.Info("Unknown Server response")
+				agent.Infof("Unknown Server response in sendMetrics: %v", result)
 			}
 		}
 
-		if !resultOk {
+		if !resultOK {
 			// wait a little before retrying
 			time.Sleep(time.Duration(delay) * time.Millisecond)
-			delay = r.setRetryDelay(delay)
+			if delay, err = r.setRetryDelay(delay, &retriesNum); err != nil {
+				break
+			}
 		}
 	}
 }
@@ -728,10 +798,18 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 
 	// we'll stay in this loop until the call to GetSettings() succeeds
 	resultOK := false
+	// Number of gRPC errors encountered
 	failsNum := 0
-	failsPrinted := false
+	// Number of retries, including gRPC errors and collector errors
+	retriesNum := 0
 
 	for !resultOK {
+		// Fail-fast in case the reporter has been closed, avoid retrying in this case.
+		select {
+		case <-r.done:
+			return
+		default:
+		}
 		// protect the call to the client object or we could run into problems if
 		// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 		r.metricConnection.lock.RLock()
@@ -744,50 +822,51 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		if err != nil {
 			// gRPC handles the reconnection automatically.
 			failsNum++
-			if failsNum > grpcRetryLogThreshold && !failsPrinted {
+			if failsNum == grpcRetryLogThreshold {
 				agent.Warningf("Error calling GetSettings(): %v", err)
-				failsPrinted = true
 			} else {
 				agent.Debugf("(%v) Error calling GetSettings(): %v", failsNum, err)
 			}
 		} else {
-			if failsPrinted {
+			if failsNum >= grpcRetryLogThreshold {
 				agent.Warning("Error recovered in GetSettings()")
-				// Reset the flags here as there might be extra retries even the transport layer is recovered.
-				failsPrinted = false
-				failsNum = 0
 			}
+			failsNum = 0
+
 			// server responded, check the result code and perform actions accordingly
 			switch result := response.GetResult(); result {
 			case collector.ResultCode_OK:
 				agent.Debugf("Got new settings from server %v", r.metricConnection.address)
 				r.updateSettings(response)
 				resultOK = true
-				r.metricConnection.reconnectAuthority = UNSET
 			case collector.ResultCode_TRY_LATER:
 				agent.Info("Server responded: Try later")
 			case collector.ResultCode_LIMIT_EXCEEDED:
 				agent.Info("Server responded: Limit exceeded")
 			case collector.ResultCode_INVALID_API_KEY:
-				agent.Error("Server responded: Invalid API key")
+				agent.Error("Server responded: Invalid API key. Reporter is closing.")
+				r.Shutdown()
 			case collector.ResultCode_REDIRECT:
+				agent.Warningf("Reporter is redirecting to %s", response.GetArg())
 				if redirects > grpcRedirectMax {
 					agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
-					r.redirect(r.metricConnection, GETSETTINGS, response.GetArg())
+					r.redirectTo(r.metricConnection, response.GetArg())
 					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
 				}
 			default:
-				agent.Info("Unknown Server response")
+				agent.Infof("Unknown Server response in getSettings: %v", result)
 			}
 		}
 
 		if !resultOK {
 			// wait a little before retrying
 			time.Sleep(time.Duration(delay) * time.Millisecond)
-			delay = r.setRetryDelay(delay)
+			if delay, err = r.setRetryDelay(delay, &retriesNum); err != nil {
+				break
+			}
 		}
 	}
 
@@ -835,6 +914,9 @@ func (r *grpcReporter) checkSettingsTimeout(ready chan bool) {
 //
 // returns	error if something goes wrong during preparation or if channel is full
 func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
+	if r.Closed() {
+		return ErrReporterIsClosed
+	}
 	if err := prepareEvent(ctx, e); err != nil {
 		// don't continue if preparation failed
 		return err
@@ -851,6 +933,7 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 // long-running goroutine that listens on the status message channel, collects all messages
 // on that channel and attempts to send them to the collector using the GRPC method PostStatus()
 func (r *grpcReporter) statusSender() {
+	defer agent.Warning("statusSender goroutine exiting.")
 	// send connection init message before doing anything else
 	r.metricConnection.sendConnectionInit()
 
@@ -861,6 +944,8 @@ func (r *grpcReporter) statusSender() {
 		// this will block until a message arrives
 		case e := <-r.statusMessages:
 			messages = append(messages, e)
+		case <-r.done: // Exit if the reporter's done channel is closed.
+			return
 		}
 		// one message detected, see if there are more and get them all!
 		done := false
@@ -871,10 +956,6 @@ func (r *grpcReporter) statusSender() {
 			default:
 				done = true
 			}
-		}
-		// if for some reason there's no message go back to top
-		if len(messages) == 0 {
-			continue
 		}
 
 		request := &collector.MessageRequest{
@@ -888,12 +969,20 @@ func (r *grpcReporter) statusSender() {
 		// counter for redirects so we know when the limit has been reached
 		redirects := 0
 
-		// we'll stay in this loop until the call to PostEvents() succeeds
-		resultOk := false
+		// we'll stay in this loop until the call to PostStatus() succeeds
+		resultOK := false
+		// Number of gRPC errors encountered
 		failsNum := 0
-		failsPrinted := false
+		// Number of retries, including gRPC errors and collector errors
+		retriesNum := 0
 
-		for !resultOk {
+		for !resultOK {
+			// Fail-fast in case the reporter has been closed, avoid retrying in this case.
+			select {
+			case <-r.done:
+				return
+			default:
+			}
 			// protect the call to the client object or we could run into problems if
 			// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 			r.metricConnection.lock.RLock()
@@ -906,49 +995,50 @@ func (r *grpcReporter) statusSender() {
 			if err != nil {
 				// gRPC handles the reconnection automatically.
 				failsNum++
-				if failsNum > grpcRetryLogThreshold && !failsPrinted {
+				if failsNum == grpcRetryLogThreshold {
 					agent.Warningf("Error calling PostStatus(): %v", err)
-					failsPrinted = true
 				} else {
 					agent.Debugf("(%v) Error calling PostStatus(): %v", failsNum, err)
 				}
 			} else {
-				if failsPrinted {
+				if failsNum >= grpcRetryLogThreshold {
 					agent.Warning("Error recovered in PostStatus()")
-					// Reset the flags here as there might be extra retries even the transport layer is recovered.
-					failsPrinted = false
-					failsNum = 0
 				}
+				failsNum = 0
+
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
 					agent.Debug("Sent status")
-					resultOk = true
-					r.metricConnection.reconnectAuthority = UNSET
+					resultOK = true
 				case collector.ResultCode_TRY_LATER:
 					agent.Info("Server responded: Try later")
 				case collector.ResultCode_LIMIT_EXCEEDED:
 					agent.Info("Server responded: Limit exceeded")
 				case collector.ResultCode_INVALID_API_KEY:
-					agent.Error("Server responded: Invalid API key")
+					agent.Error("Server responded: Invalid API key. Reporter is closing.")
+					r.Shutdown()
 				case collector.ResultCode_REDIRECT:
+					agent.Warningf("Reporter is redirecting to %s", response.GetArg())
 					if redirects > grpcRedirectMax {
 						agent.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
-						r.redirect(r.metricConnection, POSTSTATUS, response.GetArg())
+						r.redirectTo(r.metricConnection, response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++
 					}
 				default:
-					agent.Info("Unknown Server response")
+					agent.Infof("Unknown Server response in statusSender: %v", result)
 				}
 			}
 
-			if !resultOk {
+			if !resultOK {
 				// wait a little before retrying
 				time.Sleep(time.Duration(delay) * time.Millisecond)
-				delay = r.setRetryDelay(delay)
+				if delay, err = r.setRetryDelay(delay, &retriesNum); err != nil {
+					break
+				}
 			}
 		}
 	}
@@ -962,6 +1052,9 @@ func (r *grpcReporter) statusSender() {
 //
 // returns	error if channel is full
 func (r *grpcReporter) reportSpan(span SpanMessage) error {
+	if r.Closed() {
+		return ErrReporterIsClosed
+	}
 	select {
 	case r.spanMessages <- span:
 		return nil
@@ -973,10 +1066,13 @@ func (r *grpcReporter) reportSpan(span SpanMessage) error {
 // long-running goroutine that listens on the span message channel and processes (aggregates)
 // incoming span messages
 func (r *grpcReporter) spanMessageAggregator() {
+	defer agent.Warning("spanMessageAggregator goroutine exiting.")
 	for {
 		select {
 		case span := <-r.spanMessages:
 			span.process()
+		case <-r.done:
+			return
 		}
 	}
 }

@@ -148,6 +148,17 @@ func (r *TestReporter) Close(numBufs int) {
 	}
 }
 
+// Shutdown closes the Test reporter TODO: not supported
+func (r *TestReporter) Shutdown() error {
+	// return r.conn.Close()
+	return errors.New("shutdown is not supported by TestReporter")
+}
+
+// Closed returns if the reporter is closed or not TODO: not supported
+func (r *TestReporter) Closed() bool {
+	return false
+}
+
 func (r *TestReporter) report(ctx *oboeContext, e *event) error {
 	if err := prepareEvent(ctx, e); err != nil {
 		// don't continue if preparation failed
