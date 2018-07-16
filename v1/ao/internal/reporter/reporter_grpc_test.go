@@ -3,9 +3,12 @@
 package reporter
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"path"
+	"strings"
+	"sync"
 	"testing"
 
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
@@ -26,10 +29,14 @@ type TestGRPCServer struct {
 	t          *testing.T
 	grpcServer *grpc.Server
 	addr       string
-	events     []*pb.MessageRequest
-	metrics    []*pb.MessageRequest
-	status     []*pb.MessageRequest
-	pings      int
+	// The mutex to protect the other fields, mainly the slices below as gRPC needs concurrency-safe
+	// Performance is not a concern for a testing reporter, so we are fine with a single mutex for all
+	// the fields.
+	mutex   sync.Mutex
+	events  []*pb.MessageRequest
+	metrics []*pb.MessageRequest
+	status  []*pb.MessageRequest
+	pings   int
 }
 
 func StartTestGRPCServer(t *testing.T, addr string) *TestGRPCServer {
@@ -52,28 +59,52 @@ func StartTestGRPCServer(t *testing.T, addr string) *TestGRPCServer {
 	return testServer
 }
 
+func printMessageRequest(req *pb.MessageRequest) {
+	for idx, m := range req.Messages {
+		fmt.Printf("#%d->", idx)
+		printBson(m)
+	}
+}
+
+func printSettingsRequest(req *pb.SettingsRequest) {
+	fmt.Println(req)
+}
+
 func (s *TestGRPCServer) Stop() { s.grpcServer.Stop() }
 
 func (s *TestGRPCServer) PostEvents(ctx context.Context, req *pb.MessageRequest) (*pb.MessageResult, error) {
-	s.t.Logf("TestGRPCServer.PostEvents req %+v", req)
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	fmt.Println("TestGRPCServer.PostEvents req:")
+	printMessageRequest(req)
 	s.events = append(s.events, req)
+	if strings.HasPrefix(req.ApiKey, "invalid") {
+		return &pb.MessageResult{Result: pb.ResultCode_INVALID_API_KEY}, nil
+	}
 	return &pb.MessageResult{Result: pb.ResultCode_OK}, nil
 }
 
 func (s *TestGRPCServer) PostMetrics(ctx context.Context, req *pb.MessageRequest) (*pb.MessageResult, error) {
-	s.t.Logf("TestGRPCServer.PostMetrics req %+v", req)
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	fmt.Println("TestGRPCServer.PostMetrics req:")
+	printMessageRequest(req)
 	s.metrics = append(s.metrics, req)
 	return &pb.MessageResult{Result: pb.ResultCode_OK}, nil
 }
 
 func (s *TestGRPCServer) PostStatus(ctx context.Context, req *pb.MessageRequest) (*pb.MessageResult, error) {
-	s.t.Logf("TestGRPCServer.PostStatus req %+v", req)
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	fmt.Println("TestGRPCServer.PostStatus req:")
+	printMessageRequest(req)
 	s.status = append(s.status, req)
 	return &pb.MessageResult{Result: pb.ResultCode_OK}, nil
 }
 
 func (s *TestGRPCServer) GetSettings(ctx context.Context, req *pb.SettingsRequest) (*pb.SettingsResult, error) {
-	s.t.Logf("TestGRPCServer.GetSettings req %+v", req)
+	fmt.Println("TestGRPCServer.GetSettings req:")
+	printSettingsRequest(req)
 	return &pb.SettingsResult{
 		Result: pb.ResultCode_OK,
 		Settings: []*pb.OboeSetting{{
@@ -90,33 +121,9 @@ func (s *TestGRPCServer) GetSettings(ctx context.Context, req *pb.SettingsReques
 		}},
 	}, nil
 }
+
 func (s *TestGRPCServer) Ping(context.Context, *pb.PingRequest) (*pb.MessageResult, error) {
-	s.t.Logf("TestGRPCServer.Ping")
+	fmt.Println("TestGRPCServer.Ping")
 	s.pings++
 	return &pb.MessageResult{Result: pb.ResultCode_OK}, nil
-}
-
-func TestGrpcNewReporter(t *testing.T) {
-}
-
-func TestIsValidServiceKey(t *testing.T) {
-
-	keyPairs := map[string]bool{
-		"ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go": true,
-		"":       false,
-		"abc:Go": false,
-		"ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:" +
-			"Go0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
-			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
-			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
-			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef": false,
-		"1234567890abcdef":  false,
-		"1234567890abcdef:": false,
-		":Go":               false,
-		"abc:123:Go":        false,
-	}
-
-	for key, valid := range keyPairs {
-		assert.Equal(t, valid, isValidServiceKey(key))
-	}
 }

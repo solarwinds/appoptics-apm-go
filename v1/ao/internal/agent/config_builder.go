@@ -4,6 +4,7 @@ package agent
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
@@ -27,6 +28,11 @@ type initFunc func(n ConfName) string
 var envVar initFunc = func(n ConfName) string {
 	return strings.ToLower(os.Getenv(string(n)))
 }
+
+// A valid service key is something like 'service_token:service_name'.
+// The service_token should be of 64 characters long and the size of
+// service_name is larger than 0 but up to 255 characters.
+var IsValidServiceKey = regexp.MustCompile(`^[a-zA-Z0-9]{64}:\S{1,255}$`).MatchString
 
 // Default values
 const (
@@ -64,7 +70,7 @@ var agentConf = &conf{
 }
 
 func initConf(cf *conf) {
-	Info("initializing the AppOptics agent")
+	Info("Initializing the AppOptics agent.")
 	for _, item := range cb {
 		k := item.name
 		v := ""
@@ -74,7 +80,11 @@ func initConf(cf *conf) {
 			if v != "" {
 				val := v
 				if k == "APPOPTICS_SERVICE_KEY" {
-					val = maskServiceKey(val)
+					if IsValidServiceKey(val) {
+						val = maskServiceKey(val)
+					} else {
+						val = v
+					}
 				}
 				Warningf("non-default configuration used %v=%v", k, val)
 
