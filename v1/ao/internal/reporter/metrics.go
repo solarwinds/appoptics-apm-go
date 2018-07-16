@@ -543,7 +543,9 @@ func getContainerID() string {
 // onceContainerID is used to initialize the cachedContainerID only once.
 var onceContainerID sync.Once
 
-// initContainerID initializes the docker container ID (or empty string if not a docker/ecs container)
+// initContainerID initializes the docker container ID (or empty string if not a docker/ecs container).
+// It accepts a function parameter `getContainerMeta` as the source where it gets container metadata from,
+// which makes it more flexible and enables better testability.
 func initContainerID(getContainerMeta func(string) string, keywords []string) {
 	line := ""
 	cachedContainerID = ""
