@@ -1,0 +1,23 @@
+vendors:
+- path: github.com/golang/glog
+  rev: 23def4e6c14b4da8ac2ed8007337bc5eb5007998
+- path: github.com/golang/protobuf
+  rev: 1e59b77b52bf8e4b449a57e6f79f21226d571845
+- path: github.com/pkg/errors
+  rev: e881fd58d78e04cf6d0de1217f8707c8cc2249bc
+- path: golang.org/x/net
+  rev: 5ccada7d0a7ba9aeb5d3aca8d3501b4c2a509fec
+- path: golang.org/x/sync
+  rev: fd80eb99c8f653c847d294a001bdf2a3a6f768f5
+- path: golang.org/x/text
+  rev: e19ae1496984b1c655b8044a65c0300a3c878dd3
+- path: google.golang.org/genproto
+  rev: a8101f21cf983e773d0c1133ebc5424792003214
+- path: google.golang.org/grpc
+  rev: 1cd234627e6f392ade0527d593eb3fe53e832d4a
+- path: gopkg.in/check.v1
+  rev: 20d25e2804050c1cd24a7eea1e7a6447dd0e74ec
+- path: gopkg.in/mgo.v2
+  rev: 3f83fa5005286a7fe593b055f0d7771a7dce4655
+- path: gopkg.in/yaml.v2
+  rev: d670f9405373e636a5a2765eea47fac0c9bc91a4
