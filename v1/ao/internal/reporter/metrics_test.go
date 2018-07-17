@@ -504,3 +504,31 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	assert.True(t, m["TransactionNameOverflow"].(bool))
 	mTransMap.Reset()
 }
+
+func TestInitContainerID(t *testing.T) {
+	cachedContainerID = "unintialized"
+
+	var mockGetContainerMeta = func(keyword string) string {
+		if keyword == "/kubepods/" {
+			return "11:freezer:/kubepods/besteffort/pod23b7d80b-7b31-11e8-9fa1-0ea6a2c824d6/32fd701b15f2a907051d3b07b791cc08d45696c3aa372a4764c98c8be9c57626"
+		} else {
+			return ""
+		}
+	}
+
+	initContainerID(mockGetContainerMeta, []string{"/docker/", "/ecs/", "/kubepods/"})
+	assert.Equal(t, "32fd701b15f2a907051d3b07b791cc08d45696c3aa372a4764c98c8be9c57626", cachedContainerID)
+
+	cachedContainerID = "unintialized"
+
+	var badGetContainerMeta = func(keyword string) string {
+		if keyword == "/kubepods/" {
+			return "11:freezer:/kubepods/besteffort/pod23b7d80b-7b31-11e8-9fa1-0ea6a2c824d6/abc123hello-world"
+		} else {
+			return ""
+		}
+	}
+
+	initContainerID(badGetContainerMeta, []string{"/docker/", "/ecs/", "/kubepods/"})
+	assert.Equal(t, "", cachedContainerID)
+}
