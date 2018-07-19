@@ -74,7 +74,7 @@ func isPhysicalInterface(ifname string) bool {
 	link, err := os.Readlink(fn)
 	if err != nil {
 		agent.Errorf("cannot readlink %s", fn)
-		return false
+		return true
 	}
 	if strings.Contains(link, "/virtual/") {
 		return false

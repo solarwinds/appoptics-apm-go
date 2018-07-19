@@ -419,9 +419,40 @@ func appendIPAddresses(bbuf *bsonBuffer) {
 	bsonAppendFinishObject(bbuf, start)
 }
 
+// filteredIfaces returns a list of Interface which contains only interfaces required.
+// see https://swicloud.atlassian.net/browse/AO-9021
+func filteredIfaces() ([]net.Interface, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	var filtered []net.Interface
+	for _, iface := range ifaces {
+		// skip over local interface
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		// skip over point-to-point interface
+		if iface.Flags&net.FlagPointToPoint != 0 {
+			continue
+		}
+		// skip over virtual interface
+		if physical := isPhysicalInterface(iface.Name); !physical {
+			continue
+		}
+		// skip over interfaces without unicast IP addresses
+		addrs, err := iface.Addrs()
+		if err != nil || len(addrs) == 0 {
+			continue
+		}
+		filtered = append(filtered, iface)
+	}
+	return filtered, nil
+}
+
 // gets the system's IP addresses
 func getIPAddresses() []string {
-	ifaces, err := net.Interfaces()
+	ifaces, err := filteredIfaces()
 	if err != nil {
 		return nil
 	}
@@ -429,14 +460,6 @@ func getIPAddresses() []string {
 	var addresses []string
 
 	for _, iface := range ifaces {
-		// skip over local interface
-		if iface.Name == "lo" {
-			continue
-		}
-		// skip over virtual interface
-		if physical := isPhysicalInterface(iface.Name); !physical {
-			continue
-		}
 		// get unicast addresses associated with the current network interface
 		addrs, err := iface.Addrs()
 		if err != nil {
@@ -477,16 +500,9 @@ func getMACAddressList() string {
 	}
 
 	cachedMACAddresses = ""
-	ifaces, err := net.Interfaces()
+	ifaces, err := filteredIfaces()
 	if err == nil {
 		for _, iface := range ifaces {
-			if iface.Flags&net.FlagLoopback != 0 {
-				continue
-			}
-			// skip over virtual interface
-			if physical := isPhysicalInterface(iface.Name); !physical {
-				continue
-			}
 			if mac := iface.HardwareAddr.String(); mac != "" {
 				cachedMACAddresses += iface.HardwareAddr.String() + ","
 			}
