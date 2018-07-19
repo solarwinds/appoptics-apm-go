@@ -61,7 +61,7 @@ func TestAppendIPAddresses(t *testing.T) {
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
 
-	ifaces, _ := net.Interfaces()
+	ifaces, _ := filteredIfaces()
 	var addresses []string
 
 	for _, iface := range ifaces {
@@ -91,7 +91,7 @@ func TestAppendMACAddresses(t *testing.T) {
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
 
-	ifaces, _ := net.Interfaces()
+	ifaces, _ := filteredIfaces()
 	var macs []string
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagLoopback != 0 {
