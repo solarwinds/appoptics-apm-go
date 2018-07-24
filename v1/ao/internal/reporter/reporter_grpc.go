@@ -50,17 +50,18 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 7tsqAxw=
 -----END CERTIFICATE-----`
 
-	grpcEventMaxBatchIntervalDefault        = 100 * time.Millisecond
-	grpcMetricIntervalDefault               = 30  // default metrics flush interval in seconds
-	grpcGetSettingsIntervalDefault          = 30  // default settings retrieval interval in seconds
-	grpcSettingsTimeoutCheckIntervalDefault = 10  // default check interval for timed out settings in seconds
-	grpcPingIntervalDefault                 = 20  // default interval for keep alive pings in seconds
-	grpcRetryDelayInitial                   = 500 // initial connection/send retry delay in milliseconds
-	grpcRetryDelayMultiplier                = 1.5 // backoff multiplier for unsuccessful retries
-	grpcRetryDelayMax                       = 60  // max connection/send retry delay in seconds
-	grpcRedirectMax                         = 20  // max allowed collector redirects
-	grpcRetryLogThreshold                   = 10  // log prints after this number of retries (about 56.7s)
-	grpcMaxRetries                          = 20  // The message will be dropped after this number of retries
+	grpcEventFlushIntervalDefault           = 2               // EventsFlushInterval in seconds
+	grpcEventFlushBatchSizeDefault          = 2 * 1024 * 1024 // EventsBatchSize in bytes
+	grpcMetricIntervalDefault               = 30              // default metrics flush interval in seconds
+	grpcGetSettingsIntervalDefault          = 30              // default settings retrieval interval in seconds
+	grpcSettingsTimeoutCheckIntervalDefault = 10              // default check interval for timed out settings in seconds
+	grpcPingIntervalDefault                 = 20              // default interval for keep alive pings in seconds
+	grpcRetryDelayInitial                   = 500             // initial connection/send retry delay in milliseconds
+	grpcRetryDelayMultiplier                = 1.5             // backoff multiplier for unsuccessful retries
+	grpcRetryDelayMax                       = 60              // max connection/send retry delay in seconds
+	grpcRedirectMax                         = 20              // max allowed collector redirects
+	grpcRetryLogThreshold                   = 10              // log prints after this number of retries (about 56.7s)
+	grpcMaxRetries                          = 20              // The message will be dropped after this number of retries
 )
 
 type reporterChannel int
@@ -74,7 +75,7 @@ const (
 // everything needed for a GRPC connection
 type grpcConnection struct {
 	client         collector.TraceCollectorClient // GRPC client instance
-	connection     *grpc.ClientConn               //GRPC connection object
+	connection     *grpc.ClientConn               // GRPC connection object
 	address        string                         // collector address
 	certificate    []byte                         // collector certificate
 	serviceKey     string                         // service key
@@ -87,7 +88,7 @@ type grpcConnection struct {
 type grpcReporter struct {
 	eventConnection              *grpcConnection // used for events only
 	metricConnection             *grpcConnection // used for everything else (postMetrics, postStatus, getSettings)
-	eventMaxBatchInterval        time.Duration   // max interval between postEvent batches
+	eventFlushInterval           int             // max interval between postEvent batches
 	collectMetricInterval        int             // metrics flush interval in seconds
 	getSettingsInterval          int             // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int             // check interval for timed out settings in seconds
@@ -182,12 +183,12 @@ func newGRPCReporter() reporter {
 			queueStats:  &eventQueueStats{},
 		},
 
-		eventMaxBatchInterval:        grpcEventMaxBatchIntervalDefault,
+		eventFlushInterval:           grpcEventFlushIntervalDefault,
 		collectMetricInterval:        grpcMetricIntervalDefault,
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
 		settingsTimeoutCheckInterval: grpcSettingsTimeoutCheckIntervalDefault,
 
-		eventMessages:  make(chan []byte, 1024),
+		eventMessages:  make(chan []byte, 10000),
 		spanMessages:   make(chan SpanMessage, 1024),
 		statusMessages: make(chan []byte, 1024),
 		metricMessages: make(chan []byte, 1024),
@@ -224,7 +225,7 @@ func newGRPCReporter() reporter {
 // addr		collector endpoint address and port
 //
 // returns	client connection object
-//			possible error during AppendCertsFromPEM() and Dial()
+// 			possible error during AppendCertsFromPEM() and Dial()
 func grpcCreateClientConnection(cert []byte, addr string, insecureSkipVerify bool) (*grpc.ClientConn, error) {
 	certPool := x509.NewCertPool()
 
@@ -444,77 +445,60 @@ type grpcResult struct {
 	err error
 }
 
-// long-running goroutine that listens on the events message channel, collects all messages
-// on that channel and attempts to send them to the collector using the GRPC method PostEvents()
+// eventSender is a long-running goroutine that listens on the events message
+// channel, collects all messages on that channel and attempts to send them to
+// the collector using the gRPC method PostEvents()
 func (r *grpcReporter) eventSender() {
 	defer agent.Warning("eventSender goroutine exiting.")
 	// send connection init message before doing anything else
 	r.eventConnection.sendConnectionInit()
 
 	batches := make(chan [][]byte)
-	results := r.eventBatchSender(batches)
-	inProgress := false
-	var messages [][]byte
+	token := r.eventBatchSender(batches)
 
-	maxBatchTicker := time.NewTicker(r.eventMaxBatchInterval)
-	defer maxBatchTicker.Stop()
+	flushT := time.NewTicker(time.Second * time.Duration(r.eventFlushInterval))
+	defer flushT.Stop()
+
+	evtBucket := NewBytesBucket(r.eventMessages,
+		WithHWM(grpcEventFlushBatchSizeDefault),
+		WithTicker(flushT))
 
 	for {
-		select {
-		// block until a message arrives, or done
-		case e := <-r.eventMessages:
-			messages = append(messages, e)
-		case result := <-results:
-			_ = result // XXX check return code, log errors?
+		// Pour as much water as we can
+		evtBucket.PourIn()
 
-			// if pending entries, make next Log()
-			if len(messages) > 0 {
-				inProgress = true
-				select {
-				case batches <- messages:
-				case <-r.done:
-					return
-				}
-				messages = [][]byte{}
-			} else {
-				// remember that we need to make one
-				inProgress = false
+		select {
+		case <-token:
+			if evtBucket.Drainable() {
+				batches <- evtBucket.Drain()
 			}
-		// When the postEvents returns and no more messages are waiting to be sent out at that
-		// time, the subsequent messages will be accumulated and a ticker is needed to trigger
-		// another action of postEvents.
-		case <-maxBatchTicker.C:
-			if !inProgress && len(messages) > 0 {
-				// kick off Log(), none was made after last return
-				inProgress = true
-				select {
-				case batches <- messages:
-				case <-r.done:
-					return
-				}
-				messages = [][]byte{}
-			}
-		// The goroutine exits when the done channel is closed.
+
 		case <-r.done:
+			// The goroutine exits when the done channel is closed.
 			return
 		}
+		// Don't consume too much CPU with noop
+		time.Sleep(time.Millisecond * 100)
 	}
 }
 
-func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan grpcResult {
-	results := make(chan grpcResult)
+func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan struct{} {
+	token := make(chan struct{})
 	go func() {
-		r.eventRetrySender(batches, results, r.eventConnection)
+		r.eventRetrySender(batches, token, r.eventConnection)
 	}()
-	return results
+	return token
 }
 
 func (r *grpcReporter) eventRetrySender(
 	batches <-chan [][]byte,
-	results chan<- grpcResult,
+	token chan<- struct{},
 	connection *grpcConnection,
 ) {
 	defer agent.Warning("eventRetrySender goroutine exiting.")
+
+	// Push the token to the queue side to kick it off
+	token <- struct{}{}
 
 	for {
 		var messages [][]byte
@@ -583,7 +567,7 @@ func (r *grpcReporter) eventRetrySender(
 					resultOK = true
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
 					select {
-					case results <- grpcResult{ret: result}:
+					case token <- struct{}{}:
 					case <-r.done:
 						return
 					}
@@ -648,7 +632,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool, sendReady chan boo
 
 	// generate a new metrics message
 	message := generateMetricsMessage(interval, r.eventConnection.queueStats)
-	//	printBson(message)
+	// 	printBson(message)
 
 	select {
 	// put metrics message onto the channel
