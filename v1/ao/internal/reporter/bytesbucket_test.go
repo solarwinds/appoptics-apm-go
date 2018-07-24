@@ -1,7 +1,6 @@
 package reporter
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -45,11 +44,8 @@ func TestBytesBucket(t *testing.T) {
 		assert.True(t, int(w[0]) == i)
 	}
 
-	fmt.Println(b)
-
 	// pour some water in the bucket
 	poured = b.PourIn()
-	fmt.Println(b)
 
 	// 2 drops of water are poured into the bucket
 	assert.Equal(t, 2, poured)
