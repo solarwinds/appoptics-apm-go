@@ -4,6 +4,7 @@ package reporter
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -533,10 +534,13 @@ func TestInvalidKey(t *testing.T) {
 	ctx := newTestContext(t)
 	ev1, _ := ctx.newEvent(LabelInfo, "hello-from-invalid-key")
 	assert.NoError(t, r.reportEvent(ctx, ev1))
+	fmt.Println("Sent a message at: ", time.Now())
 
 	time.Sleep(5 * time.Second)
-	// assert.Equal(t, numGo, runtime.NumGoroutine())
+
+	// The agent reporter should be closed due to received INVALID_API_KEY from the collector
 	assert.Equal(t, true, r.Closed())
+	fmt.Println("Shutdown the agent by the user.")
 	e := r.Shutdown()
 	assert.NotEqual(t, nil, e)
 

@@ -459,24 +459,35 @@ func (r *grpcReporter) eventSender() {
 	flushT := time.NewTicker(time.Second * time.Duration(r.eventFlushInterval))
 	defer flushT.Stop()
 
+	// This event bucket is drainable either after it's 2MB full, or 2 seconds
+	// has passed.
 	evtBucket := NewBytesBucket(r.eventMessages,
 		WithHWM(grpcEventFlushBatchSizeDefault),
 		WithTicker(flushT))
 
 	for {
-		// Pour as much water as we can
+		// Check if the agent is required to quit.
+		select {
+		case <-r.done:
+			return
+		default:
+		}
+
+		// Pour as much water as we can into the bucket, until it's full or
+		// no more water can be got from the source. It's not blocking here.
 		evtBucket.PourIn()
 
-		select {
-		case <-token:
-			if evtBucket.Drainable() {
+		// The events can only be pushed into the channel when the bucket
+		// is drainable (either full or timeout) and we've got the token
+		// to push events.
+		if evtBucket.Drainable() {
+			select {
+			case <-token:
 				batches <- evtBucket.Drain()
+			default:
 			}
-
-		case <-r.done:
-			// The goroutine exits when the done channel is closed.
-			return
 		}
+
 		// Don't consume too much CPU with noop
 		time.Sleep(time.Millisecond * 100)
 	}

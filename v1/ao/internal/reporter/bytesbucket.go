@@ -24,6 +24,9 @@ type BytesBucket struct {
 
 	// where the water is stored in
 	water [][]byte
+
+	// the last drain time
+	drainTime time.Time
 }
 
 func NewBytesBucket(source chan []byte, opts ...BucketOption) *BytesBucket {
@@ -89,6 +92,8 @@ func (b *BytesBucket) Drain() [][]byte {
 	// Seems we'd better to `reset` the ticker here but there is no such
 	// API for a Ticker. A minor problem is that the ticker may become
 	// timeout shortly after the previous drain triggered by watermark >= HWM.
+	// The last drain time is stored to avoid this problem.
+	b.drainTime = time.Now()
 	return water
 }
 
@@ -100,14 +105,21 @@ func (b *BytesBucket) Drainable() bool {
 		return false
 	}
 
+	if b.watermark >= b.HWM {
+		return true
+	}
+
 	tickerout := false
 	if b.ticker != nil {
 		select {
 		case <-b.ticker.C:
-			tickerout = true
+			// Skip this chance if we've drained the bucket recently.
+			if time.Now().After(b.drainTime.Add(time.Millisecond * 500)) {
+				tickerout = true
+			}
 		default:
 		}
 	}
 
-	return (b.watermark >= b.HWM) || tickerout
+	return tickerout
 }
