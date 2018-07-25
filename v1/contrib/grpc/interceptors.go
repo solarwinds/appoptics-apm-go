@@ -25,11 +25,13 @@ func tracingContext(ctx context.Context, serverName string, methodName string, s
 	xtID := ""
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok {
-		xt, ok := md[ao.HTTPHeaderName]
-		if ok {
+		if xt, ok := md[ao.HTTPHeaderName]; ok {
+			xtID = xt[0]
+		} else if xt, ok = md[strings.ToLower(ao.HTTPHeaderName)]; ok {
 			xtID = xt[0]
 		}
 	}
+
 
 	t := ao.NewTraceFromID(serverName, xtID, func() ao.KVMap {
 		return ao.KVMap{
