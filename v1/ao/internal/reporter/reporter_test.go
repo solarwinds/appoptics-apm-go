@@ -4,6 +4,7 @@ package reporter
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -455,7 +456,6 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	// }()
 
 	// start test gRPC server
-	periodicTasksDisabled = false
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	addr := "localhost:4567"
 	server := StartTestGRPCServer(t, addr)
@@ -489,7 +489,6 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	// stop test reporter
 	server.Stop()
 	globalReporter = oldReporter
-	periodicTasksDisabled = true
 	// fmt.Println(buf)
 }
 
@@ -507,7 +506,6 @@ func TestInvalidKey(t *testing.T) {
 	}()
 
 	invalidKey := "invalidf6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
-	periodicTasksDisabled = false
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	oldKey := os.Getenv("APPOPTICS_SERVICE_KEY")
 	os.Setenv("APPOPTICS_SERVICE_KEY", invalidKey)
@@ -533,23 +531,25 @@ func TestInvalidKey(t *testing.T) {
 	ctx := newTestContext(t)
 	ev1, _ := ctx.newEvent(LabelInfo, "hello-from-invalid-key")
 	assert.NoError(t, r.reportEvent(ctx, ev1))
+	fmt.Println("Sent a message at: ", time.Now())
 
 	time.Sleep(5 * time.Second)
-	// assert.Equal(t, numGo, runtime.NumGoroutine())
+
+	// The agent reporter should be closed due to received INVALID_API_KEY from the collector
 	assert.Equal(t, true, r.Closed())
+	fmt.Println("Shutdown the agent by the user.")
 	e := r.Shutdown()
 	assert.NotEqual(t, nil, e)
 
 	// Tear down everything.
 	server.Stop()
 	globalReporter = oldReporter
-	periodicTasksDisabled = true
 	os.Setenv("APPOPTICS_SERVICE_KEY", oldKey)
 
 	patterns := []string{
 		"Server responded: Invalid API key. Reporter is closing",
 		"Shutting down the gRPC reporter",
-		"periodicTasks goroutine exiting",
+		// "periodicTasks goroutine exiting",
 		"eventSender goroutine exiting",
 		"spanMessageAggregator goroutine exiting",
 		"statusSender goroutine exiting",
