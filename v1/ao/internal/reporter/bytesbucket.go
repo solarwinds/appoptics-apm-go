@@ -105,7 +105,8 @@ func (b *BytesBucket) Drainable() bool {
 		return false
 	}
 
-	if b.watermark >= b.HWM {
+	// Do the first drain as soon as possible, even for one drop of water.
+	if b.watermark >= b.HWM || b.drainTime.IsZero() {
 		return true
 	}
 

@@ -456,7 +456,6 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	// }()
 
 	// start test gRPC server
-	periodicTasksDisabled = false
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	addr := "localhost:4567"
 	server := StartTestGRPCServer(t, addr)
@@ -490,7 +489,6 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	// stop test reporter
 	server.Stop()
 	globalReporter = oldReporter
-	periodicTasksDisabled = true
 	// fmt.Println(buf)
 }
 
@@ -508,7 +506,6 @@ func TestInvalidKey(t *testing.T) {
 	}()
 
 	invalidKey := "invalidf6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
-	periodicTasksDisabled = false
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	oldKey := os.Getenv("APPOPTICS_SERVICE_KEY")
 	os.Setenv("APPOPTICS_SERVICE_KEY", invalidKey)
@@ -547,13 +544,12 @@ func TestInvalidKey(t *testing.T) {
 	// Tear down everything.
 	server.Stop()
 	globalReporter = oldReporter
-	periodicTasksDisabled = true
 	os.Setenv("APPOPTICS_SERVICE_KEY", oldKey)
 
 	patterns := []string{
 		"Server responded: Invalid API key. Reporter is closing",
 		"Shutting down the gRPC reporter",
-		"periodicTasks goroutine exiting",
+		// "periodicTasks goroutine exiting",
 		"eventSender goroutine exiting",
 		"spanMessageAggregator goroutine exiting",
 		"statusSender goroutine exiting",
