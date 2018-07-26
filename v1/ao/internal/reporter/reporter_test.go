@@ -36,7 +36,6 @@ const (
 var _ = func() (_ struct{}) {
 	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
 	os.Setenv("APPOPTICS_REPORTER", "none")
-	// Call agent.Init() after changing any environment variables for testing.
 	config.Refresh()
 	return
 }()

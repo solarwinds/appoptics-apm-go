@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // defines what methods a reporter should offer (internal to reporter package)
@@ -89,7 +89,7 @@ func ReportSpan(span SpanMessage) error {
 func cacheHostname(hn hostnamer) {
 	h, err := hn.Hostname()
 	if err != nil {
-		agent.Errorf("Unable to get hostname, AppOptics tracing disabled: %v", err)
+		log.Errorf("Unable to get hostname, AppOptics tracing disabled: %v", err)
 		reportingDisabled = true
 	}
 	cachedHostname = h

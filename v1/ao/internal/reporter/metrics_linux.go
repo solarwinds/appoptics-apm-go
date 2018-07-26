@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // gets and appends UnameSysName/UnameVersion to a BSON buffer
@@ -74,7 +74,7 @@ func isPhysicalInterface(ifname string) bool {
 	fn := filepath.Join("/sys/class/net/", ifname)
 	link, err := os.Readlink(fn)
 	if err != nil {
-		agent.Infof("cannot read link %s", fn)
+		log.Infof("cannot read link %s", fn)
 		return true
 	}
 	if strings.Contains(link, "/virtual/") {

@@ -3,7 +3,7 @@
 package config
 
 import (
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // The default values for environment variables
@@ -232,7 +232,7 @@ func (c *Config) LoadEnvs() {
 
 // LoadConfigFile loads from the config file
 func (c *Config) LoadConfigFile(path string) error {
-	agent.Debug("Loading from config file is not implemented.")
+	log.Debug("Loading from config file is not implemented.")
 	return nil
 }
 

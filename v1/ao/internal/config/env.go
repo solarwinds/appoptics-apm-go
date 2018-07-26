@@ -5,7 +5,7 @@ package config
 import (
 	"os"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // Env defines the necessary properties and behaviors of a environment variable
@@ -101,11 +101,11 @@ func (e Env) reportInvalid(v string) {
 	if e.mask != nil {
 		v = e.mask(v)
 	}
-	agent.Warning(InvalidEnv(e.name, v))
+	log.Warning(InvalidEnv(e.name, v))
 }
 
 func (e Env) reportMissing() {
-	agent.Warning(MissingEnv(e.name))
+	log.Warning(MissingEnv(e.name))
 }
 
 func (e Env) reportNonDefault(v string) {
@@ -113,5 +113,5 @@ func (e Env) reportNonDefault(v string) {
 	if mask == nil {
 		mask = func(s string) string { return s }
 	}
-	agent.Warning(NonDefaultEnv(e.name, mask(v)))
+	log.Warning(NonDefaultEnv(e.name, mask(v)))
 }
