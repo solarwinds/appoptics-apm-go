@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 )
 
 // defines what methods a reporter should offer (internal to reporter package)
@@ -40,12 +41,9 @@ var cachedPid = os.Getpid()
 
 // for hostname alias
 var configuredHostname string
-var prependDomainForTransactionName bool
 
 // a noop reporter
 type nullReporter struct{}
-
-func NeedPrependDomain() bool { return prependDomainForTransactionName }
 
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
@@ -58,7 +56,7 @@ func (r *nullReporter) Closed() bool                                  { return t
 // can be overridden via APPOPTICS_REPORTER
 func init() {
 	cacheHostname(osHostnamer{})
-	setGlobalReporter(agent.GetConfig(agent.AppOpticsReporter))
+	setGlobalReporter(config.GetReporterType())
 	sendInitMessage()
 }
 

@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 )
 
 const (
@@ -23,7 +24,7 @@ func udpNewReporter() reporter {
 	}
 
 	// collector address override
-	udpAddress := agent.GetConfig(agent.AppOpticsCollectorUDP)
+	udpAddress := config.GetCollectorUDP()
 	if udpAddress == "" {
 		udpAddress = udpAddrDefault
 	}

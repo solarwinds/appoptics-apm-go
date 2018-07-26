@@ -1,31 +1,12 @@
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
-package agent
+package config
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-func TestGetConfig(t *testing.T) {
-	agentConf.initialized = false
-	assert.Equal(t, "", GetConfig(ConfName("APPOPTICS_COLLECTOR")))
-
-	agentConf.initialized = true
-	assert.Equal(t, "", GetConfig(ConfName("INVALID")))
-
-	assert.Equal(t, "collector.appoptics.com:443", GetConfig(ConfName("APPOPTICS_COLLECTOR")))
-	assert.Equal(t, "", GetConfig(ConfName("")))
-
-	os.Setenv("APPOPTICS_COLLECTOR", "test.com:12345")
-	Init()
-	assert.Equal(t, "test.com:12345", GetConfig(ConfName("APPOPTICS_COLLECTOR")))
-	os.Unsetenv("APPOPTICS_COLLECTOR")
-	Init()
-	assert.Equal(t, "collector.appoptics.com:443", GetConfig(ConfName("APPOPTICS_COLLECTOR")))
-}
 
 func TestIsValidServiceKey(t *testing.T) {
 
@@ -47,4 +28,24 @@ func TestIsValidServiceKey(t *testing.T) {
 	for key, valid := range keyPairs {
 		assert.Equal(t, valid, IsValidServiceKey(key))
 	}
+}
+
+func TestMaskServiceKey(t *testing.T) {
+	keyPairs := map[string]string{
+		"1234567890abcdef:Go": "1234********cdef:Go",
+		"abc:Go":              "abc:Go",
+		"abcd1234:Go":         "abcd1234:Go",
+	}
+
+	for key, masked := range keyPairs {
+		assert.Equal(t, masked, maskServiceKey(key))
+	}
+}
+
+func TestIsValidTracingMode(t *testing.T) {
+	assert.Equal(t, true, IsValidTracingMode("always"))
+	assert.Equal(t, true, IsValidTracingMode("never"))
+	assert.Equal(t, false, IsValidTracingMode("abc"))
+	assert.Equal(t, false, IsValidTracingMode(""))
+	assert.Equal(t, true, IsValidTracingMode("ALWAYS"))
 }

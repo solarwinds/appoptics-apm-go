@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 )
 
 // Current settings configuration
@@ -61,7 +62,7 @@ func init() {
 
 func readEnvSettings() {
 	// Configure tracing mode setting using environment variable
-	mode := agent.GetConfig(agent.AppOpticsTracingMode)
+	mode := config.GetTracingMode()
 	switch mode {
 	case "always":
 		fallthrough
@@ -69,14 +70,6 @@ func readEnvSettings() {
 		globalSettingsCfg.tracingMode = TRACE_ALWAYS
 	case "never":
 		globalSettingsCfg.tracingMode = TRACE_NEVER
-	}
-
-	// Prepend the domain name onto transaction names
-	prepend := agent.GetConfig(agent.AppOpticsPrependDomain)
-	if prepend == "true" {
-		prependDomainForTransactionName = true
-	} else {
-		prependDomainForTransactionName = false
 	}
 }
 

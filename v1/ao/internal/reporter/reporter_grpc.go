@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -124,22 +125,22 @@ func newGRPCReporter() reporter {
 	}
 
 	// service key is required, so bail out if not found
-	serviceKey := agent.GetConfig(agent.AppOpticsServiceKey)
-	if !agent.IsValidServiceKey(serviceKey) {
+	serviceKey := config.GetServiceKey()
+	if !config.IsValidServiceKey(serviceKey) {
 		agent.Errorf("Invalid service key (token:serviceName): <%s>. Reporter disabled.", serviceKey)
 		agent.Error("Check AppOptics dashboard for your token and use a service name shorter than 256 characters.")
 		return &nullReporter{}
 	}
 
 	// see if a hostname alias is configured
-	configuredHostname = agent.GetConfig(agent.AppOpticsHostnameAlias)
+	configuredHostname = config.GetHostAlias()
 
 	// collector address override
-	collectorAddress := agent.GetConfig(agent.AppOpticsCollector)
+	collectorAddress := config.GetCollector()
 
 	// certificate override
 	var cert []byte
-	if certPath := agent.GetConfig(agent.AppOpticsTrustedPath); certPath != "" {
+	if certPath := config.GetTrustedPath(); certPath != "" {
 		var err error
 		cert, err = ioutil.ReadFile(certPath)
 		if err != nil {
@@ -150,11 +151,7 @@ func newGRPCReporter() reporter {
 		cert = []byte(grpcCertDefault)
 	}
 
-	var insecureSkipVerify bool
-	switch agent.GetConfig(agent.AppOpticsInsecureSkipVerify) {
-	case "true", "1", "yes":
-		insecureSkipVerify = true
-	}
+	var insecureSkipVerify = config.GetSkipVerify()
 
 	// create connection object for events client and metrics client
 	eventConn, err1 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)

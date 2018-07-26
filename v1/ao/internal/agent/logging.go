@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -32,19 +33,60 @@ const (
 	ERROR
 )
 
-// The string representation of log levels
-var levelStr = []string{
+const (
+	envAppOpticsLogLevel = "APPOPTICS_DEBUG_LEVEL"
+)
+
+// LevelStr represents the log levels in strings
+var LevelStr = []string{
 	DEBUG:   "DEBUG",
 	INFO:    "INFO",
 	WARNING: "WARN",
 	ERROR:   "ERROR",
 }
 
+const defaultLogLevel = WARNING
+
 // The global log level.
 var (
-	_defaultLogLevel, _ = StrToLevel(defaultLogLevel)
-	_globalLevel        = &logLevel{LogLevel: _defaultLogLevel}
+	globalLevel = &logLevel{LogLevel: defaultLogLevel}
 )
+
+func init() {
+	initLog()
+}
+
+func initLog() {
+	level := defaultLogLevel
+	if s, ok := os.LookupEnv(envAppOpticsLogLevel); ok {
+		if l, valid := ToLogLevel(s); valid {
+			level = l
+		}
+	}
+	SetLevel(level)
+}
+
+// ToLogLevel converts a string to a log level, or returns false for any error
+func ToLogLevel(level string) (LogLevel, bool) {
+	lvl := WARNING
+
+	// Accept integers for backward-compatibility.
+	if i, err := strconv.Atoi(level); err == nil {
+		if i < len(LevelStr) {
+			lvl = LogLevel(i)
+		} else {
+			return lvl, false
+		}
+	} else {
+		l, err := StrToLevel(strings.ToUpper(strings.TrimSpace(level)))
+		if err == nil {
+			lvl = l
+		} else {
+			return lvl, false
+		}
+	}
+	return lvl, true
+}
 
 // SetLevel sets the log level of AppOptics agent
 func (l *logLevel) SetLevel(level LogLevel) {
@@ -61,40 +103,18 @@ func (l *logLevel) Level() LogLevel {
 }
 
 var (
-	SetLevel = _globalLevel.SetLevel
-	Level    = _globalLevel.Level
+	// SetLevel is the wrapper for the global logger
+	SetLevel = globalLevel.SetLevel
+
+	// Level is the wrapper for the global logger
+	Level = globalLevel.Level
 )
 
-// initLogging initializes the global logger with the configured log level
-func initLogging() {
-	SetLevel(verifyLogLevel(GetConfig(AppOpticsLogLevel)))
-}
-
-// verifyLogLevel verifies if a string correctly represents a valid log level and returns
-// the level in LogLevel type. It will return the default level for invalid arguments
-func verifyLogLevel(level string) (lvl LogLevel) {
-	// We do not want to break backward-compatibility so keep accepting integer values.
-	if i, err := strconv.Atoi(level); err == nil {
-		// Protect the debug level from some invalid value, e.g., 1000
-		if i < len(levelStr) {
-			lvl = LogLevel(i)
-		} else {
-			lvl = _defaultLogLevel
-		}
-
-	} else if l, err := StrToLevel(strings.ToUpper(strings.TrimSpace(level))); err == nil {
-		lvl = l
-	} else {
-		Warningf("invalid debug level: %s", level)
-		lvl = _defaultLogLevel
-	}
-	return
-}
-
-// StrToLevel converts a log level in string format (e.g., "DEBUG") to the corresponding log level
-// in LogLevel type. It returns ERROR (the highest level) and an error for invalid log level strings
+// StrToLevel converts a log level in string format (e.g., "DEBUG") to the
+// corresponding log level in LogLevel type. It returns ERROR (the highest
+// level) and an error for invalid log level strings.
 func StrToLevel(e string) (LogLevel, error) {
-	offset, err := elemOffset(levelStr, e)
+	offset, err := elemOffset(LevelStr, e)
 	if err == nil {
 		return LogLevel(offset), nil
 	} else {
@@ -102,7 +122,8 @@ func StrToLevel(e string) (LogLevel, error) {
 	}
 }
 
-// elemOffset is a simple helper function to check if a slice contains a specific element
+// elemOffset is a simple helper function to check if a slice contains a
+// specific element
 func elemOffset(s []string, e string) (int, error) {
 	for idx, i := range s {
 		if e == i {
@@ -112,7 +133,7 @@ func elemOffset(s []string, e string) (int, error) {
 	return -1, errors.New("not found")
 }
 
-// shouldLog checks if a message should be logged based on current level settings
+// shouldLog checks if a message should be logged with current level.
 func shouldLog(lv LogLevel) bool {
 	return lv >= Level()
 }
@@ -124,7 +145,8 @@ func logIt(level LogLevel, msg string, args []interface{}) {
 	}
 
 	var buffer bytes.Buffer
-	const numberOfLayersToSkip = 2 // layer 1: logIt(), layer 2: its wrappers, e.g., Info()
+	// layer 1: logIt(), layer 2: its wrappers, e.g., Info()
+	const numberOfLayersToSkip = 2
 
 	var pre string
 	if level == DEBUG {
@@ -139,12 +161,12 @@ func logIt(level LogLevel, msg string, args []interface{}) {
 		if ok {
 			path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
 			name := path[len(path)-1]
-			pre = fmt.Sprintf("%s %s#%d %s(): ", levelStr[level], filepath.Base(file), line, name)
+			pre = fmt.Sprintf("%s %s#%d %s(): ", LevelStr[level], filepath.Base(file), line, name)
 		} else {
-			pre = fmt.Sprintf("%s %s#%s %s(): ", levelStr[level], "na", "na", "na")
+			pre = fmt.Sprintf("%s %s#%s %s(): ", LevelStr[level], "na", "na", "na")
 		}
 	} else { // avoid expensive reflections in production
-		pre = fmt.Sprintf("%s ", levelStr[level])
+		pre = fmt.Sprintf("%s ", LevelStr[level])
 	}
 
 	buffer.WriteString(pre)

@@ -20,7 +20,7 @@ import (
 
 	"strings"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/stretchr/testify/assert"
@@ -37,12 +37,13 @@ var _ = func() (_ struct{}) {
 	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
 	os.Setenv("APPOPTICS_REPORTER", "none")
 	// Call agent.Init() after changing any environment variables for testing.
-	agent.Init()
+	config.Refresh()
 	return
 }()
 
 func init() {
 	periodicTasksDisabled = true
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 }
 
 // dependency injection for os.Hostname and net.{ResolveUDPAddr/DialUDP}
@@ -219,7 +220,7 @@ func assertSSLMode(t *testing.T) {
 func TestGRPCReporter(t *testing.T) {
 	// start test gRPC server
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
-	agent.Init()
+	config.Refresh()
 	addr := "localhost:4567"
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
@@ -228,7 +229,7 @@ func TestGRPCReporter(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	agent.Init()
+	config.Refresh()
 	oldReporter := globalReporter
 	setGlobalReporter("ssl")
 
@@ -307,8 +308,8 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 	}()
 
 	// start test gRPC server
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "info")
-	agent.Init()
+	config.Refresh()
+
 	addr := "localhost:4567"
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
@@ -317,7 +318,7 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	agent.Init()
+	config.Refresh()
 	oldReporter := globalReporter
 	setGlobalReporter("ssl")
 
@@ -384,7 +385,7 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 func TestRedirect(t *testing.T) {
 	// start test gRPC server
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
-	agent.Init()
+	config.Refresh()
 	addr := "localhost:4567"
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
@@ -393,7 +394,7 @@ func TestRedirect(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	agent.Init()
+	config.Refresh()
 	oldReporter := globalReporter
 	setGlobalReporter("ssl")
 
@@ -465,7 +466,7 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	agent.Init()
+	config.Refresh()
 	oldReporter := globalReporter
 	// numGo := runtime.NumGoroutine()
 	setGlobalReporter("ssl")
@@ -519,7 +520,7 @@ func TestInvalidKey(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
-	agent.Init()
+	config.Refresh()
 	oldReporter := globalReporter
 	// numGo := runtime.NumGoroutine()
 	setGlobalReporter("ssl")
@@ -537,7 +538,7 @@ func TestInvalidKey(t *testing.T) {
 
 	// The agent reporter should be closed due to received INVALID_API_KEY from the collector
 	assert.Equal(t, true, r.Closed())
-	fmt.Println("Shutdown the agent by the user.")
+	fmt.Println("The agent is shutdown by the user.")
 	e := r.Shutdown()
 	assert.NotEqual(t, nil, e)
 
