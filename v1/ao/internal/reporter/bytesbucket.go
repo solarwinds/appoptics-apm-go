@@ -124,3 +124,11 @@ func (b *BytesBucket) Drainable() bool {
 
 	return tickerout
 }
+
+// SetTicker assign a new ticker to the bucket and returns that ticker. It's
+// the caller's responsibility to stop the old ticker.
+// This function is not concurrent-safe.
+func (b *BytesBucket) SetTicker(t *time.Ticker) *time.Ticker {
+	b.ticker = t
+	return t
+}

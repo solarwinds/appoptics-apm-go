@@ -35,78 +35,80 @@ const (
 	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
 )
 
+// The environment variables, validators and converters. This map is not
+// concurrent-safe and should not be modified after initialization.
 var envs = map[string]Env{
-	envAppOpticsCollector: {
+	"Collector": {
 		envAppOpticsCollector,
 		true,
 		IsValidHost,
 		ToHost,
 		nil,
 	},
-	envAppOpticsServiceKey: {
+	"ServiceKey": {
 		envAppOpticsServiceKey,
 		false,
 		IsValidServiceKey,
 		ToServiceKey,
 		maskServiceKey,
 	},
-	envAppOpticsTrustedPath: {
+	"TrustedPath": {
 		envAppOpticsTrustedPath,
 		true,
 		IsValidFileString,
 		ToFileString,
 		nil,
 	},
-	envAppOpticsCollectorUDP: {
+	"CollectorUDP": {
 		envAppOpticsCollectorUDP,
 		true,
 		IsValidHost,
 		ToHost,
 		nil,
 	},
-	envAppOpticsReporter: {
+	"ReporterType": {
 		envAppOpticsReporter,
 		true,
 		IsValidReporterType,
 		ToReporterType,
 		nil,
 	},
-	envAppOpticsTracingMode: {
+	"TracingMode": {
 		envAppOpticsTracingMode,
 		true,
 		IsValidTracingMode,
 		ToTracingMode,
 		nil,
 	},
-	envAppOpticsPrependDomain: {
+	"PrependDomain": {
 		envAppOpticsPrependDomain,
 		true,
 		IsValidBool,
 		ToBool,
 		nil,
 	},
-	envAppOpticsHostnameAlias: {
+	"HostAlias": {
 		envAppOpticsHostnameAlias,
 		true,
 		IsValidHostnameAlias,
 		ToHostnameAlias,
 		nil,
 	},
-	envAppOpticsInsecureSkipVerify: {
+	"SkipVerify": {
 		envAppOpticsInsecureSkipVerify,
 		true,
 		IsValidBool,
 		ToBool,
 		nil,
 	},
-	envAppOpticsHistogramPrecision: {
+	"Precision": {
 		envAppOpticsHistogramPrecision,
 		true,
 		IsValidInteger,
 		ToInteger,
 		nil,
 	},
-	envAppOpticsEventsFlushInterval: {
+	"EventsFlushInterval": {
 		envAppOpticsEventsFlushInterval,
 		true,
 		IsValidInteger,
@@ -213,19 +215,19 @@ func newConfig() *Config {
 // LoadEnvs loads environment variable values and update the Config object.
 func (c *Config) LoadEnvs() {
 	// TODO: reflect?
-	c.Collector = envs[envAppOpticsCollector].LoadString(c.Collector)
-	c.ServiceKey = envs[envAppOpticsServiceKey].LoadString(c.ServiceKey)
+	c.Collector = envs["Collector"].LoadString(c.Collector)
+	c.ServiceKey = envs["ServiceKey"].LoadString(c.ServiceKey)
 
-	c.TrustedPath = envs[envAppOpticsTrustedPath].LoadString(c.TrustedPath)
-	c.CollectorUDP = envs[envAppOpticsCollectorUDP].LoadString(c.CollectorUDP)
-	c.ReporterType = envs[envAppOpticsReporter].LoadString(c.ReporterType)
-	c.TracingMode = envs[envAppOpticsTracingMode].LoadString(c.TracingMode)
+	c.TrustedPath = envs["TrustedPath"].LoadString(c.TrustedPath)
+	c.CollectorUDP = envs["CollectorUDP"].LoadString(c.CollectorUDP)
+	c.ReporterType = envs["ReporterType"].LoadString(c.ReporterType)
+	c.TracingMode = envs["TracingMode"].LoadString(c.TracingMode)
 
-	c.PrependDomain = envs[envAppOpticsPrependDomain].LoadBool(c.PrependDomain)
-	c.HostAlias = envs[envAppOpticsHostnameAlias].LoadString(c.HostAlias)
-	c.SkipVerify = envs[envAppOpticsInsecureSkipVerify].LoadBool(c.SkipVerify)
+	c.PrependDomain = envs["PrependDomain"].LoadBool(c.PrependDomain)
+	c.HostAlias = envs["HostAlias"].LoadString(c.HostAlias)
+	c.SkipVerify = envs["SkipVerify"].LoadBool(c.SkipVerify)
 
-	c.Precision = envs[envAppOpticsHistogramPrecision].LoadInt(c.Precision)
+	c.Precision = envs["Precision"].LoadInt(c.Precision)
 
 	c.Reporter.LoadEnvs()
 }

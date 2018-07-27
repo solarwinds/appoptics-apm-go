@@ -51,7 +51,8 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 7tsqAxw=
 -----END CERTIFICATE-----`
 
-	grpcEventFlushIntervalDefault           = 2               // EventsFlushInterval in seconds
+	// These are hard-coded parameters for the gRPC reporter. Any of them become
+	// configurable in future versions will be moved to package config.
 	grpcEventFlushBatchSizeDefault          = 2 * 1024 * 1024 // EventsBatchSize in bytes
 	grpcMetricIntervalDefault               = 30              // default metrics flush interval in seconds
 	grpcGetSettingsIntervalDefault          = 30              // default settings retrieval interval in seconds
@@ -89,7 +90,7 @@ type grpcConnection struct {
 type grpcReporter struct {
 	eventConnection              *grpcConnection // used for events only
 	metricConnection             *grpcConnection // used for everything else (postMetrics, postStatus, getSettings)
-	eventFlushInterval           int             // max interval between postEvent batches
+	eventFlushInterval           int64           // max interval between postEvent batches
 	collectMetricInterval        int             // metrics flush interval in seconds
 	getSettingsInterval          int             // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int             // check interval for timed out settings in seconds
@@ -110,7 +111,6 @@ type grpcReporter struct {
 
 // gRPC reporter errors
 var (
-	// You are trying to close a reporter which had been closed before.
 	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed reporter")
 	ErrReporterIsClosed       = errors.New("the reporter is closed")
 	ErrMaxRetriesExceeded     = errors.New("maximum retries exceeded")
@@ -180,7 +180,7 @@ func newGRPCReporter() reporter {
 			queueStats:  &eventQueueStats{},
 		},
 
-		eventFlushInterval:           grpcEventFlushIntervalDefault,
+		eventFlushInterval:           config.ReporterOpts().GetEventFlushInterval(),
 		collectMetricInterval:        grpcMetricIntervalDefault,
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
 		settingsTimeoutCheckInterval: grpcSettingsTimeoutCheckIntervalDefault,
@@ -447,26 +447,47 @@ type grpcResult struct {
 // the collector using the gRPC method PostEvents()
 func (r *grpcReporter) eventSender() {
 	defer log.Warning("eventSender goroutine exiting.")
+
 	// send connection init message before doing anything else
 	r.eventConnection.sendConnectionInit()
 
 	batches := make(chan [][]byte)
 	token := r.eventBatchSender(batches)
 
-	flushT := time.NewTicker(time.Second * time.Duration(r.eventFlushInterval))
-	defer flushT.Stop()
+	flushTk := time.NewTicker(time.Second * time.Duration(r.eventFlushInterval))
+	// late binding as flushTk may point to another ticker later
+	defer func() { flushTk.Stop() }()
 
-	// This event bucket is drainable either after it's 2MB full, or 2 seconds
-	// has passed.
+	// This event bucket is drainable either after it reaches HWM, or the flush
+	// interval has passed.
 	evtBucket := NewBytesBucket(r.eventMessages,
 		WithHWM(grpcEventFlushBatchSizeDefault),
-		WithTicker(flushT))
+		WithTicker(flushTk))
+
+	// The ticker to poll the new EventFlushInterval setting, if any.
+	pollTk := time.NewTicker(time.Second)
+	defer pollTk.Stop()
+
+	opts := config.ReporterOpts()
+	prev := opts.GetUpdateTime()
 
 	for {
-		// Check if the agent is required to quit.
 		select {
+		// Check if the agent is required to quit.
 		case <-r.done:
 			return
+			// dynamically update the event flush interval
+		case <-pollTk.C:
+			curr := opts.GetUpdateTime()
+			if prev != curr {
+				prev = curr
+				interval := opts.GetEventFlushInterval()
+				r.eventFlushInterval = interval
+
+				flushTk.Stop()
+				t := time.NewTicker(time.Second * time.Duration(interval))
+				flushTk = evtBucket.SetTicker(t)
+			}
 		default:
 		}
 
@@ -873,11 +894,27 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 		// update MetricsFlushInterval
 		r.collectMetricIntervalLock.Lock()
 		if interval, ok := s.Arguments["MetricsFlushInterval"]; ok {
-			r.collectMetricInterval = int(binary.LittleEndian.Uint32(interval))
+			l := len(interval)
+			if l == 4 {
+				r.collectMetricInterval = int(binary.LittleEndian.Uint32(interval))
+			} else {
+				log.Warningf("Bad MetricsFlushInterval size: %s", l)
+			}
 		} else {
 			r.collectMetricInterval = grpcMetricIntervalDefault
 		}
 		r.collectMetricIntervalLock.Unlock()
+
+		// update events flush interval
+		if interval, ok := s.Arguments["EventsFlushInterval"]; ok {
+			l := len(interval)
+			if l == 4 {
+				newInterval := int64(binary.LittleEndian.Uint32(interval))
+				config.ReporterOpts().SetEventFlushInterval(newInterval)
+			} else {
+				log.Warningf("Bad EventsFlushInterval size: %s", l)
+			}
+		}
 
 		// update MaxTransactions
 		capacity := metricsTransactionsMaxDefault

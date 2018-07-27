@@ -17,10 +17,13 @@ func TestBytesBucket(t *testing.T) {
 		}
 	}
 
+	tk := time.NewTicker(time.Second * 2)
+	defer tk.Stop()
+
 	// a new bucket with high watermark=5 and a ticker of 2 seconds
 	b := NewBytesBucket(source,
 		WithHWM(5),
-		WithTicker(time.NewTicker(time.Second*2)))
+		WithTicker(tk))
 
 	// try pour in some water and check the returned value
 	poured := b.PourIn()
@@ -63,4 +66,14 @@ func TestBytesBucket(t *testing.T) {
 	source <- []byte{2, 3}
 	poured = b.PourIn()
 	assert.Equal(t, 3, poured)
+
+	// test set ticker
+	newTk := time.NewTicker(time.Second)
+	b.SetTicker(newTk)
+	source <- []byte{1}
+	poured = b.PourIn()
+	assert.Equal(t, 1, poured)
+	time.Sleep(time.Millisecond * 1500)
+	assert.Equal(t, true, b.Drainable())
+
 }

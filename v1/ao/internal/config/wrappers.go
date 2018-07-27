@@ -34,8 +34,8 @@ var GetSkipVerify = conf.GetSkipVerify
 // GetPrecision is a wrapper to the method of the global config
 var GetPrecision = conf.GetPrecision
 
-// GetReporter is a wrapper to the method of the global config
-var GetReporter = conf.GetReporter
+// ReporterOpts is a wrapper to the method of the global config
+var ReporterOpts = conf.GetReporter
 
 // Refresh reloads the customized configurations
 var Refresh = conf.RefreshConfig

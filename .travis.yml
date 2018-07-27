@@ -21,9 +21,9 @@ install:
 
 script:
   - cd $GOPATH/src/github.com/appoptics/appoptics-apm-go/v1/ao
-  - go build -v github.com/appoptics/appoptics-apm-go/v1/ao github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter github.com/appoptics/appoptics-apm-go/v1/ao/internal/log
-  - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao
-  - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao
+  - go build -v github.com/appoptics/appoptics-apm-go/v1/ao github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter github.com/appoptics/appoptics-apm-go/v1/ao/internal/log github.com/appoptics/appoptics-apm-go/v1/ao/internal/config
+  - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config
+  - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config
   - pushd internal/reporter/
   - go test -v -race -covermode=atomic -coverprofile=cov.out
   - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out
@@ -32,11 +32,15 @@ script:
   - go test -v -race -covermode=atomic -coverprofile=cov.out
   - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out
   - popd
-  - pushd opentracing
-  - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao
-  - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao
+  - pushd internal/config/
+  - go test -v -race -covermode=atomic -coverprofile=cov.out
+  - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out
   - popd
-  - gocovmerge cov.out covao.out internal/reporter/cov.out internal/reporter/covao.out internal/log/cov.out internal/log/covao.out opentracing/cov.out opentracing/covao.out > coverage.txt
+  - pushd opentracing
+  - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config
+  - go test -v -race -tags disable_tracing -covermode=atomic -coverprofile=covao.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config
+  - popd
+  - gocovmerge cov.out covao.out internal/reporter/cov.out internal/reporter/covao.out internal/log/cov.out internal/log/covao.out internal/config/cov.out internal/config/covao.out opentracing/cov.out opentracing/covao.out > coverage.txt
 
 after_success:
   - if [[ $TRAVIS_GO_VERSION == 1.9* ]]; then bash <(curl -s https://codecov.io/bash); fi

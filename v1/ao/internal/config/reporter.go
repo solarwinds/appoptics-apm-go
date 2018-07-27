@@ -126,6 +126,6 @@ func (r *ReporterOptions) GetUpdateTime() int64 {
 
 // LoadEnvs load environment variables and refresh reporter options.
 func (r *ReporterOptions) LoadEnvs() {
-	i := envs[envAppOpticsEventsFlushInterval].LoadInt64(r.EvtFlushInterval)
+	i := envs["EventsFlushInterval"].LoadInt64(r.EvtFlushInterval)
 	r.SetEventFlushInterval(i)
 }

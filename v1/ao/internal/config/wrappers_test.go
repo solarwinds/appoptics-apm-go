@@ -18,5 +18,5 @@ func TestWrappers(t *testing.T) {
 	assert.Equal(t, defaultGRPCCollector, GetCollector())
 	assert.Equal(t, defaultHistogramPrecision, GetPrecision())
 
-	assert.NotEqual(t, nil, GetReporter())
+	assert.NotEqual(t, nil, ReporterOpts())
 }

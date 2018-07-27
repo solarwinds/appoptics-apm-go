@@ -87,6 +87,14 @@ func TestLog(t *testing.T) {
 	Info("hello")
 	assert.True(t, strings.HasSuffix(buffer.String(), "\n"))
 
+	buffer.Reset()
+	Warningf("hello %s", "world")
+	assert.True(t, strings.HasSuffix(buffer.String(), "hello world\n"))
+
+	buffer.Reset()
+	Infof("show me the %v", "code")
+	assert.True(t, strings.HasSuffix(buffer.String(), "show me the code\n"))
+
 	log.SetOutput(os.Stderr)
 	os.Unsetenv("APPOPTICS_DEBUG_LEVEL")
 
