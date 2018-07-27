@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"gopkg.in/mgo.v2/bson"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/stretchr/testify/assert"
 )
@@ -412,21 +412,22 @@ func TestOboeTracingMode(t *testing.T) {
 	r := SetTestReporter()
 
 	os.Setenv("APPOPTICS_TRACING_MODE", "ALWAYS")
-	agent.Init()
+	config.Refresh()
 	readEnvSettings()
 	assert.EqualValues(t, globalSettingsCfg.tracingMode, 1) // C.OBOE_TRACE_ALWAYS
 
 	os.Setenv("APPOPTICS_TRACING_MODE", "never")
-	agent.Init()
+	config.Refresh()
 	readEnvSettings()
 	assert.EqualValues(t, globalSettingsCfg.tracingMode, 0) // C.OBOE_TRACE_NEVER
 	ok, _, _ := oboeSampleRequest("myLayer", false)
 	assert.False(t, ok)
 
 	os.Setenv("APPOPTICS_TRACING_MODE", "")
-	agent.Init()
+	config.Refresh()
 	readEnvSettings()
-	assert.EqualValues(t, globalSettingsCfg.tracingMode, 1)
+	// empty string is invalid and discarded, the old value `never` is kept.
+	assert.EqualValues(t, 0, globalSettingsCfg.tracingMode)
 
 	r.Close(0)
 }

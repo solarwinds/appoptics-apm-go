@@ -1,6 +1,6 @@
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
-package agent
+package log
 
 import (
 	"bytes"
@@ -28,24 +28,24 @@ func TestDebugLevel(t *testing.T) {
 		{"APPOPTICS_DEBUG_LEVEL", "warn", WARNING},
 		{"APPOPTICS_DEBUG_LEVEL", "erroR", ERROR},
 		{"APPOPTICS_DEBUG_LEVEL", "erroR  ", ERROR},
-		{"APPOPTICS_DEBUG_LEVEL", "HelloWorld", _defaultLogLevel},
+		{"APPOPTICS_DEBUG_LEVEL", "HelloWorld", defaultLogLevel},
 		{"APPOPTICS_DEBUG_LEVEL", "0", DEBUG},
 		{"APPOPTICS_DEBUG_LEVEL", "1", INFO},
 		{"APPOPTICS_DEBUG_LEVEL", "2", WARNING},
 		{"APPOPTICS_DEBUG_LEVEL", "3", ERROR},
-		{"APPOPTICS_DEBUG_LEVEL", "4", _defaultLogLevel},
-		{"APPOPTICS_DEBUG_LEVEL", "1000", _defaultLogLevel},
+		{"APPOPTICS_DEBUG_LEVEL", "4", defaultLogLevel},
+		{"APPOPTICS_DEBUG_LEVEL", "1000", defaultLogLevel},
 	}
 
 	for _, test := range tests {
 		os.Setenv(test.key, test.val)
-		Init()
-		assert.EqualValues(t, test.expected, Level())
+		initLog()
+		assert.EqualValues(t, test.expected, Level(), "Test-"+test.val)
 	}
 
 	os.Unsetenv("APPOPTICS_DEBUG_LEVEL")
-	Init()
-	assert.EqualValues(t, Level(), _defaultLogLevel)
+	initLog()
+	assert.EqualValues(t, Level(), defaultLogLevel)
 }
 
 func TestLog(t *testing.T) {
@@ -53,7 +53,7 @@ func TestLog(t *testing.T) {
 	log.SetOutput(&buffer)
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
-	Init()
+	initLog()
 
 	tests := map[string]string{
 		"hello world": "hello world\n",
@@ -87,6 +87,14 @@ func TestLog(t *testing.T) {
 	Info("hello")
 	assert.True(t, strings.HasSuffix(buffer.String(), "\n"))
 
+	buffer.Reset()
+	Warningf("hello %s", "world")
+	assert.True(t, strings.HasSuffix(buffer.String(), "hello world\n"))
+
+	buffer.Reset()
+	Infof("show me the %v", "code")
+	assert.True(t, strings.HasSuffix(buffer.String(), "show me the code\n"))
+
 	log.SetOutput(os.Stderr)
 	os.Unsetenv("APPOPTICS_DEBUG_LEVEL")
 
@@ -114,10 +122,11 @@ func TestVerifyLogLevel(t *testing.T) {
 		"INFO":    INFO,
 		"WARN":    WARNING,
 		"ERROR":   ERROR,
-		"ABC":     _defaultLogLevel,
+		"ABC":     defaultLogLevel,
 	}
 	for str, lvl := range tests {
-		assert.Equal(t, lvl, verifyLogLevel(str))
+		l, _ := ToLogLevel(str)
+		assert.Equal(t, lvl, l)
 	}
 }
 
@@ -127,7 +136,7 @@ func TestSetLevel(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		go func(wg *sync.WaitGroup) {
 			time.Sleep(time.Millisecond * time.Duration(rand.Intn(5)))
-			SetLevel(LogLevel(rand.Intn(len(levelStr))))
+			SetLevel(LogLevel(rand.Intn(len(LevelStr))))
 			Debug("hello world")
 			wg.Done()
 		}(wg)
