@@ -17,8 +17,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/hdrhist"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // Linux distributions and their identifying files
@@ -226,15 +226,15 @@ func init() {
 	pEnv := "APPOPTICS_HISTOGRAM_PRECISION"
 	precision := os.Getenv(pEnv)
 	if precision != "" {
-		agent.Infof("Non-default APPOPTICS_HISTOGRAM_PRECISION: %s", precision)
+		log.Infof("Non-default APPOPTICS_HISTOGRAM_PRECISION: %s", precision)
 		if p, err := strconv.Atoi(precision); err == nil {
 			if p >= 0 && p <= 5 {
 				metricsHTTPHistograms.precision = p
 			} else {
-				agent.Errorf("value of %v must be between 0 and 5: %v", pEnv, precision)
+				log.Errorf("value of %v must be between 0 and 5: %v", pEnv, precision)
 			}
 		} else {
-			agent.Errorf("value of %v is not an int: %v", pEnv, precision)
+			log.Errorf("value of %v is not an int: %v", pEnv, precision)
 		}
 	}
 }
@@ -601,7 +601,7 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
 	defer func() {
 		if err := recover(); err != nil {
-			agent.Errorf("%v", err)
+			log.Errorf("%v", err)
 		}
 	}()
 
@@ -745,7 +745,7 @@ func recordHistogram(hi *histograms, name string, duration time.Duration) {
 	defer func() {
 		hi.lock.Unlock()
 		if err := recover(); err != nil {
-			agent.Errorf("Failed to record histogram: %v", err)
+			log.Errorf("Failed to record histogram: %v", err)
 		}
 	}()
 
@@ -816,7 +816,7 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	// get 64-base encoded representation of the histogram
 	data, err := hdrhist.EncodeCompressed(h.hist)
 	if err != nil {
-		agent.Errorf("Failed to encode histogram: %v", err)
+		log.Errorf("Failed to encode histogram: %v", err)
 		return
 	}
 

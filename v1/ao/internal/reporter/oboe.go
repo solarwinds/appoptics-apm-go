@@ -14,7 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // Current settings configuration
@@ -61,7 +62,7 @@ func init() {
 
 func readEnvSettings() {
 	// Configure tracing mode setting using environment variable
-	mode := agent.GetConfig(agent.AppOpticsTracingMode)
+	mode := config.GetTracingMode()
 	switch mode {
 	case "always":
 		fallthrough
@@ -69,14 +70,6 @@ func readEnvSettings() {
 		globalSettingsCfg.tracingMode = TRACE_ALWAYS
 	case "never":
 		globalSettingsCfg.tracingMode = TRACE_NEVER
-	}
-
-	// Prepend the domain name onto transaction names
-	prepend := agent.GetConfig(agent.AppOpticsPrependDomain)
-	if prepend == "true" {
-		prependDomainForTransactionName = true
-	} else {
-		prependDomainForTransactionName = false
 	}
 }
 
@@ -86,7 +79,7 @@ func sendInitMessage() {
 		// create new event from context
 		e, err := c.newEvent("single", "go")
 		if err != nil {
-			agent.Error("Error while creating the init message: %v", err)
+			log.Error("Error while creating the init message: %v", err)
 			return
 		}
 
@@ -168,7 +161,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		agent.Debugf("Sampling disabled for %v until valid settings are retrieved.", layer)
+		log.Debugf("Sampling disabled for %v until valid settings are retrieved.", layer)
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
 
@@ -207,7 +200,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
-	agent.Debugf("Sampling with rate=%v, source=%v", sampleRate, sampleSource)
+	log.Debugf("Sampling with rate=%v, source=%v", sampleRate, sampleSource)
 	return retval, sampleRate, sampleSource
 }
 
@@ -254,7 +247,7 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 		setting.bucket.capacity = bucketCapacity
 	} else {
 		setting.bucket.capacity = 0
-		agent.Warningf("Invalid bucket capacity (%v). Using %v.", bucketCapacity, 0)
+		log.Warningf("Invalid bucket capacity (%v). Using %v.", bucketCapacity, 0)
 	}
 	if setting.bucket.available > setting.bucket.capacity {
 		setting.bucket.available = setting.bucket.capacity
@@ -263,7 +256,7 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 		setting.bucket.ratePerSec = bucketRatePerSec
 	} else {
 		setting.bucket.ratePerSec = 0
-		agent.Warningf("Invalid bucket rate (%v). Using %v.", bucketRatePerSec, 0)
+		log.Warningf("Invalid bucket rate (%v). Using %v.", bucketRatePerSec, 0)
 	}
 	setting.bucket.lock.Unlock()
 }
@@ -295,7 +288,7 @@ func getSetting(layer string) (*oboeSettings, bool) {
 
 func shouldSample(sampleRate int) bool {
 	retval := sampleRate == maxSamplingRate || rand.Intn(maxSamplingRate) <= sampleRate
-	agent.Debugf("shouldSample(%v) => %v", sampleRate, retval)
+	log.Debugf("shouldSample(%v) => %v", sampleRate, retval)
 	return retval
 }
 

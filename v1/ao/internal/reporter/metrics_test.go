@@ -118,6 +118,11 @@ func TestAppendMACAddresses(t *testing.T) {
 }
 
 func TestGetAWSMetadata(t *testing.T) {
+	testCachedAWSInstanceZone := "uninitialized"
+	testCachedAWSInstanceID := "uninitialized"
+	testEc2MetadataZoneURL := "http://localhost:8880/latest/meta-data/placement/availability-zone"
+	testEc2MetadataInstanceIDURL := "http://localhost:8880/latest/meta-data/instance-id"
+
 	sm := http.NewServeMux()
 	sm.HandleFunc("/latest/meta-data/instance-id", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "i-12345678")
@@ -132,24 +137,20 @@ func TestGetAWSMetadata(t *testing.T) {
 
 	s := &http.Server{Addr: addr, Handler: sm}
 	// change EC2 MD URLs
-	ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, "169.254.169.254", addr, 1)
-	ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, "169.254.169.254", addr, 1)
 	go s.Serve(ln)
 	defer func() { // restore old URLs
 		ln.Close()
-		ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, addr, "169.254.169.254", 1)
-		ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, addr, "169.254.169.254", 1)
 	}()
 	time.Sleep(50 * time.Millisecond)
 
-	id := getAWSInstanceID()
-	assert.Equal(t, id, "i-12345678")
-	assert.Equal(t, "i-12345678", cachedAWSInstanceID)
-	zone := getAWSInstanceZone()
-	assert.Equal(t, zone, "us-east-7")
-	assert.Equal(t, "us-east-7", cachedAWSInstanceZone)
+	id := getAWSMeta(&testCachedAWSInstanceID, testEc2MetadataInstanceIDURL)
+	assert.Equal(t, "i-12345678", id)
+	assert.Equal(t, "i-12345678", testCachedAWSInstanceID)
+	zone := getAWSMeta(&testCachedAWSInstanceZone, testEc2MetadataZoneURL)
+	assert.Equal(t, "us-east-7", zone)
+	assert.Equal(t, "us-east-7", testCachedAWSInstanceZone)
 	// test the helper function
-	zone = getAWSMeta(nil, ec2MetadataZoneURL)
+	zone = getAWSMeta(nil, testEc2MetadataZoneURL)
 	assert.Equal(t, zone, "us-east-7")
 }
 
