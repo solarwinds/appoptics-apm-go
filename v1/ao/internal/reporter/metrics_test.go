@@ -4,22 +4,18 @@ package reporter
 
 import (
 	"bytes"
-	"fmt"
 	"log"
 	"math"
 	"net"
-	"net/http"
 	"os"
-	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/hdrhist"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -43,31 +39,19 @@ func round(val float64, roundOn float64, places int) (newVal float64) {
 	return
 }
 
-func TestDistro(t *testing.T) {
-	distro := strings.ToLower(getDistro())
-
-	assert.NotEmpty(t, distro)
-
-	if runtime.GOOS == "linux" {
-		assert.NotContains(t, distro, "unknown")
-	} else {
-		assert.Contains(t, distro, "unknown")
-	}
-}
-
 func TestAppendIPAddresses(t *testing.T) {
 	bbuf := NewBsonBuffer()
 	appendIPAddresses(bbuf)
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
 
-	ifaces, _ := filteredIfaces()
+	ifaces, _ := host.FilteredIfaces()
 	var addresses []string
 
 	for _, iface := range ifaces {
 		addrs, _ := iface.Addrs()
 		for _, addr := range addrs {
-			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && isPhysicalInterface(iface.Name) {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && host.IsPhysicalInterface(iface.Name) {
 				addresses = append(addresses, ipnet.IP.String())
 			}
 		}
@@ -87,17 +71,17 @@ func TestAppendIPAddresses(t *testing.T) {
 
 func TestAppendMACAddresses(t *testing.T) {
 	bbuf := NewBsonBuffer()
-	appendMACAddresses(bbuf)
+	appendMACAddresses(bbuf, host.CurrentID().MAC())
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
 
-	ifaces, _ := filteredIfaces()
+	ifaces, _ := host.FilteredIfaces()
 	var macs []string
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		if !isPhysicalInterface(iface.Name) {
+		if !host.IsPhysicalInterface(iface.Name) {
 			continue
 		}
 		if mac := iface.HardwareAddr.String(); mac != "" {
@@ -114,55 +98,6 @@ func TestAppendMACAddresses(t *testing.T) {
 		}
 	} else {
 		assert.Equal(t, 0, len(macs))
-	}
-}
-
-func TestGetAWSMetadata(t *testing.T) {
-	testCachedAWSInstanceZone := "uninitialized"
-	testCachedAWSInstanceID := "uninitialized"
-	testEc2MetadataZoneURL := "http://localhost:8880/latest/meta-data/placement/availability-zone"
-	testEc2MetadataInstanceIDURL := "http://localhost:8880/latest/meta-data/instance-id"
-
-	sm := http.NewServeMux()
-	sm.HandleFunc("/latest/meta-data/instance-id", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "i-12345678")
-	})
-	sm.HandleFunc("/latest/meta-data/placement/availability-zone", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "us-east-7")
-	})
-
-	addr := "localhost:8880"
-	ln, err := net.Listen("tcp", addr)
-	require.NoError(t, err)
-
-	s := &http.Server{Addr: addr, Handler: sm}
-	// change EC2 MD URLs
-	go s.Serve(ln)
-	defer func() { // restore old URLs
-		ln.Close()
-	}()
-	time.Sleep(50 * time.Millisecond)
-
-	id := getAWSMeta(&testCachedAWSInstanceID, testEc2MetadataInstanceIDURL)
-	assert.Equal(t, "i-12345678", id)
-	assert.Equal(t, "i-12345678", testCachedAWSInstanceID)
-	zone := getAWSMeta(&testCachedAWSInstanceZone, testEc2MetadataZoneURL)
-	assert.Equal(t, "us-east-7", zone)
-	assert.Equal(t, "us-east-7", testCachedAWSInstanceZone)
-	// test the helper function
-	zone = getAWSMeta(nil, testEc2MetadataZoneURL)
-	assert.Equal(t, zone, "us-east-7")
-}
-
-func TestGetContainerID(t *testing.T) {
-	id := getContainerID()
-	if getLineByKeyword("/proc/self/cgroup", "/docker/") != "" ||
-		getLineByKeyword("/proc/self/cgroup", "/ecs/") != "" {
-
-		assert.NotEmpty(t, id)
-		assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]+$`), id)
-	} else {
-		assert.Empty(t, id)
 	}
 }
 
@@ -434,9 +369,9 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	}
 	m := bsonToMap(bbuf)
 
-	assert.Equal(t, cachedHostname, m["Hostname"])
-	assert.Equal(t, getDistro(), m["Distro"])
-	assert.Equal(t, cachedPid, m["PID"])
+	assert.Equal(t, host.Hostname(), m["Hostname"])
+	assert.Equal(t, host.Distro(), m["Distro"])
+	assert.Equal(t, host.PID(), m["PID"])
 	assert.True(t, m["Timestamp_u"].(int64) > 1509053785684891)
 	assert.Equal(t, 15, m["MetricsFlushInterval"])
 
@@ -504,32 +439,4 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))
 	mTransMap.Reset()
-}
-
-func TestInitContainerID(t *testing.T) {
-	cachedContainerID = "unintialized"
-
-	var mockGetContainerMeta = func(keyword string) string {
-		if keyword == "/kubepods/" {
-			return "11:freezer:/kubepods/besteffort/pod23b7d80b-7b31-11e8-9fa1-0ea6a2c824d6/32fd701b15f2a907051d3b07b791cc08d45696c3aa372a4764c98c8be9c57626"
-		} else {
-			return ""
-		}
-	}
-
-	initContainerID(mockGetContainerMeta, []string{"/docker/", "/ecs/", "/kubepods/"})
-	assert.Equal(t, "32fd701b15f2a907051d3b07b791cc08d45696c3aa372a4764c98c8be9c57626", cachedContainerID)
-
-	cachedContainerID = "unintialized"
-
-	var badGetContainerMeta = func(keyword string) string {
-		if keyword == "/kubepods/" {
-			return "11:freezer:/kubepods/besteffort/pod23b7d80b-7b31-11e8-9fa1-0ea6a2c824d6/abc123hello-world"
-		} else {
-			return ""
-		}
-	}
-
-	initContainerID(badGetContainerMeta, []string{"/docker/", "/ecs/", "/kubepods/"})
-	assert.Equal(t, "", cachedContainerID)
 }

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -62,7 +63,7 @@ func StartTestGRPCServer(t *testing.T, addr string) *TestGRPCServer {
 func printMessageRequest(req *pb.MessageRequest) {
 	for idx, m := range req.Messages {
 		fmt.Printf("#%d->", idx)
-		printBson(m)
+		utils.PrintBson(m)
 	}
 }
 

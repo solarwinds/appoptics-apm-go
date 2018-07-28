@@ -1,13 +1,11 @@
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
-package reporter
+package utils
 
 import (
 	"bufio"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"runtime"
 	"strings"
@@ -16,18 +14,18 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-// printBson prints the BSON message. It's not concurrent-safe and is for testing only
-func printBson(message []byte) {
+// PrintBson prints the BSON message. It's not concurrent-safe and is for testing only
+func PrintBson(message []byte) {
 	m := make(map[string]interface{})
 	bson.Unmarshal(message, m)
 	b, _ := json.MarshalIndent(m, "", "  ")
 	fmt.Println(time.Now().Format("15:04:05"), string(b))
 }
 
-// getLineByKeword reads a file, searches for the keyword and returns the matched line.
+// GetLineByKeyword reads a file, searches for the keyword and returns the matched line.
 // It returns empty string "" if no match found or failed to open the path.
 // Pass an empty string "" if you just need to get the first line.
-func getLineByKeyword(path string, keyword string) string {
+func GetLineByKeyword(path string, keyword string) string {
 	if path == "" {
 		return ""
 	}
@@ -47,17 +45,17 @@ func getLineByKeyword(path string, keyword string) string {
 	return ""
 }
 
-// getStrByKeyword read a file, searches for the keyword and returns the matched line
+// GetStrByKeyword read a file, searches for the keyword and returns the matched line
 // with trailing line-feed character trimmed.
-func getStrByKeyword(path string, keyword string) string {
-	return strings.Trim(getLineByKeyword(path, keyword), "\n")
+func GetStrByKeyword(path string, keyword string) string {
+	return strings.Trim(GetLineByKeyword(path, keyword), "\n")
 }
 
-// getStrByKeywordFiles does the same thing as getStrByKeyword but searches for a list
+// GetStrByKeywordFiles does the same thing as GetStrByKeyword but searches for a list
 // of files and returns the first matched files and line
-func getStrByKeywordFiles(pathes []string, keyword string) (path string, line string) {
+func GetStrByKeywordFiles(pathes []string, keyword string) (path string, line string) {
 	for _, path = range pathes {
-		line = getStrByKeyword(path, keyword)
+		line = GetStrByKeyword(path, keyword)
 		if line != "" {
 			return path, line
 		}
@@ -90,14 +88,8 @@ func Byte2String(bs []int8) string {
 	return string(b)
 }
 
-type hostnamer interface {
-	Hostname() (name string, err error)
-}
-type osHostnamer struct{}
-
-func (h osHostnamer) Hostname() (string, error) { return os.Hostname() }
-
-func copyMap(from *map[string]string) map[string]string {
+// CopyMap makes a copy of all elements of a map.
+func CopyMap(from *map[string]string) map[string]string {
 	to := make(map[string]string)
 	for k, v := range *from {
 		to[k] = v
@@ -106,37 +98,8 @@ func copyMap(from *map[string]string) map[string]string {
 	return to
 }
 
-func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) *map[string][]byte {
-	args := make(map[string][]byte)
-
-	if capacity > -1 {
-		bits := math.Float64bits(capacity)
-		bytes := make([]byte, 8)
-		binary.LittleEndian.PutUint64(bytes, bits)
-		args["BucketCapacity"] = bytes
-	}
-	if ratePerSec > -1 {
-		bits := math.Float64bits(ratePerSec)
-		bytes := make([]byte, 8)
-		binary.LittleEndian.PutUint64(bytes, bits)
-		args["BucketRate"] = bytes
-	}
-	if metricsFlushInterval > -1 {
-		bytes := make([]byte, 4)
-		binary.LittleEndian.PutUint32(bytes, uint32(metricsFlushInterval))
-		args["MetricsFlushInterval"] = bytes
-	}
-	if maxTransactions > -1 {
-		bytes := make([]byte, 4)
-		binary.LittleEndian.PutUint32(bytes, uint32(maxTransactions))
-		args["MaxTransactions"] = bytes
-	}
-
-	return &args
-}
-
-// simple check if go version is higher or equal to the given version
-func isHigherOrEqualGoVersion(version string) bool {
+// IsHigherOrEqualGoVersion checks if go version is higher or equal to the given version
+func IsHigherOrEqualGoVersion(version string) bool {
 	goVersion := strings.Split(runtime.Version(), ".")
 	compVersion := strings.Split(version, ".")
 	for i := 0; i < len(goVersion) && i < len(compVersion); i++ {

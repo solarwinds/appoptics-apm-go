@@ -16,6 +16,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 )
 
 // Current settings configuration
@@ -170,7 +171,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	retval := false
 	doRateLimiting := false
 
-	sampleRate = Max(Min(setting.value, maxSamplingRate), 0)
+	sampleRate = utils.Max(utils.Min(setting.value, maxSamplingRate), 0)
 
 	switch setting.sType {
 	case TYPE_DEFAULT:

@@ -3,7 +3,6 @@
 package reporter
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,19 +45,12 @@ func init() {
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 }
 
-// dependency injection for os.Hostname and net.{ResolveUDPAddr/DialUDP}
-type failHostnamer struct{}
-
-func (h failHostnamer) Hostname() (string, error) {
-	return "", errors.New("couldn't resolve hostname")
-}
 func TestCacheHostname(t *testing.T) {
 	h, _ := os.Hostname()
-	assert.Equal(t, h, cachedHostname)
+	assert.Equal(t, h, host.Hostname())
 	assert.Equal(t, false, reportingDisabled)
 	t.Logf("Forcing hostname error: 'Unable to get hostname' log message expected")
-	cacheHostname(failHostnamer{})
-	assert.Equal(t, "", cachedHostname)
+	checkHostname(func() string { return "" })
 	assert.Equal(t, true, reportingDisabled)
 }
 
@@ -293,10 +286,10 @@ func TestGRPCReporter(t *testing.T) {
 	// assert ConnectionInit messages
 	assert.Equal(t, dec2["ConnectionInit"], true)
 	assert.Equal(t, dec3["ConnectionInit"], true)
-	assert.Equal(t, dec2["Hostname"], cachedHostname)
-	assert.Equal(t, dec3["Hostname"], cachedHostname)
-	assert.Equal(t, dec2["Distro"], getDistro())
-	assert.Equal(t, dec3["Distro"], getDistro())
+	assert.Equal(t, dec2["Hostname"], host.Hostname())
+	assert.Equal(t, dec3["Hostname"], host.Hostname())
+	assert.Equal(t, dec2["Distro"], host.Distro())
+	assert.Equal(t, dec3["Distro"], host.Distro())
 }
 
 func TestInterruptedGRPCReporter(t *testing.T) {

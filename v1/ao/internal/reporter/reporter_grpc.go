@@ -14,8 +14,10 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -104,7 +106,8 @@ type grpcReporter struct {
 	// long-running goroutines to stop themselves. All the goroutines will check this channel and close if the
 	// channel is closed.
 	// Don't send data into this channel, just close it by calling Shutdown().
-	done chan struct{}
+	done       chan struct{}
+	doneClosed sync.Once
 	// for testing only: if true, skip verifying TLS cert hostname
 	insecureSkipVerify bool
 }
@@ -131,9 +134,6 @@ func newGRPCReporter() reporter {
 		log.Error("Check AppOptics dashboard for your token and use a service name shorter than 256 characters.")
 		return &nullReporter{}
 	}
-
-	// see if a hostname alias is configured
-	configuredHostname = config.GetHostAlias()
 
 	// collector address override
 	collectorAddress := config.GetCollector()
@@ -242,7 +242,7 @@ func grpcCreateClientConnection(cert []byte, addr string, insecureSkipVerify boo
 		InsecureSkipVerify: insecureSkipVerify,
 	}
 	// turn off server certificate verification for Go < 1.8
-	if !isHigherOrEqualGoVersion("go1.8") {
+	if !utils.IsHigherOrEqualGoVersion("go1.8") {
 		tlsConfig.InsecureSkipVerify = true
 	}
 	creds := credentials.NewTLS(tlsConfig)
@@ -257,10 +257,12 @@ func (r *grpcReporter) Shutdown() error {
 	case <-r.done:
 		return ErrShutdownClosedReporter
 	default:
-		log.Warningf("Shutting down the gRPC reporter: %v", r.done)
-		close(r.done)
-		// There may be messages
-		r.closeConns()
+		r.doneClosed.Do(func() {
+			log.Warningf("Shutting down the gRPC reporter: %v", r.done)
+			close(r.done)
+			// There may be messages
+			r.closeConns()
+		})
 		return nil
 	}
 }
@@ -799,8 +801,8 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 		ApiKey:        r.metricConnection.serviceKey,
 		ClientVersion: grpcReporterVersion,
 		Identity: &collector.HostID{
-			Hostname:    cachedHostname,
-			IpAddresses: getIPAddresses(),
+			Hostname:    host.Hostname(),
+			IpAddresses: host.IPAddresses(),
 		},
 	}
 
