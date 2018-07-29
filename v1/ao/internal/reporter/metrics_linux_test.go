@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,8 +23,8 @@ func TestAppendUname(t *testing.T) {
 
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err == nil {
-		sysname = Byte2String(uname.Sysname[:])
-		version = Byte2String(uname.Version[:])
+		sysname = utils.Byte2String(uname.Sysname[:])
+		version = utils.Byte2String(uname.Version[:])
 		sysname = strings.TrimRight(sysname, "\x00")
 		version = strings.TrimRight(version, "\x00")
 	}

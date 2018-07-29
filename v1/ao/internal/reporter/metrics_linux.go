@@ -18,8 +18,8 @@ import (
 func appendUname(bbuf *bsonBuffer) {
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err == nil {
-		sysname := Byte2String(uname.Sysname[:])
-		version := Byte2String(uname.Version[:])
+		sysname := utils.Byte2String(uname.Sysname[:])
+		version := utils.Byte2String(uname.Version[:])
 		bsonAppendString(bbuf, "UnameSysName", strings.TrimRight(sysname, "\x00"))
 		bsonAppendString(bbuf, "UnameVersion", strings.TrimRight(version, "\x00"))
 	}
