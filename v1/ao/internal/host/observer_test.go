@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,4 +87,53 @@ func TestGetContainerID(t *testing.T) {
 	} else {
 		assert.Empty(t, id)
 	}
+}
+
+func TestGetPid(t *testing.T) {
+	assert.Equal(t, os.Getpid(), getPid())
+}
+
+func TestGetHostname(t *testing.T) {
+	host, _ := os.Hostname()
+	assert.Equal(t, host, getHostname())
+}
+
+func TestUpdateHostId(t *testing.T) {
+	lh := newLockedID()
+	updateHostID(lh)
+	assert.True(t, lh.ready())
+
+	h := lh.copyID()
+
+	host, _ := os.Hostname()
+	assert.Equal(t, host, h.Hostname())
+	assert.Equal(t, os.Getpid(), h.Pid())
+	assert.Equal(t, getEC2ID(), h.EC2Id())
+	assert.Equal(t, getEC2Zone(), h.EC2Zone())
+	assert.Equal(t, getContainerID(), h.DockerId())
+	assert.Equal(t, getMACAddressList(), h.MAC())
+	assert.EqualValues(t, getHerokuDynoId(), h.HerokuID())
+}
+
+func funcABC() string { return "" }
+
+func TestFuncName(t *testing.T) {
+	assert.True(t, strings.Contains(funcName(funcABC), "funcABC"))
+}
+
+func returnEmpty() string { return "" }
+
+func returnSomething() string { return "hello" }
+
+func TestGetOrFallback(t *testing.T) {
+	assert.Equal(t, "fallback",
+		getOrFallback(returnEmpty, "fallback"))
+	assert.Equal(t, "hello",
+		getOrFallback(returnSomething, "fallback"))
+}
+
+func TestTimedUpdateHostID(t *testing.T) {
+	lh := newLockedID()
+	timedUpdateHostID(time.Duration(time.Microsecond), lh)
+	assert.False(t, lh.ready())
 }

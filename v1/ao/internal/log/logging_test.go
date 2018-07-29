@@ -4,6 +4,7 @@ package log
 
 import (
 	"bytes"
+	"io"
 	"log"
 	"math/rand"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"sync"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -131,19 +133,37 @@ func TestVerifyLogLevel(t *testing.T) {
 }
 
 func TestSetLevel(t *testing.T) {
+	var buf utils.SafeBuffer
+	var writers []io.Writer
+
+	writers = append(writers, &buf)
+	writers = append(writers, os.Stderr)
+
+	log.SetOutput(io.MultiWriter(writers...))
+
+	defer func() {
+		log.SetOutput(os.Stderr)
+	}()
+
+	SetLevel(INFO)
 	var wg = &sync.WaitGroup{}
 	wg.Add(100)
 	for i := 0; i < 100; i++ {
 		go func(wg *sync.WaitGroup) {
 			time.Sleep(time.Millisecond * time.Duration(rand.Intn(5)))
-			SetLevel(LogLevel(rand.Intn(len(LevelStr))))
 			Debug("hello world")
 			wg.Done()
 		}(wg)
 	}
 	wg.Wait()
+	assert.Equal(t, "", buf.String())
 
+	buf.Reset()
 	SetLevel(DEBUG)
+	Debug("test")
+	assert.True(t, strings.Contains(buf.String(), "test"))
+	buf.Reset()
 	Error("", "one", "two", "three")
 	assert.Equal(t, DEBUG, Level())
+	assert.True(t, strings.Contains(buf.String(), "onetwothree"))
 }

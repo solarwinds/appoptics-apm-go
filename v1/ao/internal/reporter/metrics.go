@@ -249,7 +249,7 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	// runtime stats
 	addMetricsValue(bbuf, &index, "JMX.type=threadcount,name=NumGoroutine", runtime.NumGoroutine())
 	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
+	host.Mem(&mem)
 	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Alloc", int64(mem.Alloc))
 	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.TotalAlloc", int64(mem.TotalAlloc))
 	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Sys", int64(mem.Sys))
@@ -263,7 +263,7 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Released", int64(mem.HeapReleased))
 	addMetricsValue(bbuf, &index, "JMX.Memory:type=count,name=MemStats.Heap.Objects", int64(mem.HeapObjects))
 	var gc debug.GCStats
-	debug.ReadGCStats(&gc)
+	host.GC(&gc)
 	addMetricsValue(bbuf, &index, "JMX.type=count,name=GCStats.NumGC", gc.NumGC)
 
 	metricsHTTPMeasurements.lock.Lock()

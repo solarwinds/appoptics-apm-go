@@ -1,5 +1,3 @@
-// +build linux
-
 // Copyright (c) 2017 Librato, Inc. All rights reserved.
 
 package host
@@ -27,15 +25,9 @@ func IsPhysicalInterface(ifname string) bool {
 	return true
 }
 
-// Distro gets distribution identification
-// TODO: should we cache the distro? does it never change?
-func Distro() string {
-	if distro != "" {
-		return distro
-	}
-
-	var ds []string // distro slice
-
+// initDistro gets distribution identification
+// TODO: should we cache the initDistro? does it never change?
+func initDistro() (distro string) {
 	// Note: Order of checking is important because some distros share same file names
 	// but with different function.
 	// Keep this order: redhat based -> ubuntu -> debian
@@ -46,7 +38,8 @@ func Distro() string {
 	}
 	// amazon linux
 	distro = utils.GetStrByKeyword(AMAZON, "")
-	ds = strings.Split(distro, ":")
+
+	ds := strings.Split(distro, ":")
 	distro = ds[len(ds)-1]
 	if distro != "" {
 		distro = "Amzn Linux " + distro

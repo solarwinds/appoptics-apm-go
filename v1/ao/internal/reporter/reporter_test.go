@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +22,7 @@ import (
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
@@ -486,7 +486,7 @@ func TestShutdownGRPCReporter(t *testing.T) {
 }
 
 func TestInvalidKey(t *testing.T) {
-	var buf SafeBuffer
+	var buf utils.SafeBuffer
 	var writers []io.Writer
 
 	writers = append(writers, &buf)
@@ -552,28 +552,4 @@ func TestInvalidKey(t *testing.T) {
 		assert.True(t, strings.Contains(buf.String(), ptn))
 	}
 
-}
-
-// SafeBuffer is goroutine-safe buffer. It is for internal test use only.
-type SafeBuffer struct {
-	buf bytes.Buffer
-	sync.Mutex
-}
-
-func (b *SafeBuffer) Read(p []byte) (int, error) {
-	b.Lock()
-	defer b.Unlock()
-	return b.buf.Read(p)
-}
-
-func (b *SafeBuffer) Write(p []byte) (int, error) {
-	b.Lock()
-	defer b.Unlock()
-	return b.buf.Write(p)
-}
-
-func (b *SafeBuffer) String() string {
-	b.Lock()
-	defer b.Unlock()
-	return b.buf.String()
 }

@@ -7,14 +7,13 @@ import (
 	"runtime/debug"
 )
 
-// ProcessMeta defines the process statistics collected for reporting
-type ProcessMeta struct {
-	// the current number of goroutine
-	numGoroutine int
+// Mem returns the current memory statistics. Don't call this function too often
+// as it stops the world while gathering the information.
+func Mem(m *runtime.MemStats) {
+	runtime.ReadMemStats(m)
+}
 
-	// the memory statistics
-	mem *runtime.MemStats
-
-	// the garbage collection statistics
-	gc *debug.GCStats
+// GC collects current statistics of garbage collector
+func GC(stats *debug.GCStats) {
+	debug.ReadGCStats(stats)
 }

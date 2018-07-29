@@ -8,12 +8,8 @@ package host
 // returns true for non-Linux platforms.
 func IsPhysicalInterface(ifname string) bool { return true }
 
-// Distro returns the ditro information of the system, it returns Unkown-not-Linux
+// initDistro returns the ditro information of the system, it returns Unkown-not-Linux
 // for non-Linux platforms.
-func Distro() string {
-	if distro != "" {
-		return distro
-	}
-	distro = "Unknown-not-Linux"
-	return distro
+func initDistro() string {
+	return "Unknown-not-Linux"
 }

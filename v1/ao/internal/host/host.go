@@ -1,5 +1,8 @@
 // Copyright (c) 2017 Librato, Inc. All rights reserved.
 
+// Package host has all the functions to get host metadata needed by traces and
+// metrics. It also maintains an update-to-date global HostID object, which is
+// refreshed periodically.
 package host
 
 import (
@@ -21,6 +24,11 @@ const (
 	OTHER     = "/etc/issue"
 )
 
+// logging texts
+const (
+	stopHostIdObserverByUser = "Host hostId observer is stopped by user."
+)
+
 var (
 	// hostId stores the up-to-date ID info, which is updated periodically
 	hostId = newLockedID()
@@ -28,19 +36,20 @@ var (
 	// exit indicates the ID observer should exit when it's closed
 	exit = make(chan struct{})
 
-	// make sure the channel exit is not closed twice
+	// make sure the channel exit is not closed twice, it's effectively immutable.
 	exitClosed sync.Once
 
-	// the cache for distro information
-	distro string
+	// the cache for initDistro information and its lock
+	distro     string
+	distroOnce sync.Once
 
-	// the cache for pid
-	pid int
+	// the cache for pid, it's only modified/initialized when this package is
+	// imported.
+	pid = getPid()
 )
 
 func init() {
 	go observer()
-	pid = getPid()
 }
 
 // CurrentID returns a copyID of the current ID
@@ -58,7 +67,7 @@ func PID() int {
 func StopHostIDObserver() {
 	exitClosed.Do(func() {
 		close(exit)
-		log.Warning("Host hostId observer is stopped by user.")
+		log.Warning(stopHostIdObserverByUser)
 	})
 }
 
@@ -72,15 +81,6 @@ func ConfiguredHostname() string {
 func Hostname() string {
 	return CurrentID().Hostname()
 }
-
-// other ad-hoc metadata retrieving functions
-
-//
-// 	// the sysname retrieved from uname
-// 	sysname string
-//
-// 	// the sysversion retrieved from uname
-// 	version string
 
 // IPAddresses gets the system's IP addresses
 func IPAddresses() []string {
@@ -137,4 +137,12 @@ func FilteredIfaces() ([]net.Interface, error) {
 		filtered = append(filtered, iface)
 	}
 	return filtered, nil
+}
+
+// Distro returns the distro information
+func Distro() string {
+	distroOnce.Do(func() {
+		distro = initDistro()
+	})
+	return distro
 }

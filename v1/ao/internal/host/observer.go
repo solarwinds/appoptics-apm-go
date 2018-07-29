@@ -33,6 +33,12 @@ const (
 	maxFailCnt = 20
 )
 
+// logging texts
+const (
+	hostObserverStarted = "Host metadata observer started."
+	hostObserverStopped = "Host metadata observer stopped."
+)
+
 var (
 	// the global counter of failed retrievals of AWS metadata. If it keeps
 	// failing consecutively for a certain number maxFailCnt, the program
@@ -47,7 +53,7 @@ var (
 // observer checks the update of the host metadata periodically. It runs in a
 // standalone goroutine.
 func observer() {
-	log.Debug("Host metadata observer started.")
+	log.Debug(hostObserverStarted)
 
 	tm := time.Duration(updateTimeout)
 	// initialize the hostID as soon as possible
@@ -72,7 +78,7 @@ loop:
 		}
 	}
 
-	log.Debug("Host metadata observer exiting.")
+	log.Warning(hostObserverStopped)
 }
 
 // funcName returns the function's name in string
@@ -118,6 +124,7 @@ func updateHostID(lh *lockedID) {
 
 	// compare and fallback if error happens
 	hostname := getOrFallback(getHostname, old.hostname)
+	pid := PID()
 	ec2Id := getOrFallback(getEC2ID, old.ec2Id)
 	ec2Zone := getOrFallback(getEC2Zone, old.ec2Zone)
 	dockerId := getOrFallback(getContainerID, old.dockerId)
@@ -130,7 +137,7 @@ func updateHostID(lh *lockedID) {
 
 	setters := []IDSetter{
 		withHostname(hostname),
-		withPid(old.pid),
+		withPid(pid),
 		withEC2Id(ec2Id),
 		withEC2Zone(ec2Zone),
 		withDockerId(dockerId),
@@ -141,6 +148,7 @@ func updateHostID(lh *lockedID) {
 	lh.fullUpdate(setters...)
 }
 
+// getHostname is the implementation of getting the hostname
 func getHostname() string {
 	if host, err := os.Hostname(); err != nil {
 		log.Warningf("Failed to get hostname: %s", err)

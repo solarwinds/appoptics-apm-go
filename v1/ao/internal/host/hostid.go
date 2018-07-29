@@ -9,6 +9,12 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
+// logging texts
+const (
+	partialUpdateNotAllowed = "Partial Update is not allowed: %d."
+	hostIdInitDone          = "HostID initialization done."
+)
+
 // lockedID is a ID protected by a mutex. To avoid being modified without
 // mutex protected, the caller can only get a copyID of the internal ID.
 type lockedID struct {
@@ -54,7 +60,7 @@ func (lh *lockedID) fullUpdate(setters ...IDSetter) {
 	defer lh.Unlock()
 
 	if len(setters) != reflect.ValueOf(lh.id).Elem().NumField() {
-		log.Debugf("Partial Update is not allowed: %d.", len(setters))
+		log.Debugf(partialUpdateNotAllowed, len(setters))
 		return
 	}
 
@@ -70,7 +76,7 @@ func (lh *lockedID) setReady() {
 	default:
 		lh.cClosed.Do(func() {
 			close(lh.c)
-			log.Debug("HostID initialization done.")
+			log.Debug(hostIdInitDone)
 		})
 	}
 }

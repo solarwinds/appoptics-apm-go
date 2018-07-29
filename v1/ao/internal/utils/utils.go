@@ -4,11 +4,13 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/mgo.v2/bson"
@@ -116,4 +118,35 @@ func IsHigherOrEqualGoVersion(version string) bool {
 		}
 	}
 	return true
+}
+
+// SafeBuffer is goroutine-safe buffer. It is for internal test use only.
+type SafeBuffer struct {
+	buf bytes.Buffer
+	sync.Mutex
+}
+
+func (b *SafeBuffer) Read(p []byte) (int, error) {
+	b.Lock()
+	defer b.Unlock()
+	return b.buf.Read(p)
+}
+
+func (b *SafeBuffer) Write(p []byte) (int, error) {
+	b.Lock()
+	defer b.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *SafeBuffer) String() string {
+	b.Lock()
+	defer b.Unlock()
+	return b.buf.String()
+}
+
+// Reset truncates the buffer
+func (b *SafeBuffer) Reset() {
+	b.Lock()
+	defer b.Unlock()
+	b.buf.Reset()
 }

@@ -1,5 +1,8 @@
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
+// Package config is responsible for loading the configuration from various
+// sources, e.g., environment variables, configuration files and user input.
+// It also accepts dynamic settings from the collector server.
 package config
 
 import (
