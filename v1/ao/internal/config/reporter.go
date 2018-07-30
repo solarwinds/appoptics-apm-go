@@ -112,10 +112,23 @@ func (r *ReporterOptions) SetEventFlushInterval(i int64) {
 	atomic.StoreInt64(&r.updateTime, time.Now().UnixNano())
 }
 
+// SetEventBatchSize sets the event flush interval to i
+func (r *ReporterOptions) SetEventBatchSize(i int64) {
+	// These compound operations are not atomic but we should be fine
+	atomic.StoreInt64(&r.EvtFlushBatchSize, i)
+	atomic.StoreInt64(&r.updateTime, time.Now().UnixNano())
+}
+
 // GetEventFlushInterval returns the current event flush interval
 func (r *ReporterOptions) GetEventFlushInterval() int64 {
 
 	return atomic.LoadInt64(&r.EvtFlushInterval)
+}
+
+// GetEventBatchSize returns the current event flush interval
+func (r *ReporterOptions) GetEventBatchSize() int64 {
+
+	return atomic.LoadInt64(&r.EvtFlushBatchSize)
 }
 
 // GetUpdateTime returns the last update time of the options
@@ -128,4 +141,7 @@ func (r *ReporterOptions) GetUpdateTime() int64 {
 func (r *ReporterOptions) LoadEnvs() {
 	i := envs["EventsFlushInterval"].LoadInt64(r.EvtFlushInterval)
 	r.SetEventFlushInterval(i)
+
+	b := envs["EventsBatchSize"].LoadInt64(r.EvtFlushBatchSize)
+	r.SetEventBatchSize(b)
 }

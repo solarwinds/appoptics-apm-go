@@ -36,6 +36,7 @@ const (
 	envAppOpticsInsecureSkipVerify  = "APPOPTICS_INSECURE_SKIP_VERIFY"
 	envAppOpticsHistogramPrecision  = "APPOPTICS_HISTOGRAM_PRECISION"
 	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
+	envAppOpticsEventsBatchSize     = "APPOPTICS_EVENTS_BATCHSIZE"
 )
 
 // The environment variables, validators and converters. This map is not
@@ -113,6 +114,13 @@ var envs = map[string]Env{
 	},
 	"EventsFlushInterval": {
 		name:     envAppOpticsEventsFlushInterval,
+		optional: true,
+		validate: IsValidInteger,
+		convert:  ToInt64,
+		mask:     nil,
+	},
+	"EventsBatchSize": {
+		name:     envAppOpticsEventsBatchSize,
 		optional: true,
 		validate: IsValidInteger,
 		convert:  ToInt64,
