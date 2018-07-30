@@ -147,6 +147,11 @@ func (b *BytesBucket) checkInterval() {
 	}
 }
 
+// Watermark returns the current watermark of the bucket.
+func (b *BytesBucket) Watermark() int {
+	return b.watermark
+}
+
 // Destroy tears down the bucket and releases the resources of it
 func (b *BytesBucket) Destroy() {
 	b.ticker.Stop()

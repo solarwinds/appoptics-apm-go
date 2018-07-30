@@ -480,6 +480,7 @@ func (r *grpcReporter) eventSender() {
 		if evtBucket.Drainable() {
 			select {
 			case <-token:
+				log.Debugf("Pushed %d bytes to event sender.", evtBucket.Watermark())
 				batches <- evtBucket.Drain()
 			default:
 			}

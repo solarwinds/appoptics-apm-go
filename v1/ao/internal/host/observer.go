@@ -108,7 +108,7 @@ func timedUpdateHostID(d time.Duration, lh *lockedID) {
 
 	go func(c chan struct{}, l *lockedID) {
 		updateHostID(l)
-		<-c
+		c <- struct{}{}
 	}(done, lh)
 
 	select {
