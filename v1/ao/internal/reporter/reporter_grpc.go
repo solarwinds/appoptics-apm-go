@@ -260,6 +260,7 @@ func (r *grpcReporter) Shutdown() error {
 			close(r.done)
 			// There may be messages
 			r.closeConns()
+			host.Stop()
 		})
 		return nil
 	}

@@ -97,11 +97,11 @@ func TestStopHostIDObserver(t *testing.T) {
 		log.SetOutput(os.Stderr)
 	}()
 
-	StopHostIDObserver()
+	Stop()
 	assert.True(t, strings.Contains(buf.String(),
 		stopHostIdObserverByUser), buf.String())
 	buf.Reset()
-	StopHostIDObserver()
+	Stop()
 	assert.Equal(t, "", buf.String())
 }
 

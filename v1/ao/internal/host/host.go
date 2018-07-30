@@ -63,8 +63,8 @@ func PID() int {
 	return pid
 }
 
-// StopHostIDObserver stops the host metadata refreshing goroutine
-func StopHostIDObserver() {
+// Stop stops the host metadata refreshing goroutine
+func Stop() {
 	exitClosed.Do(func() {
 		close(exit)
 		log.Warning(stopHostIdObserverByUser)
