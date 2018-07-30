@@ -56,7 +56,7 @@ type ReporterOptions struct {
 	EvtFlushInterval int64
 
 	// Event sending batch size in bytes
-	EventFlushBatchSize int64
+	EvtFlushBatchSize int64
 
 	// Metrics flush interval in seconds
 	MetricFlushInterval int64
@@ -90,18 +90,18 @@ type ReporterOptions struct {
 // default values.
 func defaultReporterOptions() *ReporterOptions {
 	return &ReporterOptions{
-		time.Now().UnixNano(),
-		eventFlushIntervalDefault,
-		eventFlushBatchSizeDefault,
-		metricIntervalDefault,
-		getSettingsIntervalDefault,
-		settingsTimeoutCheckIntervalDefault,
-		pingIntervalDefault,
-		retryDelayInitial,
-		retryDelayMax,
-		redirectMax,
-		retryLogThreshold,
-		maxRetries,
+		updateTime:              time.Now().UnixNano(),
+		EvtFlushInterval:        eventFlushIntervalDefault,
+		EvtFlushBatchSize:       eventFlushBatchSizeDefault,
+		MetricFlushInterval:     metricIntervalDefault,
+		GetSettingsInterval:     getSettingsIntervalDefault,
+		SettingsTimeoutInterval: settingsTimeoutCheckIntervalDefault,
+		PingInterval:            pingIntervalDefault,
+		RetryDelayInitial:       retryDelayInitial,
+		RetryDelayMax:           retryDelayMax,
+		RedirectMax:             redirectMax,
+		RetryLogThreshold:       retryLogThreshold,
+		MaxRetries:              maxRetries,
 	}
 }
 

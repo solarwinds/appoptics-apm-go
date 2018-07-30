@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,10 +21,12 @@ func TestBytesBucket(t *testing.T) {
 	tk := time.NewTicker(time.Second * 2)
 	defer tk.Stop()
 
+	opts := config.ReporterOpts()
+
 	// a new bucket with high watermark=5 and a ticker of 2 seconds
 	b := NewBytesBucket(source,
 		WithHWM(5),
-		WithTicker(tk))
+		WithIntervalGetter(opts.GetEventFlushInterval))
 
 	// try pour in some water and check the returned value
 	poured := b.PourIn()
@@ -67,9 +70,8 @@ func TestBytesBucket(t *testing.T) {
 	poured = b.PourIn()
 	assert.Equal(t, 3, poured)
 
-	// test set ticker
-	newTk := time.NewTicker(time.Second)
-	b.SetTicker(newTk)
+	b.getInterval = func() int64 { return 1 }
+
 	source <- []byte{1}
 	poured = b.PourIn()
 	assert.Equal(t, 1, poured)

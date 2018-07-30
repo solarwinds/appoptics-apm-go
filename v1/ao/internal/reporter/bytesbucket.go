@@ -6,7 +6,7 @@ import "time"
 
 // BytesBucket is a struct to simulate a bucket. It has two actions: pour
 // some water into it from the water source, and drain it when it's drainable.
-// This struct is not intended for concurrent-safe.
+// This struct is **not** intended for concurrent-safe.
 type BytesBucket struct {
 	// the water source, the bucket gets some water from the source when we
 	// call PourIn()
@@ -20,20 +20,31 @@ type BytesBucket struct {
 	watermark int
 
 	// the ticker to drain the bucket periodically
-	ticker *time.Ticker
+	ticker *CleanableTicker
+
+	// the function to get the new interval
+	getInterval func() int64
+
+	// the current effective interval in seconds
+	interval int64
 
 	// where the water is stored in
 	water [][]byte
 
 	// the last drain time
-	drainTime time.Time
+	lastDrainTime time.Time
 }
 
+// NewBytesBucket returns a new bytesbucket object with the options provided
 func NewBytesBucket(source chan []byte, opts ...BucketOption) *BytesBucket {
 	b := &BytesBucket{source: source}
 	for _, opt := range opts {
 		opt(b)
 	}
+	// fetch the interval and create a ticker
+	b.interval = b.getInterval()
+	b.ticker = NewCleanableTicker(time.Second * time.Duration(b.interval))
+
 	return b
 }
 
@@ -47,10 +58,10 @@ func WithHWM(HWM int) BucketOption {
 	}
 }
 
-// WithTicker provides a ticker to the bucket to drain it periodically.
-func WithTicker(ticker *time.Ticker) BucketOption {
+// WithIntervalGetter provides a ticker to the bucket to drain it periodically.
+func WithIntervalGetter(fn func() int64) BucketOption {
 	return func(b *BytesBucket) {
-		b.ticker = ticker
+		b.getInterval = fn
 	}
 }
 
@@ -93,7 +104,7 @@ func (b *BytesBucket) Drain() [][]byte {
 	// API for a Ticker. A minor problem is that the ticker may become
 	// timeout shortly after the previous drain triggered by watermark >= HWM.
 	// The last drain time is stored to avoid this problem.
-	b.drainTime = time.Now()
+	b.lastDrainTime = time.Now()
 	return water
 }
 
@@ -102,33 +113,59 @@ func (b *BytesBucket) Drain() [][]byte {
 // least drain it periodically)
 func (b *BytesBucket) Drainable() bool {
 	if b.watermark == 0 {
+		b.ticker.Clean()
 		return false
 	}
 
 	// Do the first drain as soon as possible, even for one drop of water.
-	if b.watermark >= b.HWM || b.drainTime.IsZero() {
+	if b.watermark >= b.HWM || b.lastDrainTime.IsZero() {
+		b.ticker.Clean()
 		return true
 	}
 
-	tickerout := false
 	if b.ticker != nil {
 		select {
 		case <-b.ticker.C:
+			b.checkInterval()
 			// Skip this chance if we've drained the bucket recently.
-			if time.Now().After(b.drainTime.Add(time.Millisecond * 500)) {
-				tickerout = true
+			if time.Now().After(b.lastDrainTime.Add(time.Millisecond * 500)) {
+				return true
 			}
 		default:
 		}
 	}
 
-	return tickerout
+	return false
 }
 
-// SetTicker assign a new ticker to the bucket and returns that ticker. It's
-// the caller's responsibility to stop the old ticker.
-// This function is not concurrent-safe.
-func (b *BytesBucket) SetTicker(t *time.Ticker) *time.Ticker {
-	b.ticker = t
-	return t
+// checkInterval checks the new interval and creates a new ticker if needed.
+func (b *BytesBucket) checkInterval() {
+	ni := b.getInterval()
+	if b.interval != ni {
+		b.ticker.Stop()
+		b.ticker = NewCleanableTicker(time.Second * time.Duration(ni))
+	}
+}
+
+// Destroy tears down the bucket and releases the resources of it
+func (b *BytesBucket) Destroy() {
+	b.ticker.Stop()
+}
+
+// CleanableTicker is a ticker with an additional Clean method
+type CleanableTicker struct {
+	*time.Ticker
+}
+
+// Clean drains the ticker's channel
+func (ct *CleanableTicker) Clean() {
+	select {
+	case <-ct.C:
+	default:
+	}
+}
+
+// NewCleanableTicker returns a new cCeanableTicker
+func NewCleanableTicker(d time.Duration) *CleanableTicker {
+	return &CleanableTicker{time.NewTicker(d)}
 }

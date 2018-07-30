@@ -92,7 +92,6 @@ type grpcConnection struct {
 type grpcReporter struct {
 	eventConnection              *grpcConnection // used for events only
 	metricConnection             *grpcConnection // used for everything else (postMetrics, postStatus, getSettings)
-	eventFlushInterval           int64           // max interval between postEvent batches
 	collectMetricInterval        int             // metrics flush interval in seconds
 	getSettingsInterval          int             // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int             // check interval for timed out settings in seconds
@@ -180,7 +179,6 @@ func newGRPCReporter() reporter {
 			queueStats:  &eventQueueStats{},
 		},
 
-		eventFlushInterval:           config.ReporterOpts().GetEventFlushInterval(),
 		collectMetricInterval:        grpcMetricIntervalDefault,
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
 		settingsTimeoutCheckInterval: grpcSettingsTimeoutCheckIntervalDefault,
@@ -455,41 +453,19 @@ func (r *grpcReporter) eventSender() {
 
 	batches := make(chan [][]byte)
 	token := r.eventBatchSender(batches)
-
-	flushTk := time.NewTicker(time.Second * time.Duration(r.eventFlushInterval))
-	// late binding as flushTk may point to another ticker later
-	defer func() { flushTk.Stop() }()
+	opts := config.ReporterOpts()
 
 	// This event bucket is drainable either after it reaches HWM, or the flush
 	// interval has passed.
 	evtBucket := NewBytesBucket(r.eventMessages,
 		WithHWM(grpcEventFlushBatchSizeDefault),
-		WithTicker(flushTk))
-
-	// The ticker to poll the new EventFlushInterval setting, if any.
-	pollTk := time.NewTicker(time.Second)
-	defer pollTk.Stop()
-
-	opts := config.ReporterOpts()
-	prev := opts.GetUpdateTime()
+		WithIntervalGetter(opts.GetEventFlushInterval))
 
 	for {
 		select {
 		// Check if the agent is required to quit.
 		case <-r.done:
 			return
-			// dynamically update the event flush interval
-		case <-pollTk.C:
-			curr := opts.GetUpdateTime()
-			if prev != curr {
-				prev = curr
-				interval := opts.GetEventFlushInterval()
-				r.eventFlushInterval = interval
-
-				flushTk.Stop()
-				t := time.NewTicker(time.Second * time.Duration(interval))
-				flushTk = evtBucket.SetTicker(t)
-			}
 		default:
 		}
 
