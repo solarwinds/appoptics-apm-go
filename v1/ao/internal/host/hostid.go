@@ -76,7 +76,7 @@ func (lh *lockedID) setReady() {
 	default:
 		lh.cClosed.Do(func() {
 			close(lh.c)
-			log.Debug(hostIdInitDone)
+			log.Info(hostIdInitDone)
 		})
 	}
 }
