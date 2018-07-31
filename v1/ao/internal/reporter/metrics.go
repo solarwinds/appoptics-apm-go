@@ -305,26 +305,12 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 // append host ID to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
 func appendHostId(bbuf *bsonBuffer) {
-	h := host.CurrentID()
-
-	bsonAppendString(bbuf, "Hostname", h.Hostname())
 	if host.ConfiguredHostname() != "" {
 		bsonAppendString(bbuf, "ConfiguredHostname", host.ConfiguredHostname())
 	}
 	appendUname(bbuf)
-	bsonAppendInt(bbuf, "PID", host.PID())
 	bsonAppendString(bbuf, "Distro", host.Distro())
 	appendIPAddresses(bbuf)
-	appendMACAddresses(bbuf, h.MAC())
-	if h.EC2Id() != "" {
-		bsonAppendString(bbuf, "EC2InstanceID", h.EC2Id())
-	}
-	if h.EC2Zone() != "" {
-		bsonAppendString(bbuf, "EC2AvailabilityZone", h.EC2Zone())
-	}
-	if h.DockerId() != "" {
-		bsonAppendString(bbuf, "DockerContainerID", h.DockerId())
-	}
 }
 
 // gets and appends IP addresses to a BSON buffer
