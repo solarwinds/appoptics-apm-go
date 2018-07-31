@@ -15,6 +15,13 @@ const (
 	hostIdInitDone          = "HostID initialization done."
 )
 
+// caches and their sync.Once protectors
+var (
+	// the Heroku DYNO id
+	dyno     string
+	dynoOnce sync.Once
+)
+
 // lockedID is a ID protected by a mutex. To avoid being modified without
 // mutex protected, the caller can only get a copyID of the internal ID.
 type lockedID struct {

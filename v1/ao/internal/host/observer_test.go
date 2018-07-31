@@ -138,3 +138,16 @@ func TestTimedUpdateHostID(t *testing.T) {
 	timedUpdateHostID(time.Duration(time.Microsecond), lh)
 	assert.False(t, lh.ready())
 }
+
+// this line is used to set the environment variable DYNO before init runs
+var _ = os.Setenv(envDyno, "test-dyno")
+
+func TestGetHerokuDynoId(t *testing.T) {
+	os.Setenv(envDyno, "test-dyno")
+	assert.Equal(t, "test-dyno", getHerokuDynoId())
+	os.Unsetenv(envDyno)
+	assert.Equal(t, "test-dyno", getHerokuDynoId())
+
+	os.Setenv(envDyno, "take-no-effect")
+	assert.Equal(t, "test-dyno", getHerokuDynoId())
+}
