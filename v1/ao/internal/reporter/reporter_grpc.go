@@ -310,11 +310,9 @@ func (r *grpcReporter) redirect(c *grpcConnection, address string) {
 	c.address = address
 }
 
-// redirectTo redirects the gRPC connection to the new address and send a
-// ConnectionInit message to the collector.
+// redirectTo redirects the gRPC connection to the new address.
 func (r *grpcReporter) redirectTo(c *grpcConnection, address string) {
 	r.redirect(c, address)
-	c.sendConnectionInit()
 }
 
 // long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
@@ -448,9 +446,6 @@ type grpcResult struct {
 // the collector using the gRPC method PostEvents()
 func (r *grpcReporter) eventSender() {
 	defer log.Warning("eventSender goroutine exiting.")
-
-	// send connection init message before doing anything else
-	r.eventConnection.sendConnectionInit()
 
 	batches := make(chan [][]byte)
 	token := r.eventBatchSender(batches)
@@ -942,8 +937,6 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 // on that channel and attempts to send them to the collector using the GRPC method PostStatus()
 func (r *grpcReporter) statusSender() {
 	defer log.Warning("statusSender goroutine exiting.")
-	// send connection init message before doing anything else
-	r.metricConnection.sendConnectionInit()
 
 	for {
 		var messages [][]byte
@@ -1106,30 +1099,6 @@ func (c *grpcConnection) ping() {
 
 	c.lock.RLock()
 	c.client.Ping(context.TODO(), request)
-	c.lock.RUnlock()
-}
-
-// ========================= Connection Init Handling =============================
-
-// send a connection init message
-func (c *grpcConnection) sendConnectionInit() {
-	bbuf := NewBsonBuffer()
-	bsonAppendBool(bbuf, "ConnectionInit", true)
-	appendHostId(bbuf)
-	bsonBufferFinish(bbuf)
-
-	var messages [][]byte
-	messages = append(messages, bbuf.buf)
-
-	request := &collector.MessageRequest{
-		ApiKey:   c.serviceKey,
-		Messages: messages,
-		Encoding: collector.EncodingType_BSON,
-		Identity: buildPbHostID(),
-	}
-
-	c.lock.RLock()
-	c.client.PostStatus(context.TODO(), request)
 	c.lock.RUnlock()
 }
 
