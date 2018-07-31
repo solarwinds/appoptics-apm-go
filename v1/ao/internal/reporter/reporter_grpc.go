@@ -525,6 +525,7 @@ func (r *grpcReporter) eventRetrySender(
 			ApiKey:   connection.serviceKey,
 			Messages: messages,
 			Encoding: collector.EncodingType_BSON,
+			Identity: buildPbHostID(),
 		}
 
 		// initial retry delay in milliseconds
@@ -685,6 +686,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		ApiKey:   r.metricConnection.serviceKey,
 		Messages: messages,
 		Encoding: collector.EncodingType_BSON,
+		Identity: buildPbHostID(),
 	}
 
 	// initial retry delay in milliseconds
@@ -778,10 +780,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	request := &collector.SettingsRequest{
 		ApiKey:        r.metricConnection.serviceKey,
 		ClientVersion: grpcReporterVersion,
-		Identity: &collector.HostID{
-			Hostname:    host.Hostname(),
-			IpAddresses: host.IPAddresses(),
-		},
+		Identity:      buildPbHostID(),
 	}
 
 	// initial retry delay in milliseconds
@@ -971,6 +970,7 @@ func (r *grpcReporter) statusSender() {
 			ApiKey:   r.metricConnection.serviceKey,
 			Messages: messages,
 			Encoding: collector.EncodingType_BSON,
+			Identity: buildPbHostID(),
 		}
 
 		// initial retry delay in milliseconds
@@ -1125,9 +1125,28 @@ func (c *grpcConnection) sendConnectionInit() {
 		ApiKey:   c.serviceKey,
 		Messages: messages,
 		Encoding: collector.EncodingType_BSON,
+		Identity: buildPbHostID(),
 	}
 
 	c.lock.RLock()
 	c.client.PostStatus(context.TODO(), request)
 	c.lock.RUnlock()
+}
+
+// buildPbHostID builds the HostID struct from current host metadata
+func buildPbHostID() *collector.HostID {
+	gid := &collector.HostID{}
+	id := host.CurrentID()
+
+	gid.Hostname = host.Hostname()
+	gid.IpAddresses = host.IPAddresses()
+	gid.Uuid = ""
+	gid.Pid = int32(host.PID())
+	gid.Ec2InstanceID = id.EC2Id()
+	gid.Ec2AvailabilityZone = id.EC2Zone()
+	gid.DockerContainerID = id.DockerId()
+	gid.MacAddresses = id.MAC()
+	gid.HerokuDynoID = id.HerokuID()
+
+	return gid
 }
