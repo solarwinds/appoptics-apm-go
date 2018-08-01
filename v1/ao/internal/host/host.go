@@ -77,9 +77,8 @@ func ConfiguredHostname() string {
 }
 
 // Hostname returns the hostname
-// TODO: should we cache it?
 func Hostname() string {
-	return CurrentID().Hostname()
+	return getHostname()
 }
 
 // IPAddresses gets the system's IP addresses
