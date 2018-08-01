@@ -47,10 +47,10 @@ func TestInitContainerID(t *testing.T) {
 
 func TestGetAWSMetadata(t *testing.T) {
 	testEc2MetadataZoneURL := "http://localhost:8880/latest/meta-data/placement/availability-zone"
-	testEc2MetadataInstanceIDURL := "http://localhost:8880/latest/meta-data/instance-hostId"
+	testEc2MetadataInstanceIDURL := "http://localhost:8880/latest/meta-data/instance-id"
 
 	sm := http.NewServeMux()
-	sm.HandleFunc("/latest/meta-data/instance-hostId", func(w http.ResponseWriter, r *http.Request) {
+	sm.HandleFunc("/latest/meta-data/instance-id", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "i-12345678")
 	})
 	sm.HandleFunc("/latest/meta-data/placement/availability-zone", func(w http.ResponseWriter, r *http.Request) {
@@ -131,10 +131,4 @@ func TestGetOrFallback(t *testing.T) {
 		getOrFallback(returnEmpty, "fallback"))
 	assert.Equal(t, "hello",
 		getOrFallback(returnSomething, "fallback"))
-}
-
-func TestTimedUpdateHostID(t *testing.T) {
-	lh := newLockedID()
-	timedUpdateHostID(time.Duration(time.Microsecond), lh)
-	assert.False(t, lh.ready())
 }

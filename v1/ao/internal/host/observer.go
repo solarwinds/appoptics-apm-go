@@ -19,7 +19,7 @@ import (
 // EC2 Metadata URLs
 const (
 	// the url to fetch EC2 metadata
-	ec2IDURL   = "http://169.254.169.254/latest/meta-data/instance-hostId"
+	ec2IDURL   = "http://169.254.169.254/latest/meta-data/instance-id"
 	ec2ZoneURL = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
 
 	// the interval to update the metadata periodically
@@ -88,7 +88,7 @@ func getOrFallback(fn func() string, fb string) string {
 
 // timedUpdateHostID tries to update the lockedID but gives up after a specified
 // duration
-func timedUpdateHostID(d time.Duration, lh *lockedID) {
+func timedUpdateHostID(d time.Duration, lh *lockedID) bool {
 	// use buffered channel to avoid block the goroutine
 	// when we return early
 	done := make(chan struct{}, 1)
@@ -101,7 +101,9 @@ func timedUpdateHostID(d time.Duration, lh *lockedID) {
 
 	select {
 	case <-done:
+		return true
 	case <-tm.C:
+		return false
 	}
 }
 

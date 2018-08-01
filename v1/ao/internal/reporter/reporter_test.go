@@ -3,6 +3,7 @@
 package reporter
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -50,7 +51,7 @@ func TestCacheHostname(t *testing.T) {
 	assert.Equal(t, h, host.Hostname())
 	assert.Equal(t, false, reportingDisabled)
 	t.Logf("Forcing hostname error: 'Unable to get hostname' log message expected")
-	checkHostname(func() string { return "" })
+	checkHostname(func() (string, error) { return "", errors.New("cannot get hostname") })
 	assert.Equal(t, true, reportingDisabled)
 }
 
