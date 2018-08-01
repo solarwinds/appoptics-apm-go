@@ -322,8 +322,8 @@ func appendHostId(bbuf *bsonBuffer) {
 	if h.EC2Zone() != "" {
 		bsonAppendString(bbuf, "EC2AvailabilityZone", h.EC2Zone())
 	}
-	if h.DockerId() != "" {
-		bsonAppendString(bbuf, "DockerContainerID", h.DockerId())
+	if h.ContainerId() != "" {
+		bsonAppendString(bbuf, "DockerContainerID", h.ContainerId())
 	}
 }
 

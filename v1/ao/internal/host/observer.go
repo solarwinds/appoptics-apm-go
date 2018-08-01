@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
@@ -37,17 +36,6 @@ const (
 const (
 	hostObserverStarted = "Host metadata observer started."
 	hostObserverStopped = "Host metadata observer stopped."
-)
-
-var (
-	// the global counter of failed retrievals of AWS metadata. If it keeps
-	// failing consecutively for a certain number maxFailCnt, the program
-	// may not be running in an EC2 instance.
-	// This variable should always be accessed through atomic operators.
-	awsMetaFailedCnt int32
-
-	// the same as above, but works for container ID
-	dockerMetaFailedCnt int32
 )
 
 // observer checks the update of the host metadata periodically. It runs in a
@@ -117,8 +105,6 @@ func timedUpdateHostID(d time.Duration, lh *lockedID) {
 	}
 }
 
-// TODO: which of the following never change? EC2 ID/Zone? ContainerID?
-// TODO: herokuID?
 func updateHostID(lh *lockedID) {
 	old := lh.copyID()
 
@@ -127,7 +113,7 @@ func updateHostID(lh *lockedID) {
 	pid := PID()
 	ec2Id := getOrFallback(getEC2ID, old.ec2Id)
 	ec2Zone := getOrFallback(getEC2Zone, old.ec2Zone)
-	dockerId := getOrFallback(getContainerID, old.dockerId)
+	cid := getOrFallback(getContainerID, old.containerId)
 	herokuId := getOrFallback(getHerokuDynoId, old.herokuId)
 
 	mac := getMACAddressList()
@@ -140,7 +126,7 @@ func updateHostID(lh *lockedID) {
 		withPid(pid),
 		withEC2Id(ec2Id),
 		withEC2Zone(ec2Zone),
-		withDockerId(dockerId),
+		withContainerId(cid),
 		withMAC(mac),
 		withHerokuId(herokuId),
 	}
@@ -164,22 +150,7 @@ func getPid() int {
 
 // getAWSMeta fetches the metadata from a specific AWS URL and cache it into
 // a provided variable.
-// This function increment the value of awsMetaFailedCnt by one for each
-// failure, and reset the counter after a successful retrieval. It will bypass
-// the work after the value of awsMetaFailedCnt reaches the limit of maxFailCnt.
 func getAWSMeta(url string) (meta string) {
-	if atomic.LoadInt32(&awsMetaFailedCnt) >= maxFailCnt {
-		return
-	}
-
-	defer func() {
-		if meta != "" {
-			atomic.StoreInt32(&awsMetaFailedCnt, 0)
-		} else {
-			atomic.AddInt32(&awsMetaFailedCnt, 1)
-		}
-	}()
-
 	// Fetch it from the specified URL if the cache is uninitialized or no
 	// cache at all.
 	client := http.Client{Timeout: time.Second}
@@ -201,37 +172,35 @@ func getAWSMeta(url string) (meta string) {
 
 // gets the AWS instance ID (or empty string if not an AWS instance)
 func getEC2ID() string {
-	return getAWSMeta(ec2IDURL)
+	ec2IdOnce.Do(func() {
+		ec2Id = getAWSMeta(ec2IDURL)
+		log.Debugf("Got and cached ec2Id: %s", ec2Id)
+	})
+	return ec2Id
 }
 
 // gets the AWS instance zone (or empty string if not an AWS instance)
 func getEC2Zone() string {
-	return getAWSMeta(ec2ZoneURL)
+	ec2ZoneOnce.Do(func() {
+		ec2Zone = getAWSMeta(ec2ZoneURL)
+		log.Debugf("Got and cached ec2Zone: %s", ec2Zone)
+	})
+	return ec2Zone
 }
 
 // getContainerID fetches the container ID by reading '/proc/self/cgroup'
-// It will stop retrying after a certain amount of consecutive failures,
-// which means it may not be running inside a container
 func getContainerID() (id string) {
-	if atomic.LoadInt32(&dockerMetaFailedCnt) >= maxFailCnt {
-		return
-	}
-
-	defer func() {
-		if id != "" {
-			atomic.StoreInt32(&dockerMetaFailedCnt, 0)
-		} else {
-			atomic.AddInt32(&dockerMetaFailedCnt, 1)
-		}
-	}()
-
-	id = getContainerIDFromString(func(keyword string) string {
-		return utils.GetLineByKeyword("/proc/self/cgroup", keyword)
+	containerIdOnce.Do(func() {
+		containerId = getContainerIDFromString(func(keyword string) string {
+			return utils.GetLineByKeyword("/proc/self/cgroup", keyword)
+		})
+		log.Debugf("Got and cached container id: %s", containerId)
 	})
-	return
+
+	return containerId
 }
 
-// getContainerIDFromString initializes the docker container ID (or empty
+// getContainerIDFromString initializes the container ID (or empty
 // string if not a docker/ecs container). It accepts a function parameter
 // as the source where it gets container metadata from, which makes it more
 // flexible and enables better testability.

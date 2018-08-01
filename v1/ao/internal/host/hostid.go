@@ -15,6 +15,18 @@ const (
 	hostIdInitDone          = "HostID initialization done."
 )
 
+// caches and their sync.Once protectors
+var (
+	containerId     string
+	containerIdOnce sync.Once
+
+	ec2Id     string
+	ec2IdOnce sync.Once
+
+	ec2Zone     string
+	ec2ZoneOnce sync.Once
+)
+
 // lockedID is a ID protected by a mutex. To avoid being modified without
 // mutex protected, the caller can only get a copyID of the internal ID.
 type lockedID struct {
@@ -47,7 +59,7 @@ func (h *ID) copy() ID {
 		withPid(h.pid), // pid doesn't change, but we fullUpdate it anyways
 		withEC2Id(h.ec2Id),
 		withEC2Zone(h.ec2Zone),
-		withDockerId(h.dockerId),
+		withContainerId(h.containerId),
 		withMAC(h.mac),
 		withHerokuId(h.herokuId))
 	return *c
@@ -119,8 +131,8 @@ type ID struct {
 	// EC2 availability zone
 	ec2Zone string
 
-	// docker container ID
-	dockerId string
+	// container ID
+	containerId string
 
 	// the list of MAC addresses
 	mac []string
@@ -149,9 +161,9 @@ func (h ID) EC2Zone() string {
 	return h.ec2Zone
 }
 
-// DockerId returns the dockerId field of ID
-func (h ID) DockerId() string {
-	return h.dockerId
+// ContainerId returns the containerId field of ID
+func (h ID) ContainerId() string {
+	return h.containerId
 }
 
 // MAC returns the mac field of ID
@@ -191,9 +203,9 @@ func withEC2Zone(zone string) IDSetter {
 	}
 }
 
-func withDockerId(id string) IDSetter {
+func withContainerId(id string) IDSetter {
 	return func(h *ID) {
-		h.dockerId = id
+		h.containerId = id
 	}
 }
 
