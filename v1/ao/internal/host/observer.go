@@ -42,12 +42,22 @@ const (
 // standalone goroutine.
 func observer() {
 	log.Debug(hostObserverStarted)
+	defer log.Warning(hostObserverStopped)
 
 	tm := time.Duration(updateTimeout)
 	// initialize the hostID as soon as possible
 	timedUpdateHostID(tm, hostId)
 
 	roundup := time.Now().Truncate(observeInterval).Add(observeInterval)
+
+	// double check before sleeping, so it won't be sleeping uselessly if
+	// the agent is rejected by the collector immediately after start.
+	select {
+	case <-exit:
+		return
+	default:
+	}
+
 	// Sleep returns immediately if roundup is before time.Now()
 	time.Sleep(roundup.Sub(time.Now()))
 
@@ -65,8 +75,6 @@ loop:
 			break loop
 		}
 	}
-
-	log.Warning(hostObserverStopped)
 }
 
 // funcName returns the function's name in string

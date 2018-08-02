@@ -27,7 +27,7 @@ const (
 
 // logging texts
 const (
-	stopHostIdObserverByUser = "Host observer is stopped by user."
+	stopHostIdObserverByUser = "Host observer is closing per request."
 )
 
 var (
