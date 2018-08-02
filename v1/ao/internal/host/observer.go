@@ -138,12 +138,13 @@ func updateHostID(lh *lockedID) {
 
 // getHostname is the implementation of getting the hostname
 func getHostname() string {
-	if host, err := os.Hostname(); err != nil {
-		log.Warningf("Failed to get hostname: %s", err)
-		return ""
-	} else {
-		return host
+	h, err := os.Hostname()
+	if err == nil {
+		hm.Lock()
+		hostname = h
+		hm.Unlock()
 	}
+	return h
 }
 
 func getPid() int {

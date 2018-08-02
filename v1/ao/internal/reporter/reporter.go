@@ -111,10 +111,7 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	us := time.Now().UnixNano() / 1000
 	e.AddInt64("Timestamp_u", us)
 
-	hostID := host.CurrentID()
-	// Add cached syscalls for hostname & PID
-	// TODO: reuse cache?
-	e.AddString("Hostname", hostID.Hostname())
+	e.AddString("Hostname", host.Hostname())
 	e.AddInt("PID", host.PID())
 
 	// Update the context's op_id to that of the event
