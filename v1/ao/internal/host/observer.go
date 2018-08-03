@@ -6,9 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"reflect"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
@@ -75,14 +73,6 @@ loop:
 			break loop
 		}
 	}
-}
-
-// funcName returns the function's name in string
-func funcName(fn interface{}) string {
-	if fn == nil {
-		return ""
-	}
-	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 }
 
 // getOrFallback runs the function provided, and returns the fallback value if

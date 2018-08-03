@@ -116,12 +116,6 @@ func TestUpdateHostId(t *testing.T) {
 	assert.EqualValues(t, getHerokuDynoId(), h.HerokuID())
 }
 
-func funcABC() string { return "" }
-
-func TestFuncName(t *testing.T) {
-	assert.True(t, strings.Contains(funcName(funcABC), "funcABC"))
-}
-
 func returnEmpty() string { return "" }
 
 func returnSomething() string { return "hello" }

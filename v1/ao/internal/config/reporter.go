@@ -12,8 +12,8 @@ const (
 	// the default interval in seconds to flush events to the collector
 	eventFlushIntervalDefault = 2
 
-	// the default message batch size for each RPC call
-	eventFlushBatchSizeDefault = 2 * 1024 * 1024
+	// the default message batch size (in KB) for each RPC call
+	eventFlushBatchSizeDefault = 2000
 
 	// the default interval in seconds to flush metrics
 	metricIntervalDefault = 30
@@ -55,7 +55,7 @@ type ReporterOptions struct {
 	// Events flush interval in seconds
 	EvtFlushInterval int64
 
-	// Event sending batch size in bytes
+	// Event sending batch size in KB
 	EvtFlushBatchSize int64
 
 	// Metrics flush interval in seconds

@@ -47,7 +47,7 @@ func NewBytesBucket(source chan []byte, opts ...BucketOption) *BytesBucket {
 // BucketOption defines the function type of option setters
 type BucketOption func(b *BytesBucket)
 
-// WithHWM provides a high watermark for the bucket
+// WithHWM provides a high watermark (in bytes) for the bucket
 func WithHWM(HWM int) BucketOption {
 	return func(b *BytesBucket) {
 		b.HWM = HWM
