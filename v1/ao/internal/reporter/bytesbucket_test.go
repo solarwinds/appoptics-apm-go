@@ -71,6 +71,8 @@ func TestBytesBucket(t *testing.T) {
 	assert.Equal(t, 3, poured)
 
 	b.getInterval = func() int64 { return 1 }
+	// Drain it to trigger the refreshing of flush interval
+	b.Drain()
 
 	source <- []byte{1}
 	poured = b.PourIn()

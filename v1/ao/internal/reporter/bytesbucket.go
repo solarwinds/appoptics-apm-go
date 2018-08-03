@@ -19,14 +19,11 @@ type BytesBucket struct {
 	// the current watermark of the bucket, it may exceed the HWM temporarily.
 	watermark int
 
-	// the ticker to drain the bucket periodically
-	ticker *CleanableTicker
+	// the maximum duration between two drains
+	maxDrainInterval time.Duration
 
 	// the function to get the new interval
 	getInterval func() int64
-
-	// the current effective interval in seconds
-	interval int64
 
 	// where the water is stored in
 	water [][]byte
@@ -35,15 +32,14 @@ type BytesBucket struct {
 	lastDrainTime time.Time
 }
 
-// NewBytesBucket returns a new bytesbucket object with the options provided
+// NewBytesBucket returns a new BytesBucket object with the options provided
 func NewBytesBucket(source chan []byte, opts ...BucketOption) *BytesBucket {
 	b := &BytesBucket{source: source}
 	for _, opt := range opts {
 		opt(b)
 	}
 	// fetch the interval and create a ticker
-	b.interval = b.getInterval()
-	b.ticker = NewCleanableTicker(time.Second * time.Duration(b.interval))
+	b.maxDrainInterval = time.Second * time.Duration(b.getInterval())
 
 	return b
 }
@@ -98,79 +94,40 @@ outer:
 // Drain pour all the water out and make the bucket empty.
 func (b *BytesBucket) Drain() [][]byte {
 	water := b.water
+
 	b.water = [][]byte{}
 	b.watermark = 0
-	// Seems we'd better to `reset` the ticker here but there is no such
-	// API for a Ticker. A minor problem is that the ticker may become
-	// timeout shortly after the previous drain triggered by watermark >= HWM.
-	// The last drain time is stored to avoid this problem.
 	b.lastDrainTime = time.Now()
+	// refresh the interval here instead of drainable() to avoid polling
+	// the global config (mutex needed) too often.
+	b.maxDrainInterval = time.Second * time.Duration(b.getInterval())
+
 	return water
 }
 
 // Drainable checks if it can be drained now. It is true either when the
-// watermark is higher than HWM, or the ticker is timeout (we want to at
-// least drain it periodically)
+// watermark is higher than HWM, or it reaches the maximum drain interval
+// (we want to at least drain it periodically)
 func (b *BytesBucket) Drainable() bool {
 	if b.watermark == 0 {
-		b.ticker.Clean()
 		return false
 	}
 
+	// It's drainable when the current watermark exceeds the HWM
 	// Do the first drain as soon as possible, even for one drop of water.
 	if b.watermark >= b.HWM || b.lastDrainTime.IsZero() {
-		b.ticker.Clean()
 		return true
 	}
 
-	if b.ticker != nil {
-		select {
-		case <-b.ticker.C:
-			b.checkInterval()
-			// Skip this chance if we've drained the bucket recently.
-			if time.Now().After(b.lastDrainTime.Add(time.Millisecond * 500)) {
-				return true
-			}
-		default:
-		}
+	// It's drainable when the duration is beyond the maximum interval
+	if time.Now().After(b.lastDrainTime.Add(b.maxDrainInterval)) {
+		return true
 	}
 
 	return false
 }
 
-// checkInterval checks the new interval and creates a new ticker if needed.
-func (b *BytesBucket) checkInterval() {
-	ni := b.getInterval()
-	if b.interval != ni {
-		b.ticker.Stop()
-		b.ticker = NewCleanableTicker(time.Second * time.Duration(ni))
-	}
-}
-
 // Watermark returns the current watermark of the bucket.
 func (b *BytesBucket) Watermark() int {
 	return b.watermark
-}
-
-// Destroy tears down the bucket and releases the resources of it
-func (b *BytesBucket) Destroy() {
-	b.ticker.Stop()
-}
-
-// CleanableTicker is a ticker with an additional Clean method
-type CleanableTicker struct {
-	*time.Ticker
-}
-
-// Clean drains the ticker's channel
-func (ct *CleanableTicker) Clean() {
-	select {
-	case <-ct.C:
-	default:
-	}
-}
-
-// NewCleanableTicker returns a new cCeanableTicker
-func NewCleanableTicker(d time.Duration) *CleanableTicker {
-	return &CleanableTicker{time.NewTicker(d)}
 }
