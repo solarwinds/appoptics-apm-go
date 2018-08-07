@@ -120,7 +120,7 @@ func (b *BytesBucket) Drainable() bool {
 	}
 
 	// It's drainable when the duration is beyond the maximum interval
-	if time.Now().After(b.lastDrainTime.Add(b.maxDrainInterval)) {
+	if time.Now().Sub(b.lastDrainTime) >= b.maxDrainInterval {
 		return true
 	}
 
