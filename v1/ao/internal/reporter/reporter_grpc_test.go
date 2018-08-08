@@ -3,6 +3,7 @@
 package reporter
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -60,14 +62,18 @@ func StartTestGRPCServer(t *testing.T, addr string) *TestGRPCServer {
 }
 
 func printMessageRequest(req *pb.MessageRequest) {
+	bs, _ := json.Marshal(req)
+	fmt.Printf("Raw message marshaled to json->%s\n", bs)
+	fmt.Println("Events decoded from BSON->")
 	for idx, m := range req.Messages {
 		fmt.Printf("#%d->", idx)
-		printBson(m)
+		utils.PrintBson(m)
 	}
 }
 
 func printSettingsRequest(req *pb.SettingsRequest) {
-	fmt.Println(req)
+	bs, _ := json.Marshal(req)
+	fmt.Printf("Raw message marshaled to json->%s\n", bs)
 }
 
 func (s *TestGRPCServer) Stop() { s.grpcServer.Stop() }
@@ -122,8 +128,8 @@ func (s *TestGRPCServer) GetSettings(ctx context.Context, req *pb.SettingsReques
 	}, nil
 }
 
-func (s *TestGRPCServer) Ping(context.Context, *pb.PingRequest) (*pb.MessageResult, error) {
-	fmt.Println("TestGRPCServer.Ping")
+func (s *TestGRPCServer) Ping(ctx context.Context, req *pb.PingRequest) (*pb.MessageResult, error) {
+	fmt.Printf("TestGRPCServer.Ping with APIKey: %s\n", req.ApiKey)
 	s.pings++
 	return &pb.MessageResult{Result: pb.ResultCode_OK}, nil
 }

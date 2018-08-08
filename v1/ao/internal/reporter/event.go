@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 type event struct {
@@ -262,7 +262,7 @@ func (e *event) AddKV(key, value interface{}) error {
 			e.AddBool(k, *v)
 		}
 	default:
-		agent.Debugf("Ignoring unrecognized Event key %v val %v valType %T", k, v, v)
+		log.Debugf("Ignoring unrecognized Event key %v val %v valType %T", k, v, v)
 	}
 	return nil
 }

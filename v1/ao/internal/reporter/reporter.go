@@ -4,12 +4,15 @@ package reporter
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
-	"os"
+	"math"
 	"strings"
 	"time"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // defines what methods a reporter should offer (internal to reporter package)
@@ -34,18 +37,8 @@ var (
 	periodicTasksDisabled = false // disable periodic tasks, for testing
 )
 
-// cached hostname and PID since they don't change (only one system call each)
-var cachedHostname string
-var cachedPid = os.Getpid()
-
-// for hostname alias
-var configuredHostname string
-var prependDomainForTransactionName bool
-
 // a noop reporter
 type nullReporter struct{}
-
-func NeedPrependDomain() bool { return prependDomainForTransactionName }
 
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
@@ -57,8 +50,8 @@ func (r *nullReporter) Closed() bool                                  { return t
 // that will be used throughout the runtime of the app. Default is 'ssl' but
 // can be overridden via APPOPTICS_REPORTER
 func init() {
-	cacheHostname(osHostnamer{})
-	setGlobalReporter(agent.GetConfig(agent.AppOpticsReporter))
+	checkHostname(host.Hostname)
+	setGlobalReporter(config.GetReporterType())
 	sendInitMessage()
 }
 
@@ -87,17 +80,14 @@ func ReportSpan(span SpanMessage) error {
 	return globalReporter.reportSpan(span)
 }
 
-// cache hostname
-func cacheHostname(hn hostnamer) {
-	h, err := hn.Hostname()
-	if err != nil {
-		agent.Errorf("Unable to get hostname, AppOptics tracing disabled: %v", err)
+func checkHostname(getter func() string) {
+	if getter() == "" {
+		log.Error("Unable to get hostname, AppOptics tracing disabled.")
 		reportingDisabled = true
 	}
-	cachedHostname = h
 }
 
-// check if context and event are valid, add general keys like Timestamp, or Hostname
+// check if context and event are valid, add general keys like Timestamp, or hostname
 // ctx		oboe context
 // e		event to be prepared for sending
 //
@@ -120,9 +110,11 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	us := time.Now().UnixNano() / 1000
 	e.AddInt64("Timestamp_u", us)
 
-	// Add cached syscalls for Hostname & PID
-	e.AddString("Hostname", cachedHostname)
-	e.AddInt("PID", cachedPid)
+	hostID := host.CurrentID()
+	// Add cached syscalls for hostname & PID
+	// TODO: reuse cache?
+	e.AddString("Hostname", hostID.Hostname())
+	e.AddInt("PID", host.PID())
 
 	// Update the context's op_id to that of the event
 	ctx.metadata.ids.setOpID(e.metadata.ids.opID)
@@ -134,4 +126,33 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 // Determines if request should be traced, based on sample rate settings.
 func shouldTraceRequest(layer string, traced bool) (bool, int, sampleSource) {
 	return oboeSampleRequest(layer, traced)
+}
+
+func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) *map[string][]byte {
+	args := make(map[string][]byte)
+
+	if capacity > -1 {
+		bits := math.Float64bits(capacity)
+		bytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bytes, bits)
+		args["BucketCapacity"] = bytes
+	}
+	if ratePerSec > -1 {
+		bits := math.Float64bits(ratePerSec)
+		bytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bytes, bits)
+		args["BucketRate"] = bytes
+	}
+	if metricsFlushInterval > -1 {
+		bytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bytes, uint32(metricsFlushInterval))
+		args["MetricsFlushInterval"] = bytes
+	}
+	if maxTransactions > -1 {
+		bytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(bytes, uint32(maxTransactions))
+		args["MaxTransactions"] = bytes
+	}
+
+	return &args
 }
