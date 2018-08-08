@@ -58,6 +58,14 @@ func CurrentID() ID {
 	return hostId.copyID()
 }
 
+// BestEffortCurrentID returns the current host ID with the best effort. It
+// doesn't wait until the ID is ready. This function is used mainly by getSettings
+// where the ID may not be fully initialized immediately after starting up but
+// it's acceptable.
+func BestEffortCurrentID() ID {
+	return hostId.copyID()
+}
+
 // PID returns the cached process ID
 func PID() int {
 	return pid

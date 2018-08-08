@@ -520,7 +520,7 @@ func (r *grpcReporter) eventRetrySender(
 			ApiKey:   connection.serviceKey,
 			Messages: messages,
 			Encoding: collector.EncodingType_BSON,
-			Identity: buildPbHostID(),
+			Identity: buildIdentity(),
 		}
 
 		// initial retry delay in milliseconds
@@ -681,7 +681,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		ApiKey:   r.metricConnection.serviceKey,
 		Messages: messages,
 		Encoding: collector.EncodingType_BSON,
-		Identity: buildPbHostID(),
+		Identity: buildIdentity(),
 	}
 
 	// initial retry delay in milliseconds
@@ -775,7 +775,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	request := &collector.SettingsRequest{
 		ApiKey:        r.metricConnection.serviceKey,
 		ClientVersion: grpcReporterVersion,
-		Identity:      buildPbHostID(),
+		Identity:      buildBestEffortIdentity(),
 	}
 
 	// initial retry delay in milliseconds
@@ -963,7 +963,7 @@ func (r *grpcReporter) statusSender() {
 			ApiKey:   r.metricConnection.serviceKey,
 			Messages: messages,
 			Encoding: collector.EncodingType_BSON,
-			Identity: buildPbHostID(),
+			Identity: buildIdentity(),
 		}
 
 		// initial retry delay in milliseconds
@@ -1102,15 +1102,17 @@ func (c *grpcConnection) ping() {
 	c.lock.RUnlock()
 }
 
-// buildPbHostID builds the HostID struct from current host metadata
-func buildPbHostID() *collector.HostID {
+func newHostID(id host.ID) *collector.HostID {
 	gid := &collector.HostID{}
-	id := host.CurrentID()
 
-	gid.Hostname = host.Hostname()
+	gid.Hostname = id.Hostname()
+
+	// DEPRECATED: IP addresses and UUID are not part of the host ID anymore
+	// but kept for a while due to backward-compatibility.
 	gid.IpAddresses = host.IPAddresses()
 	gid.Uuid = ""
-	gid.Pid = int32(host.PID())
+
+	gid.Pid = int32(id.Pid())
 	gid.Ec2InstanceID = id.EC2Id()
 	gid.Ec2AvailabilityZone = id.EC2Zone()
 	gid.DockerContainerID = id.DockerId()
@@ -1118,4 +1120,16 @@ func buildPbHostID() *collector.HostID {
 	gid.HerokuDynoID = id.HerokuID()
 
 	return gid
+}
+
+// buildIdentity builds the HostID struct from current host metadata
+func buildIdentity() *collector.HostID {
+	return newHostID(host.CurrentID())
+}
+
+// buildBestEffortIdentity builds the HostID with the best effort
+func buildBestEffortIdentity() *collector.HostID {
+	hid := newHostID(host.BestEffortCurrentID())
+	hid.Hostname = host.Hostname()
+	return hid
 }
