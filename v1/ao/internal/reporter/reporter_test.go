@@ -35,16 +35,15 @@ const (
 
 // this runs before init()
 var _ = func() (_ struct{}) {
+	periodicTasksDisabled = true
+
 	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
 	os.Setenv("APPOPTICS_REPORTER", "none")
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
+
 	config.Refresh()
 	return
 }()
-
-func init() {
-	periodicTasksDisabled = true
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
-}
 
 func TestCacheHostname(t *testing.T) {
 	h, _ := os.Hostname()
@@ -241,7 +240,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	assert.Error(t, r.reportStatus(nil, nil))
 	assert.Error(t, r.reportStatus(ctx, nil))
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Second)
 	assert.NoError(t, r.reportStatus(ctx, ev2))
 
 	assert.Equal(t, addr, r.eventConnection.address)
@@ -254,7 +253,7 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
 	assert.Equal(t, grpcSettingsTimeoutCheckIntervalDefault, r.settingsTimeoutCheckInterval)
 
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(time.Second)
 
 	// stop test reporter
 	server.Stop()

@@ -3,7 +3,9 @@
 package host
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -12,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	ao "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -114,6 +118,29 @@ func TestUpdateHostId(t *testing.T) {
 	assert.Equal(t, strings.Join(getMACAddressList(), ""),
 		strings.Join(h.MAC(), ""))
 	assert.EqualValues(t, getHerokuDynoId(), h.HerokuID())
+}
+
+func TestUpdate(t *testing.T) {
+	ao.SetLevel(ao.DEBUG)
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() {
+		log.SetOutput(os.Stderr)
+	}()
+
+	lh := newLockedID()
+	tk := make(chan struct{}, 1)
+	tk <- struct{}{}
+
+	assert.False(t, lh.ready())
+	update(tk, lh)
+	time.Sleep(3 * time.Second)
+	assert.True(t, lh.ready())
+
+	for i := 0; i < 10; i++ {
+		update(tk, lh)
+	}
+	assert.Contains(t, buf.String(), prevUpdaterRunning)
 }
 
 func returnEmpty() string { return "" }

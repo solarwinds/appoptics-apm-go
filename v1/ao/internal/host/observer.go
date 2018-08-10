@@ -22,18 +22,13 @@ const (
 
 	// the interval to update the metadata periodically
 	observeInterval = time.Minute
-
-	// the maximum wait time for host metadata retrival
-	updateTimeout = time.Second * 10
-
-	// the maximum failures for expensive retrivals (EC2, Container ID, etc)
-	maxFailCnt = 20
 )
 
 // logging texts
 const (
 	hostObserverStarted = "Host metadata observer started."
 	hostObserverStopped = "Host metadata observer stopped."
+	prevUpdaterRunning  = "The previous updater is still running."
 )
 
 // observer checks the update of the host metadata periodically. It runs in a
@@ -42,9 +37,12 @@ func observer() {
 	log.Debug(hostObserverStarted)
 	defer log.Warning(hostObserverStopped)
 
-	tm := time.Duration(updateTimeout)
+	// Only one hostID updater is allowed at a time.
+	token := make(chan struct{}, 1)
+	token <- struct{}{}
+
 	// initialize the hostID as soon as possible
-	timedUpdateHostID(tm, hostId)
+	update(token, hostId)
 
 	roundup := time.Now().Truncate(observeInterval).Add(observeInterval)
 
@@ -64,7 +62,7 @@ func observer() {
 
 loop:
 	for {
-		timedUpdateHostID(tm, hostId)
+		update(token, hostId)
 
 		select {
 		case <-tk.C:
@@ -84,24 +82,17 @@ func getOrFallback(fn func() string, fb string) string {
 	return fb
 }
 
-// timedUpdateHostID tries to update the lockedID but gives up after a specified
-// duration
-func timedUpdateHostID(d time.Duration, lh *lockedID) bool {
-	// use buffered channel to avoid block the goroutine
-	// when we return early
-	done := make(chan struct{}, 1)
-	tm := time.NewTimer(d)
-
-	go func(c chan struct{}, l *lockedID) {
-		updateHostID(l)
-		c <- struct{}{}
-	}(done, lh)
-
+// update does the host metadata update work. The number of concurrent
+// updaters are constrained by the number of elements in the token channel.
+func update(token chan struct{}, lh *lockedID) {
 	select {
-	case <-done:
-		return true
-	case <-tm.C:
-		return false
+	case <-token:
+		go func(lh *lockedID) {
+			updateHostID(lh)
+			token <- struct{}{}
+		}(lh)
+	default:
+		log.Debug(prevUpdaterRunning)
 	}
 }
 

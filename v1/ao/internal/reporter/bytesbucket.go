@@ -84,6 +84,11 @@ outer:
 			if b.watermark >= b.HWM {
 				break outer
 			}
+			// stop it when it's timeout
+			if !b.lastDrainTime.IsZero() &&
+				time.Now().Sub(b.lastDrainTime) >= b.maxDrainInterval {
+				break outer
+			}
 		default:
 			break outer
 		}

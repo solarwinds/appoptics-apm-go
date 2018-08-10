@@ -437,11 +437,6 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 	}
 }
 
-type grpcResult struct {
-	ret collector.ResultCode
-	err error
-}
-
 // eventSender is a long-running goroutine that listens on the events message
 // channel, collects all messages on that channel and attempts to send them to
 // the collector using the gRPC method PostEvents()

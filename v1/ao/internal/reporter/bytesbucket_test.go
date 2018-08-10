@@ -77,6 +77,7 @@ func TestBytesBucket(t *testing.T) {
 	source <- []byte{1}
 	poured = b.PourIn()
 	assert.Equal(t, 1, poured)
+	assert.Equal(t, false, b.Drainable())
 	time.Sleep(time.Millisecond * 1500)
 	assert.Equal(t, true, b.Drainable())
 
