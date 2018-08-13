@@ -22,6 +22,9 @@ const (
 
 	// the interval to update the metadata periodically
 	observeInterval = time.Minute
+
+	// the environment variable for Heroku DYNO ID
+	envDyno = "DYNO"
 )
 
 // logging texts
@@ -242,5 +245,12 @@ func getMACAddressList() []string {
 }
 
 func getHerokuDynoId() string {
-	return "not-supported"
+	dynoOnce.Do(func() {
+		if d, has := os.LookupEnv(envDyno); has {
+			dyno = d
+		} else {
+			dyno = "not-found"
+		}
+	})
+	return dyno
 }

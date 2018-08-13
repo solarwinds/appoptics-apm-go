@@ -25,6 +25,10 @@ var (
 
 	ec2Zone     string
 	ec2ZoneOnce sync.Once
+
+	// the Heroku DYNO id
+	dyno     string
+	dynoOnce sync.Once
 )
 
 // lockedID is a ID protected by a mutex. To avoid being modified without

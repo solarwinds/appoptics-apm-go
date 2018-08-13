@@ -309,11 +309,9 @@ func (r *grpcReporter) redirect(c *grpcConnection, address string) {
 	c.address = address
 }
 
-// redirectTo redirects the gRPC connection to the new address and send a
-// ConnectionInit message to the collector.
+// redirectTo redirects the gRPC connection to the new address.
 func (r *grpcReporter) redirectTo(c *grpcConnection, address string) {
 	r.redirect(c, address)
-	c.sendConnectionInit()
 }
 
 // long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
@@ -443,9 +441,6 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 func (r *grpcReporter) eventSender() {
 	defer log.Warning("eventSender goroutine exiting.")
 
-	// send connection init message before doing anything else
-	r.eventConnection.sendConnectionInit()
-
 	batches := make(chan [][]byte)
 	token := r.eventBatchSender(batches)
 	opts := config.ReporterOpts()
@@ -520,6 +515,7 @@ func (r *grpcReporter) eventRetrySender(
 			ApiKey:   connection.serviceKey,
 			Messages: messages,
 			Encoding: collector.EncodingType_BSON,
+			Identity: buildIdentity(),
 		}
 
 		// initial retry delay in milliseconds
@@ -680,6 +676,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 		ApiKey:   r.metricConnection.serviceKey,
 		Messages: messages,
 		Encoding: collector.EncodingType_BSON,
+		Identity: buildIdentity(),
 	}
 
 	// initial retry delay in milliseconds
@@ -773,10 +770,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	request := &collector.SettingsRequest{
 		ApiKey:        r.metricConnection.serviceKey,
 		ClientVersion: grpcReporterVersion,
-		Identity: &collector.HostID{
-			Hostname:    host.Hostname(),
-			IpAddresses: host.IPAddresses(),
-		},
+		Identity:      buildBestEffortIdentity(),
 	}
 
 	// initial retry delay in milliseconds
@@ -938,8 +932,6 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 // on that channel and attempts to send them to the collector using the GRPC method PostStatus()
 func (r *grpcReporter) statusSender() {
 	defer log.Warning("statusSender goroutine exiting.")
-	// send connection init message before doing anything else
-	r.metricConnection.sendConnectionInit()
 
 	for {
 		var messages [][]byte
@@ -966,6 +958,7 @@ func (r *grpcReporter) statusSender() {
 			ApiKey:   r.metricConnection.serviceKey,
 			Messages: messages,
 			Encoding: collector.EncodingType_BSON,
+			Identity: buildIdentity(),
 		}
 
 		// initial retry delay in milliseconds
@@ -1104,25 +1097,34 @@ func (c *grpcConnection) ping() {
 	c.lock.RUnlock()
 }
 
-// ========================= Connection Init Handling =============================
+func newHostID(id host.ID) *collector.HostID {
+	gid := &collector.HostID{}
 
-// send a connection init message
-func (c *grpcConnection) sendConnectionInit() {
-	bbuf := NewBsonBuffer()
-	bsonAppendBool(bbuf, "ConnectionInit", true)
-	appendHostId(bbuf)
-	bsonBufferFinish(bbuf)
+	gid.Hostname = id.Hostname()
 
-	var messages [][]byte
-	messages = append(messages, bbuf.buf)
+	// DEPRECATED: IP addresses and UUID are not part of the host ID anymore
+	// but kept for a while due to backward-compatibility.
+	gid.IpAddresses = host.IPAddresses()
+	gid.Uuid = ""
 
-	request := &collector.MessageRequest{
-		ApiKey:   c.serviceKey,
-		Messages: messages,
-		Encoding: collector.EncodingType_BSON,
-	}
+	gid.Pid = int32(id.Pid())
+	gid.Ec2InstanceID = id.EC2Id()
+	gid.Ec2AvailabilityZone = id.EC2Zone()
+	gid.DockerContainerID = id.DockerId()
+	gid.MacAddresses = id.MAC()
+	gid.HerokuDynoID = id.HerokuID()
 
-	c.lock.RLock()
-	c.client.PostStatus(context.TODO(), request)
-	c.lock.RUnlock()
+	return gid
+}
+
+// buildIdentity builds the HostID struct from current host metadata
+func buildIdentity() *collector.HostID {
+	return newHostID(host.CurrentID())
+}
+
+// buildBestEffortIdentity builds the HostID with the best effort
+func buildBestEffortIdentity() *collector.HostID {
+	hid := newHostID(host.BestEffortCurrentID())
+	hid.Hostname = host.Hostname()
+	return hid
 }

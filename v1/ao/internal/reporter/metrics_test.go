@@ -369,9 +369,12 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	}
 	m := bsonToMap(bbuf)
 
-	assert.Equal(t, host.Hostname(), m["Hostname"])
+	_, ok := m["Hostname"]
+	assert.False(t, ok)
+	_, ok = m["PID"]
+	assert.False(t, ok)
+	_, ok = m[""]
 	assert.Equal(t, host.Distro(), m["Distro"])
-	assert.Equal(t, host.PID(), m["PID"])
 	assert.True(t, m["Timestamp_u"].(int64) > 1509053785684891)
 	assert.Equal(t, 15, m["MetricsFlushInterval"])
 
