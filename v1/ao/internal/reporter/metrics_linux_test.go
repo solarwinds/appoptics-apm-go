@@ -19,16 +19,16 @@ func TestAppendUname(t *testing.T) {
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
 
-	var sysname, version string
+	var sysname, release string
 
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err == nil {
 		sysname = utils.Byte2String(uname.Sysname[:])
-		version = utils.Byte2String(uname.Version[:])
+		release = utils.Byte2String(uname.Release[:])
 		sysname = strings.TrimRight(sysname, "\x00")
-		version = strings.TrimRight(version, "\x00")
+		release = strings.TrimRight(release, "\x00")
 	}
 
 	assert.Equal(t, sysname, m["UnameSysName"])
-	assert.Equal(t, version, m["UnameVersion"])
+	assert.Equal(t, release, m["UnameVersion"])
 }

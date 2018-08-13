@@ -7,6 +7,7 @@ package host
 
 import (
 	"net"
+	"os"
 	"sync"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
@@ -26,7 +27,7 @@ const (
 
 // logging texts
 const (
-	stopHostIdObserverByUser = "Host hostId observer is stopped by user."
+	stopHostIdObserverByUser = "Host observer is closing per request."
 )
 
 var (
@@ -46,6 +47,10 @@ var (
 	// the cache for pid, it's only modified/initialized when this package is
 	// imported.
 	pid = getPid()
+
+	// hostname and its lock
+	hostname, _ = os.Hostname()
+	hm          sync.RWMutex
 )
 
 func init() {
@@ -85,9 +90,10 @@ func ConfiguredHostname() string {
 }
 
 // Hostname returns the hostname
-// TODO: should we cache it?
 func Hostname() string {
-	return CurrentID().Hostname()
+	hm.RLock()
+	defer hm.RUnlock()
+	return hostname
 }
 
 // IPAddresses gets the system's IP addresses

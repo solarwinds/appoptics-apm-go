@@ -28,7 +28,7 @@ func TestLockedHostID(t *testing.T) {
 		withPid(p), // pid doesn't change, but we fullUpdate it anyways
 		withEC2Id(ec2Id),
 		withEC2Zone(ec2Zone),
-		withDockerId(dockerId),
+		withContainerId(dockerId),
 		withMAC(mac),
 		withHerokuId(herokuId))
 
@@ -41,7 +41,7 @@ func TestLockedHostID(t *testing.T) {
 	assert.Equal(t, p, h.Pid())
 	assert.Equal(t, ec2Id, h.EC2Id())
 	assert.Equal(t, ec2Zone, h.EC2Zone())
-	assert.Equal(t, dockerId, h.DockerId())
+	assert.Equal(t, dockerId, h.ContainerId())
 	assert.Equal(t, mac, h.MAC())
 	assert.EqualValues(t, herokuId, h.HerokuID())
 }

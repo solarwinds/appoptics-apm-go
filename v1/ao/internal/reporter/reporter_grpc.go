@@ -55,17 +55,16 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 
 	// These are hard-coded parameters for the gRPC reporter. Any of them become
 	// configurable in future versions will be moved to package config.
-	grpcEventFlushBatchSizeDefault          = 2 * 1024 * 1024 // EventsBatchSize in bytes
-	grpcMetricIntervalDefault               = 30              // default metrics flush interval in seconds
-	grpcGetSettingsIntervalDefault          = 30              // default settings retrieval interval in seconds
-	grpcSettingsTimeoutCheckIntervalDefault = 10              // default check interval for timed out settings in seconds
-	grpcPingIntervalDefault                 = 20              // default interval for keep alive pings in seconds
-	grpcRetryDelayInitial                   = 500             // initial connection/send retry delay in milliseconds
-	grpcRetryDelayMultiplier                = 1.5             // backoff multiplier for unsuccessful retries
-	grpcRetryDelayMax                       = 60              // max connection/send retry delay in seconds
-	grpcRedirectMax                         = 20              // max allowed collector redirects
-	grpcRetryLogThreshold                   = 10              // log prints after this number of retries (about 56.7s)
-	grpcMaxRetries                          = 20              // The message will be dropped after this number of retries
+	grpcMetricIntervalDefault               = 30  // default metrics flush interval in seconds
+	grpcGetSettingsIntervalDefault          = 30  // default settings retrieval interval in seconds
+	grpcSettingsTimeoutCheckIntervalDefault = 10  // default check interval for timed out settings in seconds
+	grpcPingIntervalDefault                 = 20  // default interval for keep alive pings in seconds
+	grpcRetryDelayInitial                   = 500 // initial connection/send retry delay in milliseconds
+	grpcRetryDelayMultiplier                = 1.5 // backoff multiplier for unsuccessful retries
+	grpcRetryDelayMax                       = 60  // max connection/send retry delay in seconds
+	grpcRedirectMax                         = 20  // max allowed collector redirects
+	grpcRetryLogThreshold                   = 10  // log prints after this number of retries (about 56.7s)
+	grpcMaxRetries                          = 20  // The message will be dropped after this number of retries
 )
 
 type reporterChannel int
@@ -436,11 +435,6 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 	}
 }
 
-type grpcResult struct {
-	ret collector.ResultCode
-	err error
-}
-
 // eventSender is a long-running goroutine that listens on the events message
 // channel, collects all messages on that channel and attempts to send them to
 // the collector using the gRPC method PostEvents()
@@ -454,7 +448,7 @@ func (r *grpcReporter) eventSender() {
 	// This event bucket is drainable either after it reaches HWM, or the flush
 	// interval has passed.
 	evtBucket := NewBytesBucket(r.eventMessages,
-		WithHWM(grpcEventFlushBatchSizeDefault),
+		WithHWM(int(opts.GetEventBatchSize()*1024)),
 		WithIntervalGetter(opts.GetEventFlushInterval))
 
 	for {
@@ -475,8 +469,9 @@ func (r *grpcReporter) eventSender() {
 		if evtBucket.Drainable() {
 			select {
 			case <-token:
-				log.Debugf("Pushed %d bytes to event sender.", evtBucket.Watermark())
+				w := evtBucket.Watermark()
 				batches <- evtBucket.Drain()
+				log.Debugf("Pushed %d bytes to event sender.", w)
 			default:
 			}
 		}
@@ -1115,7 +1110,7 @@ func newHostID(id host.ID) *collector.HostID {
 	gid.Pid = int32(id.Pid())
 	gid.Ec2InstanceID = id.EC2Id()
 	gid.Ec2AvailabilityZone = id.EC2Zone()
-	gid.DockerContainerID = id.DockerId()
+	gid.DockerContainerID = id.ContainerId()
 	gid.MacAddresses = id.MAC()
 	gid.HerokuDynoID = id.HerokuID()
 

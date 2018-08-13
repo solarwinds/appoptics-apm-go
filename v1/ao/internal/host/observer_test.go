@@ -3,7 +3,9 @@
 package host
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -12,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	ao "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,10 +51,10 @@ func TestInitContainerID(t *testing.T) {
 
 func TestGetAWSMetadata(t *testing.T) {
 	testEc2MetadataZoneURL := "http://localhost:8880/latest/meta-data/placement/availability-zone"
-	testEc2MetadataInstanceIDURL := "http://localhost:8880/latest/meta-data/instance-hostId"
+	testEc2MetadataInstanceIDURL := "http://localhost:8880/latest/meta-data/instance-id"
 
 	sm := http.NewServeMux()
-	sm.HandleFunc("/latest/meta-data/instance-hostId", func(w http.ResponseWriter, r *http.Request) {
+	sm.HandleFunc("/latest/meta-data/instance-id", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "i-12345678")
 	})
 	sm.HandleFunc("/latest/meta-data/placement/availability-zone", func(w http.ResponseWriter, r *http.Request) {
@@ -110,16 +114,33 @@ func TestUpdateHostId(t *testing.T) {
 	assert.Equal(t, os.Getpid(), h.Pid())
 	assert.Equal(t, getEC2ID(), h.EC2Id())
 	assert.Equal(t, getEC2Zone(), h.EC2Zone())
-	assert.Equal(t, getContainerID(), h.DockerId())
+	assert.Equal(t, getContainerID(), h.ContainerId())
 	assert.Equal(t, strings.Join(getMACAddressList(), ""),
 		strings.Join(h.MAC(), ""))
 	assert.EqualValues(t, getHerokuDynoId(), h.HerokuID())
 }
 
-func funcABC() string { return "" }
+func TestUpdate(t *testing.T) {
+	ao.SetLevel(ao.DEBUG)
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer func() {
+		log.SetOutput(os.Stderr)
+	}()
 
-func TestFuncName(t *testing.T) {
-	assert.True(t, strings.Contains(funcName(funcABC), "funcABC"))
+	lh := newLockedID()
+	tk := make(chan struct{}, 1)
+	tk <- struct{}{}
+
+	assert.False(t, lh.ready())
+	update(tk, lh)
+	time.Sleep(3 * time.Second)
+	assert.True(t, lh.ready())
+
+	for i := 0; i < 10; i++ {
+		update(tk, lh)
+	}
+	assert.Contains(t, buf.String(), prevUpdaterRunning)
 }
 
 func returnEmpty() string { return "" }
@@ -131,12 +152,6 @@ func TestGetOrFallback(t *testing.T) {
 		getOrFallback(returnEmpty, "fallback"))
 	assert.Equal(t, "hello",
 		getOrFallback(returnSomething, "fallback"))
-}
-
-func TestTimedUpdateHostID(t *testing.T) {
-	lh := newLockedID()
-	timedUpdateHostID(time.Duration(time.Microsecond), lh)
-	assert.False(t, lh.ready())
 }
 
 // this line is used to set the environment variable DYNO before init runs

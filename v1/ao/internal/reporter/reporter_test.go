@@ -3,6 +3,7 @@
 package reporter
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -34,23 +35,22 @@ const (
 
 // this runs before init()
 var _ = func() (_ struct{}) {
+	periodicTasksDisabled = true
+
 	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
 	os.Setenv("APPOPTICS_REPORTER", "none")
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
+
 	config.Refresh()
 	return
 }()
-
-func init() {
-	periodicTasksDisabled = true
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
-}
 
 func TestCacheHostname(t *testing.T) {
 	h, _ := os.Hostname()
 	assert.Equal(t, h, host.Hostname())
 	assert.Equal(t, false, reportingDisabled)
 	t.Logf("Forcing hostname error: 'Unable to get hostname' log message expected")
-	checkHostname(func() string { return "" })
+	checkHostname(func() (string, error) { return "", errors.New("cannot get hostname") })
 	assert.Equal(t, true, reportingDisabled)
 }
 
@@ -240,7 +240,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	assert.Error(t, r.reportStatus(nil, nil))
 	assert.Error(t, r.reportStatus(ctx, nil))
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Second)
 	assert.NoError(t, r.reportStatus(ctx, ev2))
 
 	assert.Equal(t, addr, r.eventConnection.address)
@@ -253,7 +253,7 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
 	assert.Equal(t, grpcSettingsTimeoutCheckIntervalDefault, r.settingsTimeoutCheckInterval)
 
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(time.Second)
 
 	// stop test reporter
 	server.Stop()

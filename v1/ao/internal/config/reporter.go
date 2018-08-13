@@ -4,7 +4,6 @@ package config
 
 import (
 	"sync/atomic"
-	"time"
 )
 
 // default values of the reporter parameters
@@ -12,8 +11,8 @@ const (
 	// the default interval in seconds to flush events to the collector
 	eventFlushIntervalDefault = 2
 
-	// the default message batch size for each RPC call
-	eventFlushBatchSizeDefault = 2 * 1024 * 1024
+	// the default message batch size (in KB) for each RPC call
+	eventFlushBatchSizeDefault = 2000
 
 	// the default interval in seconds to flush metrics
 	metricIntervalDefault = 30
@@ -49,13 +48,10 @@ const (
 // ReporterOptions defines the options of a reporter. The fields of it
 // must be accessed through atomic operators
 type ReporterOptions struct {
-	// The last update time in UnixNano (int64) format
-	updateTime int64
-
 	// Events flush interval in seconds
 	EvtFlushInterval int64
 
-	// Event sending batch size in bytes
+	// Event sending batch size in KB
 	EvtFlushBatchSize int64
 
 	// Metrics flush interval in seconds
@@ -90,7 +86,6 @@ type ReporterOptions struct {
 // default values.
 func defaultReporterOptions() *ReporterOptions {
 	return &ReporterOptions{
-		updateTime:              time.Now().UnixNano(),
 		EvtFlushInterval:        eventFlushIntervalDefault,
 		EvtFlushBatchSize:       eventFlushBatchSizeDefault,
 		MetricFlushInterval:     metricIntervalDefault,
@@ -107,16 +102,12 @@ func defaultReporterOptions() *ReporterOptions {
 
 // SetEventFlushInterval sets the event flush interval to i
 func (r *ReporterOptions) SetEventFlushInterval(i int64) {
-	// These compound operations are not atomic but we should be fine
 	atomic.StoreInt64(&r.EvtFlushInterval, i)
-	atomic.StoreInt64(&r.updateTime, time.Now().UnixNano())
 }
 
 // SetEventBatchSize sets the event flush interval to i
 func (r *ReporterOptions) SetEventBatchSize(i int64) {
-	// These compound operations are not atomic but we should be fine
 	atomic.StoreInt64(&r.EvtFlushBatchSize, i)
-	atomic.StoreInt64(&r.updateTime, time.Now().UnixNano())
 }
 
 // GetEventFlushInterval returns the current event flush interval
@@ -129,12 +120,6 @@ func (r *ReporterOptions) GetEventFlushInterval() int64 {
 func (r *ReporterOptions) GetEventBatchSize() int64 {
 
 	return atomic.LoadInt64(&r.EvtFlushBatchSize)
-}
-
-// GetUpdateTime returns the last update time of the options
-func (r *ReporterOptions) GetUpdateTime() int64 {
-
-	return atomic.LoadInt64(&r.updateTime)
 }
 
 // LoadEnvs load environment variables and refresh reporter options.

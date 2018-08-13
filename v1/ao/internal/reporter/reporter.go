@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
+	"os"
 	"strings"
 	"time"
 
@@ -50,7 +51,7 @@ func (r *nullReporter) Closed() bool                                  { return t
 // that will be used throughout the runtime of the app. Default is 'ssl' but
 // can be overridden via APPOPTICS_REPORTER
 func init() {
-	checkHostname(host.Hostname)
+	checkHostname(os.Hostname)
 	setGlobalReporter(config.GetReporterType())
 	sendInitMessage()
 }
@@ -80,8 +81,8 @@ func ReportSpan(span SpanMessage) error {
 	return globalReporter.reportSpan(span)
 }
 
-func checkHostname(getter func() string) {
-	if getter() == "" {
+func checkHostname(getter func() (string, error)) {
+	if _, err := getter(); err != nil {
 		log.Error("Unable to get hostname, AppOptics tracing disabled.")
 		reportingDisabled = true
 	}
@@ -110,10 +111,7 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	us := time.Now().UnixNano() / 1000
 	e.AddInt64("Timestamp_u", us)
 
-	hostID := host.CurrentID()
-	// Add cached syscalls for hostname & PID
-	// TODO: reuse cache?
-	e.AddString("Hostname", hostID.Hostname())
+	e.AddString("Hostname", host.Hostname())
 	e.AddInt("PID", host.PID())
 
 	// Update the context's op_id to that of the event

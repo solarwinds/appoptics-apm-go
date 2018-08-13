@@ -6,11 +6,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"reflect"
 	"regexp"
-	"runtime"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
@@ -20,17 +17,11 @@ import (
 // EC2 Metadata URLs
 const (
 	// the url to fetch EC2 metadata
-	ec2IDURL   = "http://169.254.169.254/latest/meta-data/instance-hostId"
+	ec2IDURL   = "http://169.254.169.254/latest/meta-data/instance-id"
 	ec2ZoneURL = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
 
 	// the interval to update the metadata periodically
 	observeInterval = time.Minute
-
-	// the maximum wait time for host metadata retrival
-	updateTimeout = time.Second * 10
-
-	// the maximum failures for expensive retrivals (EC2, Container ID, etc)
-	maxFailCnt = 20
 
 	// the environment variable for Heroku DYNO ID
 	envDyno = "DYNO"
@@ -40,29 +31,32 @@ const (
 const (
 	hostObserverStarted = "Host metadata observer started."
 	hostObserverStopped = "Host metadata observer stopped."
-)
-
-var (
-	// the global counter of failed retrievals of AWS metadata. If it keeps
-	// failing consecutively for a certain number maxFailCnt, the program
-	// may not be running in an EC2 instance.
-	// This variable should always be accessed through atomic operators.
-	awsMetaFailedCnt int32
-
-	// the same as above, but works for container ID
-	dockerMetaFailedCnt int32
+	prevUpdaterRunning  = "The previous updater is still running."
 )
 
 // observer checks the update of the host metadata periodically. It runs in a
 // standalone goroutine.
 func observer() {
 	log.Debug(hostObserverStarted)
+	defer log.Warning(hostObserverStopped)
 
-	tm := time.Duration(updateTimeout)
+	// Only one hostID updater is allowed at a time.
+	token := make(chan struct{}, 1)
+	token <- struct{}{}
+
 	// initialize the hostID as soon as possible
-	timedUpdateHostID(tm, hostId)
+	update(token, hostId)
 
 	roundup := time.Now().Truncate(observeInterval).Add(observeInterval)
+
+	// double check before sleeping, so it won't be sleeping uselessly if
+	// the agent is rejected by the collector immediately after start.
+	select {
+	case <-exit:
+		return
+	default:
+	}
+
 	// Sleep returns immediately if roundup is before time.Now()
 	time.Sleep(roundup.Sub(time.Now()))
 
@@ -71,7 +65,7 @@ func observer() {
 
 loop:
 	for {
-		timedUpdateHostID(tm, hostId)
+		update(token, hostId)
 
 		select {
 		case <-tk.C:
@@ -80,16 +74,6 @@ loop:
 			break loop
 		}
 	}
-
-	log.Warning(hostObserverStopped)
-}
-
-// funcName returns the function's name in string
-func funcName(fn interface{}) string {
-	if fn == nil {
-		return ""
-	}
-	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 }
 
 // getOrFallback runs the function provided, and returns the fallback value if
@@ -101,27 +85,20 @@ func getOrFallback(fn func() string, fb string) string {
 	return fb
 }
 
-// timedUpdateHostID tries to update the lockedID but gives up after a specified
-// duration
-func timedUpdateHostID(d time.Duration, lh *lockedID) {
-	// use buffered channel to avoid block the goroutine
-	// when we return early
-	done := make(chan struct{}, 1)
-	tm := time.NewTimer(d)
-
-	go func(c chan struct{}, l *lockedID) {
-		updateHostID(l)
-		c <- struct{}{}
-	}(done, lh)
-
+// update does the host metadata update work. The number of concurrent
+// updaters are constrained by the number of elements in the token channel.
+func update(token chan struct{}, lh *lockedID) {
 	select {
-	case <-done:
-	case <-tm.C:
+	case <-token:
+		go func(lh *lockedID) {
+			updateHostID(lh)
+			token <- struct{}{}
+		}(lh)
+	default:
+		log.Debug(prevUpdaterRunning)
 	}
 }
 
-// TODO: which of the following never change? EC2 ID/Zone? ContainerID?
-// TODO: herokuID?
 func updateHostID(lh *lockedID) {
 	old := lh.copyID()
 
@@ -130,7 +107,7 @@ func updateHostID(lh *lockedID) {
 	pid := PID()
 	ec2Id := getOrFallback(getEC2ID, old.ec2Id)
 	ec2Zone := getOrFallback(getEC2Zone, old.ec2Zone)
-	dockerId := getOrFallback(getContainerID, old.dockerId)
+	cid := getOrFallback(getContainerID, old.containerId)
 	herokuId := getOrFallback(getHerokuDynoId, old.herokuId)
 
 	mac := getMACAddressList()
@@ -143,7 +120,7 @@ func updateHostID(lh *lockedID) {
 		withPid(pid),
 		withEC2Id(ec2Id),
 		withEC2Zone(ec2Zone),
-		withDockerId(dockerId),
+		withContainerId(cid),
 		withMAC(mac),
 		withHerokuId(herokuId),
 	}
@@ -153,12 +130,13 @@ func updateHostID(lh *lockedID) {
 
 // getHostname is the implementation of getting the hostname
 func getHostname() string {
-	if host, err := os.Hostname(); err != nil {
-		log.Warningf("Failed to get hostname: %s", err)
-		return ""
-	} else {
-		return host
+	h, err := os.Hostname()
+	if err == nil {
+		hm.Lock()
+		hostname = h
+		hm.Unlock()
 	}
+	return h
 }
 
 func getPid() int {
@@ -167,22 +145,7 @@ func getPid() int {
 
 // getAWSMeta fetches the metadata from a specific AWS URL and cache it into
 // a provided variable.
-// This function increment the value of awsMetaFailedCnt by one for each
-// failure, and reset the counter after a successful retrieval. It will bypass
-// the work after the value of awsMetaFailedCnt reaches the limit of maxFailCnt.
 func getAWSMeta(url string) (meta string) {
-	if atomic.LoadInt32(&awsMetaFailedCnt) >= maxFailCnt {
-		return
-	}
-
-	defer func() {
-		if meta != "" {
-			atomic.StoreInt32(&awsMetaFailedCnt, 0)
-		} else {
-			atomic.AddInt32(&awsMetaFailedCnt, 1)
-		}
-	}()
-
 	// Fetch it from the specified URL if the cache is uninitialized or no
 	// cache at all.
 	client := http.Client{Timeout: time.Second}
@@ -204,37 +167,35 @@ func getAWSMeta(url string) (meta string) {
 
 // gets the AWS instance ID (or empty string if not an AWS instance)
 func getEC2ID() string {
-	return getAWSMeta(ec2IDURL)
+	ec2IdOnce.Do(func() {
+		ec2Id = getAWSMeta(ec2IDURL)
+		log.Debugf("Got and cached ec2Id: %s", ec2Id)
+	})
+	return ec2Id
 }
 
 // gets the AWS instance zone (or empty string if not an AWS instance)
 func getEC2Zone() string {
-	return getAWSMeta(ec2ZoneURL)
+	ec2ZoneOnce.Do(func() {
+		ec2Zone = getAWSMeta(ec2ZoneURL)
+		log.Debugf("Got and cached ec2Zone: %s", ec2Zone)
+	})
+	return ec2Zone
 }
 
 // getContainerID fetches the container ID by reading '/proc/self/cgroup'
-// It will stop retrying after a certain amount of consecutive failures,
-// which means it may not be running inside a container
 func getContainerID() (id string) {
-	if atomic.LoadInt32(&dockerMetaFailedCnt) >= maxFailCnt {
-		return
-	}
-
-	defer func() {
-		if id != "" {
-			atomic.StoreInt32(&dockerMetaFailedCnt, 0)
-		} else {
-			atomic.AddInt32(&dockerMetaFailedCnt, 1)
-		}
-	}()
-
-	id = getContainerIDFromString(func(keyword string) string {
-		return utils.GetLineByKeyword("/proc/self/cgroup", keyword)
+	containerIdOnce.Do(func() {
+		containerId = getContainerIDFromString(func(keyword string) string {
+			return utils.GetLineByKeyword("/proc/self/cgroup", keyword)
+		})
+		log.Debugf("Got and cached container id: %s", containerId)
 	})
-	return
+
+	return containerId
 }
 
-// getContainerIDFromString initializes the docker container ID (or empty
+// getContainerIDFromString initializes the container ID (or empty
 // string if not a docker/ecs container). It accepts a function parameter
 // as the source where it gets container metadata from, which makes it more
 // flexible and enables better testability.
