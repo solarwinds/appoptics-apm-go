@@ -1110,7 +1110,7 @@ func newHostID(id host.ID) *collector.HostID {
 	gid.Pid = int32(id.Pid())
 	gid.Ec2InstanceID = id.EC2Id()
 	gid.Ec2AvailabilityZone = id.EC2Zone()
-	gid.DockerContainerID = id.DockerId()
+	gid.DockerContainerID = id.ContainerId()
 	gid.MacAddresses = id.MAC()
 	gid.HerokuDynoID = id.HerokuID()
 
