@@ -4,12 +4,12 @@ package reporter
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -19,9 +19,11 @@ import (
 
 	"strings"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
@@ -33,30 +35,22 @@ const (
 
 // this runs before init()
 var _ = func() (_ struct{}) {
+	periodicTasksDisabled = true
+
 	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
 	os.Setenv("APPOPTICS_REPORTER", "none")
-	// Call agent.Init() after changing any environment variables for testing.
-	agent.Init()
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
+
+	config.Refresh()
 	return
 }()
 
-func init() {
-	periodicTasksDisabled = true
-}
-
-// dependency injection for os.Hostname and net.{ResolveUDPAddr/DialUDP}
-type failHostnamer struct{}
-
-func (h failHostnamer) Hostname() (string, error) {
-	return "", errors.New("couldn't resolve hostname")
-}
 func TestCacheHostname(t *testing.T) {
 	h, _ := os.Hostname()
-	assert.Equal(t, h, cachedHostname)
+	assert.Equal(t, h, host.Hostname())
 	assert.Equal(t, false, reportingDisabled)
 	t.Logf("Forcing hostname error: 'Unable to get hostname' log message expected")
-	cacheHostname(failHostnamer{})
-	assert.Equal(t, "", cachedHostname)
+	checkHostname(func() (string, error) { return "", errors.New("cannot get hostname") })
 	assert.Equal(t, true, reportingDisabled)
 }
 
@@ -218,7 +212,7 @@ func assertSSLMode(t *testing.T) {
 func TestGRPCReporter(t *testing.T) {
 	// start test gRPC server
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
-	agent.Init()
+	config.Refresh()
 	addr := "localhost:4567"
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
@@ -227,7 +221,7 @@ func TestGRPCReporter(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	agent.Init()
+	config.Refresh()
 	oldReporter := globalReporter
 	setGlobalReporter("ssl")
 
@@ -246,7 +240,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	assert.Error(t, r.reportStatus(nil, nil))
 	assert.Error(t, r.reportStatus(ctx, nil))
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Second)
 	assert.NoError(t, r.reportStatus(ctx, ev2))
 
 	assert.Equal(t, addr, r.eventConnection.address)
@@ -259,7 +253,7 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
 	assert.Equal(t, grpcSettingsTimeoutCheckIntervalDefault, r.settingsTimeoutCheckInterval)
 
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(time.Second)
 
 	// stop test reporter
 	server.Stop()
@@ -270,32 +264,22 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, server.events[0].Encoding, pb.EncodingType_BSON)
 	require.Len(t, server.events[0].Messages, 1)
 
-	require.Len(t, server.status, 3)
+	require.Len(t, server.status, 1)
 	assert.Equal(t, server.status[0].Encoding, pb.EncodingType_BSON)
 	require.Len(t, server.status[0].Messages, 1)
-	require.Len(t, server.status[1].Messages, 1)
-	require.Len(t, server.status[2].Messages, 1)
 
-	dec1, dec2, dec3, dec4 := bson.M{}, bson.M{}, bson.M{}, bson.M{}
+	dec1, dec2 := bson.M{}, bson.M{}
 	err = bson.Unmarshal(server.events[0].Messages[0], &dec1)
 	require.NoError(t, err)
 	err = bson.Unmarshal(server.status[0].Messages[0], &dec2)
 	require.NoError(t, err)
-	err = bson.Unmarshal(server.status[1].Messages[0], &dec3)
-	require.NoError(t, err)
-	err = bson.Unmarshal(server.status[2].Messages[0], &dec4)
-	require.NoError(t, err)
 
 	assert.Equal(t, dec1["Layer"], "layer1")
-	assert.Equal(t, dec4["Layer"], "layer2")
+	assert.Equal(t, dec1["Hostname"], host.Hostname())
+	assert.Equal(t, dec1["Label"], LabelInfo)
+	assert.Equal(t, dec1["PID"], host.PID())
 
-	// assert ConnectionInit messages
-	assert.Equal(t, dec2["ConnectionInit"], true)
-	assert.Equal(t, dec3["ConnectionInit"], true)
-	assert.Equal(t, dec2["Hostname"], cachedHostname)
-	assert.Equal(t, dec3["Hostname"], cachedHostname)
-	assert.Equal(t, dec2["Distro"], getDistro())
-	assert.Equal(t, dec3["Distro"], getDistro())
+	assert.Equal(t, dec2["Layer"], "layer2")
 }
 
 func TestInterruptedGRPCReporter(t *testing.T) {
@@ -306,8 +290,8 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 	}()
 
 	// start test gRPC server
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "info")
-	agent.Init()
+	config.Refresh()
+
 	addr := "localhost:4567"
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
@@ -316,7 +300,7 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	agent.Init()
+	config.Refresh()
 	oldReporter := globalReporter
 	setGlobalReporter("ssl")
 
@@ -383,7 +367,7 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 func TestRedirect(t *testing.T) {
 	// start test gRPC server
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
-	agent.Init()
+	config.Refresh()
 	addr := "localhost:4567"
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
@@ -392,7 +376,7 @@ func TestRedirect(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	agent.Init()
+	config.Refresh()
 	oldReporter := globalReporter
 	setGlobalReporter("ssl")
 
@@ -455,7 +439,6 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	// }()
 
 	// start test gRPC server
-	periodicTasksDisabled = false
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	addr := "localhost:4567"
 	server := StartTestGRPCServer(t, addr)
@@ -465,7 +448,7 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	agent.Init()
+	config.Refresh()
 	oldReporter := globalReporter
 	// numGo := runtime.NumGoroutine()
 	setGlobalReporter("ssl")
@@ -489,12 +472,11 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	// stop test reporter
 	server.Stop()
 	globalReporter = oldReporter
-	periodicTasksDisabled = true
 	// fmt.Println(buf)
 }
 
 func TestInvalidKey(t *testing.T) {
-	var buf SafeBuffer
+	var buf utils.SafeBuffer
 	var writers []io.Writer
 
 	writers = append(writers, &buf)
@@ -507,7 +489,6 @@ func TestInvalidKey(t *testing.T) {
 	}()
 
 	invalidKey := "invalidf6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
-	periodicTasksDisabled = false
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	oldKey := os.Getenv("APPOPTICS_SERVICE_KEY")
 	os.Setenv("APPOPTICS_SERVICE_KEY", invalidKey)
@@ -521,7 +502,7 @@ func TestInvalidKey(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
-	agent.Init()
+	config.Refresh()
 	oldReporter := globalReporter
 	// numGo := runtime.NumGoroutine()
 	setGlobalReporter("ssl")
@@ -533,23 +514,25 @@ func TestInvalidKey(t *testing.T) {
 	ctx := newTestContext(t)
 	ev1, _ := ctx.newEvent(LabelInfo, "hello-from-invalid-key")
 	assert.NoError(t, r.reportEvent(ctx, ev1))
+	fmt.Println("Sent a message at: ", time.Now())
 
 	time.Sleep(5 * time.Second)
-	// assert.Equal(t, numGo, runtime.NumGoroutine())
+
+	// The agent reporter should be closed due to received INVALID_API_KEY from the collector
 	assert.Equal(t, true, r.Closed())
+	fmt.Println("The agent is shutdown by the user.")
 	e := r.Shutdown()
 	assert.NotEqual(t, nil, e)
 
 	// Tear down everything.
 	server.Stop()
 	globalReporter = oldReporter
-	periodicTasksDisabled = true
 	os.Setenv("APPOPTICS_SERVICE_KEY", oldKey)
 
 	patterns := []string{
 		"Server responded: Invalid API key. Reporter is closing",
 		"Shutting down the gRPC reporter",
-		"periodicTasks goroutine exiting",
+		// "periodicTasks goroutine exiting",
 		"eventSender goroutine exiting",
 		"spanMessageAggregator goroutine exiting",
 		"statusSender goroutine exiting",
@@ -559,28 +542,4 @@ func TestInvalidKey(t *testing.T) {
 		assert.True(t, strings.Contains(buf.String(), ptn))
 	}
 
-}
-
-// SafeBuffer is goroutine-safe buffer. It is for internal test use only.
-type SafeBuffer struct {
-	buf bytes.Buffer
-	sync.Mutex
-}
-
-func (b *SafeBuffer) Read(p []byte) (int, error) {
-	b.Lock()
-	defer b.Unlock()
-	return b.buf.Read(p)
-}
-
-func (b *SafeBuffer) Write(p []byte) (int, error) {
-	b.Lock()
-	defer b.Unlock()
-	return b.buf.Write(p)
-}
-
-func (b *SafeBuffer) String() string {
-	b.Lock()
-	defer b.Unlock()
-	return b.buf.String()
 }

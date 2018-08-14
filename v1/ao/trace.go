@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"golang.org/x/net/context"
 )
@@ -285,7 +286,7 @@ func (t *aoTrace) finalizeTxnName(controller string, action string) {
 
 // prependDomainToTxnName prepends the domain to the transaction name if APPOPTICS_PREPEND_DOMAIN = true
 func (t *aoTrace) prependDomainToTxnName() {
-	if !reporter.NeedPrependDomain() ||
+	if !config.GetPrependDomain() ||
 		t.httpSpan.span.Transaction == reporter.UnknownTransactionName ||
 		t.httpSpan.span.Host == "" {
 		return
