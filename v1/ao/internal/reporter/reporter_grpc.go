@@ -288,8 +288,6 @@ func (r *grpcReporter) redirect(c *grpcConnection, address string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	log.Debugf("Redirecting to %s", address)
-
 	// Someone else has done it.
 	if c.address == address {
 		log.Debug("Someone else has done the redirection.")
@@ -300,6 +298,8 @@ func (r *grpcReporter) redirect(c *grpcConnection, address string) {
 	if err != nil {
 		log.Errorf("Failed redirect to: %v %v", address, err)
 	}
+
+	log.Warningf("Redirected to %s", address)
 
 	// close the old connection
 	c.connection.Close()
@@ -427,10 +427,10 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 
 	select {
 	case r.eventMessages <- (*e).bbuf.GetBuf():
-		atomic.AddInt64(&r.eventConnection.queueStats.totalEvents, int64(1)) // use goroutine so this won't block on the critical path
+		atomic.AddInt64(&r.eventConnection.queueStats.totalEvents, int64(1))
 		return nil
 	default:
-		atomic.AddInt64(&r.eventConnection.queueStats.numOverflowed, int64(1)) // use goroutine so this won't block on the critical path
+		atomic.AddInt64(&r.eventConnection.queueStats.numOverflowed, int64(1))
 		return errors.New("event message queue is full")
 	}
 }
