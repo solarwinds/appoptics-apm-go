@@ -282,9 +282,8 @@ func (r *grpcReporter) Closed() bool {
 }
 
 // redirect to a different collector
-// c			client connection to perform the redirect
 // address		redirect address
-func (r *grpcReporter) redirect(c *grpcConnection, address string) {
+func (c *grpcConnection) redirect(address string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -310,8 +309,8 @@ func (r *grpcReporter) redirect(c *grpcConnection, address string) {
 }
 
 // redirectTo redirects the gRPC connection to the new address.
-func (r *grpcReporter) redirectTo(c *grpcConnection, address string) {
-	r.redirect(c, address)
+func (c *grpcConnection) redirectTo(address string) {
+	c.redirect(address)
 }
 
 // long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
@@ -585,7 +584,7 @@ func (r *grpcReporter) eventRetrySender(
 					if redirects > grpcRedirectMax {
 						log.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
-						r.redirectTo(connection, response.GetArg())
+						connection.redirectTo(response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++
@@ -739,7 +738,7 @@ func (r *grpcReporter) sendMetrics(ready chan bool) {
 				if redirects > grpcRedirectMax {
 					log.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
-					r.redirectTo(r.metricConnection, response.GetArg())
+					r.metricConnection.redirectTo(response.GetArg())
 					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
@@ -833,7 +832,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 				if redirects > grpcRedirectMax {
 					log.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 				} else {
-					r.redirectTo(r.metricConnection, response.GetArg())
+					r.metricConnection.redirectTo(response.GetArg())
 					// a proper redirect shouldn't cause delays
 					delay = grpcRetryDelayInitial
 					redirects++
@@ -1020,7 +1019,7 @@ func (r *grpcReporter) statusSender() {
 					if redirects > grpcRedirectMax {
 						log.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
 					} else {
-						r.redirectTo(r.metricConnection, response.GetArg())
+						r.metricConnection.redirectTo(response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++

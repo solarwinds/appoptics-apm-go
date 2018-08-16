@@ -407,7 +407,7 @@ func TestRedirect(t *testing.T) {
 	server = StartTestGRPCServer(t, addr2)
 	time.Sleep(time.Second * 10)
 	// Call redirect directly
-	r.redirectTo(r.eventConnection, addr2)
+	r.eventConnection.redirectTo(addr2)
 
 	for i := 11; i <= 20; i++ {
 		ctx := newTestContext(t)
