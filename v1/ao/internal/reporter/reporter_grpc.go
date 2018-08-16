@@ -86,6 +86,8 @@ type grpcConnection struct {
 	pingTickerLock sync.Mutex                     // lock to ensure sequential access of pingTicker
 	lock           sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
 	queueStats     *eventQueueStats               // queue stats (reset on each metrics report cycle)
+	// for testing only: if true, skip verifying TLS cert hostname
+	insecureSkipVerify bool
 }
 
 type grpcReporter struct {
@@ -106,8 +108,6 @@ type grpcReporter struct {
 	// Don't send data into this channel, just close it by calling Shutdown().
 	done       chan struct{}
 	doneClosed sync.Once
-	// for testing only: if true, skip verifying TLS cert hostname
-	insecureSkipVerify bool
 }
 
 // gRPC reporter errors
@@ -162,20 +162,22 @@ func newGRPCReporter() reporter {
 	// construct the reporter object which handles two connections
 	reporter := &grpcReporter{
 		eventConnection: &grpcConnection{
-			client:      collector.NewTraceCollectorClient(eventConn),
-			connection:  eventConn,
-			address:     collectorAddress,
-			certificate: cert,
-			serviceKey:  serviceKey,
-			queueStats:  &eventQueueStats{},
+			client:             collector.NewTraceCollectorClient(eventConn),
+			connection:         eventConn,
+			address:            collectorAddress,
+			certificate:        cert,
+			serviceKey:         serviceKey,
+			queueStats:         &eventQueueStats{},
+			insecureSkipVerify: insecureSkipVerify,
 		},
 		metricConnection: &grpcConnection{
-			client:      collector.NewTraceCollectorClient(metricConn),
-			connection:  metricConn,
-			address:     collectorAddress,
-			certificate: cert,
-			serviceKey:  serviceKey,
-			queueStats:  &eventQueueStats{},
+			client:             collector.NewTraceCollectorClient(metricConn),
+			connection:         metricConn,
+			address:            collectorAddress,
+			certificate:        cert,
+			serviceKey:         serviceKey,
+			queueStats:         &eventQueueStats{},
+			insecureSkipVerify: insecureSkipVerify,
 		},
 
 		collectMetricInterval:        grpcMetricIntervalDefault,
@@ -188,8 +190,6 @@ func newGRPCReporter() reporter {
 		metricMessages: make(chan []byte, 1024),
 
 		done: make(chan struct{}),
-
-		insecureSkipVerify: insecureSkipVerify,
 	}
 
 	// start up long-running goroutine eventSender() which listens on the events message channel
@@ -294,7 +294,7 @@ func (r *grpcReporter) redirect(c *grpcConnection, address string) {
 		return
 	}
 	// create a new connection object for this client
-	conn, err := grpcCreateClientConnection(c.certificate, address, r.insecureSkipVerify)
+	conn, err := grpcCreateClientConnection(c.certificate, address, c.insecureSkipVerify)
 	if err != nil {
 		log.Errorf("Failed redirect to: %v %v", address, err)
 	}
