@@ -15,8 +15,6 @@ import (
 
 	"strconv"
 
-	"bytes"
-
 	"strings"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
@@ -283,8 +281,14 @@ func TestGRPCReporter(t *testing.T) {
 }
 
 func TestInterruptedGRPCReporter(t *testing.T) {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
+	var buf utils.SafeBuffer
+	var writers []io.Writer
+
+	writers = append(writers, &buf)
+	writers = append(writers, os.Stderr)
+
+	log.SetOutput(io.MultiWriter(writers...))
+
 	defer func() {
 		log.SetOutput(os.Stderr)
 	}()
@@ -432,12 +436,6 @@ func TestRedirect(t *testing.T) {
 }
 
 func TestShutdownGRPCReporter(t *testing.T) {
-	// var buf bytes.Buffer
-	// log.SetOutput(&buf)
-	// defer func() {
-	// 	log.SetOutput(os.Stderr)
-	// }()
-
 	// start test gRPC server
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	addr := "localhost:4567"
