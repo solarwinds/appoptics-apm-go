@@ -74,7 +74,7 @@ func TestConfiguredHostname(t *testing.T) {
 	os.Setenv("APPOPTICS_HOSTNAME_ALIAS", "testAlias")
 	config.Refresh()
 	assert.Equal(t, "testAlias", ConfiguredHostname())
-	assert.True(t, strings.Contains(buf.String(), "non-default env"))
+	assert.True(t, strings.Contains(buf.String(), "env found"))
 	if has {
 		os.Setenv("APPOPTICS_HOSTNAME_ALIAS", old)
 	}

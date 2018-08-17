@@ -20,7 +20,9 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -88,6 +90,10 @@ type grpcConnection struct {
 	queueStats     *eventQueueStats               // queue stats (reset on each metrics report cycle)
 	// for testing only: if true, skip verifying TLS cert hostname
 	insecureSkipVerify bool
+	// atomicStale indicates if the underlying connection is stale and should be
+	// reconnected or redirected to a new address. The value 0 represents false
+	// and a value other than 0 (usually 1) means true
+	atomicStale int32
 }
 
 type grpcReporter struct {
@@ -281,36 +287,64 @@ func (r *grpcReporter) Closed() bool {
 	}
 }
 
-// redirect to a different collector
-// address		redirect address
-func (c *grpcConnection) redirect(address string) {
+func (c *grpcConnection) setAddress(addr string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.address = addr
+	c.setStale(true)
+}
+
+// connect does the operation of connecting to a collector. It may be the same
+// address or a new one. Those who issue the connection request need to set
+// the stale flag to true, otherwise this function will do nothing.
+func (c *grpcConnection) connect() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	// Someone else has done it.
-	if c.address == address {
+	// Skip it if the connection is not stale - someone else may have done
+	// the connection.
+	if !c.isStale() {
 		log.Debug("Someone else has done the redirection.")
 		return
 	}
 	// create a new connection object for this client
-	conn, err := grpcCreateClientConnection(c.certificate, address, c.insecureSkipVerify)
+	conn, err := grpcCreateClientConnection(c.certificate, c.address, c.insecureSkipVerify)
 	if err != nil {
-		log.Errorf("Failed redirect to: %v %v", address, err)
+		log.Errorf("Failed redirect to: %v %v", c.address, err)
+		return
 	}
 
-	log.Warningf("Redirected to %s", address)
+	log.Warningf("Connected to %s", c.address)
 
 	// close the old connection
 	c.connection.Close()
 	// set new connection (need to be protected)
 	c.connection = conn
 	c.client = collector.NewTraceCollectorClient(c.connection)
-	c.address = address
+	c.setStale(false)
 }
 
 // redirectTo redirects the gRPC connection to the new address.
+// TODO: deprecated
 func (c *grpcConnection) redirectTo(address string) {
-	c.redirect(address)
+	c.setAddress(address)
+	c.connect()
+}
+
+func (c *grpcConnection) isStale() bool {
+	return atomic.LoadInt32(&c.atomicStale) != 0
+}
+
+func (c *grpcConnection) setStale(stale bool) {
+	var flag int32
+	if stale {
+		flag = 1
+	}
+	atomic.StoreInt32(&c.atomicStale, flag)
+}
+
+func (c *grpcConnection) reconnect() {
+	c.connect()
 }
 
 // long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
@@ -396,6 +430,7 @@ func (r *grpcReporter) periodicTasks() {
 //
 // returns	the new delay in milliseconds
 func (r *grpcReporter) setRetryDelay(oldDelay int, retryNum *int) (int, error) {
+	*retryNum++
 	if *retryNum > grpcMaxRetries {
 		return 0, ErrMaxRetriesExceeded
 	}
@@ -539,7 +574,20 @@ func (r *grpcReporter) eventRetrySender(
 			// protect the call to the client object or we could run into problems if
 			// another goroutine is messing with it at the same time, e.g. doing a reconnect()
 			connection.lock.RLock()
-			response, err := connection.client.PostEvents(context.TODO(), request)
+			var response *collector.MessageResult
+			var err = errors.New("connection is stale")
+			if !connection.isStale() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				response, err = connection.client.PostEvents(ctx, request)
+
+				code := status.Code(err)
+				if code == codes.DeadlineExceeded ||
+					code == codes.Canceled {
+					log.Warningf("Connection becomes stale: %v", err)
+					connection.setStale(true)
+				}
+				cancel()
+			}
 			connection.lock.RUnlock()
 
 			// we sent something, or at least tried to, so we're not idle - reset the keepalive timer
@@ -562,14 +610,11 @@ func (r *grpcReporter) eventRetrySender(
 				// server responded, check the result code and perform actions accordingly
 				switch result := response.GetResult(); result {
 				case collector.ResultCode_OK:
-					log.Debugf("Sent %d events", len(messages))
+					log.Infof("Sent %d events", len(messages))
 					resultOK = true
 					atomic.AddInt64(&connection.queueStats.numSent, int64(len(messages)))
-					select {
-					case token <- struct{}{}:
-					case <-r.done:
-						return
-					}
+					token <- struct{}{}
+
 				case collector.ResultCode_TRY_LATER:
 					log.Info("Server responded: Try later")
 					atomic.AddInt64(&connection.queueStats.numFailed, int64(len(messages)))
@@ -583,8 +628,9 @@ func (r *grpcReporter) eventRetrySender(
 					log.Warningf("Reporter is redirecting to %s", response.GetArg())
 					if redirects > grpcRedirectMax {
 						log.Errorf("Max redirects of %v exceeded", grpcRedirectMax)
+						// TODO: should it quit here?
 					} else {
-						connection.redirectTo(response.GetArg())
+						connection.setAddress(response.GetArg())
 						// a proper redirect shouldn't cause delays
 						delay = grpcRetryDelayInitial
 						redirects++
@@ -598,8 +644,15 @@ func (r *grpcReporter) eventRetrySender(
 				// wait a little before retrying
 				time.Sleep(time.Duration(delay) * time.Millisecond)
 				if delay, err = r.setRetryDelay(delay, &retriesNum); err != nil {
+					log.Warningf("Give up after %d retries.", retriesNum-1)
+					token <- struct{}{}
+
 					break
 				}
+			}
+
+			if connection.isStale() {
+				connection.reconnect()
 			}
 		}
 	}

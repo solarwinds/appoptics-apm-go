@@ -23,7 +23,7 @@ func MissingEnv(env string) string {
 
 // NonDefaultEnv returns a string indicating non-default environment variables
 func NonDefaultEnv(env string, val string) string {
-	return fmt.Sprintf("non-default env - %s: %s", env, val)
+	return fmt.Sprintf("env found - %s: %s", env, val)
 }
 
 const validServiceKeyPattern = `^[a-zA-Z0-9]{64}:\S{1,255}$`
