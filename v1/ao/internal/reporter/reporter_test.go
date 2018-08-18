@@ -21,8 +21,10 @@ import (
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/mocks"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -410,6 +412,10 @@ func TestRedirect(t *testing.T) {
 	server = StartTestGRPCServer(t, addr2)
 	time.Sleep(time.Second * 10)
 	// Call redirect directly
+	r.eventConnection.setStale(true)
+	assert.True(t, r.eventConnection.isStale())
+	r.eventConnection.setStale(false)
+
 	r.eventConnection.setAddress(addr2)
 	r.eventConnection.connect()
 
@@ -540,4 +546,74 @@ func TestInvalidKey(t *testing.T) {
 		assert.True(t, strings.Contains(buf.String(), ptn))
 	}
 
+}
+
+func TestRetryDelay(t *testing.T) {
+	c := &grpcConnection{}
+	retries := grpcMaxRetries + 1
+	newDelay, err := c.setRetryDelay(1, &retries)
+	assert.Equal(t, ErrMaxRetriesExceeded, err)
+	assert.Equal(t, 0, newDelay)
+
+	retries = 0
+	oldDelay := 500
+	newDelay, err = c.setRetryDelay(oldDelay, &retries)
+	expectedDelay := int(500 * grpcRetryDelayMultiplier)
+	assert.Equal(t, expectedDelay, newDelay)
+	assert.Equal(t, 1, retries)
+
+	retries = 0
+	oldDelay = 50000
+	newDelay, err = c.setRetryDelay(oldDelay, &retries)
+	expectedDelay = grpcRetryDelayMax * 1000
+	assert.Equal(t, expectedDelay, newDelay)
+	assert.Equal(t, 1, retries)
+}
+
+func TestInvokeRPC(t *testing.T) {
+	c := &grpcConnection{
+		name:               "events channel",
+		client:             nil,
+		connection:         nil,
+		address:            "test-addr",
+		certificate:        []byte(""),
+		queueStats:         &eventQueueStats{},
+		insecureSkipVerify: true,
+	}
+
+	mockMethod := &mocks.Method{}
+	mockMethod.On("Call", mock.Anything, mock.Anything).
+		Return(nil)
+	mockMethod.On("MessageLen").Return(int64(0))
+
+	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
+		Return(pb.ResultCode_OK)
+
+	exit := make(chan struct{})
+	close(exit)
+	assert.Equal(t, errReporterExiting, c.InvokeRPC(exit, mockMethod))
+
+	exit = make(chan struct{})
+	assert.Nil(t, c.InvokeRPC(exit, mockMethod))
+	mockMethod = &mocks.Method{}
+	mockMethod.On("Call", mock.Anything, mock.Anything).
+		Return(nil)
+	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
+		Return(pb.ResultCode_INVALID_API_KEY)
+	mockMethod.On("String").Return("test")
+
+	assert.Equal(t, errInvalidServiceKey, c.InvokeRPC(exit, mockMethod))
+
+	mockMethod = &mocks.Method{}
+	mockMethod.On("Call", mock.Anything, mock.Anything).
+		Return(nil)
+	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
+		Return(pb.ResultCode_LIMIT_EXCEEDED)
+	mockMethod.On("String").Return("test")
+
+	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
+		Return(false)
+	assert.Equal(t, errNoRetryOnErr, c.InvokeRPC(exit, mockMethod))
 }

@@ -911,7 +911,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			}
 		} else {
 			if failsNum >= grpcRetryLogThreshold {
-				log.Warning("[%s] error recovered.", m)
+				log.Warningf("[%s] error recovered.", m)
 			}
 			failsNum = 0
 
@@ -923,13 +923,13 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 				return nil
 
 			case collector.ResultCode_TRY_LATER:
-				log.Info("[%s] server responded: Try later", m)
+				log.Infof("[%s] server responded: Try later", m)
 				atomic.AddInt64(&c.queueStats.numFailed, m.MessageLen())
 			case collector.ResultCode_LIMIT_EXCEEDED:
-				log.Info("[%s] server responded: Limit exceeded", m)
+				log.Infof("[%s] server responded: Limit exceeded", m)
 				atomic.AddInt64(&c.queueStats.numFailed, m.MessageLen())
 			case collector.ResultCode_INVALID_API_KEY:
-				log.Error("[%s] server responded: Invalid API key.", m)
+				log.Errorf("[%s] server responded: Invalid API key.", m)
 				return errInvalidServiceKey
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
