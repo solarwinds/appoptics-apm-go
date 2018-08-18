@@ -244,8 +244,7 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, addr, r.eventConnection.address)
 	assert.Equal(t, addr, r.metricConnection.address)
 
-	assert.Equal(t, serviceKey, r.eventConnection.serviceKey)
-	assert.Equal(t, serviceKey, r.metricConnection.serviceKey)
+	assert.Equal(t, serviceKey, r.serviceKey)
 
 	assert.Equal(t, grpcMetricIntervalDefault, r.collectMetricInterval)
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
@@ -354,8 +353,8 @@ func TestInterruptedGRPCReporter(t *testing.T) {
 	server.Stop()
 
 	s := buf.String()
-	assert.True(t, strings.Contains(s, "Error calling PostEvents"))
-	assert.True(t, strings.Contains(s, "Error recovered in PostEvents"))
+	assert.True(t, strings.Contains(s, "invocation error"))
+	assert.True(t, strings.Contains(s, "error recovered"))
 
 	for i := 0; i < len(server.events); i++ {
 		for j := 0; j < len(server.events[i].Messages); j++ {
@@ -411,7 +410,8 @@ func TestRedirect(t *testing.T) {
 	server = StartTestGRPCServer(t, addr2)
 	time.Sleep(time.Second * 10)
 	// Call redirect directly
-	r.eventConnection.redirectTo(addr2)
+	r.eventConnection.setAddress(addr2)
+	r.eventConnection.connect()
 
 	for i := 11; i <= 20; i++ {
 		ctx := newTestContext(t)
@@ -528,7 +528,7 @@ func TestInvalidKey(t *testing.T) {
 	os.Setenv("APPOPTICS_SERVICE_KEY", oldKey)
 
 	patterns := []string{
-		"Server responded: Invalid API key. Reporter is closing",
+		"server responded: Invalid API key",
 		"Shutting down the gRPC reporter",
 		// "periodicTasks goroutine exiting",
 		"eventSender goroutine exiting",
