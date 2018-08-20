@@ -599,8 +599,8 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	*index += 1
 }
 
-func (s *eventQueueStats) setQueueLargest(count int) {
-	newVal := int64(count)
+func (s *eventQueueStats) setQueueLargest(count int64) {
+	newVal := count
 
 	for {
 		currVal := atomic.LoadInt64(&s.queueLargest)

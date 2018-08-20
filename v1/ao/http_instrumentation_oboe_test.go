@@ -48,7 +48,9 @@ func TestCustomTransactionNameWithDomain(t *testing.T) {
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 			// assert that response X-Trace header matches trace exit event
-			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string), "test2.com/final-my-custom-transaction-name"))
+			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string),
+				"test2.com/final-my-custom-transaction-name"),
+				n.Map["TransactionName"].(string))
 		}},
 	})
 	os.Unsetenv("APPOPTICS_PREPEND_DOMAIN")

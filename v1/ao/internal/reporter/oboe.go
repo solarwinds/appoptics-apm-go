@@ -162,7 +162,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		log.Debugf("Sampling disabled for %v until valid settings are retrieved.", layer)
+		// log.Debugf("Sampling disabled for %v until valid settings are retrieved.", layer)
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
 
@@ -201,7 +201,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
-	log.Debugf("Sampling with rate=%v, source=%v", sampleRate, sampleSource)
+	// log.Debugf("Sampling with rate=%v, source=%v", sampleRate, sampleSource)
 	return retval, sampleRate, sampleSource
 }
 
@@ -289,7 +289,7 @@ func getSetting(layer string) (*oboeSettings, bool) {
 
 func shouldSample(sampleRate int) bool {
 	retval := sampleRate == maxSamplingRate || rand.Intn(maxSamplingRate) <= sampleRate
-	log.Debugf("shouldSample(%v) => %v", sampleRate, retval)
+	// log.Debugf("shouldSample(%v) => %v", sampleRate, retval)
 	return retval
 }
 
