@@ -14,8 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"strconv"
-
 	"strings"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
@@ -285,78 +283,6 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, dec2["Layer"], "layer2")
 }
 
-func TestRedirect(t *testing.T) {
-	// start test gRPC server
-	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
-	config.Refresh()
-	addr := "localhost:4567"
-	server := StartTestGRPCServer(t, addr)
-	time.Sleep(100 * time.Millisecond)
-
-	// set gRPC reporter
-	reportingDisabled = false
-	os.Setenv("APPOPTICS_COLLECTOR", addr)
-	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	config.Refresh()
-	oldReporter := globalReporter
-	setGlobalReporter("ssl")
-
-	require.IsType(t, &grpcReporter{}, globalReporter)
-
-	r := globalReporter.(*grpcReporter)
-	var bsonArr []bson.M
-
-	for i := 1; i <= 10; i++ {
-		ctx := newTestContext(t)
-		ev1, _ := ctx.newEvent(LabelInfo, "layer-"+strconv.Itoa(i))
-		assert.NoError(t, r.reportEvent(ctx, ev1))
-		time.Sleep(time.Millisecond * 50)
-	}
-	time.Sleep(time.Second * 10)
-	// stop test reporter
-	server.Stop()
-
-	for i := 0; i < len(server.events); i++ {
-		for j := 0; j < len(server.events[i].Messages); j++ {
-			bs := bson.M{}
-			bson.Unmarshal(server.events[i].Messages[j], &bs)
-			bsonArr = append(bsonArr, bs)
-		}
-	}
-
-	addr2 := "localhost:4568"
-	server = StartTestGRPCServer(t, addr2)
-	time.Sleep(time.Second * 10)
-	// Call redirect directly
-	r.eventConnection.setActive(false)
-	assert.False(t, r.eventConnection.isActive())
-	r.eventConnection.setActive(true)
-
-	r.eventConnection.setAddress(addr2)
-	r.eventConnection.connect()
-
-	for i := 11; i <= 20; i++ {
-		ctx := newTestContext(t)
-		ev1, _ := ctx.newEvent(LabelInfo, "layer-"+strconv.Itoa(i))
-		assert.NoError(t, r.reportEvent(ctx, ev1))
-		time.Sleep(time.Millisecond * 50)
-	}
-	time.Sleep(time.Second * 10)
-
-	globalReporter = oldReporter
-	server.Stop()
-
-	for i := 0; i < len(server.events); i++ {
-		for j := 0; j < len(server.events[i].Messages); j++ {
-			bs := bson.M{}
-			bson.Unmarshal(server.events[i].Messages[j], &bs)
-			bsonArr = append(bsonArr, bs)
-		}
-	}
-	assert.Equal(t, 20, len(bsonArr))
-
-}
-
 func TestShutdownGRPCReporter(t *testing.T) {
 	// start test gRPC server
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
@@ -576,4 +502,29 @@ func TestInvokeRPC(t *testing.T) {
 	assert.Equal(t, nil, c.InvokeRPC(exit, mockMethod))
 	assert.True(t, strings.Contains(buf.String(), "invocation error"))
 	assert.True(t, strings.Contains(buf.String(), "error recovered"))
+
+	// Test redirect
+	redirectNum := 1
+	mockMethod = &mocks.Method{}
+	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
+		Return(true)
+	mockMethod.On("Arg", mock.Anything, mock.Anything).
+		Return("new-addr:9999")
+	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
+		Return(func() pb.ResultCode {
+			redirectNum--
+			if redirectNum < 0 {
+				return pb.ResultCode_OK
+			} else {
+				return pb.ResultCode_REDIRECT
+			}
+		})
+	mockMethod.On("String").Return("events channel")
+
+	mockMethod.On("Call", mock.Anything, mock.Anything).
+		Return(nil)
+	assert.Equal(t, nil, c.InvokeRPC(exit, mockMethod))
+	assert.True(t, c.isActive())
+	assert.Equal(t, "new-addr:9999", c.address)
 }
