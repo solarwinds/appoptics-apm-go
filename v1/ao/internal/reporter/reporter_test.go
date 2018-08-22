@@ -352,9 +352,8 @@ func TestInvalidKey(t *testing.T) {
 	oldReporter := globalReporter
 	// numGo := runtime.NumGoroutine()
 	setGlobalReporter("ssl")
-
 	require.IsType(t, &grpcReporter{}, globalReporter)
-	time.Sleep(time.Second * 5)
+	time.Sleep(100 * time.Millisecond)
 
 	r := globalReporter.(*grpcReporter)
 	ctx := newTestContext(t)
@@ -362,11 +361,11 @@ func TestInvalidKey(t *testing.T) {
 	assert.NoError(t, r.reportEvent(ctx, ev1))
 	fmt.Println("Sent a message at: ", time.Now())
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(time.Second)
 
 	// The agent reporter should be closed due to received INVALID_API_KEY from the collector
 	assert.Equal(t, true, r.Closed())
-	fmt.Println("The agent is shutdown by the user.")
+
 	e := r.Shutdown()
 	assert.NotEqual(t, nil, e)
 
