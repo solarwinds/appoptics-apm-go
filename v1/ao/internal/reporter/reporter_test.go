@@ -3,6 +3,7 @@
 package reporter
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +27,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -281,94 +285,6 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, dec2["Layer"], "layer2")
 }
 
-func TestInterruptedGRPCReporter(t *testing.T) {
-	var buf utils.SafeBuffer
-	var writers []io.Writer
-
-	writers = append(writers, &buf)
-	writers = append(writers, os.Stderr)
-
-	log.SetOutput(io.MultiWriter(writers...))
-
-	defer func() {
-		log.SetOutput(os.Stderr)
-	}()
-
-	// start test gRPC server
-	config.Refresh()
-
-	addr := "localhost:4567"
-	server := StartTestGRPCServer(t, addr)
-	time.Sleep(100 * time.Millisecond)
-
-	// set gRPC reporter
-	reportingDisabled = false
-	os.Setenv("APPOPTICS_COLLECTOR", addr)
-	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	config.Refresh()
-	oldReporter := globalReporter
-	setGlobalReporter("ssl")
-
-	require.IsType(t, &grpcReporter{}, globalReporter)
-
-	r := globalReporter.(*grpcReporter)
-	var bsonArr []bson.M
-
-	for i := 1; i <= 10; i++ {
-		ctx := newTestContext(t)
-		ev1, _ := ctx.newEvent(LabelInfo, "layer-"+strconv.Itoa(i))
-		assert.NoError(t, r.reportEvent(ctx, ev1))
-		time.Sleep(time.Millisecond * 50)
-	}
-	time.Sleep(time.Second * 10)
-	// stop test reporter
-	server.Stop()
-
-	for i := 0; i < len(server.events); i++ {
-		for j := 0; j < len(server.events[i].Messages); j++ {
-			bs := bson.M{}
-			bson.Unmarshal(server.events[i].Messages[j], &bs)
-			bsonArr = append(bsonArr, bs)
-		}
-	}
-
-	for i := 11; i <= 20; i++ {
-		ctx := newTestContext(t)
-		ev1, _ := ctx.newEvent(LabelInfo, "layer-"+strconv.Itoa(i))
-		assert.NoError(t, r.reportEvent(ctx, ev1))
-		time.Sleep(time.Millisecond * 50)
-	}
-	time.Sleep(time.Second * 60)
-
-	server = StartTestGRPCServer(t, addr)
-	time.Sleep(time.Second * 10)
-
-	for i := 21; i <= 30; i++ {
-		ctx := newTestContext(t)
-		ev1, _ := ctx.newEvent(LabelInfo, "layer-"+strconv.Itoa(i))
-		assert.NoError(t, r.reportEvent(ctx, ev1))
-		time.Sleep(time.Millisecond * 50)
-	}
-
-	time.Sleep(time.Second * 30)
-	globalReporter = oldReporter
-	server.Stop()
-
-	s := buf.String()
-	assert.True(t, strings.Contains(s, "invocation error"))
-	assert.True(t, strings.Contains(s, "error recovered"))
-
-	for i := 0; i < len(server.events); i++ {
-		for j := 0; j < len(server.events[i].Messages); j++ {
-			bs := bson.M{}
-			bson.Unmarshal(server.events[i].Messages[j], &bs)
-			bsonArr = append(bsonArr, bs)
-		}
-	}
-	assert.Equal(t, 30, len(bsonArr))
-
-}
-
 func TestRedirect(t *testing.T) {
 	// start test gRPC server
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
@@ -412,9 +328,9 @@ func TestRedirect(t *testing.T) {
 	server = StartTestGRPCServer(t, addr2)
 	time.Sleep(time.Second * 10)
 	// Call redirect directly
-	r.eventConnection.setStale(true)
-	assert.True(t, r.eventConnection.isStale())
-	r.eventConnection.setStale(false)
+	r.eventConnection.setActive(false)
+	assert.False(t, r.eventConnection.isActive())
+	r.eventConnection.setActive(true)
 
 	r.eventConnection.setAddress(addr2)
 	r.eventConnection.connect()
@@ -548,39 +464,57 @@ func TestInvalidKey(t *testing.T) {
 
 }
 
-func TestRetryDelay(t *testing.T) {
-	c := &grpcConnection{}
-	retries := grpcMaxRetries + 1
-	newDelay, err := c.setRetryDelay(1, &retries)
-	assert.Equal(t, ErrMaxRetriesExceeded, err)
-	assert.Equal(t, 0, newDelay)
+func TestDefaultBackoff(t *testing.T) {
+	var backoff []int64
+	expected := []int64{
+		500, 750, 1125, 1687, 2531, 3796, 5695, 8542, 12814, 19221, 28832,
+		43248, 60000, 60000, 60000, 60000, 60000, 60000, 60000, 60000}
+	bf := func(d time.Duration) { backoff = append(backoff, d.Nanoseconds()/1e6) }
+	for i := 1; i <= grpcMaxRetries+1; i++ {
+		DefaultBackoff(i, bf)
+	}
+	assert.Equal(t, expected, backoff)
+	assert.NotNil(t, DefaultBackoff(grpcMaxRetries+1, func(d time.Duration) {}))
+}
 
-	retries = 0
-	oldDelay := 500
-	newDelay, err = c.setRetryDelay(oldDelay, &retries)
-	expectedDelay := int(500 * grpcRetryDelayMultiplier)
-	assert.Equal(t, expectedDelay, newDelay)
-	assert.Equal(t, 1, retries)
+type NoopDialer struct{}
 
-	retries = 0
-	oldDelay = 50000
-	newDelay, err = c.setRetryDelay(oldDelay, &retries)
-	expectedDelay = grpcRetryDelayMax * 1000
-	assert.Equal(t, expectedDelay, newDelay)
-	assert.Equal(t, 1, retries)
+func (d *NoopDialer) Dial(c grpcConnection) (*grpc.ClientConn, error) {
+	return nil, nil
 }
 
 func TestInvokeRPC(t *testing.T) {
+	var buf utils.SafeBuffer
+	var writers []io.Writer
+
+	writers = append(writers, &buf)
+	writers = append(writers, os.Stderr)
+
+	log.SetOutput(io.MultiWriter(writers...))
+
+	defer func() {
+		log.SetOutput(os.Stderr)
+	}()
+
 	c := &grpcConnection{
 		name:               "events channel",
 		client:             nil,
 		connection:         nil,
 		address:            "test-addr",
-		certificate:        []byte(""),
+		certificate:        []byte(grpcCertDefault),
 		queueStats:         &eventQueueStats{},
 		insecureSkipVerify: true,
+		backoff: func(retries int, wait func(d time.Duration)) error {
+			if retries > grpcMaxRetries {
+				return ErrMaxRetriesExceeded
+			}
+			return nil
+		},
+		Dialer: &NoopDialer{},
 	}
+	c.connect()
 
+	// Test reporter exiting
 	mockMethod := &mocks.Method{}
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
@@ -593,18 +527,20 @@ func TestInvokeRPC(t *testing.T) {
 	close(exit)
 	assert.Equal(t, errReporterExiting, c.InvokeRPC(exit, mockMethod))
 
+	// Test invalid service key
 	exit = make(chan struct{})
-	assert.Nil(t, c.InvokeRPC(exit, mockMethod))
 	mockMethod = &mocks.Method{}
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_INVALID_API_KEY)
+
 	mockMethod.On("String").Return("test")
 
 	assert.Equal(t, errInvalidServiceKey, c.InvokeRPC(exit, mockMethod))
 
+	// Test no retry
 	mockMethod = &mocks.Method{}
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
@@ -616,4 +552,28 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(false)
 	assert.Equal(t, errNoRetryOnErr, c.InvokeRPC(exit, mockMethod))
+
+	// Test invocation error / recovery logs
+	failsNum := grpcRetryLogThreshold + (grpcMaxRetries-grpcRetryLogThreshold)/2
+
+	mockMethod = &mocks.Method{}
+	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
+		Return(true)
+	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
+		Return(pb.ResultCode_OK)
+	mockMethod.On("String").Return("events channel")
+
+	mockMethod.On("Call", mock.Anything, mock.Anything).
+		Return(func(ctx context.Context, c pb.TraceCollectorClient) error {
+			failsNum--
+			if failsNum <= 0 {
+				return nil
+			} else {
+				return status.Error(codes.Canceled, "Canceled")
+			}
+		})
+	assert.Equal(t, nil, c.InvokeRPC(exit, mockMethod))
+	assert.True(t, strings.Contains(buf.String(), "invocation error"))
+	assert.True(t, strings.Contains(buf.String(), "error recovered"))
 }
