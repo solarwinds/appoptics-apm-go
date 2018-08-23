@@ -135,7 +135,9 @@ func TestHTTPHandler200(t *testing.T) {
 			assert.EqualValues(t, 200, n.Map["Status"])
 			assert.Equal(t, "ao_test", n.Map["Controller"])
 			assert.Equal(t, "handler200", n.Map["Action"])
-			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string), "final-my-custom-transaction-name"))
+			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string),
+				"final-my-custom-transaction-name"),
+				n.Map["TransactionName"].(string))
 			assert.True(t, reporter.ValidMetadata(response.Body.String()))
 		}},
 	})
