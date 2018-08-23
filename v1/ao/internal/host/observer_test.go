@@ -21,6 +21,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var _ = func() bool {
+	fetch = func(url string) string {
+		if url == ec2IDURL {
+			return "i-027a3e4e2e8f04e89"
+		} else if url == ec2ZoneURL {
+			return "us-east-1d"
+		} else {
+			return ""
+		}
+	}
+	return true
+}()
+
 func TestInitContainerID(t *testing.T) {
 	id := "unintialized"
 
@@ -134,7 +147,7 @@ func TestUpdate(t *testing.T) {
 
 	assert.False(t, lh.ready())
 	update(tk, lh)
-	time.Sleep(3 * time.Second)
+	<-tk
 	assert.True(t, lh.ready())
 
 	for i := 0; i < 10; i++ {

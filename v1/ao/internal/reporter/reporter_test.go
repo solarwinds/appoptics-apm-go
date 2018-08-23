@@ -242,7 +242,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	assert.Error(t, r.reportStatus(nil, nil))
 	assert.Error(t, r.reportStatus(ctx, nil))
-	time.Sleep(time.Second)
+	// time.Sleep(time.Second)
 	assert.NoError(t, r.reportStatus(ctx, ev2))
 
 	assert.Equal(t, addr, r.eventConnection.address)
