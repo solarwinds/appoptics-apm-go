@@ -60,6 +60,7 @@ func UnaryServerInterceptor(serverName string) grpc.UnaryServerInterceptor {
 		var err error
 		var resp interface{}
 		var statusCode = 200
+		var t ao.Trace
 		ctx, t = tracingContext(ctx, serverName, info.FullMethod, &statusCode)
 		defer func() {
 			t.SetStatus(statusCode)
