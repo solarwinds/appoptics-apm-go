@@ -242,7 +242,7 @@ func newGRPCReporter() reporter {
 	metricConn, err2 := newGrpcConnection("metrics channel", addr, opts...)
 	if err2 != nil {
 		eventConn.Close()
-		log.Errorf("Failed to initialize gRPC reporter %v: %v; %v", addr, err1, err2)
+		log.Errorf("Failed to initialize gRPC reporter %v: %v", addr, err2)
 		return &nullReporter{}
 	}
 
@@ -1032,12 +1032,18 @@ func buildBestEffortIdentity() *collector.HostID {
 	return hid
 }
 
+// Dialer has a method Dial which accepts a grpcConnection object as the
+// argument and returns a ClientConn object.
 type Dialer interface {
 	Dial(grpcConnection) (*grpc.ClientConn, error)
 }
 
+// DefaultDialer implements the Dialer interface to provide the default dialing
+// method.
 type DefaultDialer struct{}
 
+// Dial issues the connection to the remote address with attributes provided by
+// the grpcConnection.
 func (d *DefaultDialer) Dial(c grpcConnection) (*grpc.ClientConn, error) {
 	certPool := x509.NewCertPool()
 
