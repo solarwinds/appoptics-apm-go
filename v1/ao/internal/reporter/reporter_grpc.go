@@ -709,7 +709,7 @@ func (r *grpcReporter) checkSettingsTimeout(ready chan bool) {
 	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { ready <- true }()
 
-	// TODO check TTL
+	OboeCheckSettingsTimeout()
 }
 
 // ========================= Status Message Handling =============================

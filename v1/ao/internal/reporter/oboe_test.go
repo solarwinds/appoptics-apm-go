@@ -431,3 +431,29 @@ func TestOboeTracingMode(t *testing.T) {
 
 	r.Close(0)
 }
+
+func TestCheckSettingsTimeout(t *testing.T) {
+	sc := &oboeSettingsCfg{
+		settings: make(map[oboeSettingKey]*oboeSettings),
+	}
+	k1 := oboeSettingKey{
+		sType: TYPE_DEFAULT,
+		layer: "expired",
+	}
+	sc.settings[k1] = &oboeSettings{
+		timestamp: time.Now().Add(-time.Second * 2),
+		ttl:       1,
+	}
+
+	k2 := oboeSettingKey{
+		sType: TYPE_DEFAULT,
+		layer: "alive",
+	}
+	sc.settings[k2] = &oboeSettings{
+		timestamp: time.Now(),
+		ttl:       2,
+	}
+	sc.checkSettingsTimeout()
+	assert.Contains(t, sc.settings, k2, k2.layer)
+	assert.NotContains(t, sc.settings, k1, k1.layer)
+}
