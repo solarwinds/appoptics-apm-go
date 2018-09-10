@@ -313,3 +313,9 @@ func (t *nullTrace) recordMetrics()               {}
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }
+
+// IsReady checks if the agent is ready. It will wait for a specified time before
+// returning the final state if the timeout is set to non-zero value.
+func IsReady(timeout time.Duration) bool {
+	return reporter.IsReady(timeout)
+}

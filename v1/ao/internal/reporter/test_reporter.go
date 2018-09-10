@@ -159,6 +159,12 @@ func (r *TestReporter) Closed() bool {
 	return false
 }
 
+// IsReady checks the state of the reporter and may wait for up to the specified
+// duration until it becomes ready.
+func (r *TestReporter) IsReady(timeout time.Duration) bool {
+	return true
+}
+
 func (r *TestReporter) report(ctx *oboeContext, e *event) error {
 	if err := prepareEvent(ctx, e); err != nil {
 		// don't continue if preparation failed

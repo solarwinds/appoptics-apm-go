@@ -185,6 +185,12 @@ type grpcReporter struct {
 	spanMessages   chan SpanMessage // channel for span messages (sent from agent)
 	statusMessages chan []byte      // channel for status messages (sent from agent)
 	metricMessages chan []byte      // channel for metrics messages (internal to reporter)
+
+	// The reporter is ready to use only after this channel is closed
+	ready chan struct{}
+	// The channel should only be closed once
+	readyOnce sync.Once
+
 	// The reporter doesn't have a explicit field to record its state. This channel is used to notify all the
 	// long-running goroutines to stop themselves. All the goroutines will check this channel and close if the
 	// channel is closed.
@@ -321,6 +327,29 @@ func (r *grpcReporter) Closed() bool {
 	case <-r.done:
 		return true
 	default:
+		return false
+	}
+}
+
+func (r *grpcReporter) setReady() {
+	r.readyOnce.Do(func() {
+		close(r.ready)
+	})
+}
+
+// IsReady checks the state of the reporter and may wait for up to the specified
+// duration until it becomes ready.
+func (r *grpcReporter) IsReady(timeout time.Duration) bool {
+	select {
+	case <-r.ready:
+		return true
+	default:
+	}
+
+	select {
+	case <-r.ready:
+		return true
+	case <-time.After(timeout):
 		return false
 	}
 }
@@ -735,6 +764,9 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 		}
 		mTransMap.SetCap(capacity)
 	}
+	// Normally the response brings back the settings for the default layer so
+	// let's make it ready anyways.
+	r.setReady()
 }
 
 // delete settings that have timed out according to their TTL
