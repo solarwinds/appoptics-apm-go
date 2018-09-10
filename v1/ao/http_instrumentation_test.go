@@ -50,13 +50,17 @@ func checkAOContextAndSetCustomTxnName(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Concurrently set custom transaction names
+	var sw sync.WaitGroup
+	sw.Add(10)
 	for i := 0; i < 10; i++ {
 		go func(i int) {
 			time.Sleep(time.Duration(rand.Intn(5)) * time.Millisecond)
 			ao.SetTransactionName(r.Context(), "my-custom-transaction-name-"+strconv.Itoa(i))
+			sw.Done()
 		}(i)
 	}
-	time.Sleep(10 * time.Millisecond)
+	sw.Wait()
+
 	ao.SetTransactionName(r.Context(), "final-"+ao.GetTransactionName(r.Context()))
 	xtrace = t.MetadataString()
 }
