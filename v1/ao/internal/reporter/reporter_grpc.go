@@ -268,7 +268,8 @@ func newGRPCReporter() reporter {
 		statusMessages: make(chan []byte, 1024),
 		metricMessages: make(chan []byte, 1024),
 
-		done: make(chan struct{}),
+		ready: make(chan struct{}),
+		done:  make(chan struct{}),
 	}
 
 	r.start()

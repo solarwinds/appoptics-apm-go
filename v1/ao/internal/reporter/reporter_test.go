@@ -230,6 +230,10 @@ func TestGRPCReporter(t *testing.T) {
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
 	r := globalReporter.(*grpcReporter)
+
+	r.setReady()
+	assert.True(t, r.IsReady(time.Millisecond))
+
 	ctx := newTestContext(t)
 	ev1, err := ctx.newEvent(LabelInfo, "layer1")
 	assert.NoError(t, err)
