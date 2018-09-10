@@ -231,8 +231,19 @@ func TestGRPCReporter(t *testing.T) {
 
 	r := globalReporter.(*grpcReporter)
 
-	r.setReady()
+	// Test IsReady
+	ready := make(chan bool, 1)
+	r.getSettings(ready)
 	assert.True(t, r.IsReady(time.Millisecond))
+	assert.True(t, hasDefaultSetting())
+	assert.True(t, func(r *grpcReporter) bool {
+		select {
+		case <-r.ready:
+			return true
+		default:
+			return false
+		}
+	}(r))
 
 	ctx := newTestContext(t)
 	ev1, err := ctx.newEvent(LabelInfo, "layer1")

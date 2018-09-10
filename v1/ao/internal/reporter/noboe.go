@@ -23,3 +23,5 @@ func resetSettings() {}
 func flushRateCounts() *rateCounts { return &rateCounts{} }
 
 func sendInitMessage() {}
+
+func hasDefaultSetting() bool { return true }

@@ -340,16 +340,20 @@ func (r *grpcReporter) setReady() {
 
 // IsReady checks the state of the reporter and may wait for up to the specified
 // duration until it becomes ready.
+//
+// The reporter is still considered `not ready` if (in rare cases) the default
+// setting is retrieved from the collector but expires after the TTL, and no new
+// setting is fetched.
 func (r *grpcReporter) IsReady(timeout time.Duration) bool {
 	select {
 	case <-r.ready:
-		return true
+		return hasDefaultSetting()
 	default:
 	}
 
 	select {
 	case <-r.ready:
-		return true
+		return hasDefaultSetting()
 	case <-time.After(timeout):
 		return false
 	}
@@ -765,9 +769,10 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 		}
 		mTransMap.SetCap(capacity)
 	}
-	// Normally the response brings back the settings for the default layer so
-	// let's make it ready anyways.
-	r.setReady()
+
+	if hasDefaultSetting() {
+		r.setReady()
+	}
 }
 
 // delete settings that have timed out according to their TTL

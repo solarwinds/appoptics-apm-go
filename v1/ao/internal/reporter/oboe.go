@@ -305,6 +305,13 @@ func getSetting(layer string) (*oboeSettings, bool) {
 	return nil, false
 }
 
+func hasDefaultSetting() bool {
+	if _, ok := getSetting(""); ok {
+		return true
+	}
+	return false
+}
+
 func shouldSample(sampleRate int) bool {
 	retval := sampleRate == maxSamplingRate || rand.Intn(maxSamplingRate) <= sampleRate
 	// log.Debugf("shouldSample(%v) => %v", sampleRate, retval)
