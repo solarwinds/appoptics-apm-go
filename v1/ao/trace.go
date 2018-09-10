@@ -6,12 +6,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"golang.org/x/net/context"
 )
 
-// Trace represents a distributed trace for this request that reports
-// events to AppOptics.
+// Trace represents the root span of a distributed trace for this request that reports
+// events to AppOptics. The Trace interface extends the Span interface with additional
+// methods that can be used to help categorize a service's inbound requests on the
+// AppOptics service dashboard.
 type Trace interface {
 	// Inherited from the Span interface
 	//  BeginSpan(spanName string, args ...interface{}) Span
@@ -283,7 +286,7 @@ func (t *aoTrace) finalizeTxnName(controller string, action string) {
 
 // prependDomainToTxnName prepends the domain to the transaction name if APPOPTICS_PREPEND_DOMAIN = true
 func (t *aoTrace) prependDomainToTxnName() {
-	if !reporter.NeedPrependDomain() ||
+	if !config.GetPrependDomain() ||
 		t.httpSpan.span.Transaction == reporter.UnknownTransactionName ||
 		t.httpSpan.span.Host == "" {
 		return

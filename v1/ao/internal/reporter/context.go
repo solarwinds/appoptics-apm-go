@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 const (
@@ -300,7 +300,7 @@ func newContext(sampled bool) Context {
 	ctx := &oboeContext{txCtx: &transactionContext{}}
 	ctx.metadata.Init()
 	if err := ctx.metadata.SetRandom(); err != nil {
-		agent.Infof("AppOptics rand.Read error: %v", err)
+		log.Infof("AppOptics rand.Read error: %v", err)
 		return &nullContext{}
 	}
 	ctx.SetSampled(sampled)
@@ -323,14 +323,14 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 	if mdStr != "" {
 		var err error
 		if ctx, err = newContextFromMetadataString(mdStr); err != nil {
-			agent.Info("passed in x-trace seems invalid, ignoring")
+			log.Info("passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
-			agent.Info("passed in x-trace has wrong version, ignoring")
+			log.Info("passed in x-trace has wrong version, ignoring")
 		} else if ctx.IsSampled() {
 			traced = true
 			addCtxEdge = true
 		} else {
-			agent.Info("passed in x-trace indicates that request is not being sampled")
+			log.Info("passed in x-trace indicates that request is not being sampled")
 			return ctx, true
 		}
 	}

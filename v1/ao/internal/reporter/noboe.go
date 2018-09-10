@@ -4,6 +4,8 @@
 
 package reporter
 
+func OboeCheckSettingsTimeout() {}
+
 func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {

@@ -5,7 +5,8 @@ package reporter
 import (
 	"net"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 const (
@@ -23,7 +24,7 @@ func udpNewReporter() reporter {
 	}
 
 	// collector address override
-	udpAddress := agent.GetConfig(agent.AppOpticsCollectorUDP)
+	udpAddress := config.GetCollectorUDP()
 	if udpAddress == "" {
 		udpAddress = udpAddrDefault
 	}
@@ -33,7 +34,7 @@ func udpNewReporter() reporter {
 		conn, err = net.DialUDP("udp4", nil, serverAddr)
 	}
 	if err != nil {
-		agent.Errorf("AppOptics failed to initialize UDP reporter: %v", err)
+		log.Errorf("AppOptics failed to initialize UDP reporter: %v", err)
 		return &nullReporter{}
 	}
 

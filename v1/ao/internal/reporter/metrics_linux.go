@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 )
 
 // gets and appends UnameSysName/UnameVersion to a BSON buffer
@@ -18,16 +18,16 @@ import (
 func appendUname(bbuf *bsonBuffer) {
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err == nil {
-		sysname := Byte2String(uname.Sysname[:])
-		version := Byte2String(uname.Version[:])
+		sysname := utils.Byte2String(uname.Sysname[:])
+		release := utils.Byte2String(uname.Release[:])
 		bsonAppendString(bbuf, "UnameSysName", strings.TrimRight(sysname, "\x00"))
-		bsonAppendString(bbuf, "UnameVersion", strings.TrimRight(version, "\x00"))
+		bsonAppendString(bbuf, "UnameVersion", strings.TrimRight(release, "\x00"))
 	}
 }
 
 func addHostMetrics(bbuf *bsonBuffer, index *int) {
 	// system load of last minute
-	if s := getStrByKeyword("/proc/loadavg", ""); s != "" {
+	if s := utils.GetStrByKeyword("/proc/loadavg", ""); s != "" {
 		load, err := strconv.ParseFloat(strings.Fields(s)[0], 64)
 		if err == nil {
 			addMetricsValue(bbuf, index, "Load1", load)
@@ -35,7 +35,7 @@ func addHostMetrics(bbuf *bsonBuffer, index *int) {
 	}
 
 	// system total memory
-	if s := getStrByKeyword("/proc/meminfo", "MemTotal"); s != "" {
+	if s := utils.GetStrByKeyword("/proc/meminfo", "MemTotal"); s != "" {
 		memTotal := strings.Fields(s) // MemTotal: 7657668 kB
 		if len(memTotal) == 3 {
 			if total, err := strconv.Atoi(memTotal[1]); err == nil {
@@ -45,7 +45,7 @@ func addHostMetrics(bbuf *bsonBuffer, index *int) {
 	}
 
 	// free memory
-	if s := getStrByKeyword("/proc/meminfo", "MemFree"); s != "" {
+	if s := utils.GetStrByKeyword("/proc/meminfo", "MemFree"); s != "" {
 		memFree := strings.Fields(s) // MemFree: 161396 kB
 		if len(memFree) == 3 {
 			if free, err := strconv.Atoi(memFree[1]); err == nil {
@@ -55,7 +55,7 @@ func addHostMetrics(bbuf *bsonBuffer, index *int) {
 	}
 
 	// process memory
-	if s := getStrByKeyword("/proc/self/statm", ""); s != "" {
+	if s := utils.GetStrByKeyword("/proc/self/statm", ""); s != "" {
 		processRAM := strings.Fields(s)
 		if len(processRAM) != 0 {
 			for _, ps := range processRAM {
@@ -66,18 +66,4 @@ func addHostMetrics(bbuf *bsonBuffer, index *int) {
 			}
 		}
 	}
-}
-
-// isPhysicalInterface returns true if the specified interface name is physical
-func isPhysicalInterface(ifname string) bool {
-	fn := "/sys/class/net/" + ifname
-	link, err := os.Readlink(fn)
-	if err != nil {
-		agent.Errorf("cannot readlink %s", fn)
-		return false
-	}
-	if strings.Contains(link, "/virtual/") {
-		return false
-	}
-	return true
 }

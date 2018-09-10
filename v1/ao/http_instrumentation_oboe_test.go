@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +16,7 @@ import (
 
 func TestCustomTransactionNameWithDomain(t *testing.T) {
 	os.Setenv("APPOPTICS_PREPEND_DOMAIN", "true")
-	agent.Init()
+	config.Refresh()
 	r := reporter.SetTestReporter() // set up test reporter
 
 	// Test prepending the domain to transaction names.
@@ -48,7 +48,9 @@ func TestCustomTransactionNameWithDomain(t *testing.T) {
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 			// assert that response X-Trace header matches trace exit event
-			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string), "test2.com/final-my-custom-transaction-name"))
+			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string),
+				"test2.com/final-my-custom-transaction-name"),
+				n.Map["TransactionName"].(string))
 		}},
 	})
 	os.Unsetenv("APPOPTICS_PREPEND_DOMAIN")

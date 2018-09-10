@@ -202,16 +202,19 @@ func (s *span) GetTransactionName() string {
 func (s *span) Error(class, msg string) {
 	if s.ok() {
 		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
-			"ErrorClass", class, "ErrorMsg", msg, "Backtrace", debug.Stack())
+			"Spec", "error",
+			"ErrorClass", class,
+			"ErrorMsg", msg,
+			"Backtrace", string(debug.Stack()))
 	}
 }
 
 // Err reports the provided error type
 func (s *span) Err(err error) {
-	if s.ok() && err != nil {
-		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
-			"ErrorClass", "error", "ErrorMsg", err.Error(), "Backtrace", debug.Stack())
+	if err == nil {
+		return
 	}
+	s.Error("error", err.Error())
 }
 
 // span satisfies the Extent interface and consolidates common reporting routines used by

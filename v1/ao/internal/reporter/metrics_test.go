@@ -4,22 +4,18 @@ package reporter
 
 import (
 	"bytes"
-	"fmt"
 	"log"
 	"math"
 	"net"
-	"net/http"
 	"os"
-	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/hdrhist"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -43,31 +39,19 @@ func round(val float64, roundOn float64, places int) (newVal float64) {
 	return
 }
 
-func TestDistro(t *testing.T) {
-	distro := strings.ToLower(getDistro())
-
-	assert.NotEmpty(t, distro)
-
-	if runtime.GOOS == "linux" {
-		assert.NotContains(t, distro, "unknown")
-	} else {
-		assert.Contains(t, distro, "unknown")
-	}
-}
-
 func TestAppendIPAddresses(t *testing.T) {
 	bbuf := NewBsonBuffer()
 	appendIPAddresses(bbuf)
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
 
-	ifaces, _ := net.Interfaces()
+	ifaces, _ := host.FilteredIfaces()
 	var addresses []string
 
 	for _, iface := range ifaces {
 		addrs, _ := iface.Addrs()
 		for _, addr := range addrs {
-			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && isPhysicalInterface(iface.Name) {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && host.IsPhysicalInterface(iface.Name) {
 				addresses = append(addresses, ipnet.IP.String())
 			}
 		}
@@ -87,17 +71,17 @@ func TestAppendIPAddresses(t *testing.T) {
 
 func TestAppendMACAddresses(t *testing.T) {
 	bbuf := NewBsonBuffer()
-	appendMACAddresses(bbuf)
+	appendMACAddresses(bbuf, host.CurrentID().MAC())
 	bsonBufferFinish(bbuf)
 	m := bsonToMap(bbuf)
 
-	ifaces, _ := net.Interfaces()
+	ifaces, _ := host.FilteredIfaces()
 	var macs []string
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		if !isPhysicalInterface(iface.Name) {
+		if !host.IsPhysicalInterface(iface.Name) {
 			continue
 		}
 		if mac := iface.HardwareAddr.String(); mac != "" {
@@ -114,54 +98,6 @@ func TestAppendMACAddresses(t *testing.T) {
 		}
 	} else {
 		assert.Equal(t, 0, len(macs))
-	}
-}
-
-func TestGetAWSMetadata(t *testing.T) {
-	sm := http.NewServeMux()
-	sm.HandleFunc("/latest/meta-data/instance-id", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "i-12345678")
-	})
-	sm.HandleFunc("/latest/meta-data/placement/availability-zone", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "us-east-7")
-	})
-
-	addr := "localhost:8880"
-	ln, err := net.Listen("tcp", addr)
-	require.NoError(t, err)
-
-	s := &http.Server{Addr: addr, Handler: sm}
-	// change EC2 MD URLs
-	ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, "169.254.169.254", addr, 1)
-	ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, "169.254.169.254", addr, 1)
-	go s.Serve(ln)
-	defer func() { // restore old URLs
-		ln.Close()
-		ec2MetadataInstanceIDURL = strings.Replace(ec2MetadataInstanceIDURL, addr, "169.254.169.254", 1)
-		ec2MetadataZoneURL = strings.Replace(ec2MetadataZoneURL, addr, "169.254.169.254", 1)
-	}()
-	time.Sleep(50 * time.Millisecond)
-
-	id := getAWSInstanceID()
-	assert.Equal(t, id, "i-12345678")
-	assert.Equal(t, "i-12345678", cachedAWSInstanceID)
-	zone := getAWSInstanceZone()
-	assert.Equal(t, zone, "us-east-7")
-	assert.Equal(t, "us-east-7", cachedAWSInstanceZone)
-	// test the helper function
-	zone = getAWSMeta(nil, ec2MetadataZoneURL)
-	assert.Equal(t, zone, "us-east-7")
-}
-
-func TestGetContainerID(t *testing.T) {
-	id := getContainerID()
-	if getLineByKeyword("/proc/self/cgroup", "/docker/") != "" ||
-		getLineByKeyword("/proc/self/cgroup", "/ecs/") != "" {
-
-		assert.NotEmpty(t, id)
-		assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]+$`), id)
-	} else {
-		assert.Empty(t, id)
 	}
 }
 
@@ -433,9 +369,12 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	}
 	m := bsonToMap(bbuf)
 
-	assert.Equal(t, cachedHostname, m["Hostname"])
-	assert.Equal(t, getDistro(), m["Distro"])
-	assert.Equal(t, cachedPid, m["PID"])
+	_, ok := m["Hostname"]
+	assert.False(t, ok)
+	_, ok = m["PID"]
+	assert.False(t, ok)
+	_, ok = m[""]
+	assert.Equal(t, host.Distro(), m["Distro"])
 	assert.True(t, m["Timestamp_u"].(int64) > 1509053785684891)
 	assert.Equal(t, 15, m["MetricsFlushInterval"])
 

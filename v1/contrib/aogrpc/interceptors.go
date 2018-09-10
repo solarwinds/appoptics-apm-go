@@ -1,4 +1,4 @@
-package grpc
+package aogrpc
 
 import (
 	"io"
@@ -18,15 +18,16 @@ func actionFromMethod(method string) string {
 	return mParts[len(mParts)-1]
 }
 
-func tracingContext(ctx context.Context, serverName string, methodName string, statusCode *int) context.Context {
+func tracingContext(ctx context.Context, serverName string, methodName string, statusCode *int) (context.Context, ao.Trace) {
 
 	action := actionFromMethod(methodName)
 
 	xtID := ""
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok {
-		xt, ok := md[ao.HTTPHeaderName]
-		if ok {
+		if xt, ok := md[ao.HTTPHeaderName]; ok {
+			xtID = xt[0]
+		} else if xt, ok = md[strings.ToLower(ao.HTTPHeaderName)]; ok {
 			xtID = xt[0]
 		}
 	}
@@ -44,7 +45,7 @@ func tracingContext(ctx context.Context, serverName string, methodName string, s
 	t.SetTransactionName(serverName + "." + action)
 	t.SetStartTime(time.Now())
 
-	return ao.NewContext(ctx, t)
+	return ao.NewContext(ctx, t), t
 }
 
 // UnaryServerInterceptor returns an interceptor that traces gRPC unary server RPCs using AppOptics.
@@ -59,8 +60,12 @@ func UnaryServerInterceptor(serverName string) grpc.UnaryServerInterceptor {
 		var err error
 		var resp interface{}
 		var statusCode = 200
-		ctx = tracingContext(ctx, serverName, info.FullMethod, &statusCode)
-		defer ao.EndTrace(ctx)
+		var t ao.Trace
+		ctx, t = tracingContext(ctx, serverName, info.FullMethod, &statusCode)
+		defer func() {
+			t.SetStatus(statusCode)
+			ao.EndTrace(ctx)
+		}()
 		resp, err = handler(ctx, req)
 		if err != nil {
 			statusCode = 500
@@ -93,8 +98,11 @@ func StreamServerInterceptor(serverName string) grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		var err error
 		var statusCode = 200
-		newCtx := tracingContext(stream.Context(), serverName, info.FullMethod, &statusCode)
-		defer ao.EndTrace(newCtx)
+		newCtx, t := tracingContext(stream.Context(), serverName, info.FullMethod, &statusCode)
+		defer func() {
+			t.SetStatus(statusCode)
+			ao.EndTrace(newCtx)
+		}()
 		// if lg.IsDebug() {
 		//	sp := ao.FromContext(newCtx)
 		//	lg.Debug("server stream starting", "xtrace", sp.MetadataString())

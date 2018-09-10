@@ -3,11 +3,7 @@
 package reporter
 
 import (
-	"io/ioutil"
-	"net"
-	"net/http"
 	"os"
-	"regexp"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -17,21 +13,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/agent"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/hdrhist"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 )
 
 // Linux distributions and their identifying files
 const (
-	REDHAT    = "/etc/redhat-release"
-	AMAZON    = "/etc/release-cpe"
-	UBUNTU    = "/etc/lsb-release"
-	DEBIAN    = "/etc/debian_version"
-	SUSE      = "/etc/SuSE-release"
-	SLACKWARE = "/etc/slackware-version"
-	GENTOO    = "/etc/gentoo-release"
-	OTHER     = "/etc/issue"
-
 	metricsTransactionsMaxDefault = 200 // default max amount of transaction names we allow per cycle
 	metricsHistPrecisionDefault   = 2   // default histogram precision
 
@@ -44,12 +33,6 @@ const (
 	UnknownTransactionName       = "unknown"
 	OtherTransactionName         = "other"
 	maxPathLenForTransactionName = 3
-)
-
-// EC2 Metadata URLs, overridable for testing
-var (
-	ec2MetadataInstanceIDURL = "http://169.254.169.254/latest/meta-data/instance-id"
-	ec2MetadataZoneURL       = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
 )
 
 // SpanMessage defines a span message
@@ -114,14 +97,6 @@ type eventQueueStats struct {
 
 // rate counts reported by trace sampler
 type rateCounts struct{ requested, sampled, limited, traced, through int64 }
-
-var (
-	cachedDistro          string            // cached distribution name
-	cachedMACAddresses    = "uninitialized" // cached list MAC addresses
-	cachedAWSInstanceID   = "uninitialized" // cached EC2 instance ID (if applicable)
-	cachedAWSInstanceZone = "uninitialized" // cached EC2 instance zone (if applicable)
-	cachedContainerID     = "uninitialized" // cached docker container ID (if applicable)
-)
 
 // TransMap records the received transaction names in a metrics report cycle. It will refuse
 // new transaction names if reaching the capacity.
@@ -218,23 +193,21 @@ var metricsHTTPHistograms = &histograms{
 	precision:  metricsHistPrecisionDefault,
 }
 
-// ensure that only one routine accesses the host id part
-var hostIDLock sync.Mutex
-
+// TODO: use config package, and add validator (0-5)
 // initialize values according to env variables
 func init() {
 	pEnv := "APPOPTICS_HISTOGRAM_PRECISION"
 	precision := os.Getenv(pEnv)
 	if precision != "" {
-		agent.Infof("Non-default APPOPTICS_HISTOGRAM_PRECISION: %s", precision)
+		log.Infof("Non-default APPOPTICS_HISTOGRAM_PRECISION: %s", precision)
 		if p, err := strconv.Atoi(precision); err == nil {
 			if p >= 0 && p <= 5 {
 				metricsHTTPHistograms.precision = p
 			} else {
-				agent.Errorf("value of %v must be between 0 and 5: %v", pEnv, precision)
+				log.Errorf("value of %v must be between 0 and 5: %v", pEnv, precision)
 			}
 		} else {
-			agent.Errorf("value of %v is not an int: %v", pEnv, precision)
+			log.Errorf("value of %v is not an int: %v", pEnv, precision)
 		}
 	}
 }
@@ -276,7 +249,7 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	// runtime stats
 	addMetricsValue(bbuf, &index, "JMX.type=threadcount,name=NumGoroutine", runtime.NumGoroutine())
 	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
+	host.Mem(&mem)
 	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Alloc", int64(mem.Alloc))
 	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.TotalAlloc", int64(mem.TotalAlloc))
 	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Sys", int64(mem.Sys))
@@ -290,7 +263,7 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Released", int64(mem.HeapReleased))
 	addMetricsValue(bbuf, &index, "JMX.Memory:type=count,name=MemStats.Heap.Objects", int64(mem.HeapObjects))
 	var gc debug.GCStats
-	debug.ReadGCStats(&gc)
+	host.GC(&gc)
 	addMetricsValue(bbuf, &index, "JMX.type=count,name=GCStats.NumGC", gc.NumGC)
 
 	metricsHTTPMeasurements.lock.Lock()
@@ -332,82 +305,18 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 // append host ID to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
 func appendHostId(bbuf *bsonBuffer) {
-	hostIDLock.Lock()
-	defer hostIDLock.Unlock()
-
-	bsonAppendString(bbuf, "Hostname", cachedHostname)
-	if configuredHostname != "" {
-		bsonAppendString(bbuf, "ConfiguredHostname", configuredHostname)
+	if host.ConfiguredHostname() != "" {
+		bsonAppendString(bbuf, "ConfiguredHostname", host.ConfiguredHostname())
 	}
 	appendUname(bbuf)
-	bsonAppendInt(bbuf, "PID", cachedPid)
-	bsonAppendString(bbuf, "Distro", getDistro())
+	bsonAppendString(bbuf, "Distro", host.Distro())
 	appendIPAddresses(bbuf)
-	appendMACAddresses(bbuf)
-	if getAWSInstanceID() != "" {
-		bsonAppendString(bbuf, "EC2InstanceID", getAWSInstanceID())
-	}
-	if getAWSInstanceZone() != "" {
-		bsonAppendString(bbuf, "EC2AvailabilityZone", getAWSInstanceZone())
-	}
-	if getContainerID() != "" {
-		bsonAppendString(bbuf, "DockerContainerID", getContainerID())
-	}
-}
-
-// gets distribution identification
-func getDistro() string {
-	if cachedDistro != "" {
-		return cachedDistro
-	}
-
-	var ds []string // distro slice
-
-	// Note: Order of checking is important because some distros share same file names
-	// but with different function.
-	// Keep this order: redhat based -> ubuntu -> debian
-
-	// redhat
-	if cachedDistro = getStrByKeyword(REDHAT, ""); cachedDistro != "" {
-		return cachedDistro
-	}
-	// amazon linux
-	cachedDistro = getStrByKeyword(AMAZON, "")
-	ds = strings.Split(cachedDistro, ":")
-	cachedDistro = ds[len(ds)-1]
-	if cachedDistro != "" {
-		cachedDistro = "Amzn Linux " + cachedDistro
-		return cachedDistro
-	}
-	// ubuntu
-	cachedDistro = getStrByKeyword(UBUNTU, "DISTRIB_DESCRIPTION")
-	if cachedDistro != "" {
-		ds = strings.Split(cachedDistro, "=")
-		cachedDistro = ds[len(ds)-1]
-		if cachedDistro != "" {
-			cachedDistro = strings.Trim(cachedDistro, "\"")
-		} else {
-			cachedDistro = "Ubuntu unknown"
-		}
-		return cachedDistro
-	}
-
-	pathes := []string{DEBIAN, SUSE, SLACKWARE, GENTOO, OTHER}
-	if path, line := getStrByKeywordFiles(pathes, ""); path != "" && line != "" {
-		cachedDistro = line
-		if path == "Debian" {
-			cachedDistro = "Debian " + cachedDistro
-		}
-	} else {
-		cachedDistro = "Unknown"
-	}
-	return cachedDistro
 }
 
 // gets and appends IP addresses to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
 func appendIPAddresses(bbuf *bsonBuffer) {
-	addrs := getIPAddresses()
+	addrs := host.IPAddresses()
 	if addrs == nil {
 		return
 	}
@@ -419,45 +328,9 @@ func appendIPAddresses(bbuf *bsonBuffer) {
 	bsonAppendFinishObject(bbuf, start)
 }
 
-// gets the system's IP addresses
-func getIPAddresses() []string {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil
-	}
-
-	var addresses []string
-
-	for _, iface := range ifaces {
-		// skip over local interface
-		if iface.Name == "lo" {
-			continue
-		}
-		// skip over virtual interface
-		if physical := isPhysicalInterface(iface.Name); !physical {
-			continue
-		}
-		// get unicast addresses associated with the current network interface
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-
-		for _, addr := range addrs {
-			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-				addresses = append(addresses, ipnet.IP.String())
-			}
-		}
-	}
-
-	return addresses
-}
-
 // gets and appends MAC addresses to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
-func appendMACAddresses(bbuf *bsonBuffer) {
-	macs := strings.Split(getMACAddressList(), ",")
-
+func appendMACAddresses(bbuf *bsonBuffer, macs []string) {
 	start := bsonAppendStartArray(bbuf, "MACAddresses")
 	for _, mac := range macs {
 		if mac == "" {
@@ -468,96 +341,6 @@ func appendMACAddresses(bbuf *bsonBuffer) {
 		i++
 	}
 	bsonAppendFinishObject(bbuf, start)
-}
-
-// gets a comma-separated list of MAC addresses
-func getMACAddressList() string {
-	if cachedMACAddresses != "uninitialized" {
-		return cachedMACAddresses
-	}
-
-	cachedMACAddresses = ""
-	ifaces, err := net.Interfaces()
-	if err == nil {
-		for _, iface := range ifaces {
-			if iface.Flags&net.FlagLoopback != 0 {
-				continue
-			}
-			// skip over virtual interface
-			if physical := isPhysicalInterface(iface.Name); !physical {
-				continue
-			}
-			if mac := iface.HardwareAddr.String(); mac != "" {
-				cachedMACAddresses += iface.HardwareAddr.String() + ","
-			}
-		}
-	}
-	cachedMACAddresses = strings.TrimSuffix(cachedMACAddresses, ",") // trim the final one
-
-	return cachedMACAddresses
-}
-
-// getAWSMeta fetches the metadata from a specific AWS URL and cache it into a provided variable
-func getAWSMeta(cached *string, url string) string {
-	if cached != nil && *cached != "uninitialized" {
-		return *cached
-	}
-	// Fetch it from the specified URL if the cache is uninitialized or no cache at all.
-	meta := ""
-	if cached != nil {
-		defer func() { *cached = meta }()
-	}
-	client := http.Client{Timeout: time.Second}
-	resp, err := client.Get(url)
-	if err == nil {
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-		if err == nil {
-			meta = string(body)
-		}
-	}
-
-	return meta
-}
-
-// gets the AWS instance ID (or empty string if not an AWS instance)
-func getAWSInstanceID() string {
-	return getAWSMeta(&cachedAWSInstanceID, ec2MetadataInstanceIDURL)
-}
-
-// gets the AWS instance zone (or empty string if not an AWS instance)
-func getAWSInstanceZone() string {
-	return getAWSMeta(&cachedAWSInstanceZone, ec2MetadataZoneURL)
-}
-
-// gets the docker container ID (or empty string if not a docker/ecs container)
-func getContainerID() string {
-	if cachedContainerID != "uninitialized" {
-		return cachedContainerID
-	}
-
-	cachedContainerID = ""
-	line := getLineByKeyword("/proc/self/cgroup", "/docker/")
-	if line == "" {
-		line = getLineByKeyword("/proc/self/cgroup", "/ecs/")
-	}
-	if line != "" {
-		tokens := strings.Split(line, "/")
-		// A typical line returned by cat /proc/self/cgroup:
-		// 9:devices:/docker/40188af19439697187e3f60b933e7e37c5c41035f4c0b266a51c86c5a0074b25
-		for _, token := range tokens {
-			// a length of 64 indicates a container ID
-			if len(token) == 64 {
-				// ensure token is hex SHA1
-				if match, _ := regexp.MatchString("^[0-9a-f]+$", token); match {
-					cachedContainerID = token
-					break
-				}
-			}
-		}
-	}
-
-	return cachedContainerID
 }
 
 // appends a metric to a BSON buffer, the form will be:
@@ -573,7 +356,7 @@ func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{
 	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
 	defer func() {
 		if err := recover(); err != nil {
-			agent.Errorf("%v", err)
+			log.Errorf("%v", err)
 		}
 	}()
 
@@ -647,16 +430,16 @@ func (s *HTTPSpanMessage) processMeasurements(transactionName string) {
 	recordMeasurement(metricsHTTPMeasurements, name, &primaryTags, duration, 1, true)
 
 	// secondary keys: HttpMethod, HttpStatus, Errors
-	withMethodTags := copyMap(&primaryTags)
+	withMethodTags := utils.CopyMap(&primaryTags)
 	withMethodTags["HttpMethod"] = s.Method
 	recordMeasurement(metricsHTTPMeasurements, name, &withMethodTags, duration, 1, true)
 
-	withStatusTags := copyMap(&primaryTags)
+	withStatusTags := utils.CopyMap(&primaryTags)
 	withStatusTags["HttpStatus"] = strconv.Itoa(s.Status)
 	recordMeasurement(metricsHTTPMeasurements, name, &withStatusTags, duration, 1, true)
 
 	if s.HasError {
-		withErrorTags := copyMap(&primaryTags)
+		withErrorTags := utils.CopyMap(&primaryTags)
 		withErrorTags["Errors"] = "true"
 		recordMeasurement(metricsHTTPMeasurements, name, &withErrorTags, duration, 1, true)
 	}
@@ -717,7 +500,7 @@ func recordHistogram(hi *histograms, name string, duration time.Duration) {
 	defer func() {
 		hi.lock.Unlock()
 		if err := recover(); err != nil {
-			agent.Errorf("Failed to record histogram: %v", err)
+			log.Errorf("Failed to record histogram: %v", err)
 		}
 	}()
 
@@ -788,7 +571,7 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	// get 64-base encoded representation of the histogram
 	data, err := hdrhist.EncodeCompressed(h.hist)
 	if err != nil {
-		agent.Errorf("Failed to encode histogram: %v", err)
+		log.Errorf("Failed to encode histogram: %v", err)
 		return
 	}
 
@@ -816,8 +599,8 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	*index += 1
 }
 
-func (s *eventQueueStats) setQueueLargest(count int) {
-	newVal := int64(count)
+func (s *eventQueueStats) setQueueLargest(count int64) {
+	newVal := count
 
 	for {
 		currVal := atomic.LoadInt64(&s.queueLargest)
