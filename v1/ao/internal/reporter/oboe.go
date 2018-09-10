@@ -271,6 +271,24 @@ func resetSettings() {
 	readEnvSettings()
 }
 
+// OboeCheckSettingsTimeout checks and deletes expired settings
+func OboeCheckSettingsTimeout() {
+	globalSettingsCfg.checkSettingsTimeout()
+}
+
+func (sc *oboeSettingsCfg) checkSettingsTimeout() {
+	sc.lock.Lock()
+	defer sc.lock.Unlock()
+
+	ss := sc.settings
+	for k, s := range ss {
+		e := s.timestamp.Add(time.Duration(s.ttl) * time.Second)
+		if e.Before(time.Now()) {
+			delete(ss, k)
+		}
+	}
+}
+
 func getSetting(layer string) (*oboeSettings, bool) {
 	globalSettingsCfg.lock.RLock()
 	defer globalSettingsCfg.lock.RUnlock()
