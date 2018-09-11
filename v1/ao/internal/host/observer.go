@@ -165,12 +165,10 @@ func getAWSMeta(url string) (meta string) {
 	return
 }
 
-var fetch = getAWSMeta
-
 // gets the AWS instance ID (or empty string if not an AWS instance)
 func getEC2ID() string {
 	ec2IdOnce.Do(func() {
-		ec2Id = fetch(ec2IDURL)
+		ec2Id = getAWSMeta(ec2IDURL)
 		log.Debugf("Got and cached ec2Id: %s", ec2Id)
 	})
 	return ec2Id
@@ -179,7 +177,7 @@ func getEC2ID() string {
 // gets the AWS instance zone (or empty string if not an AWS instance)
 func getEC2Zone() string {
 	ec2ZoneOnce.Do(func() {
-		ec2Zone = fetch(ec2ZoneURL)
+		ec2Zone = getAWSMeta(ec2ZoneURL)
 		log.Debugf("Got and cached ec2Zone: %s", ec2Zone)
 	})
 	return ec2Zone

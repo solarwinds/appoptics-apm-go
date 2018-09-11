@@ -21,19 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var _ = func() bool {
-	fetch = func(url string) string {
-		if url == ec2IDURL {
-			return "i-027a3e4e2e8f04e89"
-		} else if url == ec2ZoneURL {
-			return "us-east-1d"
-		} else {
-			return ""
-		}
-	}
-	return true
-}()
-
 func TestInitContainerID(t *testing.T) {
 	id := "unintialized"
 
