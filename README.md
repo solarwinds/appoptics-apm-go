@@ -48,7 +48,7 @@ check out the [demo](#demo) app below to get a quick start!
 
 Install the following to get started:
 
-* [Go >= 1.7](https://golang.org/dl/)
+* [Go >= 1.8](https://golang.org/dl/)
 * This package: go get github.com/appoptics/appoptics-apm-go/v1/ao
 
 Note that the service key needs to be configured for a successful setup. See [Configuration](#configuration) 

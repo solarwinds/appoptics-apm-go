@@ -315,11 +315,9 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	setGlobalReporter("ssl")
 
 	require.IsType(t, &grpcReporter{}, globalReporter)
-	time.Sleep(100 * time.Millisecond)
 
 	r := globalReporter.(*grpcReporter)
 	r.Shutdown()
-	time.Sleep(100 * time.Millisecond)
 	assert.Equal(t, true, r.Closed())
 
 	// // Print current goroutines stack
@@ -368,7 +366,6 @@ func TestInvalidKey(t *testing.T) {
 	// numGo := runtime.NumGoroutine()
 	setGlobalReporter("ssl")
 	require.IsType(t, &grpcReporter{}, globalReporter)
-	time.Sleep(100 * time.Millisecond)
 
 	r := globalReporter.(*grpcReporter)
 	ctx := newTestContext(t)
