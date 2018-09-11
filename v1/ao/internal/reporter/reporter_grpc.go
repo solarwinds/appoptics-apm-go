@@ -6,22 +6,24 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
-	"errors"
 	"io/ioutil"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc/credentials"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 )
 
@@ -92,10 +94,81 @@ type grpcConnection struct {
 	queueStats     *eventQueueStats               // queue stats (reset on each metrics report cycle)
 	// for testing only: if true, skip verifying TLS cert hostname
 	insecureSkipVerify bool
-	// atomicStale indicates if the underlying connection is stale and should be
-	// reconnected or redirected to a new address. The value 0 represents false
-	// and a value other than 0 (usually 1) means true
-	atomicStale int32
+	// atomicActive indicates if the underlying connection is active. It should
+	// be reconnected or redirected to a new address in case of inactive. The
+	// value 0 represents false and a value other than 0 (usually 1) means true
+	atomicActive int32
+
+	// the backoff function
+	backoff Backoff
+	Dialer
+}
+
+// GrpcConnOpt defines the function type that sets an option of the grpcConnection
+type GrpcConnOpt func(c *grpcConnection)
+
+// WithCert returns a function that sets the certificate
+func WithCert(cert []byte) GrpcConnOpt {
+	return func(c *grpcConnection) {
+		c.certificate = cert
+	}
+}
+
+// WithSkipVerify returns a function that sets the insecureSkipVerify option
+func WithSkipVerify(skip bool) GrpcConnOpt {
+	return func(c *grpcConnection) {
+		c.insecureSkipVerify = skip
+	}
+}
+
+// WithDialer returns a function that sets the Dialer option
+func WithDialer(d Dialer) GrpcConnOpt {
+	return func(c *grpcConnection) {
+		c.Dialer = d
+	}
+}
+
+// WithBackoff return a function that sets the backoff option
+func WithBackoff(b Backoff) GrpcConnOpt {
+	return func(c *grpcConnection) {
+		c.backoff = b
+	}
+}
+
+func newGrpcConnection(name string, target string, opts ...GrpcConnOpt) (*grpcConnection, error) {
+	gc := &grpcConnection{
+		name:               name,
+		client:             nil,
+		connection:         nil,
+		address:            target,
+		certificate:        []byte(grpcCertDefault),
+		queueStats:         &eventQueueStats{},
+		insecureSkipVerify: false,
+		backoff:            DefaultBackoff,
+		Dialer:             &DefaultDialer{},
+	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(gc)
+		}
+	}
+
+	err := gc.connect()
+	if err != nil {
+		return nil, errors.Wrap(err, name)
+	}
+	return gc, nil
+}
+
+// Close closes the gRPC connection and set the pointer to nil
+func (c *grpcConnection) Close() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if c.connection != nil {
+		c.connection.Close()
+	}
+	c.connection = nil
 }
 
 type grpcReporter struct {
@@ -144,51 +217,39 @@ func newGRPCReporter() reporter {
 	}
 
 	// collector address override
-	collectorAddress := config.GetCollector()
+	addr := config.GetCollector()
 
+	var opts []GrpcConnOpt
 	// certificate override
-	var cert []byte
 	if certPath := config.GetTrustedPath(); certPath != "" {
 		var err error
-		cert, err = ioutil.ReadFile(certPath)
+		cert, err := ioutil.ReadFile(certPath)
 		if err != nil {
 			log.Errorf("Error reading cert file %s: %v", certPath, err)
 			return &nullReporter{}
 		}
-	} else {
-		cert = []byte(grpcCertDefault)
+		opts = append(opts, WithCert(cert))
 	}
 
-	var insecureSkipVerify = config.GetSkipVerify()
+	opts = append(opts, WithSkipVerify(config.GetSkipVerify()))
 
 	// create connection object for events client and metrics client
-	eventConn, err1 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
-	metricConn, err2 := grpcCreateClientConnection(cert, collectorAddress, insecureSkipVerify)
-	if err1 != nil || err2 != nil {
-		log.Errorf("Failed to initialize gRPC reporter %v: %v; %v", collectorAddress, err1, err2)
+	eventConn, err1 := newGrpcConnection("events channel", addr, opts...)
+	if err1 != nil {
+		log.Errorf("Failed to initialize gRPC reporter %v: %v", addr, err1)
+		return &nullReporter{}
+	}
+	metricConn, err2 := newGrpcConnection("metrics channel", addr, opts...)
+	if err2 != nil {
+		eventConn.Close()
+		log.Errorf("Failed to initialize gRPC reporter %v: %v", addr, err2)
 		return &nullReporter{}
 	}
 
 	// construct the reporter object which handles two connections
-	reporter := &grpcReporter{
-		eventConnection: &grpcConnection{
-			name:               "events channel",
-			client:             collector.NewTraceCollectorClient(eventConn),
-			connection:         eventConn,
-			address:            collectorAddress,
-			certificate:        cert,
-			queueStats:         &eventQueueStats{},
-			insecureSkipVerify: insecureSkipVerify,
-		},
-		metricConnection: &grpcConnection{
-			name:               "metrics channel",
-			client:             collector.NewTraceCollectorClient(metricConn),
-			connection:         metricConn,
-			address:            collectorAddress,
-			certificate:        cert,
-			queueStats:         &eventQueueStats{},
-			insecureSkipVerify: insecureSkipVerify,
-		},
+	r := &grpcReporter{
+		eventConnection:  eventConn,
+		metricConnection: metricConn,
 
 		collectMetricInterval:        grpcMetricIntervalDefault,
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
@@ -204,59 +265,30 @@ func newGRPCReporter() reporter {
 		done: make(chan struct{}),
 	}
 
+	r.start()
+
+	log.Infof("AppOptics reporter is started: %v", r.done)
+	return r
+}
+
+func (r *grpcReporter) start() {
 	// start up long-running goroutine eventSender() which listens on the events message channel
 	// and reports incoming events to the collector using GRPC
-	go reporter.eventSender()
+	go r.eventSender()
 
 	// start up long-running goroutine statusSender() which listens on the status message channel
 	// and reports incoming events to the collector using GRPC
-	go reporter.statusSender()
+	go r.statusSender()
 
 	// start up long-running goroutine periodicTasks() which kicks off periodic tasks like
 	// collectMetrics() and getSettings()
 	if !periodicTasksDisabled {
-		go reporter.periodicTasks()
+		go r.periodicTasks()
 	}
 
 	// start up long-running goroutine spanMessageAggregator() which listens on the span message
 	// channel and processes incoming span messages
-	go reporter.spanMessageAggregator()
-
-	log.Infof("AppOptics reporter is started: %v", reporter.done)
-	return reporter
-}
-
-// creates a new client connection object which is used by GRPC
-// cert		certificate used to verify the collector endpoint
-// addr		collector endpoint address and port
-//
-// returns	client connection object
-// 			possible error during AppendCertsFromPEM() and Dial()
-func grpcCreateClientConnection(cert []byte, addr string, insecureSkipVerify bool) (*grpc.ClientConn, error) {
-	certPool := x509.NewCertPool()
-
-	if ok := certPool.AppendCertsFromPEM(cert); !ok {
-		return nil, errors.New("unable to append the certificate to pool")
-	}
-
-	// trim port from server name used for TLS verification
-	serverName := addr
-	if s := strings.Split(addr, ":"); len(s) > 0 {
-		serverName = s[0]
-	}
-
-	tlsConfig := &tls.Config{
-		ServerName:         serverName,
-		RootCAs:            certPool,
-		InsecureSkipVerify: insecureSkipVerify,
-	}
-	// turn off server certificate verification for Go < 1.8
-	if !utils.IsHigherOrEqualGoVersion("go1.8") {
-		tlsConfig.InsecureSkipVerify = true
-	}
-	creds := credentials.NewTLS(tlsConfig)
-
-	return grpc.Dial(addr, grpc.WithTransportCredentials(creds))
+	go r.spanMessageAggregator()
 }
 
 // Shutdown closes the reporter by close the `done` channel. All long-running goroutines
@@ -279,8 +311,8 @@ func (r *grpcReporter) Shutdown() error {
 
 // closeConns closes all the gRPC connections of a reporter
 func (r *grpcReporter) closeConns() {
-	r.eventConnection.connection.Close()
-	r.metricConnection.connection.Close()
+	r.eventConnection.Close()
+	r.metricConnection.Close()
 }
 
 // Closed return true if the reporter is already closed, or false otherwise.
@@ -297,49 +329,51 @@ func (c *grpcConnection) setAddress(addr string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.address = addr
-	c.setStale(true)
+	c.setActive(false)
 }
 
 // connect does the operation of connecting to a collector. It may be the same
 // address or a new one. Those who issue the connection request need to set
 // the stale flag to true, otherwise this function will do nothing.
-func (c *grpcConnection) connect() {
+func (c *grpcConnection) connect() error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	// Skip it if the connection is not stale - someone else may have done
 	// the connection.
-	if !c.isStale() {
+	if c.isActive() {
 		log.Debug("[%s] Someone else has done the redirection.", c.name)
-		return
+		return nil
 	}
 	// create a new connection object for this client
-	conn, err := grpcCreateClientConnection(c.certificate, c.address, c.insecureSkipVerify)
+	conn, err := c.Dial(*c)
 	if err != nil {
-		log.Errorf("[%s] Failed redirect to: %v %v", c.name, c.address, err)
-		return
+		return errors.Wrap(err, "failed to connect to target")
 	}
 
 	// close the old connection
-	c.connection.Close()
+	if c.connection != nil {
+		c.connection.Close()
+	}
 	// set new connection (need to be protected)
 	c.connection = conn
 	c.client = collector.NewTraceCollectorClient(c.connection)
-	c.setStale(false)
+	c.setActive(true)
 
-	log.Warningf("[%s] Connected to %s", c.name, c.address)
+	log.Infof("[%s] Connected to %s", c.name, c.address)
+	return nil
 }
 
-func (c *grpcConnection) isStale() bool {
-	return atomic.LoadInt32(&c.atomicStale) != 0
+func (c *grpcConnection) isActive() bool {
+	return atomic.LoadInt32(&c.atomicActive) == 1
 }
 
-func (c *grpcConnection) setStale(stale bool) {
+func (c *grpcConnection) setActive(active bool) {
 	var flag int32
-	if stale {
+	if active {
 		flag = 1
 	}
-	atomic.StoreInt32(&c.atomicStale, flag)
+	atomic.StoreInt32(&c.atomicActive, flag)
 }
 
 func (c *grpcConnection) reconnect() {
@@ -432,21 +466,21 @@ func (r *grpcReporter) periodicTasks() {
 	}
 }
 
-// backoff strategy to slowly increase the retry delay up to a max delay
-// oldDelay	the old delay in milliseconds
-//
-// returns	the new delay in milliseconds
-func (c *grpcConnection) setRetryDelay(oldDelay int, retryNum *int) (int, error) {
-	if *retryNum >= grpcMaxRetries {
-		return 0, ErrMaxRetriesExceeded
-	}
-	*retryNum++
+type Backoff func(retries int, wait func(d time.Duration)) error
 
-	newDelay := int(float64(oldDelay) * grpcRetryDelayMultiplier)
-	if newDelay > grpcRetryDelayMax*1000 {
-		newDelay = grpcRetryDelayMax * 1000
+// DefaultBackoff calls the wait function to sleep for a certain time based on
+// the retries value. It returns immediately if the retries exceeds a threshold.
+func DefaultBackoff(retries int, wait func(d time.Duration)) error {
+	if retries > grpcMaxRetries {
+		return ErrMaxRetriesExceeded
 	}
-	return newDelay, nil
+	delay := int(grpcRetryDelayInitial * math.Pow(grpcRetryDelayMultiplier, float64(retries-1)))
+	if delay > grpcRetryDelayMax*1000 {
+		delay = grpcRetryDelayMax * 1000
+	}
+
+	wait(time.Duration(delay) * time.Millisecond)
+	return nil
 }
 
 // ================================ Event Handling ====================================
@@ -859,8 +893,6 @@ var (
 func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 	c.queueStats.setQueueLargest(m.MessageLen())
 
-	// initial retry delay in milliseconds
-	delay := grpcRetryDelayInitial
 	// counter for redirects so we know when the limit has been reached
 	redirects := 0
 
@@ -883,15 +915,16 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		// if another goroutine is messing with it at the same time, e.g. doing
 		// a redirection.
 		c.lock.RLock()
-		if !c.isStale() {
+		if c.isActive() {
 			ctx, cancel := context.WithTimeout(context.Background(), grpcCtxTimeout)
 			err = m.Call(ctx, c.client)
 
 			code := status.Code(err)
 			if code == codes.DeadlineExceeded ||
 				code == codes.Canceled {
-				log.Warningf("[%s] Connection becomes stale: %v", m, err)
-				c.setStale(true)
+				log.Infof("[%s] Connection becomes stale: %v", m, err)
+				err = errors.Wrap(err, "connection is stale")
+				c.setActive(false)
 			}
 			cancel()
 		}
@@ -940,7 +973,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 
 					c.setAddress(m.Arg())
 					// a proper redirect shouldn't cause delays
-					delay = grpcRetryDelayInitial
+					retriesNum = 0
 					redirects++
 				}
 			default:
@@ -948,7 +981,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			}
 		}
 
-		if c.isStale() {
+		if !c.isActive() {
 			c.reconnect()
 		}
 
@@ -956,10 +989,11 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			return errNoRetryOnErr
 		}
 
-		// wait a little before retrying
-		time.Sleep(time.Duration(delay) * time.Millisecond)
-		if delay, err = c.setRetryDelay(delay, &retriesNum); err != nil {
-			log.Warningf("[%s] give up after %d retries.", m, retriesNum)
+		retriesNum++
+		err = c.backoff(retriesNum, func(d time.Duration) {
+			time.Sleep(d)
+		})
+		if err != nil {
 			return errGiveUpAfterRetries
 		}
 	}
@@ -996,4 +1030,43 @@ func buildBestEffortIdentity() *collector.HostID {
 	hid := newHostID(host.BestEffortCurrentID())
 	hid.Hostname = host.Hostname()
 	return hid
+}
+
+// Dialer has a method Dial which accepts a grpcConnection object as the
+// argument and returns a ClientConn object.
+type Dialer interface {
+	Dial(grpcConnection) (*grpc.ClientConn, error)
+}
+
+// DefaultDialer implements the Dialer interface to provide the default dialing
+// method.
+type DefaultDialer struct{}
+
+// Dial issues the connection to the remote address with attributes provided by
+// the grpcConnection.
+func (d *DefaultDialer) Dial(c grpcConnection) (*grpc.ClientConn, error) {
+	certPool := x509.NewCertPool()
+
+	if ok := certPool.AppendCertsFromPEM(c.certificate); !ok {
+		return nil, errors.New("unable to append the certificate to pool")
+	}
+
+	// trim port from server name used for TLS verification
+	serverName := c.address
+	if s := strings.Split(c.address, ":"); len(s) > 0 {
+		serverName = s[0]
+	}
+
+	tlsConfig := &tls.Config{
+		ServerName:         serverName,
+		RootCAs:            certPool,
+		InsecureSkipVerify: c.insecureSkipVerify,
+	}
+	// turn off server certificate verification for Go < 1.8
+	if !utils.IsHigherOrEqualGoVersion("go1.8") {
+		tlsConfig.InsecureSkipVerify = true
+	}
+	creds := credentials.NewTLS(tlsConfig)
+
+	return grpc.Dial(c.address, grpc.WithTransportCredentials(creds))
 }

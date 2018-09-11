@@ -134,7 +134,7 @@ func TestUpdate(t *testing.T) {
 
 	assert.False(t, lh.ready())
 	update(tk, lh)
-	time.Sleep(3 * time.Second)
+	<-tk
 	assert.True(t, lh.ready())
 
 	for i := 0; i < 10; i++ {

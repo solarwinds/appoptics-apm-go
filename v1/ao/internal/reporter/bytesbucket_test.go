@@ -1,6 +1,7 @@
 package reporter
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -18,8 +19,8 @@ func TestBytesBucket(t *testing.T) {
 		}
 	}
 
-	tk := time.NewTicker(time.Second * 2)
-	defer tk.Stop()
+	os.Setenv("APPOPTICS_EVENTS_FLUSH_INTERVAL", "2")
+	config.Refresh()
 
 	opts := config.ReporterOpts()
 
@@ -58,7 +59,7 @@ func TestBytesBucket(t *testing.T) {
 	// should not be drainable right now
 	assert.Equal(t, false, b.Drainable())
 	// sleep for a while to make the ticker timeout
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Millisecond * 2100)
 	// it should be drainable now
 	assert.Equal(t, true, b.Drainable())
 	// and 2 drops of water are drained from the bucket

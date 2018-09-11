@@ -80,7 +80,7 @@ func TestTokenBucket(t *testing.T) {
 	}
 	wg.Wait()
 	t.Logf("TB iters %d allowed %v dropped %v limited %v", iters, allowed, dropped, c.limited)
-	assert.True(t, (iters == 100 && consumers == 5))
+	t.Logf("%+v", c.rateCounts)
 	assert.True(t, (allowed == 20 && dropped == 480 && c.limited == 230 && c.traced == 20) ||
 		(allowed == 19 && dropped == 481 && c.limited == 231 && c.traced == 19) ||
 		(allowed == 18 && dropped == 482 && c.limited == 232 && c.traced == 18))
