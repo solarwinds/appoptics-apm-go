@@ -174,10 +174,9 @@ func (c *grpcConnection) Close() {
 type grpcReporter struct {
 	eventConnection              *grpcConnection // used for events only
 	metricConnection             *grpcConnection // used for everything else (postMetrics, postStatus, getSettings)
-	collectMetricInterval        int             // metrics flush interval in seconds
+	collectMetricInterval        int32           // metrics flush interval in seconds
 	getSettingsInterval          int             // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int             // check interval for timed out settings in seconds
-	collectMetricIntervalLock    sync.RWMutex    // lock to ensure sequential access of collectMetricInterval
 
 	serviceKey string // service key
 
@@ -464,8 +463,6 @@ func (r *grpcReporter) periodicTasks() {
 	getSettingsReady <- true
 	settingsTimeoutCheckReady <- true
 
-	var lastMetricsFlushSec int
-
 	for {
 		// Exit if the reporter's done channel is closed.
 		select {
@@ -483,8 +480,7 @@ func (r *grpcReporter) periodicTasks() {
 			}
 			select {
 			case <-collectMetricsReady:
-				i := time.Now().Second() - lastMetricsFlushSec
-				r.collectMetrics(collectMetricsReady, i)
+				r.collectMetrics(collectMetricsReady)
 				close(r.flushed)
 			default:
 			}
@@ -492,17 +488,11 @@ func (r *grpcReporter) periodicTasks() {
 		case <-collectMetricsTicker.C: // collect and send metrics
 			// set up ticker for next round
 			collectMetricsTicker.Reset(r.collectMetricsNextInterval())
-			lastMetricsFlushSec = time.Now().Second()
-
-			// access collectMetricInterval protected since it can be updated in updateSettings()
-			r.collectMetricIntervalLock.RLock()
-			i := r.collectMetricInterval
-			r.collectMetricIntervalLock.RUnlock()
 
 			select {
 			case <-collectMetricsReady:
 				// only kick off a new goroutine if the previous one has terminated
-				go r.collectMetrics(collectMetricsReady, i)
+				go r.collectMetrics(collectMetricsReady)
 			default:
 			}
 		case <-getSettingsTicker.C: // get settings from collector
@@ -681,20 +671,20 @@ func (r *grpcReporter) eventRetrySender(
 //
 // returns	the interval (nanoseconds)
 func (r *grpcReporter) collectMetricsNextInterval() time.Duration {
-	r.collectMetricIntervalLock.RLock()
-	interval := r.collectMetricInterval - (time.Now().Second() % r.collectMetricInterval)
-	r.collectMetricIntervalLock.RUnlock()
+	i := int(atomic.LoadInt32(&r.collectMetricInterval))
+	interval := i - (time.Now().Second() % i)
 	return time.Duration(interval) * time.Second
 }
 
 // collects the current metrics, puts them on the channel, and kicks off sendMetrics()
 // collectReady	a 'ready' channel to indicate if this routine has terminated
-func (r *grpcReporter) collectMetrics(collectReady chan bool, interval int) {
+func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { collectReady <- true }()
 
+	i := int(atomic.LoadInt32(&r.collectMetricInterval))
 	// generate a new metrics message
-	message := generateMetricsMessage(interval, r.eventConnection.queueStats)
+	message := generateMetricsMessage(i, r.eventConnection.queueStats)
 	r.sendMetrics(message)
 }
 
@@ -746,18 +736,18 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Value, s.Ttl, &s.Arguments)
 
 		// update MetricsFlushInterval
-		r.collectMetricIntervalLock.Lock()
+		var i int32
 		if interval, ok := s.Arguments["MetricsFlushInterval"]; ok {
 			l := len(interval)
 			if l == 4 {
-				r.collectMetricInterval = int(binary.LittleEndian.Uint32(interval))
+				i = int32(binary.LittleEndian.Uint32(interval))
 			} else {
 				log.Warningf("Bad MetricsFlushInterval size: %s", l)
 			}
 		} else {
-			r.collectMetricInterval = grpcMetricIntervalDefault
+			i = grpcMetricIntervalDefault
 		}
-		r.collectMetricIntervalLock.Unlock()
+		atomic.StoreInt32(&r.collectMetricInterval, i)
 
 		// update events flush interval
 		if interval, ok := s.Arguments["EventsFlushInterval"]; ok {
