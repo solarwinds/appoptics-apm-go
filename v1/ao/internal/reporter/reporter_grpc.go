@@ -199,7 +199,8 @@ type grpcReporter struct {
 	// A (default) zero value means shutdown abruptly.
 	gracefully int32
 	// This channel is closed after flushing the metrics.
-	flushed chan struct{}
+	flushed     chan struct{}
+	flushedOnce sync.Once
 }
 
 // gRPC reporter errors
@@ -481,7 +482,6 @@ func (r *grpcReporter) periodicTasks() {
 			select {
 			case <-collectMetricsReady:
 				r.collectMetrics(collectMetricsReady)
-				close(r.flushed)
 			default:
 			}
 			return
@@ -680,7 +680,14 @@ func (r *grpcReporter) collectMetricsNextInterval() time.Duration {
 // collectReady	a 'ready' channel to indicate if this routine has terminated
 func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	// notify caller that this routine has terminated (defered to end of routine)
-	defer func() { collectReady <- true }()
+	defer func() {
+		select {
+		case <-r.done:
+			r.flushedOnce.Do(func() { close(r.flushed) })
+		default:
+			collectReady <- true
+		}
+	}()
 
 	i := int(atomic.LoadInt32(&r.collectMetricInterval))
 	// generate a new metrics message
