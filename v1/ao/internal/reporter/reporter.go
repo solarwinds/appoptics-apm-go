@@ -25,7 +25,7 @@ type reporter interface {
 	// called when a Span message should be reported
 	reportSpan(span SpanMessage) error
 	// Shutdown closes the reporter.
-	Shutdown() error
+	Shutdown(duration time.Duration) error
 	// Closed returns if the reporter is already closed.
 	Closed() bool
 	// IsReady checks the state of the reporter and may wait for up to the specified
@@ -47,7 +47,7 @@ type nullReporter struct{}
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
 func (r *nullReporter) reportSpan(span SpanMessage) error             { return nil }
-func (r *nullReporter) Shutdown() error                               { return nil }
+func (r *nullReporter) Shutdown(duration time.Duration) error         { return nil }
 func (r *nullReporter) Closed() bool                                  { return true }
 func (r *nullReporter) IsReady(duration time.Duration) bool           { return true }
 
@@ -63,7 +63,7 @@ func init() {
 func setGlobalReporter(reporterType string) {
 	// Close the previous reporter
 	if globalReporter != nil {
-		globalReporter.Shutdown()
+		globalReporter.Shutdown(0)
 	}
 
 	switch strings.ToLower(reporterType) {

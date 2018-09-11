@@ -149,7 +149,7 @@ func (r *TestReporter) Close(numBufs int) {
 }
 
 // Shutdown closes the Test reporter TODO: not supported
-func (r *TestReporter) Shutdown() error {
+func (r *TestReporter) Shutdown(duration time.Duration) error {
 	// return r.conn.Close()
 	return errors.New("shutdown is not supported by TestReporter")
 }

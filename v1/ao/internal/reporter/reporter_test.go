@@ -318,7 +318,7 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	r := globalReporter.(*grpcReporter)
-	r.Shutdown()
+	r.Shutdown(0)
 	time.Sleep(100 * time.Millisecond)
 	assert.Equal(t, true, r.Closed())
 
@@ -327,7 +327,7 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	// runtime.Stack(buf, true)
 	// fmt.Printf("%s", buf)
 
-	e := r.Shutdown()
+	e := r.Shutdown(0)
 	assert.NotEqual(t, nil, e)
 
 	// stop test reporter
@@ -381,7 +381,7 @@ func TestInvalidKey(t *testing.T) {
 	// The agent reporter should be closed due to received INVALID_API_KEY from the collector
 	assert.Equal(t, true, r.Closed())
 
-	e := r.Shutdown()
+	e := r.Shutdown(0)
 	assert.NotEqual(t, nil, e)
 
 	// Tear down everything.

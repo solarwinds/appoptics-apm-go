@@ -58,7 +58,7 @@ func (r *udpReporter) report(ctx *oboeContext, e *event) error {
 }
 
 // Shutdown closes the UDP reporter TODO: not supported
-func (r *udpReporter) Shutdown() error {
+func (r *udpReporter) Shutdown(duration time.Duration) error {
 	// return r.conn.Close()
 	return nil
 }

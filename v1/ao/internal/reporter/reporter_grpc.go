@@ -184,7 +184,6 @@ type grpcReporter struct {
 	eventMessages  chan []byte      // channel for event messages (sent from agent)
 	spanMessages   chan SpanMessage // channel for span messages (sent from agent)
 	statusMessages chan []byte      // channel for status messages (sent from agent)
-	metricMessages chan []byte      // channel for metrics messages (internal to reporter)
 
 	// The reporter is ready to use only after this channel is closed
 	ready chan struct{}
@@ -197,6 +196,11 @@ type grpcReporter struct {
 	// Don't send data into this channel, just close it by calling Shutdown().
 	done       chan struct{}
 	doneClosed sync.Once
+	// The flag to indicate gracefully stopping the reporter. It should be accessed atomically.
+	// A (default) zero value means shutdown abruptly.
+	gracefully int32
+	// This channel is closed after flushing the metrics.
+	flushed chan struct{}
 }
 
 // gRPC reporter errors
@@ -266,16 +270,28 @@ func newGRPCReporter() reporter {
 		eventMessages:  make(chan []byte, 10000),
 		spanMessages:   make(chan SpanMessage, 1024),
 		statusMessages: make(chan []byte, 1024),
-		metricMessages: make(chan []byte, 1024),
 
-		ready: make(chan struct{}),
-		done:  make(chan struct{}),
+		ready:   make(chan struct{}),
+		done:    make(chan struct{}),
+		flushed: make(chan struct{}),
 	}
 
 	r.start()
 
 	log.Infof("AppOptics reporter is started: %v", r.done)
 	return r
+}
+
+func (r *grpcReporter) isGracefully() bool {
+	return atomic.LoadInt32(&r.gracefully) == 1
+}
+
+func (r *grpcReporter) setGracefully(flag bool) {
+	var i int32
+	if flag {
+		i = 1
+	}
+	atomic.StoreInt32(&r.gracefully, i)
 }
 
 func (r *grpcReporter) start() {
@@ -300,14 +316,21 @@ func (r *grpcReporter) start() {
 
 // Shutdown closes the reporter by close the `done` channel. All long-running goroutines
 // monitor the channel `done` in the reporter and close themselves when the channel is closed.
-func (r *grpcReporter) Shutdown() error {
+//
+//
+func (r *grpcReporter) Shutdown(duration time.Duration) error {
 	select {
 	case <-r.done:
 		return ErrShutdownClosedReporter
 	default:
 		r.doneClosed.Do(func() {
 			log.Warningf("Shutting down the gRPC reporter: %v", r.done)
+			r.setGracefully(duration != 0)
 			close(r.done)
+			select {
+			case <-r.flushed:
+			case <-time.After(duration):
+			}
 			// There may be messages
 			r.closeConns()
 			host.Stop()
@@ -435,11 +458,9 @@ func (r *grpcReporter) periodicTasks() {
 
 	// set up 'ready' channels to indicate if a goroutine has terminated
 	collectMetricsReady := make(chan bool, 1)
-	sendMetricsReady := make(chan bool, 1)
 	getSettingsReady := make(chan bool, 1)
 	settingsTimeoutCheckReady := make(chan bool, 1)
 	collectMetricsReady <- true
-	sendMetricsReady <- true
 	getSettingsReady <- true
 	settingsTimeoutCheckReady <- true
 
@@ -447,17 +468,31 @@ func (r *grpcReporter) periodicTasks() {
 		// Exit if the reporter's done channel is closed.
 		select {
 		case <-r.done:
-			return
+			if !r.isGracefully() {
+				return
+			}
 		default:
 		}
+
 		select {
+		case <-r.done:
+			if !r.isGracefully() {
+				return
+			}
+			select {
+			case <-collectMetricsReady:
+				r.collectMetrics(collectMetricsReady)
+				close(r.flushed)
+			default:
+			}
+			return
 		case <-collectMetricsTicker.C: // collect and send metrics
 			// set up ticker for next round
 			collectMetricsTicker.Reset(r.collectMetricsNextInterval())
 			select {
 			case <-collectMetricsReady:
 				// only kick off a new goroutine if the previous one has terminated
-				go r.collectMetrics(collectMetricsReady, sendMetricsReady)
+				go r.collectMetrics(collectMetricsReady)
 			default:
 			}
 		case <-getSettingsTicker.C: // get settings from collector
@@ -483,7 +518,7 @@ func (r *grpcReporter) periodicTasks() {
 			r.eventConnection.resetPing()
 			go func() {
 				if r.eventConnection.ping(r.done, r.serviceKey) == errInvalidServiceKey {
-					r.Shutdown()
+					r.Shutdown(0)
 				}
 			}()
 		case <-r.metricConnection.pingTicker.C: // ping on metrics connection (keep alive)
@@ -491,11 +526,9 @@ func (r *grpcReporter) periodicTasks() {
 			r.metricConnection.resetPing()
 			go func() {
 				if r.metricConnection.ping(r.done, r.serviceKey) == errInvalidServiceKey {
-					r.Shutdown()
+					r.Shutdown(0)
 				}
 			}()
-		case <-r.done:
-			return
 		}
 	}
 }
@@ -623,7 +656,7 @@ func (r *grpcReporter) eventRetrySender(
 
 		switch err {
 		case errInvalidServiceKey:
-			r.Shutdown()
+			r.Shutdown(0)
 		case nil, errGiveUpAfterRetries, errTooManyRedirections:
 			token <- struct{}{}
 		default:
@@ -646,8 +679,7 @@ func (r *grpcReporter) collectMetricsNextInterval() time.Duration {
 
 // collects the current metrics, puts them on the channel, and kicks off sendMetrics()
 // collectReady	a 'ready' channel to indicate if this routine has terminated
-// sendReady	another 'ready' channel to indicate if the sendMetrics() goroutine has terminated
-func (r *grpcReporter) collectMetrics(collectReady chan bool, sendReady chan bool) {
+func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { collectReady <- true }()
 
@@ -658,52 +690,23 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool, sendReady chan boo
 
 	// generate a new metrics message
 	message := generateMetricsMessage(interval, r.eventConnection.queueStats)
-	// 	printBson(message)
-
-	select {
-	// put metrics message onto the channel
-	case r.metricMessages <- message:
-	default:
-	}
-
-	select {
-	case <-sendReady:
-		// only kick off a new goroutine if the previous one has terminated
-		go r.sendMetrics(sendReady)
-	default:
-	}
+	r.sendMetrics(message)
 }
 
 // listens on the metrics message channel, collects all messages on that channel and
 // attempts to send them to the collector using the GRPC method PostMetrics()
-// ready	a 'ready' channel to indicate if this routine has terminated
-func (r *grpcReporter) sendMetrics(ready chan bool) {
-	// notify caller that this routine has terminated (defered to end of routine)
-	defer func() { ready <- true }()
-
-	var messages [][]byte
-
-	done := false
-	for !done {
-		select {
-		case m := <-r.metricMessages:
-			messages = append(messages, m)
-		default:
-			done = true
-		}
-	}
-
+func (r *grpcReporter) sendMetrics(msg []byte) {
 	// no messages on the channel so nothing to send, return
-	if len(messages) == 0 {
+	if len(msg) == 0 {
 		return
 	}
 
-	method := newPostMetricsMethod(r.serviceKey, messages)
+	method := newPostMetricsMethod(r.serviceKey, [][]byte{msg})
 
 	err := r.metricConnection.InvokeRPC(r.done, method)
 	switch err {
 	case errInvalidServiceKey:
-		r.Shutdown()
+		r.Shutdown(0)
 	case nil:
 	default:
 		log.Infof("sendMetrics: %s", err)
@@ -723,7 +726,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 
 	switch err {
 	case errInvalidServiceKey:
-		r.Shutdown()
+		r.Shutdown(0)
 	case nil:
 		r.updateSettings(method.Resp)
 	default:
@@ -839,7 +842,7 @@ func (r *grpcReporter) statusSender() {
 
 		switch err {
 		case errInvalidServiceKey:
-			r.Shutdown()
+			r.Shutdown(0)
 		case nil:
 		default:
 			log.Infof("statusSender: %s", err)
