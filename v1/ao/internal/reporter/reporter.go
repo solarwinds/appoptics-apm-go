@@ -85,6 +85,12 @@ func IsReady(tm time.Duration) bool {
 	return globalReporter.IsReady(tm)
 }
 
+// Shutdown flushes the metrics and stops the reporter. It waits for up to the
+// specified duration before returning.
+func Shutdown(tm time.Duration) {
+	globalReporter.Shutdown(tm)
+}
+
 // ReportSpan is called from the app when a span message is available
 // span	span message to be put on the channel
 //

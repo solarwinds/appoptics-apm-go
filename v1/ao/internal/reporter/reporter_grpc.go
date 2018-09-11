@@ -464,6 +464,8 @@ func (r *grpcReporter) periodicTasks() {
 	getSettingsReady <- true
 	settingsTimeoutCheckReady <- true
 
+	var lastMetricsFlushSec int
+
 	for {
 		// Exit if the reporter's done channel is closed.
 		select {
@@ -481,7 +483,8 @@ func (r *grpcReporter) periodicTasks() {
 			}
 			select {
 			case <-collectMetricsReady:
-				r.collectMetrics(collectMetricsReady)
+				i := time.Now().Second() - lastMetricsFlushSec
+				r.collectMetrics(collectMetricsReady, i)
 				close(r.flushed)
 			default:
 			}
@@ -489,10 +492,17 @@ func (r *grpcReporter) periodicTasks() {
 		case <-collectMetricsTicker.C: // collect and send metrics
 			// set up ticker for next round
 			collectMetricsTicker.Reset(r.collectMetricsNextInterval())
+			lastMetricsFlushSec = time.Now().Second()
+
+			// access collectMetricInterval protected since it can be updated in updateSettings()
+			r.collectMetricIntervalLock.RLock()
+			i := r.collectMetricInterval
+			r.collectMetricIntervalLock.RUnlock()
+
 			select {
 			case <-collectMetricsReady:
 				// only kick off a new goroutine if the previous one has terminated
-				go r.collectMetrics(collectMetricsReady)
+				go r.collectMetrics(collectMetricsReady, i)
 			default:
 			}
 		case <-getSettingsTicker.C: // get settings from collector
@@ -679,14 +689,9 @@ func (r *grpcReporter) collectMetricsNextInterval() time.Duration {
 
 // collects the current metrics, puts them on the channel, and kicks off sendMetrics()
 // collectReady	a 'ready' channel to indicate if this routine has terminated
-func (r *grpcReporter) collectMetrics(collectReady chan bool) {
+func (r *grpcReporter) collectMetrics(collectReady chan bool, interval int) {
 	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { collectReady <- true }()
-
-	// access collectMetricInterval protected since it can be updated in updateSettings()
-	r.collectMetricIntervalLock.RLock()
-	interval := r.collectMetricInterval
-	r.collectMetricIntervalLock.RUnlock()
 
 	// generate a new metrics message
 	message := generateMetricsMessage(interval, r.eventConnection.queueStats)
