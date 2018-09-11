@@ -127,6 +127,13 @@ var (
 	ErrMaxRetriesExceeded     = errors.New("maximum retries exceeded")
 )
 
+const (
+	errFullInvalidServiceKey = `AppOptics agent is disabled. Check errors below.
+	No valid service key (defined as token:service_name) is found. 
+	Please check AppOptics dashboard for your token and use a valid service name.
+	A valid service name should be shorter than 256 characters without spaces, tabs or newlines.`
+)
+
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
@@ -138,8 +145,7 @@ func newGRPCReporter() reporter {
 	// service key is required, so bail out if not found
 	serviceKey := config.GetServiceKey()
 	if !config.IsValidServiceKey(serviceKey) {
-		log.Errorf("Invalid service key (token:serviceName): <%s>. Reporter disabled.", serviceKey)
-		log.Error("Check AppOptics dashboard for your token and use a service name shorter than 256 characters.")
+		log.Error(errFullInvalidServiceKey)
 		return &nullReporter{}
 	}
 

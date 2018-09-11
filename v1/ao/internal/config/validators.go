@@ -13,7 +13,7 @@ import (
 
 // InvalidEnv returns a string indicating invalid environment variables
 func InvalidEnv(env string, val string) string {
-	return fmt.Sprintf("invalid env, discarded - %s: %s", env, val)
+	return fmt.Sprintf("invalid env, discarded - %s: \"%s\"", env, val)
 }
 
 // MissingEnv returns a string indicating missing environment variables
@@ -23,7 +23,7 @@ func MissingEnv(env string) string {
 
 // NonDefaultEnv returns a string indicating non-default environment variables
 func NonDefaultEnv(env string, val string) string {
-	return fmt.Sprintf("env found - %s: %s", env, val)
+	return fmt.Sprintf("env found - %s: \"%s\"", env, val)
 }
 
 const validServiceKeyPattern = `^[a-zA-Z0-9]{64}:\S{1,255}$`
