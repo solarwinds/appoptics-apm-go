@@ -612,11 +612,16 @@ func (r *grpcReporter) eventSender() {
 		WithHWM(int(opts.GetEventBatchSize()*1024)),
 		WithIntervalGetter(opts.GetEventFlushInterval))
 
+	var closing bool
+
 	for {
 		select {
 		// Check if the agent is required to quit.
 		case <-r.done:
-			return
+			if !r.isGracefully() {
+				return
+			}
+			closing = true
 		default:
 		}
 
@@ -627,23 +632,27 @@ func (r *grpcReporter) eventSender() {
 		// The events can only be pushed into the channel when the bucket
 		// is drainable (either full or timeout) and we've got the token
 		// to push events.
-		if evtBucket.Drainable() {
-			select {
-			case <-token:
+		if evtBucket.Drainable() || closing {
+			if <-token {
 				w := evtBucket.Watermark()
 				batches <- evtBucket.Drain()
 				log.Debugf("Pushed %d bytes to event sender.", w)
-			default:
+			} else {
+				log.Warning("Dropped events as eventRetrySender is closing.")
+				closing = true
 			}
 		}
 
+		if closing {
+			return
+		}
 		// Don't consume too much CPU with noop
 		time.Sleep(time.Millisecond * 100)
 	}
 }
 
-func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan struct{} {
-	token := make(chan struct{})
+func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan bool {
+	token := make(chan bool)
 	go func() {
 		r.eventRetrySender(batches, token)
 	}()
@@ -652,37 +661,53 @@ func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan struct{} {
 
 func (r *grpcReporter) eventRetrySender(
 	batches <-chan [][]byte,
-	token chan<- struct{},
+	token chan<- bool,
 ) {
-	defer log.Warning("eventRetrySender goroutine exiting.")
+	defer func() {
+		r.eventConnection.setFlushed()
+		close(token)
+		log.Warning("eventRetrySender goroutine exiting.")
+	}()
 
 	// Push the token to the queue side to kick it off
-	token <- struct{}{}
+	token <- true
+	var closing bool
 
 	for {
 		var messages [][]byte
 		// this will block until a message arrives or the reporter is closed
 		select {
-		case b := <-batches:
-			messages = b
+		case messages = <-batches:
 		case <-r.done:
-			r.eventConnection.setFlushed()
-			return
-		}
-		method := newPostEventsMethod(r.serviceKey, messages)
-		err := r.eventConnection.InvokeRPC(r.done, method)
-
-		switch err {
-		case errInvalidServiceKey:
-			r.Shutdown(0)
-		case nil, errGiveUpAfterRetries, errTooManyRedirections:
-			select {
-			case token <- struct{}{}:
-			case <-r.done:
+			if !r.isGracefully() {
 				return
 			}
-		default:
-			log.Infof("eventRetrySender: %s", err)
+			select {
+			case messages = <-batches:
+			default:
+			}
+			closing = true
+		}
+
+		if len(messages) != 0 {
+			method := newPostEventsMethod(r.serviceKey, messages)
+			err := r.eventConnection.InvokeRPC(r.done, method)
+
+			switch err {
+			case errInvalidServiceKey:
+				r.Shutdown(0)
+			case nil, errGiveUpAfterRetries, errTooManyRedirections:
+				select {
+				case token <- true:
+				case <-r.done:
+				}
+			default:
+				log.Infof("eventRetrySender: %s", err)
+			}
+		}
+
+		if closing {
+			return
 		}
 	}
 }
