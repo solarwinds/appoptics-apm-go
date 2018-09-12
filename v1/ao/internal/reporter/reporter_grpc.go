@@ -317,12 +317,11 @@ func (r *grpcReporter) start() {
 
 // Shutdown closes the reporter by close the `done` channel. All long-running goroutines
 // monitor the channel `done` in the reporter and close themselves when the channel is closed.
-//
-//
 func (r *grpcReporter) Shutdown(duration time.Duration) error {
+	var err error
 	select {
 	case <-r.done:
-		return ErrShutdownClosedReporter
+		err = ErrShutdownClosedReporter
 	default:
 		r.doneClosed.Do(func() {
 			log.Warningf("Shutting down the gRPC reporter: %v", r.done)
@@ -331,13 +330,14 @@ func (r *grpcReporter) Shutdown(duration time.Duration) error {
 			select {
 			case <-r.flushed():
 			case <-time.After(duration):
+				err = errors.New("Shutdown timeout")
 			}
 			// There may be messages
 			r.closeConns()
 			host.Stop()
 		})
-		return nil
 	}
+	return err
 }
 
 func (r *grpcReporter) flushed() chan struct{} {
@@ -632,13 +632,22 @@ func (r *grpcReporter) eventSender() {
 		// The events can only be pushed into the channel when the bucket
 		// is drainable (either full or timeout) and we've got the token
 		// to push events.
+		//
+		// If the token is holding by eventRetrySender, it usually means the
+		// events sending is too slow (or the events are generated too fast).
+		// We have to wait in this case.
+		//
+		// If the reporter is closing, we have the last chance to send all
+		// the queued events.
 		if evtBucket.Drainable() || closing {
+			w := evtBucket.Watermark()
+			e := evtBucket.Drain()
+
 			if <-token {
-				w := evtBucket.Watermark()
-				batches <- evtBucket.Drain()
-				log.Debugf("Pushed %d bytes to event sender.", w)
+				batches <- e
+				log.Debugf("Pushed %d bytes (%d events) to event sender.", w, len(e))
 			} else {
-				log.Warning("Dropped events as eventRetrySender is closing.")
+				log.Debugf("Dropped %d events as the sender is closing.", len(e))
 				closing = true
 			}
 		}
@@ -679,13 +688,15 @@ func (r *grpcReporter) eventRetrySender(
 		select {
 		case messages = <-batches:
 		case <-r.done:
-			if !r.isGracefully() {
-				return
-			}
 			select {
 			case messages = <-batches:
 			default:
 			}
+
+			if !r.isGracefully() {
+				return
+			}
+
 			closing = true
 		}
 

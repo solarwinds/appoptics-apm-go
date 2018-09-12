@@ -321,9 +321,10 @@ func IsReady(timeout time.Duration) bool {
 }
 
 // Shutdown flush the metrics and stops the agent. It will block until the agent
-// flushes and successfully shutdown or the time is out.
+// flushes and successfully shutdown or the time is out. It returns nil for successful
+// shutdown and an error when timeout happens.
 //
 // This function should be called only once.
-func Shutdown(wait time.Duration) {
-	reporter.Shutdown(wait)
+func Shutdown(wait time.Duration) error {
+	return reporter.Shutdown(wait)
 }
