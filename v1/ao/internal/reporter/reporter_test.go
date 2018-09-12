@@ -448,7 +448,8 @@ func TestInvokeRPC(t *testing.T) {
 			}
 			return nil
 		},
-		Dialer: &NoopDialer{},
+		Dialer:  &NoopDialer{},
+		flushed: make(chan struct{}),
 	}
 	c.connect()
 
@@ -463,6 +464,7 @@ func TestInvokeRPC(t *testing.T) {
 
 	exit := make(chan struct{})
 	close(exit)
+	c.setFlushed()
 	assert.Equal(t, errReporterExiting, c.InvokeRPC(exit, mockMethod))
 
 	// Test invalid service key

@@ -102,6 +102,10 @@ type grpcConnection struct {
 	// the backoff function
 	backoff Backoff
 	Dialer
+
+	// This channel is closed after flushing the metrics.
+	flushed     chan struct{}
+	flushedOnce sync.Once
 }
 
 // GrpcConnOpt defines the function type that sets an option of the grpcConnection
@@ -146,6 +150,7 @@ func newGrpcConnection(name string, target string, opts ...GrpcConnOpt) (*grpcCo
 		insecureSkipVerify: false,
 		backoff:            DefaultBackoff,
 		Dialer:             &DefaultDialer{},
+		flushed:            make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -198,9 +203,6 @@ type grpcReporter struct {
 	// The flag to indicate gracefully stopping the reporter. It should be accessed atomically.
 	// A (default) zero value means shutdown abruptly.
 	gracefully int32
-	// This channel is closed after flushing the metrics.
-	flushed     chan struct{}
-	flushedOnce sync.Once
 }
 
 // gRPC reporter errors
@@ -271,9 +273,8 @@ func newGRPCReporter() reporter {
 		spanMessages:   make(chan SpanMessage, 1024),
 		statusMessages: make(chan []byte, 1024),
 
-		ready:   make(chan struct{}),
-		done:    make(chan struct{}),
-		flushed: make(chan struct{}),
+		ready: make(chan struct{}),
+		done:  make(chan struct{}),
 	}
 
 	r.start()
@@ -328,7 +329,7 @@ func (r *grpcReporter) Shutdown(duration time.Duration) error {
 			r.setGracefully(duration != 0)
 			close(r.done)
 			select {
-			case <-r.flushed:
+			case <-r.flushed():
 			case <-time.After(duration):
 			}
 			// There may be messages
@@ -337,6 +338,21 @@ func (r *grpcReporter) Shutdown(duration time.Duration) error {
 		})
 		return nil
 	}
+}
+
+func (r *grpcReporter) flushed() chan struct{} {
+	c := make(chan struct{})
+	go func(o chan struct{}) {
+		chs := []chan struct{}{
+			r.eventConnection.getFlushedChan(),
+			r.metricConnection.getFlushedChan(),
+		}
+		for _, ch := range chs {
+			<-ch
+		}
+		close(c)
+	}(c)
+	return c
 }
 
 // closeConns closes all the gRPC connections of a reporter
@@ -357,6 +373,7 @@ func (r *grpcReporter) Closed() bool {
 
 func (r *grpcReporter) setReady() {
 	r.readyOnce.Do(func() {
+		log.Infof("Agent(%v) is ready: Got settings from collector.", r.done)
 		close(r.ready)
 	})
 }
@@ -484,6 +501,8 @@ func (r *grpcReporter) periodicTasks() {
 				r.collectMetrics(collectMetricsReady)
 			default:
 			}
+			<-collectMetricsReady
+			r.metricConnection.setFlushed()
 			return
 		case <-collectMetricsTicker.C: // collect and send metrics
 			// set up ticker for next round
@@ -643,14 +662,13 @@ func (r *grpcReporter) eventRetrySender(
 	for {
 		var messages [][]byte
 		// this will block until a message arrives or the reporter is closed
-
 		select {
 		case b := <-batches:
 			messages = b
 		case <-r.done:
+			r.eventConnection.setFlushed()
 			return
 		}
-
 		method := newPostEventsMethod(r.serviceKey, messages)
 		err := r.eventConnection.InvokeRPC(r.done, method)
 
@@ -658,7 +676,11 @@ func (r *grpcReporter) eventRetrySender(
 		case errInvalidServiceKey:
 			r.Shutdown(0)
 		case nil, errGiveUpAfterRetries, errTooManyRedirections:
-			token <- struct{}{}
+			select {
+			case token <- struct{}{}:
+			case <-r.done:
+				return
+			}
 		default:
 			log.Infof("eventRetrySender: %s", err)
 		}
@@ -680,14 +702,7 @@ func (r *grpcReporter) collectMetricsNextInterval() time.Duration {
 // collectReady	a 'ready' channel to indicate if this routine has terminated
 func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	// notify caller that this routine has terminated (defered to end of routine)
-	defer func() {
-		select {
-		case <-r.done:
-			r.flushedOnce.Do(func() { close(r.flushed) })
-		default:
-			collectReady <- true
-		}
-	}()
+	defer func() { collectReady <- true }()
 
 	i := int(atomic.LoadInt32(&r.collectMetricInterval))
 	// generate a new metrics message
@@ -949,7 +964,9 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		// this case.
 		select {
 		case <-exit:
-			return errReporterExiting
+			if c.isFlushed() {
+				return errReporterExiting
+			}
 		default:
 		}
 
@@ -958,9 +975,12 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		// if another goroutine is messing with it at the same time, e.g. doing
 		// a redirection.
 		c.lock.RLock()
+		var cost time.Duration
 		if c.isActive() {
 			ctx, cancel := context.WithTimeout(context.Background(), grpcCtxTimeout)
+			start := time.Now()
 			err = m.Call(ctx, c.client)
+			cost = time.Now().Sub(start)
 
 			code := status.Code(err)
 			if code == codes.DeadlineExceeded ||
@@ -994,7 +1014,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			// server responded, check the result code and perform actions accordingly
 			switch result := m.ResultCode(); result {
 			case collector.ResultCode_OK:
-				log.Infof("[%s] sent %d data chunks", m, m.MessageLen())
+				log.Infof("[%s] sent %d data chunks in %v msec", m, m.MessageLen(), cost.Nanoseconds()/1e6)
 				atomic.AddInt64(&c.queueStats.numSent, m.MessageLen())
 				return nil
 
@@ -1041,6 +1061,23 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		}
 	}
 	return errShouldNotHappen
+}
+
+func (c *grpcConnection) setFlushed() {
+	c.flushedOnce.Do(func() { close(c.flushed) })
+}
+
+func (c *grpcConnection) getFlushedChan() chan struct{} {
+	return c.flushed
+}
+
+func (c *grpcConnection) isFlushed() bool {
+	select {
+	case <-c.flushed:
+		return true
+	default:
+		return false
+	}
 }
 
 func newHostID(id host.ID) *collector.HostID {
