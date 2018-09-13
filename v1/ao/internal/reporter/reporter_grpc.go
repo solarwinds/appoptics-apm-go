@@ -17,11 +17,12 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/credentials"
 
+	"context"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -315,9 +316,15 @@ func (r *grpcReporter) start() {
 	go r.spanMessageAggregator()
 }
 
+// ShutdownNow stops the reporter immediately.
+func (r *grpcReporter) ShutdownNow() error {
+	ctx, _ := context.WithTimeout(context.Background(), 0)
+	return r.Shutdown(ctx)
+}
+
 // Shutdown closes the reporter by close the `done` channel. All long-running goroutines
 // monitor the channel `done` in the reporter and close themselves when the channel is closed.
-func (r *grpcReporter) Shutdown(duration time.Duration) error {
+func (r *grpcReporter) Shutdown(ctx context.Context) error {
 	var err error
 	select {
 	case <-r.done:
@@ -325,14 +332,23 @@ func (r *grpcReporter) Shutdown(duration time.Duration) error {
 	default:
 		r.doneClosed.Do(func() {
 			log.Warningf("Shutting down the gRPC reporter: %v", r.done)
-			r.setGracefully(duration != 0)
+
+			var g bool
+			if d, ddlSet := ctx.Deadline(); ddlSet {
+				g = d.Sub(time.Now()) > 0
+			} else {
+				g = true
+			}
+			r.setGracefully(g)
+
 			close(r.done)
+
 			select {
 			case <-r.flushed():
-			case <-time.After(duration):
+			case <-ctx.Done():
 				err = errors.New("Shutdown timeout")
 			}
-			// There may be messages
+
 			r.closeConns()
 			host.Stop()
 			log.Warning("AppOptics agent stopped.")
@@ -538,7 +554,7 @@ func (r *grpcReporter) periodicTasks() {
 			r.eventConnection.resetPing()
 			go func() {
 				if r.eventConnection.ping(r.done, r.serviceKey) == errInvalidServiceKey {
-					r.Shutdown(0)
+					r.ShutdownNow()
 				}
 			}()
 		case <-r.metricConnection.pingTicker.C: // ping on metrics connection (keep alive)
@@ -546,7 +562,7 @@ func (r *grpcReporter) periodicTasks() {
 			r.metricConnection.resetPing()
 			go func() {
 				if r.metricConnection.ping(r.done, r.serviceKey) == errInvalidServiceKey {
-					r.Shutdown(0)
+					r.ShutdownNow()
 				}
 			}()
 		}
@@ -692,7 +708,7 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 
 			switch err {
 			case errInvalidServiceKey:
-				r.Shutdown(0)
+				r.ShutdownNow()
 			case nil:
 			default:
 				log.Infof("eventBatchSender: %s", err)
@@ -741,7 +757,7 @@ func (r *grpcReporter) sendMetrics(msg []byte) {
 	err := r.metricConnection.InvokeRPC(r.done, method)
 	switch err {
 	case errInvalidServiceKey:
-		r.Shutdown(0)
+		r.ShutdownNow()
 	case nil:
 	default:
 		log.Infof("sendMetrics: %s", err)
@@ -761,7 +777,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 
 	switch err {
 	case errInvalidServiceKey:
-		r.Shutdown(0)
+		r.ShutdownNow()
 	case nil:
 		r.updateSettings(method.Resp)
 	default:
@@ -877,7 +893,7 @@ func (r *grpcReporter) statusSender() {
 
 		switch err {
 		case errInvalidServiceKey:
-			r.Shutdown(0)
+			r.ShutdownNow()
 		case nil:
 		default:
 			log.Infof("statusSender: %s", err)

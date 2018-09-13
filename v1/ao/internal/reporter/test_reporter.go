@@ -3,6 +3,7 @@
 package reporter
 
 import (
+	"context"
 	"errors"
 	"log"
 	"sync"
@@ -149,10 +150,13 @@ func (r *TestReporter) Close(numBufs int) {
 }
 
 // Shutdown closes the Test reporter TODO: not supported
-func (r *TestReporter) Shutdown(duration time.Duration) error {
+func (r *TestReporter) Shutdown(ctx context.Context) error {
 	// return r.conn.Close()
 	return errors.New("shutdown is not supported by TestReporter")
 }
+
+// Shutdown closes the Test reporter immediately
+func (r *TestReporter) ShutdownNow() error { return nil }
 
 // Closed returns if the reporter is closed or not TODO: not supported
 func (r *TestReporter) Closed() bool {

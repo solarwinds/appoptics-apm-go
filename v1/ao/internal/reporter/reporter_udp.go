@@ -3,6 +3,7 @@
 package reporter
 
 import (
+	"context"
 	"net"
 	"time"
 
@@ -58,10 +59,13 @@ func (r *udpReporter) report(ctx *oboeContext, e *event) error {
 }
 
 // Shutdown closes the UDP reporter TODO: not supported
-func (r *udpReporter) Shutdown(duration time.Duration) error {
+func (r *udpReporter) Shutdown(ctx context.Context) error {
 	// return r.conn.Close()
 	return nil
 }
+
+// ShutdownNow closes the reporter immediately.
+func (r *udpReporter) ShutdownNow() error { return nil }
 
 // Closed returns if the reporter is closed or not TODO: not supported
 func (r *udpReporter) Closed() bool {

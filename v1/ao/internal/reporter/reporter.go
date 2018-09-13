@@ -4,6 +4,7 @@ package reporter
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"math"
@@ -25,7 +26,9 @@ type reporter interface {
 	// called when a Span message should be reported
 	reportSpan(span SpanMessage) error
 	// Shutdown closes the reporter.
-	Shutdown(duration time.Duration) error
+	Shutdown(ctx context.Context) error
+	// ShutdownNow closes the reporter immediately
+	ShutdownNow() error
 	// Closed returns if the reporter is already closed.
 	Closed() bool
 	// IsReady checks the state of the reporter and may wait for up to the specified
@@ -47,7 +50,8 @@ type nullReporter struct{}
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
 func (r *nullReporter) reportSpan(span SpanMessage) error             { return nil }
-func (r *nullReporter) Shutdown(duration time.Duration) error         { return nil }
+func (r *nullReporter) Shutdown(ctx context.Context) error            { return nil }
+func (r *nullReporter) ShutdownNow() error                            { return nil }
 func (r *nullReporter) Closed() bool                                  { return true }
 func (r *nullReporter) IsReady(duration time.Duration) bool           { return true }
 
@@ -63,7 +67,7 @@ func init() {
 func setGlobalReporter(reporterType string) {
 	// Close the previous reporter
 	if globalReporter != nil {
-		globalReporter.Shutdown(0)
+		globalReporter.ShutdownNow()
 	}
 
 	switch strings.ToLower(reporterType) {
@@ -85,10 +89,10 @@ func IsReady(tm time.Duration) bool {
 	return globalReporter.IsReady(tm)
 }
 
-// Shutdown flushes the metrics and stops the reporter. It waits for up to the
-// specified duration before returning.
-func Shutdown(tm time.Duration) error {
-	return globalReporter.Shutdown(tm)
+// Shutdown flushes the metrics and stops the reporter. It blocked until the reporter
+// is shutdown or the context is canceled.
+func Shutdown(ctx context.Context) error {
+	return globalReporter.Shutdown(ctx)
 }
 
 // ReportSpan is called from the app when a span message is available
