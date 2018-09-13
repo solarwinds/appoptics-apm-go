@@ -363,20 +363,22 @@ func (r *grpcReporter) IsReady(ctx context.Context) bool {
 	}
 
 	ready := make(chan struct{})
+	var e int32
 
-	go func(ch chan struct{}) {
+	go func(ch chan struct{}, exit *int32) {
 		r.cond.L.Lock()
-		for !r.isReady() {
+		for !r.isReady() && (atomic.LoadInt32(exit) != 1) {
 			r.cond.Wait()
 		}
 		r.cond.L.Unlock()
 		close(ch)
-	}(ready)
+	}(ready, &e)
 
 	select {
 	case <-ready:
 		return true
 	case <-ctx.Done():
+		atomic.StoreInt32(&e, 1)
 		return false
 	}
 }
