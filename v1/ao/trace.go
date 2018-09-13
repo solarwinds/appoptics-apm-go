@@ -316,6 +316,8 @@ func NewNullTrace() Trace { return &nullTrace{} }
 
 // IsReady checks if the agent is ready. It will block until the agent is ready
 // or the context is canceled.
+//
+// The agent is considered ready if there is a valid default setting for sampling.
 func IsReady(ctx context.Context) bool {
 	return reporter.IsReady(ctx)
 }

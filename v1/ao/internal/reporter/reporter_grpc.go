@@ -187,10 +187,11 @@ type grpcReporter struct {
 	statusMessages chan []byte      // channel for status messages (sent from agent)
 	metricMessages chan []byte      // channel for metrics messages (internal to reporter)
 
-	// The reporter is ready to use only after this channel is closed
-	ready chan struct{}
-	// The channel should only be closed once
-	readyOnce sync.Once
+	// The reporter is considered ready if there is a valid default setting for sampling.
+	// It should be accessed atomically.
+	ready int32
+	// The condition variable to notify those who are waiting for the reporter becomes ready
+	cond *sync.Cond
 
 	// The reporter doesn't have a explicit field to record its state. This channel is used to notify all the
 	// long-running goroutines to stop themselves. All the goroutines will check this channel and close if the
@@ -275,8 +276,8 @@ func newGRPCReporter() reporter {
 		statusMessages: make(chan []byte, 1024),
 		metricMessages: make(chan []byte, 1024),
 
-		ready: make(chan struct{}),
-		done:  make(chan struct{}),
+		cond: sync.NewCond(&sync.Mutex{}),
+		done: make(chan struct{}),
 	}
 
 	r.start()
@@ -339,10 +340,16 @@ func (r *grpcReporter) Closed() bool {
 	}
 }
 
-func (r *grpcReporter) setReady() {
-	r.readyOnce.Do(func() {
-		close(r.ready)
-	})
+func (r *grpcReporter) setReady(ready bool) {
+	var s int32
+	if ready {
+		s = 1
+	}
+	atomic.StoreInt32(&r.ready, s)
+}
+
+func (r *grpcReporter) isReady() bool {
+	return atomic.LoadInt32(&r.ready) == 1
 }
 
 // IsReady waits until the reporter becomes ready or the context is canceled.
@@ -351,15 +358,24 @@ func (r *grpcReporter) setReady() {
 // setting is retrieved from the collector but expires after the TTL, and no new
 // setting is fetched.
 func (r *grpcReporter) IsReady(ctx context.Context) bool {
-	select {
-	case <-r.ready:
-		return hasDefaultSetting()
-	default:
+	if r.isReady() {
+		return true
 	}
 
+	ready := make(chan struct{})
+
+	go func(ch chan struct{}) {
+		r.cond.L.Lock()
+		for !r.isReady() {
+			r.cond.Wait()
+		}
+		r.cond.L.Unlock()
+		close(ch)
+	}(ready)
+
 	select {
-	case <-r.ready:
-		return hasDefaultSetting()
+	case <-ready:
+		return true
 	case <-ctx.Done():
 		return false
 	}
@@ -776,8 +792,11 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 		mTransMap.SetCap(capacity)
 	}
 
-	if hasDefaultSetting() {
-		r.setReady()
+	if !r.isReady() && hasDefaultSetting() {
+		r.cond.L.Lock()
+		r.setReady(true)
+		r.cond.Broadcast()
+		r.cond.L.Unlock()
 	}
 }
 
@@ -788,6 +807,9 @@ func (r *grpcReporter) checkSettingsTimeout(ready chan bool) {
 	defer func() { ready <- true }()
 
 	OboeCheckSettingsTimeout()
+	if r.isReady() && !hasDefaultSetting() {
+		r.setReady(false)
+	}
 }
 
 // ========================= Status Message Handling =============================
