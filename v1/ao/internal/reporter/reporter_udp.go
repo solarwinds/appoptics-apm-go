@@ -3,8 +3,8 @@
 package reporter
 
 import (
+	"context"
 	"net"
-	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
@@ -68,9 +68,8 @@ func (r *udpReporter) Closed() bool {
 	return false
 }
 
-// IsReady checks the state of the reporter and may wait for up to the specified
-// duration until it becomes ready.
-func (r *udpReporter) IsReady(timeout time.Duration) bool { return true }
+// IsReady waits until the reporter becomes ready or the context is canceled.
+func (r *udpReporter) IsReady(ctx context.Context) bool { return true }
 
 func (r *udpReporter) reportEvent(ctx *oboeContext, e *event) error {
 	return r.report(ctx, e)

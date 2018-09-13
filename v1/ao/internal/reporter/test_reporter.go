@@ -3,6 +3,7 @@
 package reporter
 
 import (
+	"context"
 	"errors"
 	"log"
 	"sync"
@@ -161,7 +162,7 @@ func (r *TestReporter) Closed() bool {
 
 // IsReady checks the state of the reporter and may wait for up to the specified
 // duration until it becomes ready.
-func (r *TestReporter) IsReady(timeout time.Duration) bool {
+func (r *TestReporter) IsReady(ctx context.Context) bool {
 	return true
 }
 

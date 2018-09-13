@@ -234,7 +234,9 @@ func TestGRPCReporter(t *testing.T) {
 	// Test IsReady
 	ready := make(chan bool, 1)
 	r.getSettings(ready)
-	assert.True(t, r.IsReady(time.Millisecond))
+	ctxTm, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	assert.True(t, r.IsReady(ctxTm))
 	assert.True(t, hasDefaultSetting())
 	assert.True(t, func(r *grpcReporter) bool {
 		select {

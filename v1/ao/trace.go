@@ -315,7 +315,7 @@ func (t *nullTrace) recordMetrics()               {}
 func NewNullTrace() Trace { return &nullTrace{} }
 
 // IsReady checks if the agent is ready. It will block until the agent is ready
-// or the time is out.
-func IsReady(timeout time.Duration) bool {
-	return reporter.IsReady(timeout)
+// or the context is canceled.
+func IsReady(ctx context.Context) bool {
+	return reporter.IsReady(ctx)
 }

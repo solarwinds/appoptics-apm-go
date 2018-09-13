@@ -17,11 +17,12 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/credentials"
 
+	"context"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -344,13 +345,12 @@ func (r *grpcReporter) setReady() {
 	})
 }
 
-// IsReady checks the state of the reporter and may wait for up to the specified
-// duration until it becomes ready.
+// IsReady waits until the reporter becomes ready or the context is canceled.
 //
 // The reporter is still considered `not ready` if (in rare cases) the default
 // setting is retrieved from the collector but expires after the TTL, and no new
 // setting is fetched.
-func (r *grpcReporter) IsReady(timeout time.Duration) bool {
+func (r *grpcReporter) IsReady(ctx context.Context) bool {
 	select {
 	case <-r.ready:
 		return hasDefaultSetting()
@@ -360,7 +360,7 @@ func (r *grpcReporter) IsReady(timeout time.Duration) bool {
 	select {
 	case <-r.ready:
 		return hasDefaultSetting()
-	case <-time.After(timeout):
+	case <-ctx.Done():
 		return false
 	}
 }
