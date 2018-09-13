@@ -600,9 +600,12 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 // channel, collects all messages on that channel and attempts to send them to
 // the collector using the gRPC method PostEvents()
 func (r *grpcReporter) eventSender() {
-	defer log.Warning("eventSender goroutine exiting.")
-
 	batches := make(chan [][]byte)
+	defer func() {
+		close(batches)
+		log.Warning("eventSender goroutine exiting.")
+	}()
+
 	token := r.eventBatchSender(batches)
 	opts := config.ReporterOpts()
 
@@ -642,10 +645,9 @@ func (r *grpcReporter) eventSender() {
 		if evtBucket.Drainable() || closing {
 			w := evtBucket.Watermark()
 			e := evtBucket.Drain()
-
 			if <-token {
 				batches <- e
-				log.Debugf("Pushed %d bytes (%d events) to event sender.", w, len(e))
+				log.Debugf("Pushed %d bytes (%d events) to the sender.", w, len(e))
 			} else {
 				log.Debugf("Dropped %d events as the sender is closing.", len(e))
 				closing = true
@@ -687,6 +689,9 @@ func (r *grpcReporter) eventRetrySender(
 		// this will block until a message arrives or the reporter is closed
 		select {
 		case messages = <-batches:
+			if len(messages) == 0 {
+				batches = nil
+			}
 		case <-r.done:
 			select {
 			case messages = <-batches:
@@ -696,7 +701,6 @@ func (r *grpcReporter) eventRetrySender(
 			if !r.isGracefully() {
 				return
 			}
-
 			closing = true
 		}
 
