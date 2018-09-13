@@ -19,6 +19,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
+	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/mocks"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
@@ -364,7 +365,8 @@ func TestInvalidKey(t *testing.T) {
 	// set gRPC reporter
 	config.Refresh()
 	oldReporter := globalReporter
-	// numGo := runtime.NumGoroutine()
+
+	aolog.SetLevel(aolog.INFO)
 	setGlobalReporter("ssl")
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
@@ -394,12 +396,12 @@ func TestInvalidKey(t *testing.T) {
 		"eventSender goroutine exiting",
 		"spanMessageAggregator goroutine exiting",
 		"statusSender goroutine exiting",
-		"eventRetrySender goroutine exiting",
+		"eventBatchSender goroutine exiting",
 	}
 	for _, ptn := range patterns {
 		assert.True(t, strings.Contains(buf.String(), ptn))
 	}
-
+	aolog.SetLevel(aolog.WARNING)
 }
 
 func TestDefaultBackoff(t *testing.T) {
