@@ -335,6 +335,7 @@ func (r *grpcReporter) Shutdown(duration time.Duration) error {
 			// There may be messages
 			r.closeConns()
 			host.Stop()
+			log.Warning("AppOptics agent stopped.")
 		})
 	}
 	return err
@@ -373,7 +374,7 @@ func (r *grpcReporter) Closed() bool {
 
 func (r *grpcReporter) setReady() {
 	r.readyOnce.Do(func() {
-		log.Infof("Agent(%v) is ready: Got settings from collector.", r.done)
+		log.Warningf("AppOptics agent(%v) ready: got settings from collector.", r.done)
 		close(r.ready)
 	})
 }
@@ -456,7 +457,7 @@ func (c *grpcConnection) reconnect() {
 
 // long-running goroutine that kicks off periodic tasks like collectMetrics() and getSettings()
 func (r *grpcReporter) periodicTasks() {
-	defer log.Warning("periodicTasks goroutine exiting.")
+	defer log.Info("periodicTasks goroutine exiting.")
 
 	// set up tickers
 	collectMetricsTicker := time.NewTimer(r.collectMetricsNextInterval())
@@ -600,13 +601,13 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 // channel, collects all messages on that channel and attempts to send them to
 // the collector using the gRPC method PostEvents()
 func (r *grpcReporter) eventSender() {
-	batches := make(chan [][]byte)
+	batches := make(chan [][]byte, 10)
 	defer func() {
 		close(batches)
-		log.Warning("eventSender goroutine exiting.")
+		log.Info("eventSender goroutine exiting.")
 	}()
 
-	token := r.eventBatchSender(batches)
+	go r.eventBatchSender(batches)
 	opts := config.ReporterOpts()
 
 	// This event bucket is drainable either after it reaches HWM, or the flush
@@ -644,14 +645,9 @@ func (r *grpcReporter) eventSender() {
 		// the queued events.
 		if evtBucket.Drainable() || closing {
 			w := evtBucket.Watermark()
-			e := evtBucket.Drain()
-			if <-token {
-				batches <- e
-				log.Debugf("Pushed %d bytes (%d events) to the sender.", w, len(e))
-			} else {
-				log.Debugf("Dropped %d events as the sender is closing.", len(e))
-				closing = true
-			}
+
+			batches <- evtBucket.Drain()
+			log.Debugf("Pushed %d bytes (%d events) to the sender.", w, len(batches))
 		}
 
 		if closing {
@@ -662,30 +658,16 @@ func (r *grpcReporter) eventSender() {
 	}
 }
 
-func (r *grpcReporter) eventBatchSender(batches chan [][]byte) chan bool {
-	token := make(chan bool)
-	go func() {
-		r.eventRetrySender(batches, token)
-	}()
-	return token
-}
-
-func (r *grpcReporter) eventRetrySender(
-	batches <-chan [][]byte,
-	token chan<- bool,
-) {
+func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 	defer func() {
 		r.eventConnection.setFlushed()
-		close(token)
-		log.Warning("eventRetrySender goroutine exiting.")
+		log.Info("eventBatchSender goroutine exiting.")
 	}()
 
-	// Push the token to the queue side to kick it off
-	token <- true
 	var closing bool
+	var messages [][]byte
 
 	for {
-		var messages [][]byte
 		// this will block until a message arrives or the reporter is closed
 		select {
 		case messages = <-batches:
@@ -711,13 +693,9 @@ func (r *grpcReporter) eventRetrySender(
 			switch err {
 			case errInvalidServiceKey:
 				r.Shutdown(0)
-			case nil, errGiveUpAfterRetries, errTooManyRedirections:
-				select {
-				case token <- true:
-				case <-r.done:
-				}
+			case nil:
 			default:
-				log.Infof("eventRetrySender: %s", err)
+				log.Infof("eventBatchSender: %s", err)
 			}
 		}
 
@@ -872,7 +850,7 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 // long-running goroutine that listens on the status message channel, collects all messages
 // on that channel and attempts to send them to the collector using the GRPC method PostStatus()
 func (r *grpcReporter) statusSender() {
-	defer log.Warning("statusSender goroutine exiting.")
+	defer log.Info("statusSender goroutine exiting.")
 
 	for {
 		var messages [][]byte
@@ -929,7 +907,7 @@ func (r *grpcReporter) reportSpan(span SpanMessage) error {
 // long-running goroutine that listens on the span message channel and processes (aggregates)
 // incoming span messages
 func (r *grpcReporter) spanMessageAggregator() {
-	defer log.Warning("spanMessageAggregator goroutine exiting.")
+	defer log.Info("spanMessageAggregator goroutine exiting.")
 	for {
 		select {
 		case span := <-r.spanMessages:
