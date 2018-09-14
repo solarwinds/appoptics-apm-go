@@ -26,7 +26,9 @@ type reporter interface {
 	// called when a Span message should be reported
 	reportSpan(span SpanMessage) error
 	// Shutdown closes the reporter.
-	Shutdown() error
+	Shutdown(ctx context.Context) error
+	// ShutdownNow closes the reporter immediately
+	ShutdownNow() error
 	// Closed returns if the reporter is already closed.
 	Closed() bool
 	// IsReady waits until the reporter becomes ready or the context is canceled.
@@ -47,7 +49,8 @@ type nullReporter struct{}
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
 func (r *nullReporter) reportSpan(span SpanMessage) error             { return nil }
-func (r *nullReporter) Shutdown() error                               { return nil }
+func (r *nullReporter) Shutdown(ctx context.Context) error            { return nil }
+func (r *nullReporter) ShutdownNow() error                            { return nil }
 func (r *nullReporter) Closed() bool                                  { return true }
 func (r *nullReporter) IsReady(ctx context.Context) bool              { return true }
 
@@ -63,7 +66,7 @@ func init() {
 func setGlobalReporter(reporterType string) {
 	// Close the previous reporter
 	if globalReporter != nil {
-		globalReporter.Shutdown()
+		globalReporter.ShutdownNow()
 	}
 
 	switch strings.ToLower(reporterType) {
@@ -82,6 +85,12 @@ func IsReady(ctx context.Context) bool {
 	// globalReporter is not protected by a mutex as currently it's only modified
 	// from the init() function.
 	return globalReporter.IsReady(ctx)
+}
+
+// Shutdown flushes the metrics and stops the reporter. It blocked until the reporter
+// is shutdown or the context is canceled.
+func Shutdown(ctx context.Context) error {
+	return globalReporter.Shutdown(ctx)
 }
 
 // ReportSpan is called from the app when a span message is available
