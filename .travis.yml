@@ -38,7 +38,7 @@ script:
   - pushd opentracing
   - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config,github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
   - popd
-  - gocovmerge cov.out covao.out internal/reporter/cov.out internal/reporter/covao.out internal/log/cov.out internal/log/covao.out internal/config/cov.out internal/config/covao.out internal/host/cov.out internal/host/covao.out opentracing/cov.out opentracing/covao.out > coverage.txt
+  - gocovmerge cov.out internal/reporter/cov.out internal/log/cov.out internal/config/cov.out internal/host/cov.out opentracing/cov.out > coverage.txt
 
 after_success:
   - if [[ $TRAVIS_GO_VERSION == 1.9* ]]; then bash <(curl -s https://codecov.io/bash); fi

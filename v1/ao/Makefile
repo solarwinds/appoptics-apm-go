@@ -5,8 +5,7 @@ prev_branch :=$(shell git rev-parse --abbrev-ref HEAD)
 coverpkg="github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing"
 cov_args=-covermode=atomic -coverpkg=$(coverpkg)
 cov_out=-coverprofile=cov.out
-covao_out=-coverprofile=covao.out
-cov_files=cov.out covao.out internal/reporter/cov.out internal/reporter/covao.out opentracing/cov.out opentracing/covao.out
+cov_files=cov.out internal/reporter/cov.out opentracing/cov.out
 cov_merge=covmerge.out
 test_args=-race
 

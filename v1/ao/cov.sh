@@ -25,6 +25,6 @@ pushd opentracing
 go test -v -race -covermode=atomic -coverprofile=cov.out
 popd
 
-gocovmerge cov.out covao.out internal/reporter/cov.out internal/reporter/covao.out internal/log/cov.out internal/log/covao.out internal/config/cov.out internal/config/covao.out internal/host/cov.out internal/host/covao.out opentracing/cov.out opentracing/covao.out > covmerge.out
+gocovmerge cov.out internal/reporter/cov.out internal/log/cov.out internal/config/cov.out internal/host/cov.out opentracing/cov.out > covmerge.out
 
 #go tool cover -html=covmerge.out
