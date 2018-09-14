@@ -14,11 +14,8 @@ test: export APPOPTICS_DEBUG_LEVEL=1
 #test: export APPOPTICS_DEBUG_LEVEL=0
 test:
 	go test $(test_args) $(cov_args) -v $(cov_out)
-	go test $(test_args) $(cov_args) -v $(covao_out) -tags disable_tracing
 	cd internal/reporter && go test $(test_args) $(cov_args) $(cov_out) -v
-	cd internal/reporter && go test $(test_args) $(cov_args) $(covao_out) -v -tags disable_tracing
 	cd opentracing && go test $(test_args) $(cov_args) $(cov_out) -v
-	cd opentracing && go test $(test_args) $(cov_args) $(covao_out) -v -tags disable_tracing
 
 $(cov_merge): test $(cov_files)
 	gocovmerge $(cov_files) > $(cov_merge)

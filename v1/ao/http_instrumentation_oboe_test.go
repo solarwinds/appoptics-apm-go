@@ -1,4 +1,3 @@
-// +build !disable_tracing
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 
 package ao_test
