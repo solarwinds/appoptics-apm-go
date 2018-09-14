@@ -6,7 +6,7 @@ package ao
 import (
 	"net/http"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 // HTTPClientSpan is a Span that aids in reporting HTTP client requests.

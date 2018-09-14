@@ -24,7 +24,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+	"context"
 )
 
 func handler404(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(404) }

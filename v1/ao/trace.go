@@ -8,7 +8,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
-	"golang.org/x/net/context"
+	"context"
 )
 
 // Trace represents the root span of a distributed trace for this request that reports

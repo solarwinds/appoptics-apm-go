@@ -260,13 +260,13 @@ logically matches your application; for more information [see our custom span
 documentation](https://docs.appoptics.com/kb/apm_tracing/custom_instrumentation/).
 
 The [Go blog](https://blog.golang.org/context) recommends propagating request context using the
-package [golang.org/x/net/context](godoc.org/golang.org/x/net/context): "At Google, we require that
-Go programmers pass a [Context](https://godoc.org/golang.org/x/net/context) parameter as the first
+package [context](godoc.org/context): "At Google, we require that
+Go programmers pass a [Context](https://godoc.org/context) parameter as the first
 argument to every function on the call path between incoming and outgoing requests." Frameworks like
 [Gin](https://godoc.org/github.com/gin-gonic/gin#Context) and
 [Gizmo](https://godoc.org/github.com/NYTimes/gizmo/server#ContextHandler) use Context
 implementations, for example. We provide helper methods that allow a Trace to be associated with a
-[context.Context](https://godoc.org/golang.org/x/net/context) interface; for example,
+[context.Context](https://godoc.org/context) interface; for example,
 [ao.BeginSpan](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginSpan) returns both a
 new Span and an associated context, and
 [ao.Info(ctx)](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Info) and

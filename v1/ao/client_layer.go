@@ -3,7 +3,7 @@
 
 package ao
 
-import "golang.org/x/net/context"
+import "context"
 
 // BeginQuerySpan returns a Span that reports metadata used by AppOptics to filter
 // query latency heatmaps and charts by span name, query statement, DB host and table.

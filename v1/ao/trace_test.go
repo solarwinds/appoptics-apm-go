@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"

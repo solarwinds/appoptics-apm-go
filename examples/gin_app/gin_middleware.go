@@ -6,7 +6,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/net/context"
+	"context"
 )
 
 const (
