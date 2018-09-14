@@ -5,7 +5,6 @@ package reporter
 import (
 	"context"
 	"net"
-	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
@@ -59,13 +58,10 @@ func (r *udpReporter) report(ctx *oboeContext, e *event) error {
 }
 
 // Shutdown closes the UDP reporter TODO: not supported
-func (r *udpReporter) Shutdown(ctx context.Context) error {
+func (r *udpReporter) Shutdown() error {
 	// return r.conn.Close()
 	return nil
 }
-
-// ShutdownNow closes the reporter immediately.
-func (r *udpReporter) ShutdownNow() error { return nil }
 
 // Closed returns if the reporter is closed or not TODO: not supported
 func (r *udpReporter) Closed() bool {
