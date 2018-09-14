@@ -352,12 +352,12 @@ func (r *grpcReporter) isReady() bool {
 	return atomic.LoadInt32(&r.ready) == 1
 }
 
-// IsReady waits until the reporter becomes ready or the context is canceled.
+// WaitForReady waits until the reporter becomes ready or the context is canceled.
 //
 // The reporter is still considered `not ready` if (in rare cases) the default
 // setting is retrieved from the collector but expires after the TTL, and no new
 // setting is fetched.
-func (r *grpcReporter) IsReady(ctx context.Context) bool {
+func (r *grpcReporter) WaitForReady(ctx context.Context) bool {
 	if r.isReady() {
 		return true
 	}

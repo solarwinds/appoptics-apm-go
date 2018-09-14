@@ -68,8 +68,8 @@ func (r *udpReporter) Closed() bool {
 	return false
 }
 
-// IsReady waits until the reporter becomes ready or the context is canceled.
-func (r *udpReporter) IsReady(ctx context.Context) bool { return true }
+// WaitForReady waits until the reporter becomes ready or the context is canceled.
+func (r *udpReporter) WaitForReady(ctx context.Context) bool { return true }
 
 func (r *udpReporter) reportEvent(ctx *oboeContext, e *event) error {
 	return r.report(ctx, e)

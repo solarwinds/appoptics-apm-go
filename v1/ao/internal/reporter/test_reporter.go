@@ -160,9 +160,9 @@ func (r *TestReporter) Closed() bool {
 	return false
 }
 
-// IsReady checks the state of the reporter and may wait for up to the specified
+// WaitForReady checks the state of the reporter and may wait for up to the specified
 // duration until it becomes ready.
-func (r *TestReporter) IsReady(ctx context.Context) bool {
+func (r *TestReporter) WaitForReady(ctx context.Context) bool {
 	return true
 }
 

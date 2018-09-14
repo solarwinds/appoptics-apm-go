@@ -231,18 +231,18 @@ func TestGRPCReporter(t *testing.T) {
 
 	r := globalReporter.(*grpcReporter)
 
-	// Test IsReady
+	// Test WaitForReady
 	// The reporter is not ready when there is no default setting.
 	ctxTm1, cancel1 := context.WithTimeout(context.Background(), 0)
 	defer cancel1()
-	assert.False(t, r.IsReady(ctxTm1))
+	assert.False(t, r.WaitForReady(ctxTm1))
 
 	// The reporter becomes ready after it has got the default setting.
 	ready := make(chan bool, 1)
 	r.getSettings(ready)
 	ctxTm2, cancel2 := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel2()
-	assert.True(t, r.IsReady(ctxTm2))
+	assert.True(t, r.WaitForReady(ctxTm2))
 	assert.True(t, r.isReady())
 
 	// The reporter becomes not ready after the default setting has been deleted
@@ -251,7 +251,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	assert.False(t, r.isReady())
 	ctxTm3, cancel3 := context.WithTimeout(context.Background(), 0)
-	assert.False(t, r.IsReady(ctxTm3))
+	assert.False(t, r.WaitForReady(ctxTm3))
 	defer cancel3()
 
 	ctx := newTestContext(t)
