@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
-	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 )
@@ -98,14 +97,12 @@ func TestStopHostIDObserver(t *testing.T) {
 		log.SetOutput(os.Stderr)
 	}()
 
-	aolog.SetLevel(aolog.INFO)
 	Stop()
 	assert.True(t, strings.Contains(buf.String(),
 		stopHostIdObserverByUser), buf.String())
 	buf.Reset()
 	Stop()
 	assert.Equal(t, "", buf.String())
-	aolog.SetLevel(aolog.WARNING)
 }
 
 func TestCurrentID(t *testing.T) {

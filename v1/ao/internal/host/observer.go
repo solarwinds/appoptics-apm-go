@@ -38,7 +38,7 @@ const (
 // standalone goroutine.
 func observer() {
 	log.Debug(hostObserverStarted)
-	defer log.Info(hostObserverStopped)
+	defer log.Warning(hostObserverStopped)
 
 	// Only one hostID updater is allowed at a time.
 	token := make(chan struct{}, 1)

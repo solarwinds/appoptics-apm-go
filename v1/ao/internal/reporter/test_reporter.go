@@ -150,13 +150,10 @@ func (r *TestReporter) Close(numBufs int) {
 }
 
 // Shutdown closes the Test reporter TODO: not supported
-func (r *TestReporter) Shutdown(ctx context.Context) error {
+func (r *TestReporter) Shutdown() error {
 	// return r.conn.Close()
 	return errors.New("shutdown is not supported by TestReporter")
 }
-
-// Shutdown closes the Test reporter immediately
-func (r *TestReporter) ShutdownNow() error { return nil }
 
 // Closed returns if the reporter is closed or not TODO: not supported
 func (r *TestReporter) Closed() bool {
@@ -165,7 +162,7 @@ func (r *TestReporter) Closed() bool {
 
 // IsReady checks the state of the reporter and may wait for up to the specified
 // duration until it becomes ready.
-func (r *TestReporter) IsReady(timeout time.Duration) bool {
+func (r *TestReporter) IsReady(ctx context.Context) bool {
 	return true
 }
 
