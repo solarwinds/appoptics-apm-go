@@ -80,7 +80,7 @@ func PID() int {
 func Stop() {
 	exitClosed.Do(func() {
 		close(exit)
-		log.Warning(stopHostIdObserverByUser)
+		log.Info(stopHostIdObserverByUser)
 	})
 }
 
