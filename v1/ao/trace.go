@@ -6,10 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"context"
-
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
+	"golang.org/x/net/context"
 )
 
 // Trace represents the root span of a distributed trace for this request that reports
@@ -315,18 +314,10 @@ func (t *nullTrace) recordMetrics()               {}
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }
 
-// IsReady checks if the agent is ready. It will block until the agent is ready
-// or the time is out.
-func IsReady(timeout time.Duration) bool {
-	return reporter.IsReady(timeout)
-}
-
-// Shutdown flush the metrics and stops the agent. The call will block until the agent
-// flushes and is successfully shutdown or the context is canceled. It returns nil
-// for successful shutdown and or error when the context is canceled or the agent
-// has already been closed before.
+// WaitForReady checks if the agent is ready. It will block until the agent is ready
+// or the context is canceled.
 //
-// This function should be called only once.
-func Shutdown(ctx context.Context) error {
-	return reporter.Shutdown(ctx)
+// The agent is considered ready if there is a valid default setting for sampling.
+func WaitForReady(ctx context.Context) bool {
+	return reporter.WaitForReady(ctx)
 }

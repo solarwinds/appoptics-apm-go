@@ -26,14 +26,11 @@ type reporter interface {
 	// called when a Span message should be reported
 	reportSpan(span SpanMessage) error
 	// Shutdown closes the reporter.
-	Shutdown(ctx context.Context) error
-	// ShutdownNow closes the reporter immediately
-	ShutdownNow() error
+	Shutdown() error
 	// Closed returns if the reporter is already closed.
 	Closed() bool
-	// IsReady checks the state of the reporter and may wait for up to the specified
-	// duration until it becomes ready.
-	IsReady(duration time.Duration) bool
+	// WaitForReady waits until the reporter becomes ready or the context is canceled.
+	WaitForReady(context.Context) bool
 }
 
 // currently used reporter
@@ -50,10 +47,9 @@ type nullReporter struct{}
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
 func (r *nullReporter) reportSpan(span SpanMessage) error             { return nil }
-func (r *nullReporter) Shutdown(ctx context.Context) error            { return nil }
-func (r *nullReporter) ShutdownNow() error                            { return nil }
+func (r *nullReporter) Shutdown() error                               { return nil }
 func (r *nullReporter) Closed() bool                                  { return true }
-func (r *nullReporter) IsReady(duration time.Duration) bool           { return true }
+func (r *nullReporter) WaitForReady(ctx context.Context) bool         { return true }
 
 // init() is called only once on program startup. Here we create the reporter
 // that will be used throughout the runtime of the app. Default is 'ssl' but
@@ -67,7 +63,7 @@ func init() {
 func setGlobalReporter(reporterType string) {
 	// Close the previous reporter
 	if globalReporter != nil {
-		globalReporter.ShutdownNow()
+		globalReporter.Shutdown()
 	}
 
 	switch strings.ToLower(reporterType) {
@@ -81,18 +77,11 @@ func setGlobalReporter(reporterType string) {
 	}
 }
 
-// IsReady checks the state of the reporter and may wait for up to the specified
-// duration until it becomes ready.
-func IsReady(tm time.Duration) bool {
+// WaitForReady waits until the reporter becomes ready or the context is canceled.
+func WaitForReady(ctx context.Context) bool {
 	// globalReporter is not protected by a mutex as currently it's only modified
 	// from the init() function.
-	return globalReporter.IsReady(tm)
-}
-
-// Shutdown flushes the metrics and stops the reporter. It blocked until the reporter
-// is shutdown or the context is canceled.
-func Shutdown(ctx context.Context) error {
-	return globalReporter.Shutdown(ctx)
+	return globalReporter.WaitForReady(ctx)
 }
 
 // ReportSpan is called from the app when a span message is available
