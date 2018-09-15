@@ -287,7 +287,7 @@ func newGRPCReporter() reporter {
 
 	r.start()
 
-	log.Infof("AppOptics reporter is started: %v", r.done)
+	log.Warningf("AppOptics reporter is initialized: %v", r.done)
 	return r
 }
 
@@ -339,7 +339,7 @@ func (r *grpcReporter) Shutdown(ctx context.Context) error {
 		err = ErrShutdownClosedReporter
 	default:
 		r.doneClosed.Do(func() {
-			log.Warningf("Shutting down the gRPC reporter: %v", r.done)
+			log.Warningf("Shutting down the reporter: %v", r.done)
 
 			var g bool
 			if d, ddlSet := ctx.Deadline(); ddlSet {
@@ -359,7 +359,7 @@ func (r *grpcReporter) Shutdown(ctx context.Context) error {
 
 			r.closeConns()
 			host.Stop()
-			log.Warning("AppOptics agent stopped.")
+			log.Warning("AppOptics agent is stopped.")
 		})
 	}
 	return err
@@ -850,6 +850,7 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	if !r.isReady() && hasDefaultSetting() {
 		r.cond.L.Lock()
 		r.setReady(true)
+		log.Warningf("AppOptics agent (%v) is ready.", r.done)
 		r.cond.Broadcast()
 		r.cond.L.Unlock()
 	}
@@ -863,6 +864,7 @@ func (r *grpcReporter) checkSettingsTimeout(ready chan bool) {
 
 	OboeCheckSettingsTimeout()
 	if r.isReady() && !hasDefaultSetting() {
+		log.Warningf("Sampling setting expired. AppOptics agent (%v) is not working.", r.done)
 		r.setReady(false)
 	}
 }
