@@ -17,11 +17,12 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/credentials"
 
+	"context"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -185,6 +186,13 @@ type grpcReporter struct {
 	spanMessages   chan SpanMessage // channel for span messages (sent from agent)
 	statusMessages chan []byte      // channel for status messages (sent from agent)
 	metricMessages chan []byte      // channel for metrics messages (internal to reporter)
+
+	// The reporter is considered ready if there is a valid default setting for sampling.
+	// It should be accessed atomically.
+	ready int32
+	// The condition variable to notify those who are waiting for the reporter becomes ready
+	cond *sync.Cond
+
 	// The reporter doesn't have a explicit field to record its state. This channel is used to notify all the
 	// long-running goroutines to stop themselves. All the goroutines will check this channel and close if the
 	// channel is closed.
@@ -268,6 +276,7 @@ func newGRPCReporter() reporter {
 		statusMessages: make(chan []byte, 1024),
 		metricMessages: make(chan []byte, 1024),
 
+		cond: sync.NewCond(&sync.Mutex{}),
 		done: make(chan struct{}),
 	}
 
@@ -327,6 +336,49 @@ func (r *grpcReporter) Closed() bool {
 	case <-r.done:
 		return true
 	default:
+		return false
+	}
+}
+
+func (r *grpcReporter) setReady(ready bool) {
+	var s int32
+	if ready {
+		s = 1
+	}
+	atomic.StoreInt32(&r.ready, s)
+}
+
+func (r *grpcReporter) isReady() bool {
+	return atomic.LoadInt32(&r.ready) == 1
+}
+
+// WaitForReady waits until the reporter becomes ready or the context is canceled.
+//
+// The reporter is still considered `not ready` if (in rare cases) the default
+// setting is retrieved from the collector but expires after the TTL, and no new
+// setting is fetched.
+func (r *grpcReporter) WaitForReady(ctx context.Context) bool {
+	if r.isReady() {
+		return true
+	}
+
+	ready := make(chan struct{})
+	var e int32
+
+	go func(ch chan struct{}, exit *int32) {
+		r.cond.L.Lock()
+		for !r.isReady() && (atomic.LoadInt32(exit) != 1) {
+			r.cond.Wait()
+		}
+		r.cond.L.Unlock()
+		close(ch)
+	}(ready, &e)
+
+	select {
+	case <-ready:
+		return true
+	case <-ctx.Done():
+		atomic.StoreInt32(&e, 1)
 		return false
 	}
 }
@@ -741,6 +793,13 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 		}
 		mTransMap.SetCap(capacity)
 	}
+
+	if !r.isReady() && hasDefaultSetting() {
+		r.cond.L.Lock()
+		r.setReady(true)
+		r.cond.Broadcast()
+		r.cond.L.Unlock()
+	}
 }
 
 // delete settings that have timed out according to their TTL
@@ -750,6 +809,9 @@ func (r *grpcReporter) checkSettingsTimeout(ready chan bool) {
 	defer func() { ready <- true }()
 
 	OboeCheckSettingsTimeout()
+	if r.isReady() && !hasDefaultSetting() {
+		r.setReady(false)
+	}
 }
 
 // ========================= Status Message Handling =============================

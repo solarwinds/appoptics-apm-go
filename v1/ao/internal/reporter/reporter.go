@@ -4,6 +4,7 @@ package reporter
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"math"
@@ -28,6 +29,8 @@ type reporter interface {
 	Shutdown() error
 	// Closed returns if the reporter is already closed.
 	Closed() bool
+	// WaitForReady waits until the reporter becomes ready or the context is canceled.
+	WaitForReady(context.Context) bool
 }
 
 // currently used reporter
@@ -46,6 +49,7 @@ func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return n
 func (r *nullReporter) reportSpan(span SpanMessage) error             { return nil }
 func (r *nullReporter) Shutdown() error                               { return nil }
 func (r *nullReporter) Closed() bool                                  { return true }
+func (r *nullReporter) WaitForReady(ctx context.Context) bool         { return true }
 
 // init() is called only once on program startup. Here we create the reporter
 // that will be used throughout the runtime of the app. Default is 'ssl' but
@@ -71,6 +75,13 @@ func setGlobalReporter(reporterType string) {
 		globalReporter = udpNewReporter()
 	case "none":
 	}
+}
+
+// WaitForReady waits until the reporter becomes ready or the context is canceled.
+func WaitForReady(ctx context.Context) bool {
+	// globalReporter is not protected by a mutex as currently it's only modified
+	// from the init() function.
+	return globalReporter.WaitForReady(ctx)
 }
 
 // ReportSpan is called from the app when a span message is available

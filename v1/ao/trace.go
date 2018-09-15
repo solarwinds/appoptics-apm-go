@@ -313,3 +313,11 @@ func (t *nullTrace) recordMetrics()               {}
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }
+
+// WaitForReady checks if the agent is ready. It will block until the agent is ready
+// or the context is canceled.
+//
+// The agent is considered ready if there is a valid default setting for sampling.
+func WaitForReady(ctx context.Context) bool {
+	return reporter.WaitForReady(ctx)
+}

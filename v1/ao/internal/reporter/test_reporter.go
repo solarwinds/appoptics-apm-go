@@ -3,6 +3,7 @@
 package reporter
 
 import (
+	"context"
 	"errors"
 	"log"
 	"sync"
@@ -157,6 +158,12 @@ func (r *TestReporter) Shutdown() error {
 // Closed returns if the reporter is closed or not TODO: not supported
 func (r *TestReporter) Closed() bool {
 	return false
+}
+
+// WaitForReady checks the state of the reporter and may wait for up to the specified
+// duration until it becomes ready.
+func (r *TestReporter) WaitForReady(ctx context.Context) bool {
+	return true
 }
 
 func (r *TestReporter) report(ctx *oboeContext, e *event) error {
