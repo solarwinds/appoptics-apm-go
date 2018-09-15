@@ -8,6 +8,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -58,10 +59,13 @@ func (r *udpReporter) report(ctx *oboeContext, e *event) error {
 }
 
 // Shutdown closes the UDP reporter TODO: not supported
-func (r *udpReporter) Shutdown() error {
+func (r *udpReporter) Shutdown(ctx context.Context) error {
 	// return r.conn.Close()
-	return nil
+	return errors.New("not implemented")
 }
+
+// ShutdownNow closes the reporter immediately.
+func (r *udpReporter) ShutdownNow() error { return nil }
 
 // Closed returns if the reporter is closed or not TODO: not supported
 func (r *udpReporter) Closed() bool {
