@@ -400,7 +400,7 @@ func TestInvalidKey(t *testing.T) {
 
 	patterns := []string{
 		"server responded: Invalid API key",
-		"Shutting down the gRPC reporter",
+		"Shutting down the reporter",
 		// "periodicTasks goroutine exiting",
 		"eventSender goroutine exiting",
 		"spanMessageAggregator goroutine exiting",
