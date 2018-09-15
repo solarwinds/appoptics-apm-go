@@ -19,6 +19,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
+	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/mocks"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
@@ -274,7 +275,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	assert.Equal(t, serviceKey, r.serviceKey)
 
-	assert.Equal(t, grpcMetricIntervalDefault, r.collectMetricInterval)
+	assert.Equal(t, int32(grpcMetricIntervalDefault), r.collectMetricInterval)
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
 	assert.Equal(t, grpcSettingsTimeoutCheckIntervalDefault, r.settingsTimeoutCheckInterval)
 
@@ -326,7 +327,8 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
 	r := globalReporter.(*grpcReporter)
-	r.Shutdown()
+	r.ShutdownNow()
+
 	assert.Equal(t, true, r.Closed())
 
 	// // Print current goroutines stack
@@ -334,7 +336,7 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	// runtime.Stack(buf, true)
 	// fmt.Printf("%s", buf)
 
-	e := r.Shutdown()
+	e := r.ShutdownNow()
 	assert.NotEqual(t, nil, e)
 
 	// stop test reporter
@@ -372,7 +374,8 @@ func TestInvalidKey(t *testing.T) {
 	// set gRPC reporter
 	config.Refresh()
 	oldReporter := globalReporter
-	// numGo := runtime.NumGoroutine()
+
+	aolog.SetLevel(aolog.INFO)
 	setGlobalReporter("ssl")
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
@@ -387,7 +390,7 @@ func TestInvalidKey(t *testing.T) {
 	// The agent reporter should be closed due to received INVALID_API_KEY from the collector
 	assert.Equal(t, true, r.Closed())
 
-	e := r.Shutdown()
+	e := r.ShutdownNow()
 	assert.NotEqual(t, nil, e)
 
 	// Tear down everything.
@@ -397,17 +400,17 @@ func TestInvalidKey(t *testing.T) {
 
 	patterns := []string{
 		"server responded: Invalid API key",
-		"Shutting down the gRPC reporter",
+		"Shutting down the reporter",
 		// "periodicTasks goroutine exiting",
 		"eventSender goroutine exiting",
 		"spanMessageAggregator goroutine exiting",
 		"statusSender goroutine exiting",
-		"eventRetrySender goroutine exiting",
+		"eventBatchSender goroutine exiting",
 	}
 	for _, ptn := range patterns {
 		assert.True(t, strings.Contains(buf.String(), ptn))
 	}
-
+	aolog.SetLevel(aolog.WARNING)
 }
 
 func TestDefaultBackoff(t *testing.T) {
@@ -456,7 +459,8 @@ func TestInvokeRPC(t *testing.T) {
 			}
 			return nil
 		},
-		Dialer: &NoopDialer{},
+		Dialer:  &NoopDialer{},
+		flushed: make(chan struct{}),
 	}
 	c.connect()
 
@@ -471,6 +475,7 @@ func TestInvokeRPC(t *testing.T) {
 
 	exit := make(chan struct{})
 	close(exit)
+	c.setFlushed()
 	assert.Equal(t, errReporterExiting, c.InvokeRPC(exit, mockMethod))
 
 	// Test invalid service key
