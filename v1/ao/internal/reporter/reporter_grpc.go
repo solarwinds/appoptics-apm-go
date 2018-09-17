@@ -211,6 +211,7 @@ type grpcReporter struct {
 // gRPC reporter errors
 var (
 	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed reporter")
+	ErrShutdownTimeout        = errors.New("Shutdown timeout")
 	ErrReporterIsClosed       = errors.New("the reporter is closed")
 	ErrMaxRetriesExceeded     = errors.New("maximum retries exceeded")
 )
@@ -355,7 +356,7 @@ func (r *grpcReporter) Shutdown(ctx context.Context) error {
 			select {
 			case <-r.flushed():
 			case <-ctx.Done():
-				err = errors.New("Shutdown timeout")
+				err = ErrShutdownTimeout
 			}
 
 			r.closeConns()
