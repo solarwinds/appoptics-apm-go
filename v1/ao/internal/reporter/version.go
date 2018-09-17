@@ -6,4 +6,4 @@ package reporter
 Do not change this file manually. It will be modified by `make tag-and-release`.
 Check the Makefile for more details.
 */
-const initVersion = "1.2.0"
+const initVersion = "1.3.0"

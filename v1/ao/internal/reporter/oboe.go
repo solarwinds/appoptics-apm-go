@@ -303,6 +303,25 @@ func getSetting(layer string) (*oboeSettings, bool) {
 	return nil, false
 }
 
+func removeSetting(layer string) {
+	globalSettingsCfg.lock.RLock()
+	defer globalSettingsCfg.lock.RUnlock()
+
+	key := oboeSettingKey{
+		sType: TYPE_DEFAULT,
+		layer: "",
+	}
+
+	delete(globalSettingsCfg.settings, key)
+}
+
+func hasDefaultSetting() bool {
+	if _, ok := getSetting(""); ok {
+		return true
+	}
+	return false
+}
+
 func shouldSample(sampleRate int) bool {
 	retval := sampleRate == maxSamplingRate || rand.Intn(maxSamplingRate) <= sampleRate
 	// log.Debugf("shouldSample(%v) => %v", sampleRate, retval)
