@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"strings"
@@ -1050,7 +1051,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			code := status.Code(err)
 			if code == codes.DeadlineExceeded ||
 				code == codes.Canceled {
-				log.Infof("[%s] Connection becomes stale: %v", m, err)
+				log.Infof("[%s] Connection becomes stale: %v.", m, err)
 				err = errors.Wrap(err, "connection is stale")
 				c.setActive(false)
 			}
@@ -1066,9 +1067,9 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			// gRPC handles the reconnection automatically.
 			failsNum++
 			if failsNum == grpcRetryLogThreshold {
-				log.Warningf("[%s] invocation error: %v", m, err)
+				log.Warningf("[%s] invocation error: %v.", m, err)
 			} else {
-				log.Debugf("[%s] (%v) invocation error: %v", m, failsNum, err)
+				log.Debugf("[%s] (%v) invocation error: %v.", m, failsNum, err)
 			}
 		} else {
 			if failsNum >= grpcRetryLogThreshold {
@@ -1076,28 +1077,33 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			}
 			failsNum = 0
 
+			arg := ""
+			if m.Arg() != "" {
+				arg = fmt.Sprintf("Arg:%s", m.Arg())
+			}
 			// server responded, check the result code and perform actions accordingly
 			switch result := m.ResultCode(); result {
 			case collector.ResultCode_OK:
-				log.Infof("[%s] sent %d data chunks in %v msec", m, m.MessageLen(), cost.Nanoseconds()/1e6)
+				log.Infof("[%s] sent %d data chunks in %v msec. %s",
+					m, m.MessageLen(), cost.Nanoseconds()/1e6, arg)
 				atomic.AddInt64(&c.queueStats.numSent, m.MessageLen())
 				return nil
 
 			case collector.ResultCode_TRY_LATER:
-				log.Infof("[%s] server responded: Try later", m)
+				log.Infof("[%s] server responded: Try later. %s", m, arg)
 				atomic.AddInt64(&c.queueStats.numFailed, m.MessageLen())
 			case collector.ResultCode_LIMIT_EXCEEDED:
-				log.Infof("[%s] server responded: Limit exceeded", m)
+				log.Infof("[%s] server responded: Limit exceeded. %s", m, arg)
 				atomic.AddInt64(&c.queueStats.numFailed, m.MessageLen())
 			case collector.ResultCode_INVALID_API_KEY:
-				log.Errorf("[%s] server responded: Invalid API key.", m)
+				log.Errorf("[%s] server responded: Invalid API key. %s", m, arg)
 				return errInvalidServiceKey
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
-					log.Errorf("[%s] max redirects of %v exceeded", m, grpcRedirectMax)
+					log.Errorf("[%s] max redirects of %v exceeded. %s", m, grpcRedirectMax, arg)
 					return errTooManyRedirections
 				} else {
-					log.Warningf("[%s] channel is redirecting to %s", m, m.Arg())
+					log.Warningf("[%s] channel is redirecting to %s.", m, m.Arg())
 
 					c.setAddress(m.Arg())
 					// a proper redirect shouldn't cause delays
@@ -1105,7 +1111,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 					redirects++
 				}
 			default:
-				log.Infof("[%s] unknown server response: %v", m, result)
+				log.Infof("[%s] unknown server response: %v. %s", m, result, arg)
 			}
 		}
 
