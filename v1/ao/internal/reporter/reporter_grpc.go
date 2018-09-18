@@ -213,7 +213,6 @@ var (
 	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed reporter")
 	ErrShutdownTimeout        = errors.New("Shutdown timeout")
 	ErrReporterIsClosed       = errors.New("the reporter is closed")
-	ErrMaxRetriesExceeded     = errors.New("maximum retries exceeded")
 )
 
 const (
@@ -599,7 +598,7 @@ type Backoff func(retries int, wait func(d time.Duration)) error
 // the retries value. It returns immediately if the retries exceeds a threshold.
 func DefaultBackoff(retries int, wait func(d time.Duration)) error {
 	if retries > grpcMaxRetries {
-		return ErrMaxRetriesExceeded
+		return errGiveUpAfterRetries
 	}
 	delay := int(grpcRetryDelayInitial * math.Pow(grpcRetryDelayMultiplier, float64(retries-1)))
 	if delay > grpcRetryDelayMax*1000 {
@@ -1001,11 +1000,19 @@ var (
 	// dropped.
 	errTooManyRedirections = errors.New("too many redirections")
 
+	// the operation or loop cannot continue as the reporter is exiting.
 	errReporterExiting = errors.New("reporter is exiting")
 
+	// something might be wrong if we run into this error.
 	errShouldNotHappen = errors.New("this should not happen")
 
+	// errNoRetryOnErr means this RPC call method doesn't need retry, e.g., the
+	// Ping method.
 	errNoRetryOnErr = errors.New("method requires no retry")
+
+	// errConnStale means the connection is broken. This usually happens
+	// when an RPC call is timeout.
+	errConnStale = errors.New("connection is stale")
 )
 
 // InvokeRPC makes an RPC call and returns an error if something is broken and
@@ -1037,7 +1044,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		default:
 		}
 
-		var err = errors.New("connection is stale")
+		var err = errConnStale
 		// Protect the call to the client object or we could run into problems
 		// if another goroutine is messing with it at the same time, e.g. doing
 		// a redirection.
@@ -1053,7 +1060,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			if code == codes.DeadlineExceeded ||
 				code == codes.Canceled {
 				log.Infof("[%s] Connection becomes stale: %v.", m, err)
-				err = errors.Wrap(err, "connection is stale")
+				err = errConnStale
 				c.setActive(false)
 			}
 			cancel()
@@ -1112,7 +1119,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 					redirects++
 				}
 			default:
-				log.Infof("[%s] unknown server response: %v. %s", m, result, arg)
+				log.Infof("[%s] unknown response: %v. %s", m, result, arg)
 			}
 		}
 
@@ -1129,7 +1136,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			time.Sleep(d)
 		})
 		if err != nil {
-			return errGiveUpAfterRetries
+			return err
 		}
 	}
 	return errShouldNotHappen

@@ -455,7 +455,7 @@ func TestInvokeRPC(t *testing.T) {
 		insecureSkipVerify: true,
 		backoff: func(retries int, wait func(d time.Duration)) error {
 			if retries > grpcMaxRetries {
-				return ErrMaxRetriesExceeded
+				return errGiveUpAfterRetries
 			}
 			return nil
 		},
