@@ -13,6 +13,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // defines what methods a reporter should offer (internal to reporter package)
@@ -64,6 +65,7 @@ func initReporter() {
 	r := config.GetReporterType()
 	if config.GetDisabled() {
 		r = "none"
+		log.Warning("AppOptics reporter is disabled.")
 	}
 	setGlobalReporter(r)
 }

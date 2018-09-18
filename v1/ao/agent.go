@@ -29,6 +29,9 @@ func init() {
 
 func initDisabled() {
 	disabled = config.GetDisabled()
+	if disabled {
+		aolog.Warningf("AppOptics agent is disabled.")
+	}
 }
 
 // Disabled indicates if the agent is disabled
