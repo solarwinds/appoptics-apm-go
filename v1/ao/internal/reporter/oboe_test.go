@@ -426,8 +426,7 @@ func TestOboeTracingMode(t *testing.T) {
 	os.Setenv("APPOPTICS_TRACING_MODE", "")
 	config.Refresh()
 	readEnvSettings()
-	// empty string is invalid and discarded, the old value `never` is kept.
-	assert.EqualValues(t, 0, globalSettingsCfg.tracingMode)
+	assert.EqualValues(t, 1, globalSettingsCfg.tracingMode)
 
 	r.Close(0)
 }

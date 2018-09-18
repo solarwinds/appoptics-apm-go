@@ -6,6 +6,8 @@
 package config
 
 import (
+	"sync"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
@@ -141,6 +143,8 @@ var envs = map[string]Env{
 // options in this struct (excluding those from ReporterOptions) are not
 // intended for dynamically updating.
 type Config struct {
+	sync.RWMutex
+
 	// Collector defines the host and port of the AppOptics collector
 	Collector string `yaml:"CollectorHost" json:"CollectorHost"`
 
@@ -210,6 +214,9 @@ func NewConfig(opts ...Option) *Config {
 
 // RefreshConfig loads the customized settings and merge with default values
 func (c *Config) RefreshConfig(opts ...Option) {
+	c.Lock()
+	defer c.Unlock()
+
 	c.LoadConfigFile("TODO")
 	c.LoadEnvs()
 
@@ -219,25 +226,30 @@ func (c *Config) RefreshConfig(opts ...Option) {
 }
 
 func newConfig() *Config {
-	return &Config{
-		Collector:     defaultGRPCCollector,
-		ServiceKey:    defaultServiceKey,
-		TrustedPath:   defaultTrustedPath,
-		CollectorUDP:  defaultCollectorUDP,
-		ReporterType:  defaultReporter,
-		TracingMode:   defaultTracingMode,
-		PrependDomain: defaultPrependDomain,
-		HostAlias:     defaultHostnameAlias,
-		SkipVerify:    defaultInsecureSkipVerify,
-		Precision:     defaultHistogramPrecision,
-		Reporter:      defaultReporterOptions(),
-		Disabled:      defaultDisabled,
-	}
+	c := &Config{}
+	c.reset()
+	return c
+}
+
+func (c *Config) reset() {
+	c.Collector = defaultGRPCCollector
+	c.ServiceKey = defaultServiceKey
+	c.TrustedPath = defaultTrustedPath
+	c.CollectorUDP = defaultCollectorUDP
+	c.ReporterType = defaultReporter
+	c.TracingMode = defaultTracingMode
+	c.PrependDomain = defaultPrependDomain
+	c.HostAlias = defaultHostnameAlias
+	c.SkipVerify = defaultInsecureSkipVerify
+	c.Precision = defaultHistogramPrecision
+	c.Reporter = defaultReporterOptions()
+	c.Disabled = defaultDisabled
 }
 
 // LoadEnvs loads environment variable values and update the Config object.
 func (c *Config) LoadEnvs() {
 	// TODO: reflect?
+	c.reset()
 	c.Collector = envs["Collector"].LoadString(c.Collector)
 	c.ServiceKey = envs["ServiceKey"].LoadString(c.ServiceKey)
 
@@ -264,60 +276,84 @@ func (c *Config) LoadConfigFile(path string) error {
 
 // GetCollector returns the collector address
 func (c *Config) GetCollector() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.Collector
 }
 
 // GetServiceKey returns the service key
 func (c *Config) GetServiceKey() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.ServiceKey
 }
 
 // GetTrustedPath returns the file path of the cert file
 func (c *Config) GetTrustedPath() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.TrustedPath
 }
 
 // GetReporterType returns the reporter type
 func (c *Config) GetReporterType() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.ReporterType
 }
 
 // GetCollectorUDP returns the UDP collector host
 func (c *Config) GetCollectorUDP() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.CollectorUDP
 }
 
 // GetTracingMode returns the UDP collector host
 func (c *Config) GetTracingMode() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.TracingMode
 }
 
 // GetPrependDomain returns the UDP collector host
 func (c *Config) GetPrependDomain() bool {
+	c.RLock()
+	defer c.RUnlock()
 	return c.PrependDomain
 }
 
 // GetHostAlias returns the UDP collector host
 func (c *Config) GetHostAlias() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.HostAlias
 }
 
 // GetSkipVerify returns the UDP collector host
 func (c *Config) GetSkipVerify() bool {
+	c.RLock()
+	defer c.RUnlock()
 	return c.SkipVerify
 }
 
 // GetPrecision returns the UDP collector host
 func (c *Config) GetPrecision() int {
+	c.RLock()
+	defer c.RUnlock()
 	return c.Precision
 }
 
 // GetDisabled returns if the agent is disabled
 func (c *Config) GetDisabled() bool {
+	c.RLock()
+	defer c.RUnlock()
 	return c.Disabled
 }
 
 // GetReporter returns the reporter options struct
 func (c *Config) GetReporter() *ReporterOptions {
+	c.RLock()
+	defer c.RUnlock()
 	return c.Reporter
 }

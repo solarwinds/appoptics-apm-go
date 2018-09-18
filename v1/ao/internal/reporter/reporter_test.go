@@ -569,6 +569,8 @@ func TestInitReporter(t *testing.T) {
 	os.Unsetenv("APPOPTICS_DISABLED")
 	os.Setenv("APPOPTICS_REPORTER", "ssl")
 	config.Refresh()
+	assert.False(t, config.GetDisabled())
+
 	initReporter()
 	require.IsType(t, &grpcReporter{}, globalReporter)
 }
