@@ -455,7 +455,7 @@ func TestInvokeRPC(t *testing.T) {
 		insecureSkipVerify: true,
 		backoff: func(retries int, wait func(d time.Duration)) error {
 			if retries > grpcMaxRetries {
-				return ErrMaxRetriesExceeded
+				return errGiveUpAfterRetries
 			}
 			return nil
 		},
@@ -469,7 +469,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
-
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_OK)
 
@@ -484,6 +484,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_INVALID_API_KEY)
 
@@ -496,6 +497,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_LIMIT_EXCEEDED)
 	mockMethod.On("String").Return("test")
@@ -509,6 +511,7 @@ func TestInvokeRPC(t *testing.T) {
 
 	mockMethod = &mocks.Method{}
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(true)
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).

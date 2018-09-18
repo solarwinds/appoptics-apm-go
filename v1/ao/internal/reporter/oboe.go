@@ -80,7 +80,7 @@ func sendInitMessage() {
 		// create new event from context
 		e, err := c.newEvent("single", "go")
 		if err != nil {
-			log.Error("Error while creating the init message: %v", err)
+			log.Warningf("Error while creating the init message: %v", err)
 			return
 		}
 
