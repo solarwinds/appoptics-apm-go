@@ -5,6 +5,7 @@ package ao
 import (
 	"context"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/pkg/errors"
@@ -13,6 +14,27 @@ import (
 var (
 	errInvalidLogLevel = errors.New("invalid log level")
 )
+
+var (
+	// This flag indicates whether the agent is disabled.
+	//
+	// It is initialized when the package is imported and won't be changed
+	// in runtime.
+	disabled = false
+)
+
+func init() {
+	initDisabled()
+}
+
+func initDisabled() {
+	disabled = config.GetDisabled()
+}
+
+// Disabled indicates if the agent is disabled
+func Disabled() bool {
+	return disabled
+}
 
 // WaitForReady checks if the agent is ready. It will block until the agent is ready
 // or the context is canceled.

@@ -26,6 +26,9 @@ const httpSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.HTT
 // returning a new handler that can be used in its place.
 //   http.HandleFunc("/path", ao.HTTPHandler(myHandler))
 func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	if Disabled() {
+		return handler
+	}
 	// At wrap time (when binding handler to router): get name of wrapped handler func
 	var endArgs []interface{}
 	if f := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()); f != nil {

@@ -20,8 +20,8 @@ type Trace interface {
 	// Inherited from the Span interface
 	//  BeginSpan(spanName string, args ...interface{}) Span
 	//  BeginProfile(profileName string, args ...interface{}) Profile
-	//	End(args ...interface{})
-	//	Info(args ...interface{})
+	// 	End(args ...interface{})
+	// 	Info(args ...interface{})
 	//  Error(class, msg string)
 	//  Err(error)
 	//  IsSampled() bool
@@ -85,6 +85,10 @@ func (t *aoTrace) aoContext() reporter.Context { return t.aoCtx }
 // the beginning of a root span named spanName. If this trace is sampled, it may report
 // event data to AppOptics; otherwise event reporting will be a no-op.
 func NewTrace(spanName string) Trace {
+	if Disabled() {
+		return &nullTrace{}
+	}
+
 	ctx, ok := reporter.NewContext(spanName, "", true, nil)
 	if !ok {
 		return &nullTrace{}
@@ -100,6 +104,10 @@ func NewTrace(spanName string) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
+	if Disabled() {
+		return &nullTrace{}
+	}
+
 	ctx, ok := reporter.NewContext(spanName, mdstr, true, func() map[string]interface{} {
 		if cb != nil {
 			return cb()
