@@ -21,6 +21,7 @@ const (
 	defaultHostnameAlias      = ""
 	defaultInsecureSkipVerify = false
 	defaultHistogramPrecision = 2
+	defaultDisabled           = false
 )
 
 // The environment variables
@@ -37,6 +38,7 @@ const (
 	envAppOpticsHistogramPrecision  = "APPOPTICS_HISTOGRAM_PRECISION"
 	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
 	envAppOpticsEventsBatchSize     = "APPOPTICS_EVENTS_BATCHSIZE"
+	envAppOpticsDisabled            = "APPOPTICS_DISABLED"
 )
 
 // The environment variables, validators and converters. This map is not
@@ -126,6 +128,13 @@ var envs = map[string]Env{
 		convert:  ToInt64,
 		mask:     nil,
 	},
+	"Disabled": {
+		name:     envAppOpticsDisabled,
+		optional: true,
+		validate: IsValidBool,
+		convert:  ToBool,
+		mask:     nil,
+	},
 }
 
 // Config is the struct to define the agent configuration. The configuration
@@ -164,6 +173,8 @@ type Config struct {
 
 	// The reporter options
 	Reporter *ReporterOptions `yaml:"ReporterOptions" json:"ReporterOptions"`
+
+	Disabled bool `yaml:"Disabled" json:"Disabled"`
 }
 
 // Option is a function type that accepts a Config pointer and
@@ -220,6 +231,7 @@ func newConfig() *Config {
 		SkipVerify:    defaultInsecureSkipVerify,
 		Precision:     defaultHistogramPrecision,
 		Reporter:      defaultReporterOptions(),
+		Disabled:      defaultDisabled,
 	}
 }
 
@@ -239,6 +251,7 @@ func (c *Config) LoadEnvs() {
 	c.SkipVerify = envs["SkipVerify"].LoadBool(c.SkipVerify)
 
 	c.Precision = envs["Precision"].LoadInt(c.Precision)
+	c.Disabled = envs["Disabled"].LoadBool(c.Disabled)
 
 	c.Reporter.LoadEnvs()
 }
@@ -297,6 +310,11 @@ func (c *Config) GetSkipVerify() bool {
 // GetPrecision returns the UDP collector host
 func (c *Config) GetPrecision() int {
 	return c.Precision
+}
+
+// GetDisabled returns if the agent is disabled
+func (c *Config) GetDisabled() bool {
+	return c.Disabled
 }
 
 // GetReporter returns the reporter options struct
