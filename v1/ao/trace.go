@@ -86,12 +86,12 @@ func (t *aoTrace) aoContext() reporter.Context { return t.aoCtx }
 // event data to AppOptics; otherwise event reporting will be a no-op.
 func NewTrace(spanName string) Trace {
 	if Disabled() {
-		return &nullTrace{}
+		return NewNullTrace()
 	}
 
 	ctx, ok := reporter.NewContext(spanName, "", true, nil)
 	if !ok {
-		return &nullTrace{}
+		return NewNullTrace()
 	}
 	t := &aoTrace{
 		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
@@ -105,7 +105,7 @@ func NewTrace(spanName string) Trace {
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
 	if Disabled() {
-		return &nullTrace{}
+		return NewNullTrace()
 	}
 
 	ctx, ok := reporter.NewContext(spanName, mdstr, true, func() map[string]interface{} {
@@ -115,7 +115,7 @@ func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
 		return nil
 	})
 	if !ok {
-		return &nullTrace{}
+		return NewNullTrace()
 	}
 	t := &aoTrace{
 		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
