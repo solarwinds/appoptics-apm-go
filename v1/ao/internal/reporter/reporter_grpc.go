@@ -305,6 +305,8 @@ func (r *grpcReporter) setGracefully(flag bool) {
 }
 
 func (r *grpcReporter) start() {
+	// start up the host observer
+	host.Start()
 	// start up long-running goroutine eventSender() which listens on the events message channel
 	// and reports incoming events to the collector using GRPC
 	go r.eventSender()
