@@ -145,6 +145,7 @@ func TestNullReporter(t *testing.T) {
 	assert.NoError(t, nullR.reportEvent(nil, nil))
 	assert.NoError(t, nullR.reportStatus(nil, nil))
 	assert.NoError(t, nullR.reportSpan(nil))
+
 }
 
 // ========================= UDP Reporter =============================
@@ -555,4 +556,19 @@ func TestInvokeRPC(t *testing.T) {
 	assert.Equal(t, nil, c.InvokeRPC(exit, mockMethod))
 	assert.True(t, c.isActive())
 	assert.Equal(t, "new-addr:9999", c.address)
+}
+
+func TestInitReporter(t *testing.T) {
+	// Test disable agent
+	os.Setenv("APPOPTICS_DISABLED", "true")
+	config.Refresh()
+	initReporter()
+	require.IsType(t, &nullReporter{}, globalReporter)
+
+	// Test enable agent
+	os.Unsetenv("APPOPTICS_DISABLED")
+	os.Setenv("APPOPTICS_REPORTER", "ssl")
+	config.Refresh()
+	initReporter()
+	require.IsType(t, &grpcReporter{}, globalReporter)
 }

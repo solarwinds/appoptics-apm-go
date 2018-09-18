@@ -46,6 +46,7 @@ var (
 // a noop reporter
 type nullReporter struct{}
 
+func newNullReporter() *nullReporter                                  { return &nullReporter{} }
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
 func (r *nullReporter) reportSpan(span SpanMessage) error             { return nil }
@@ -59,8 +60,16 @@ func (r *nullReporter) WaitForReady(ctx context.Context) bool         { return t
 // can be overridden via APPOPTICS_REPORTER
 func init() {
 	checkHostname(os.Hostname)
-	setGlobalReporter(config.GetReporterType())
+	initReporter()
 	sendInitMessage()
+}
+
+func initReporter() {
+	r := config.GetReporterType()
+	if config.GetDisabled() {
+		r = "none"
+	}
+	setGlobalReporter(r)
 }
 
 func setGlobalReporter(reporterType string) {
@@ -71,12 +80,13 @@ func setGlobalReporter(reporterType string) {
 
 	switch strings.ToLower(reporterType) {
 	case "ssl":
-		fallthrough // using fallthrough since the SSL reporter (GRPC) is our default reporter
+		fallthrough // using fallthrough since the SSL reporter (gRPC) is our default reporter
 	default:
 		globalReporter = newGRPCReporter()
 	case "udp":
 		globalReporter = udpNewReporter()
 	case "none":
+		globalReporter = newNullReporter()
 	}
 }
 
