@@ -153,10 +153,6 @@ func TestSampleTracingDisabled(t *testing.T) {
 	traced = callShouldTraceRequest(total, false)
 	assert.EqualValues(t, 3, traced)
 
-	reportingDisabled = true
-	traced = callShouldTraceRequest(total, false)
-	assert.EqualValues(t, 0, traced)
-
 	r.Close(0)
 }
 

@@ -226,10 +226,6 @@ const (
 //
 // returns	GRPC reporter object
 func newGRPCReporter() reporter {
-	if reportingDisabled {
-		return &nullReporter{}
-	}
-
 	// service key is required, so bail out if not found
 	serviceKey := config.GetServiceKey()
 	if !config.IsValidServiceKey(serviceKey) {

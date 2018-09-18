@@ -8,13 +8,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // defines what methods a reporter should offer (internal to reporter package)
@@ -39,7 +37,6 @@ type reporter interface {
 var globalReporter reporter = &nullReporter{}
 
 var (
-	reportingDisabled     = false // reporting disabled due to error
 	periodicTasksDisabled = false // disable periodic tasks, for testing
 )
 
@@ -59,7 +56,6 @@ func (r *nullReporter) WaitForReady(ctx context.Context) bool         { return t
 // that will be used throughout the runtime of the app. Default is 'ssl' but
 // can be overridden via APPOPTICS_REPORTER
 func init() {
-	checkHostname(os.Hostname)
 	initReporter()
 	sendInitMessage()
 }
@@ -109,13 +105,6 @@ func Shutdown(ctx context.Context) error {
 // returns	error if channel is full
 func ReportSpan(span SpanMessage) error {
 	return globalReporter.reportSpan(span)
-}
-
-func checkHostname(getter func() (string, error)) {
-	if _, err := getter(); err != nil {
-		log.Error("Unable to get hostname, AppOptics tracing disabled.")
-		reportingDisabled = true
-	}
 }
 
 // check if context and event are valid, add general keys like Timestamp, or hostname

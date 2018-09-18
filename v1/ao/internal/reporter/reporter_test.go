@@ -4,7 +4,6 @@ package reporter
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -47,15 +46,6 @@ var _ = func() (_ struct{}) {
 	config.Refresh()
 	return
 }()
-
-func TestCacheHostname(t *testing.T) {
-	h, _ := os.Hostname()
-	assert.Equal(t, h, host.Hostname())
-	assert.Equal(t, false, reportingDisabled)
-	t.Logf("Forcing hostname error: 'Unable to get hostname' log message expected")
-	checkHostname(func() (string, error) { return "", errors.New("cannot get hostname") })
-	assert.Equal(t, true, reportingDisabled)
-}
 
 // ========================= Test Reporter =============================
 
@@ -222,7 +212,6 @@ func TestGRPCReporter(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
-	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
 	config.Refresh()
@@ -317,7 +306,6 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
-	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
 	config.Refresh()
@@ -366,7 +354,6 @@ func TestInvalidKey(t *testing.T) {
 	addr := "localhost:4567"
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	reportingDisabled = false
 
 	// start test gRPC server
 	server := StartTestGRPCServer(t, addr)
