@@ -153,10 +153,6 @@ func TestSampleTracingDisabled(t *testing.T) {
 	traced = callShouldTraceRequest(total, false)
 	assert.EqualValues(t, 3, traced)
 
-	reportingDisabled = true
-	traced = callShouldTraceRequest(total, false)
-	assert.EqualValues(t, 0, traced)
-
 	r.Close(0)
 }
 
@@ -426,8 +422,7 @@ func TestOboeTracingMode(t *testing.T) {
 	os.Setenv("APPOPTICS_TRACING_MODE", "")
 	config.Refresh()
 	readEnvSettings()
-	// empty string is invalid and discarded, the old value `never` is kept.
-	assert.EqualValues(t, 0, globalSettingsCfg.tracingMode)
+	assert.EqualValues(t, 1, globalSettingsCfg.tracingMode)
 
 	r.Close(0)
 }

@@ -226,10 +226,6 @@ const (
 //
 // returns	GRPC reporter object
 func newGRPCReporter() reporter {
-	if reportingDisabled {
-		return &nullReporter{}
-	}
-
 	// service key is required, so bail out if not found
 	serviceKey := config.GetServiceKey()
 	if !config.IsValidServiceKey(serviceKey) {
@@ -305,6 +301,8 @@ func (r *grpcReporter) setGracefully(flag bool) {
 }
 
 func (r *grpcReporter) start() {
+	// start up the host observer
+	host.Start()
 	// start up long-running goroutine eventSender() which listens on the events message channel
 	// and reports incoming events to the collector using GRPC
 	go r.eventSender()

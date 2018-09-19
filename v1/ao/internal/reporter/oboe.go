@@ -155,7 +155,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 		}
 	}
 
-	if globalSettingsCfg.tracingMode == TRACE_NEVER || reportingDisabled {
+	if globalSettingsCfg.tracingMode == TRACE_NEVER {
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
 
@@ -263,7 +263,6 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 }
 
 func resetSettings() {
-	reportingDisabled = false
 	flushRateCounts()
 	globalSettingsCfg = &oboeSettingsCfg{
 		settings: make(map[oboeSettingKey]*oboeSettings),
