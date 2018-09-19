@@ -15,16 +15,26 @@ var (
 	errInvalidLogLevel = errors.New("invalid log level")
 )
 
+// The `const` variable which should not be updated on runtime.
+// These variables are accessed by every request in the critical path, which
+// makes it too expensive to be protected by a mutex.
+//
+// Do NOT modify it outside the init() function.
 var (
 	// This flag indicates whether the agent is disabled.
 	//
 	// It is initialized when the package is imported and won't be changed
 	// in runtime.
 	disabled = false
+
+	// This flag indicates whether the domain name needs to be prepended to
+	// the transaction name of the span message
+	trxNamePrependDomain = false
 )
 
 func init() {
 	initDisabled()
+	initTrxNamePrependDomain()
 }
 
 func initDisabled() {
@@ -32,6 +42,10 @@ func initDisabled() {
 	if disabled {
 		aolog.Warningf("AppOptics agent is disabled.")
 	}
+}
+
+func initTrxNamePrependDomain() {
+	trxNamePrependDomain = config.GetPrependDomain()
 }
 
 // Disabled indicates if the agent is disabled
