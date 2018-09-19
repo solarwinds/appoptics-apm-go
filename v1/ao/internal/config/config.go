@@ -217,8 +217,8 @@ func (c *Config) RefreshConfig(opts ...Option) {
 	c.Lock()
 	defer c.Unlock()
 
-	c.LoadConfigFile("TODO")
-	c.LoadEnvs()
+	c.loadConfigFile("TODO")
+	c.loadEnvs()
 
 	for _, opt := range opts {
 		opt(c)
@@ -246,8 +246,8 @@ func (c *Config) reset() {
 	c.Disabled = defaultDisabled
 }
 
-// LoadEnvs loads environment variable values and update the Config object.
-func (c *Config) LoadEnvs() {
+// loadEnvs loads environment variable values and update the Config object.
+func (c *Config) loadEnvs() {
 	// TODO: reflect?
 	c.reset()
 	c.Collector = envs["Collector"].LoadString(c.Collector)
@@ -265,11 +265,11 @@ func (c *Config) LoadEnvs() {
 	c.Precision = envs["Precision"].LoadInt(c.Precision)
 	c.Disabled = envs["Disabled"].LoadBool(c.Disabled)
 
-	c.Reporter.LoadEnvs()
+	c.Reporter.loadEnvs()
 }
 
-// LoadConfigFile loads from the config file
-func (c *Config) LoadConfigFile(path string) error {
+// loadConfigFile loads from the config file
+func (c *Config) loadConfigFile(path string) error {
 	log.Debug("Loading from config file is not implemented.")
 	return nil
 }
