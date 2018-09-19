@@ -1,4 +1,3 @@
-//go:generate go run main.go
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
 package utils
