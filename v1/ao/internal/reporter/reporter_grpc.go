@@ -288,8 +288,8 @@ func newGRPCReporter() reporter {
 
 	r.start()
 
-	log.Warningf("AppOptics reporter is initialized. id: %v version: %s commit: %s",
-		r.done, utils.Version(), utils.Commit())
+	log.Warningf("AppOptics reporter is initialized. id: %v version: %s.",
+		r.done, utils.Version())
 	return r
 }
 
@@ -686,7 +686,7 @@ func (r *grpcReporter) eventSender() {
 		if evtBucket.Drainable() || closing {
 			w := evtBucket.Watermark()
 			batches <- evtBucket.Drain()
-			log.Debugf("Pushed %d bytes (%d events) to the sender.", w, len(batches))
+			log.Debugf("Pushed %d bytes to the sender.", w)
 		}
 
 		if closing {
@@ -1034,6 +1034,8 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 	// Number of retries, including gRPC errors and collector errors
 	retriesNum := 0
 
+	printRPCMsg(m)
+
 	for {
 		// Fail-fast in case the reporter has been closed, avoid retrying in
 		// this case.
@@ -1229,4 +1231,15 @@ func (d *DefaultDialer) Dial(c grpcConnection) (*grpc.ClientConn, error) {
 	creds := credentials.NewTLS(tlsConfig)
 
 	return grpc.Dial(c.address, grpc.WithTransportCredentials(creds))
+}
+
+func printRPCMsg(m Method) {
+	msgs := m.Message()
+	var str []string
+	str = append(str, m.String())
+
+	for _, msg := range msgs {
+		str = append(str, utils.SPrintBson(msg))
+	}
+	log.Debugf("%s", str)
 }
