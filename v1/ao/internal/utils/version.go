@@ -23,5 +23,5 @@ func Commit() string {
 
 // GoVersion returns the Go version
 func GoVersion() string {
-
+	return goVersion
 }

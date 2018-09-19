@@ -1,5 +1,7 @@
 //+build dont_compile_me
 
+// The program is used to generate the code to initialize AppOptics version,
+// commit id and other metadata.
 package main
 
 const template = `
@@ -10,7 +12,9 @@ package utils
 func init() {
 	version = %[1]q
 	commit = %[2]q
-}`
+	goVersion = runtime.Version()
+}
+`
 
 func main() {
 
