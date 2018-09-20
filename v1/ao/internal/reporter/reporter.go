@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
-	"os"
 	"strings"
 	"time"
 
@@ -39,13 +38,13 @@ type reporter interface {
 var globalReporter reporter = &nullReporter{}
 
 var (
-	reportingDisabled     = false // reporting disabled due to error
 	periodicTasksDisabled = false // disable periodic tasks, for testing
 )
 
 // a noop reporter
 type nullReporter struct{}
 
+func newNullReporter() *nullReporter                                  { return &nullReporter{} }
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
 func (r *nullReporter) reportSpan(span SpanMessage) error             { return nil }
@@ -58,9 +57,17 @@ func (r *nullReporter) WaitForReady(ctx context.Context) bool         { return t
 // that will be used throughout the runtime of the app. Default is 'ssl' but
 // can be overridden via APPOPTICS_REPORTER
 func init() {
-	checkHostname(os.Hostname)
-	setGlobalReporter(config.GetReporterType())
+	initReporter()
 	sendInitMessage()
+}
+
+func initReporter() {
+	r := config.GetReporterType()
+	if config.GetDisabled() {
+		r = "none"
+		log.Warning("AppOptics reporter is disabled.")
+	}
+	setGlobalReporter(r)
 }
 
 func setGlobalReporter(reporterType string) {
@@ -71,12 +78,13 @@ func setGlobalReporter(reporterType string) {
 
 	switch strings.ToLower(reporterType) {
 	case "ssl":
-		fallthrough // using fallthrough since the SSL reporter (GRPC) is our default reporter
+		fallthrough // using fallthrough since the SSL reporter (gRPC) is our default reporter
 	default:
 		globalReporter = newGRPCReporter()
 	case "udp":
 		globalReporter = udpNewReporter()
 	case "none":
+		globalReporter = newNullReporter()
 	}
 }
 
@@ -99,13 +107,6 @@ func Shutdown(ctx context.Context) error {
 // returns	error if channel is full
 func ReportSpan(span SpanMessage) error {
 	return globalReporter.reportSpan(span)
-}
-
-func checkHostname(getter func() (string, error)) {
-	if _, err := getter(); err != nil {
-		log.Error("Unable to get hostname, AppOptics tracing disabled.")
-		reportingDisabled = true
-	}
 }
 
 // check if context and event are valid, add general keys like Timestamp, or hostname

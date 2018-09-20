@@ -315,6 +315,7 @@ These environment variables may be set:
 |APPOPTICS_TRUSTEDPATH|No||Path to the certificate used to verify the collector endpoint.|
 |APPOPTICS_INSECURE_SKIP_VERIFY|No|false|Skip verification of the collector endpoint. Possible values: true, false|
 |APPOPTICS_PREPEND_DOMAIN|No|false|Prepend the domain name to the transaction name. Possible values: true, false|
+|APPOPTICS_DISABLED|No|false|Disable the agent. Possible values: true, false|
 
 
 ## Help and examples
