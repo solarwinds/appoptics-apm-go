@@ -1234,10 +1234,14 @@ func (d *DefaultDialer) Dial(c grpcConnection) (*grpc.ClientConn, error) {
 }
 
 func printRPCMsg(m Method) {
-	msgs := m.Message()
+	if log.Level() > log.DEBUG {
+		return
+	}
+
 	var str []string
 	str = append(str, m.String())
 
+	msgs := m.Message()
 	for _, msg := range msgs {
 		str = append(str, utils.SPrintBson(msg))
 	}
