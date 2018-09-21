@@ -147,7 +147,7 @@ func shouldTraceRequest(layer string, traced bool) (bool, int, sampleSource) {
 	return oboeSampleRequest(layer, traced)
 }
 
-func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) *map[string][]byte {
+func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) map[string][]byte {
 	args := make(map[string][]byte)
 
 	if capacity > -1 {
@@ -173,5 +173,5 @@ func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactio
 		args["MaxTransactions"] = bytes
 	}
 
-	return &args
+	return args
 }
