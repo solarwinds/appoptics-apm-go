@@ -52,6 +52,36 @@ type tokenBucket struct {
 	lock       sync.Mutex
 }
 
+func (b *tokenBucket) setRate(r float64) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	b.ratePerSec = r
+}
+
+func (b *tokenBucket) setCap(c float64) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	b.capacity = c
+	if b.available > b.capacity {
+		b.available = b.capacity
+	}
+}
+
+func (b *tokenBucket) setAvail(a float64) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	b.available = a
+	if b.available > b.capacity {
+		b.available = b.capacity
+	}
+}
+
+func (b *tokenBucket) avail() float64 {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	return b.available
+}
+
 // The identifying keys for a setting
 type oboeSettingKey struct {
 	sType settingType
@@ -255,20 +285,17 @@ func parseInt32(args map[string][]byte, key string, fb int32) int32 {
 }
 
 func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int64, args map[string][]byte) {
-	setting := newOboeSettings()
+	ns := newOboeSettings()
 
-	setting.timestamp = time.Now()
-	setting.sType = settingType(sType)
-	setting.flags = flagStringToBin(string(flags))
-	setting.value = int(value)
-	setting.ttl = ttl
-	setting.layer = layer
+	ns.timestamp = time.Now()
+	ns.sType = settingType(sType)
+	ns.flags = flagStringToBin(string(flags))
+	ns.value = int(value)
+	ns.ttl = ttl
+	ns.layer = layer
 
-	setting.bucket.capacity = parseFloat64(args, kvBucketCapacity, 0)
-	setting.bucket.ratePerSec = parseFloat64(args, kvBucketRate, 0)
-	if setting.bucket.available > setting.bucket.capacity {
-		setting.bucket.available = setting.bucket.capacity
-	}
+	ns.bucket.capacity = parseFloat64(args, kvBucketCapacity, 0)
+	ns.bucket.ratePerSec = parseFloat64(args, kvBucketRate, 0)
 
 	key := oboeSettingKey{
 		sType: settingType(sType),
@@ -276,7 +303,10 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	}
 
 	globalSettingsCfg.lock.Lock()
-	globalSettingsCfg.settings[key] = setting
+	if s, ok := globalSettingsCfg.settings[key]; ok {
+		ns.bucket.setAvail(s.bucket.avail())
+	}
+	globalSettingsCfg.settings[key] = ns
 	globalSettingsCfg.lock.Unlock()
 }
 
