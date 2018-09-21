@@ -253,10 +253,11 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 }
 
 func resetSettings() {
+	globalSettingsCfg.lock.Lock()
+	defer globalSettingsCfg.lock.Unlock()
+
 	flushRateCounts()
-	globalSettingsCfg = &oboeSettingsCfg{
-		settings: make(map[oboeSettingKey]*oboeSettings),
-	}
+	globalSettingsCfg.settings = make(map[oboeSettingKey]*oboeSettings)
 	readEnvSettings()
 }
 
@@ -295,8 +296,8 @@ func getSetting(layer string) (*oboeSettings, bool) {
 }
 
 func removeSetting(layer string) {
-	globalSettingsCfg.lock.RLock()
-	defer globalSettingsCfg.lock.RUnlock()
+	globalSettingsCfg.lock.Lock()
+	defer globalSettingsCfg.lock.Unlock()
 
 	key := oboeSettingKey{
 		sType: TYPE_DEFAULT,
