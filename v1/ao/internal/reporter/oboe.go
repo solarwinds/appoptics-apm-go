@@ -6,6 +6,7 @@ package reporter
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/rand"
 	"runtime"
@@ -211,26 +212,29 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	return retval, sampleRate, sampleSource
 }
 
-func bytesToFloat64(b []byte) float64 {
+func bytesToFloat64(b []byte) (float64, error) {
 	if len(b) != 8 {
-		return -1
+		return -1, fmt.Errorf("invalid length: %d", len(b))
 	}
-	return math.Float64frombits(binary.LittleEndian.Uint64(b))
+	return math.Float64frombits(binary.LittleEndian.Uint64(b)), nil
 }
 
-func bytesToInt32(b []byte) int32 {
+func bytesToInt32(b []byte) (int32, error) {
 	if len(b) != 4 {
-		return -1
+		return -1, fmt.Errorf("invalid length: %d", len(b))
 	}
-	return int32(binary.LittleEndian.Uint32(b))
+	return int32(binary.LittleEndian.Uint32(b)), nil
 }
 
 func parseFloat64(args map[string][]byte, key string, fb float64) float64 {
 	ret := fb
 	if c, ok := args[key]; ok {
-		v := bytesToFloat64(c)
-		if v >= 0 {
+		v, err := bytesToFloat64(c)
+		if err == nil && v >= 0 {
 			ret = v
+			log.Debugf("parsed %s=%f", key, v)
+		} else {
+			log.Warningf("parse error: %s=%f err=%v fallback=%f", key, v, err, fb)
 		}
 	}
 	return ret
@@ -239,9 +243,12 @@ func parseFloat64(args map[string][]byte, key string, fb float64) float64 {
 func parseInt32(args map[string][]byte, key string, fb int32) int32 {
 	ret := fb
 	if c, ok := args[key]; ok {
-		v := bytesToInt32(c)
-		if v >= 0 {
+		v, err := bytesToInt32(c)
+		if err == nil && v >= 0 {
 			ret = v
+			log.Debugf("parsed %s=%d", key, v)
+		} else {
+			log.Warningf("parse error: %s=%d err=%v fallback=%d", key, v, err, fb)
 		}
 	}
 	return ret
