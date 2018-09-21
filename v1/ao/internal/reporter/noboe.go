@@ -44,3 +44,6 @@ func hasDefaultSetting() bool {
 	ret := hasSetting
 	return ret
 }
+
+func parseInt32(args map[string][]byte, key string, fb int32) int32       { return fb }
+func parseFloat64(args map[string][]byte, key string, fb float64) float64 { return fb }

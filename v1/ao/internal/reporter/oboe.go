@@ -211,14 +211,35 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	return retval, sampleRate, sampleSource
 }
 
-func decodeBytes(b []byte) float64 {
+func bytesToFloat64(b []byte) float64 {
+	if len(b) != 8 {
+		return -1
+	}
 	return math.Float64frombits(binary.LittleEndian.Uint64(b))
 }
 
-func parseArg(args map[string][]byte, key string, fb float64) float64 {
+func bytesToInt32(b []byte) int32 {
+	if len(b) != 4 {
+		return -1
+	}
+	return int32(binary.LittleEndian.Uint32(b))
+}
+
+func parseFloat64(args map[string][]byte, key string, fb float64) float64 {
 	ret := fb
 	if c, ok := args[key]; ok {
-		v := decodeBytes(c)
+		v := bytesToFloat64(c)
+		if v >= 0 {
+			ret = v
+		}
+	}
+	return ret
+}
+
+func parseInt32(args map[string][]byte, key string, fb int32) int32 {
+	ret := fb
+	if c, ok := args[key]; ok {
+		v := bytesToInt32(c)
 		if v >= 0 {
 			ret = v
 		}
@@ -236,8 +257,8 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	setting.ttl = ttl
 	setting.layer = layer
 
-	setting.bucket.capacity = parseArg(args, "BucketCapacity", 0)
-	setting.bucket.ratePerSec = parseArg(args, "BucketRate", 0)
+	setting.bucket.capacity = parseFloat64(args, kvBucketCapacity, 0)
+	setting.bucket.ratePerSec = parseFloat64(args, kvBucketRate, 0)
 	if setting.bucket.available > setting.bucket.capacity {
 		setting.bucket.available = setting.bucket.capacity
 	}
