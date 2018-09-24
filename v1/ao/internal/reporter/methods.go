@@ -84,8 +84,9 @@ func (pe *PostEventsMethod) Call(ctx context.Context,
 }
 
 func (pe *PostEventsMethod) CallSummary() string {
-	return fmt.Sprintf("sent %d events, rtt=%v.",
-		pe.MessageLen(), pe.rtt)
+	rsp := fmt.Sprintf("%v %s", pe.Resp.Result, pe.Resp.Arg)
+	return fmt.Sprintf("[%s] sent %d events, rtt=%v. rsp=%s",
+		pe, pe.MessageLen(), pe.rtt, rsp)
 }
 
 func (pe *PostEventsMethod) RetryOnErr() bool {
@@ -139,7 +140,8 @@ func (pm *PostMetricsMethod) Call(ctx context.Context,
 }
 
 func (pm *PostMetricsMethod) CallSummary() string {
-	return fmt.Sprintf("sent metrics, rtt=%v.", pm.rtt)
+	rsp := fmt.Sprintf("%v %s", pm.Resp.Result, pm.Resp.Arg)
+	return fmt.Sprintf("[%s] sent metrics, rtt=%v. rsp=%s", pm, pm.rtt, rsp)
 }
 
 func (pm *PostMetricsMethod) RetryOnErr() bool {
@@ -197,7 +199,8 @@ func (ps *PostStatusMethod) RetryOnErr() bool {
 }
 
 func (ps *PostStatusMethod) CallSummary() string {
-	return fmt.Sprintf("sent status, rtt=%v.", ps.rtt)
+	rsp := fmt.Sprintf("%v %s", ps.Resp.Result, ps.Resp.Arg)
+	return fmt.Sprintf("[%s] sent status, rtt=%v. rsp=%s", ps, ps.rtt, rsp)
 }
 
 // GetSettingsMethod is the struct for RPC method GetSettings
@@ -244,7 +247,8 @@ func (gs *GetSettingsMethod) Call(ctx context.Context,
 }
 
 func (gs *GetSettingsMethod) CallSummary() string {
-	return fmt.Sprintf("got settings, rtt=%v.", gs.rtt)
+	rsp := fmt.Sprintf("%v %s", gs.Resp.Result, gs.Resp.Arg)
+	return fmt.Sprintf("[%s] got settings, rtt=%v. rsp=%s", gs, gs.rtt, rsp)
 }
 
 func (gs *GetSettingsMethod) RetryOnErr() bool {
@@ -294,7 +298,8 @@ func (p *PingMethod) Call(ctx context.Context,
 }
 
 func (p *PingMethod) CallSummary() string {
-	return fmt.Sprintf("ping back, rtt=%v.", p.rtt)
+	rsp := fmt.Sprintf("%v %s", p.Resp.Result, p.Resp.Arg)
+	return fmt.Sprintf("[%s] ping back, rtt=%v. rsp=%s", p, p.rtt, rsp)
 }
 
 func (p *PingMethod) RetryOnErr() bool {

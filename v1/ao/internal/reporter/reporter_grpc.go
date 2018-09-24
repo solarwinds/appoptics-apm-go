@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
-	"fmt"
 	"io/ioutil"
 	"math"
 	"strings"
@@ -732,6 +731,7 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 			case errInvalidServiceKey:
 				r.ShutdownNow()
 			case nil:
+				log.Info(method.CallSummary())
 			default:
 				log.Infof("eventBatchSender: %s", err)
 			}
@@ -781,6 +781,7 @@ func (r *grpcReporter) sendMetrics(msg []byte) {
 	case errInvalidServiceKey:
 		r.ShutdownNow()
 	case nil:
+		log.Info(method.CallSummary())
 	default:
 		log.Infof("sendMetrics: %s", err)
 	}
@@ -801,6 +802,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	case errInvalidServiceKey:
 		r.ShutdownNow()
 	case nil:
+		log.Info(method.CallSummary())
 		r.updateSettings(method.Resp)
 	default:
 		log.Infof("getSettings: %s", err)
@@ -926,6 +928,7 @@ func (r *grpcReporter) statusSender() {
 		case errInvalidServiceKey:
 			r.ShutdownNow()
 		case nil:
+			log.Info(method.CallSummary())
 		default:
 			log.Infof("statusSender: %s", err)
 		}
@@ -981,7 +984,9 @@ func (c *grpcConnection) resetPing() {
 // send a keep alive (ping) request on a given GRPC connection
 func (c *grpcConnection) ping(exit chan struct{}, key string) error {
 	method := newPingMethod(key, c.name)
-	return c.InvokeRPC(exit, method)
+	err := c.InvokeRPC(exit, method)
+	log.Debug(method.CallSummary())
+	return err
 }
 
 // possible errors while issuing an RPC call
@@ -1054,7 +1059,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			code := status.Code(err)
 			if code == codes.DeadlineExceeded ||
 				code == codes.Canceled {
-				log.Infof("[%s] Connection becomes stale: %v.", m, err)
+				log.Infof("[%s] Connection becomes stale: %v.", c.name, err)
 				err = errConnStale
 				c.setActive(false)
 			}
@@ -1080,32 +1085,29 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			}
 			failsNum = 0
 
-			arg := ""
-			if m.Arg() != "" {
-				arg = fmt.Sprintf("Arg:%s", m.Arg())
-			}
 			// server responded, check the result code and perform actions accordingly
 			switch result := m.ResultCode(); result {
 			case collector.ResultCode_OK:
-				log.Infof("[%s] %s %s", m, m.CallSummary(), arg)
 				atomic.AddInt64(&c.queueStats.numSent, m.MessageLen())
 				return nil
 
 			case collector.ResultCode_TRY_LATER:
-				log.Infof("[%s] server responded: Try later. %s", m, arg)
+				log.Info(m.CallSummary())
 				atomic.AddInt64(&c.queueStats.numFailed, m.MessageLen())
 			case collector.ResultCode_LIMIT_EXCEEDED:
-				log.Infof("[%s] server responded: Limit exceeded. %s", m, arg)
+				log.Info(m.CallSummary())
 				atomic.AddInt64(&c.queueStats.numFailed, m.MessageLen())
 			case collector.ResultCode_INVALID_API_KEY:
-				log.Errorf("[%s] server responded: Invalid API key. %s", m, arg)
+				log.Error(m.CallSummary())
 				return errInvalidServiceKey
 			case collector.ResultCode_REDIRECT:
 				if redirects > grpcRedirectMax {
-					log.Errorf("[%s] max redirects of %v exceeded. %s", m, grpcRedirectMax, arg)
+					log.Errorf("max redirects of %v exceeded. %s",
+						grpcRedirectMax, m.CallSummary())
 					return errTooManyRedirections
 				} else {
-					log.Warningf("[%s] channel is redirecting to %s.", m, m.Arg())
+					log.Warningf("channel is redirecting to %s. %s",
+						m.Arg(), m.CallSummary())
 
 					c.setAddress(m.Arg())
 					// a proper redirect shouldn't cause delays
@@ -1113,7 +1115,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 					redirects++
 				}
 			default:
-				log.Infof("[%s] unknown response: %v. %s", m, result, arg)
+				log.Info(m.CallSummary())
 			}
 		}
 

@@ -387,7 +387,7 @@ func TestInvalidKey(t *testing.T) {
 	os.Setenv("APPOPTICS_SERVICE_KEY", oldKey)
 
 	patterns := []string{
-		"server responded: Invalid API key",
+		"rsp=INVALID_API_KEY",
 		"Shutting down the reporter",
 		// "periodicTasks goroutine exiting",
 		"eventSender goroutine exiting",
