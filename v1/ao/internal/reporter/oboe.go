@@ -6,6 +6,7 @@ package reporter
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/rand"
 	"runtime"
@@ -36,6 +37,12 @@ type oboeSettings struct {
 	bucket    *tokenBucket
 }
 
+func newOboeSettings() *oboeSettings {
+	return &oboeSettings{
+		bucket: &tokenBucket{},
+	}
+}
+
 // token bucket
 type tokenBucket struct {
 	ratePerSec float64
@@ -43,6 +50,36 @@ type tokenBucket struct {
 	available  float64
 	last       time.Time
 	lock       sync.Mutex
+}
+
+func (b *tokenBucket) setRate(r float64) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	b.ratePerSec = r
+}
+
+func (b *tokenBucket) setCap(c float64) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	b.capacity = c
+	if b.available > b.capacity {
+		b.available = b.capacity
+	}
+}
+
+func (b *tokenBucket) setAvail(a float64) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	b.available = a
+	if b.available > b.capacity {
+		b.available = b.capacity
+	}
+}
+
+func (b *tokenBucket) avail() float64 {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	return b.available
 }
 
 // The identifying keys for a setting
@@ -205,68 +242,80 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	return retval, sampleRate, sampleSource
 }
 
-func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int64, arguments *map[string][]byte) {
-	globalSettingsCfg.lock.Lock()
-	defer globalSettingsCfg.lock.Unlock()
+func bytesToFloat64(b []byte) (float64, error) {
+	if len(b) != 8 {
+		return -1, fmt.Errorf("invalid length: %d", len(b))
+	}
+	return math.Float64frombits(binary.LittleEndian.Uint64(b)), nil
+}
 
-	var bucketCapacity float64
-	if c, ok := (*arguments)["BucketCapacity"]; ok {
-		bits := binary.LittleEndian.Uint64(c)
-		bucketCapacity = math.Float64frombits(bits)
-	} else {
-		bucketCapacity = 0
+func bytesToInt32(b []byte) (int32, error) {
+	if len(b) != 4 {
+		return -1, fmt.Errorf("invalid length: %d", len(b))
 	}
-	var bucketRatePerSec float64
-	if c, ok := (*arguments)["BucketRate"]; ok {
-		bits := binary.LittleEndian.Uint64(c)
-		bucketRatePerSec = math.Float64frombits(bits)
-	} else {
-		bucketRatePerSec = 0
+	return int32(binary.LittleEndian.Uint32(b)), nil
+}
+
+func parseFloat64(args map[string][]byte, key string, fb float64) float64 {
+	ret := fb
+	if c, ok := args[key]; ok {
+		v, err := bytesToFloat64(c)
+		if err == nil && v >= 0 {
+			ret = v
+			log.Debugf("parsed %s=%f", key, v)
+		} else {
+			log.Warningf("parse error: %s=%f err=%v fallback=%f", key, v, err, fb)
+		}
 	}
+	return ret
+}
+
+func parseInt32(args map[string][]byte, key string, fb int32) int32 {
+	ret := fb
+	if c, ok := args[key]; ok {
+		v, err := bytesToInt32(c)
+		if err == nil && v >= 0 {
+			ret = v
+			log.Debugf("parsed %s=%d", key, v)
+		} else {
+			log.Warningf("parse error: %s=%d err=%v fallback=%d", key, v, err, fb)
+		}
+	}
+	return ret
+}
+
+func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int64, args map[string][]byte) {
+	ns := newOboeSettings()
+
+	ns.timestamp = time.Now()
+	ns.sType = settingType(sType)
+	ns.flags = flagStringToBin(string(flags))
+	ns.value = int(value)
+	ns.ttl = ttl
+	ns.layer = layer
+
+	ns.bucket.capacity = parseFloat64(args, kvBucketCapacity, 0)
+	ns.bucket.ratePerSec = parseFloat64(args, kvBucketRate, 0)
 
 	key := oboeSettingKey{
 		sType: settingType(sType),
 		layer: layer,
 	}
-	var setting *oboeSettings
-	var ok bool
-	if setting, ok = globalSettingsCfg.settings[key]; !ok {
-		setting = &oboeSettings{
-			bucket: &tokenBucket{},
-		}
-		globalSettingsCfg.settings[key] = setting
-	}
-	setting.timestamp = time.Now()
-	setting.sType = settingType(sType)
-	setting.flags = flagStringToBin(string(flags))
-	setting.value = int(value)
-	setting.ttl = ttl
-	setting.layer = layer
 
-	setting.bucket.lock.Lock()
-	if bucketCapacity >= 0 {
-		setting.bucket.capacity = bucketCapacity
-	} else {
-		setting.bucket.capacity = 0
-		log.Warningf("Invalid bucket capacity (%v). Using %v.", bucketCapacity, 0)
+	globalSettingsCfg.lock.Lock()
+	if s, ok := globalSettingsCfg.settings[key]; ok {
+		ns.bucket.setAvail(s.bucket.avail())
 	}
-	if setting.bucket.available > setting.bucket.capacity {
-		setting.bucket.available = setting.bucket.capacity
-	}
-	if bucketRatePerSec >= 0 {
-		setting.bucket.ratePerSec = bucketRatePerSec
-	} else {
-		setting.bucket.ratePerSec = 0
-		log.Warningf("Invalid bucket rate (%v). Using %v.", bucketRatePerSec, 0)
-	}
-	setting.bucket.lock.Unlock()
+	globalSettingsCfg.settings[key] = ns
+	globalSettingsCfg.lock.Unlock()
 }
 
 func resetSettings() {
+	globalSettingsCfg.lock.Lock()
+	defer globalSettingsCfg.lock.Unlock()
+
 	flushRateCounts()
-	globalSettingsCfg = &oboeSettingsCfg{
-		settings: make(map[oboeSettingKey]*oboeSettings),
-	}
+	globalSettingsCfg.settings = make(map[oboeSettingKey]*oboeSettings)
 	readEnvSettings()
 }
 
@@ -305,8 +354,8 @@ func getSetting(layer string) (*oboeSettings, bool) {
 }
 
 func removeSetting(layer string) {
-	globalSettingsCfg.lock.RLock()
-	defer globalSettingsCfg.lock.RUnlock()
+	globalSettingsCfg.lock.Lock()
+	defer globalSettingsCfg.lock.Unlock()
 
 	key := oboeSettingKey{
 		sType: TYPE_DEFAULT,

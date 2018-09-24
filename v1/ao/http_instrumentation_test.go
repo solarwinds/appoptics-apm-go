@@ -186,7 +186,9 @@ func TestHTTPSpan(t *testing.T) {
 	assert.Equal(t, 200, m.Status)
 	assert.Equal(t, "GET", m.Method)
 	assert.False(t, m.HasError)
-	assert.InDelta(t, (25*time.Millisecond + nullDuration).Seconds(), m.Duration.Seconds(), (10 * time.Millisecond).Seconds())
+	assert.InDelta(t, (25*time.Millisecond + nullDuration).Seconds(),
+		m.Duration.Seconds(), (10 * time.Millisecond).Seconds(),
+		nullDuration, m.Duration)
 
 	m, ok = r.SpanMessages[3].(*reporter.HTTPSpanMessage)
 	assert.True(t, ok)
