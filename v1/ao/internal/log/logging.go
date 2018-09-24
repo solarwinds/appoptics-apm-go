@@ -70,7 +70,7 @@ func initLog() {
 
 // ToLogLevel converts a string to a log level, or returns false for any error
 func ToLogLevel(level string) (LogLevel, bool) {
-	lvl := WARNING
+	lvl := defaultLogLevel
 
 	// Accept integers for backward-compatibility.
 	if i, err := strconv.Atoi(level); err == nil {
@@ -120,7 +120,7 @@ func StrToLevel(e string) (LogLevel, error) {
 	if err == nil {
 		return LogLevel(offset), nil
 	} else {
-		return ERROR, err
+		return defaultLogLevel, err
 	}
 }
 

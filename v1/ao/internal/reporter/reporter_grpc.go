@@ -811,7 +811,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 // settings	new settings
 func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	for _, s := range settings.GetSettings() {
-		log.Debugf("Got sampling setting: %+v\n", s)
+		log.Debugf("Got sampling setting: %#v\n", s)
 		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Value, s.Ttl, &s.Arguments)
 
 		// update MetricsFlushInterval
@@ -1090,7 +1090,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			// server responded, check the result code and perform actions accordingly
 			switch result := m.ResultCode(); result {
 			case collector.ResultCode_OK:
-				log.Infof("[%s] sent %d data chunks in %v msec. %s",
+				log.Infof("[%s] sent %d data chunks. RTT=%v msec. %s",
 					m, m.MessageLen(), cost.Nanoseconds()/1e6, arg)
 				atomic.AddInt64(&c.queueStats.numSent, m.MessageLen())
 				return nil
