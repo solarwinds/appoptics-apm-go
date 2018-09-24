@@ -4,6 +4,8 @@ package reporter
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 )
@@ -12,6 +14,10 @@ import (
 type Method interface {
 	// Call invokes the RPC method through a specified gRPC client
 	Call(ctx context.Context, c collector.TraceCollectorClient) error
+
+	// CallSummary returns a string indicating the summary of this call, e.g., the
+	// data chunks sent out and the round trip time.It is for logging purpose only.
+	CallSummary() string
 
 	// MessageLen returns the length (number of elements) of the method request
 	MessageLen() int64
@@ -36,6 +42,7 @@ type PostEventsMethod struct {
 	serviceKey string
 	messages   [][]byte
 	Resp       *collector.MessageResult
+	rtt        time.Duration
 }
 
 func newPostEventsMethod(key string, msgs [][]byte) *PostEventsMethod {
@@ -70,8 +77,15 @@ func (pe *PostEventsMethod) Call(ctx context.Context,
 		Identity: buildIdentity(),
 	}
 	var err error
+	start := time.Now()
 	pe.Resp, err = c.PostEvents(ctx, request)
+	pe.rtt = time.Now().Sub(start)
 	return err
+}
+
+func (pe *PostEventsMethod) CallSummary() string {
+	return fmt.Sprintf("sent %d events, rtt=%v.",
+		pe.MessageLen(), pe.rtt)
 }
 
 func (pe *PostEventsMethod) RetryOnErr() bool {
@@ -83,6 +97,7 @@ type PostMetricsMethod struct {
 	serviceKey string
 	messages   [][]byte
 	Resp       *collector.MessageResult
+	rtt        time.Duration
 }
 
 func newPostMetricsMethod(key string, msgs [][]byte) *PostMetricsMethod {
@@ -117,8 +132,14 @@ func (pm *PostMetricsMethod) Call(ctx context.Context,
 		Identity: buildIdentity(),
 	}
 	var err error
+	start := time.Now()
 	pm.Resp, err = c.PostMetrics(ctx, request)
+	pm.rtt = time.Now().Sub(start)
 	return err
+}
+
+func (pm *PostMetricsMethod) CallSummary() string {
+	return fmt.Sprintf("sent metrics, rtt=%v.", pm.rtt)
 }
 
 func (pm *PostMetricsMethod) RetryOnErr() bool {
@@ -130,6 +151,7 @@ type PostStatusMethod struct {
 	serviceKey string
 	messages   [][]byte
 	Resp       *collector.MessageResult
+	rtt        time.Duration
 }
 
 func newPostStatusMethod(key string, msgs [][]byte) *PostStatusMethod {
@@ -164,7 +186,9 @@ func (ps *PostStatusMethod) Call(ctx context.Context,
 		Identity: buildIdentity(),
 	}
 	var err error
+	start := time.Now()
 	ps.Resp, err = c.PostStatus(ctx, request)
+	ps.rtt = time.Now().Sub(start)
 	return err
 }
 
@@ -172,10 +196,15 @@ func (ps *PostStatusMethod) RetryOnErr() bool {
 	return true
 }
 
+func (ps *PostStatusMethod) CallSummary() string {
+	return fmt.Sprintf("sent status, rtt=%v.", ps.rtt)
+}
+
 // GetSettingsMethod is the struct for RPC method GetSettings
 type GetSettingsMethod struct {
 	serviceKey string
 	Resp       *collector.SettingsResult
+	rtt        time.Duration
 }
 
 func newGetSettingsMethod(key string) *GetSettingsMethod {
@@ -208,8 +237,14 @@ func (gs *GetSettingsMethod) Call(ctx context.Context,
 		Identity:      buildBestEffortIdentity(),
 	}
 	var err error
+	start := time.Now()
 	gs.Resp, err = c.GetSettings(ctx, request)
+	gs.rtt = time.Now().Sub(start)
 	return err
+}
+
+func (gs *GetSettingsMethod) CallSummary() string {
+	return fmt.Sprintf("got settings, rtt=%v.", gs.rtt)
 }
 
 func (gs *GetSettingsMethod) RetryOnErr() bool {
@@ -220,6 +255,7 @@ type PingMethod struct {
 	conn       string
 	serviceKey string
 	Resp       *collector.MessageResult
+	rtt        time.Duration
 }
 
 func newPingMethod(key string, conn string) *PingMethod {
@@ -251,8 +287,14 @@ func (p *PingMethod) Call(ctx context.Context,
 		ApiKey: p.serviceKey,
 	}
 	var err error
+	start := time.Now()
 	p.Resp, err = c.Ping(ctx, request)
+	p.rtt = time.Now().Sub(start)
 	return err
+}
+
+func (p *PingMethod) CallSummary() string {
+	return fmt.Sprintf("ping back, rtt=%v.", p.rtt)
 }
 
 func (p *PingMethod) RetryOnErr() bool {

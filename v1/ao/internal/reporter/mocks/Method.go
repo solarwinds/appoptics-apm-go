@@ -39,6 +39,20 @@ func (_m *Method) Call(ctx context.Context, c collector.TraceCollectorClient) er
 	return r0
 }
 
+// CallSummary provides a mock function with given fields:
+func (_m *Method) CallSummary() string {
+	ret := _m.Called()
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
 // MessageLen provides a mock function with given fields:
 func (_m *Method) MessageLen() int64 {
 	ret := _m.Called()

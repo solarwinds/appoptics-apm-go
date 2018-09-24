@@ -1047,12 +1047,9 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		// if another goroutine is messing with it at the same time, e.g. doing
 		// a redirection.
 		c.lock.RLock()
-		var cost time.Duration
 		if c.isActive() {
 			ctx, cancel := context.WithTimeout(context.Background(), grpcCtxTimeout)
-			start := time.Now()
 			err = m.Call(ctx, c.client)
-			cost = time.Now().Sub(start)
 
 			code := status.Code(err)
 			if code == codes.DeadlineExceeded ||
@@ -1090,8 +1087,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			// server responded, check the result code and perform actions accordingly
 			switch result := m.ResultCode(); result {
 			case collector.ResultCode_OK:
-				log.Infof("[%s] sent %d data chunks. RTT=%v msec. %s",
-					m, m.MessageLen(), cost.Nanoseconds()/1e6, arg)
+				log.Infof("[%s] %s %s", m, m.CallSummary(), arg)
 				atomic.AddInt64(&c.queueStats.numSent, m.MessageLen())
 				return nil
 

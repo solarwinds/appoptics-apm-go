@@ -457,6 +457,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_OK)
@@ -472,6 +473,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_INVALID_API_KEY)
@@ -485,6 +487,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_LIMIT_EXCEEDED)
@@ -499,6 +502,7 @@ func TestInvokeRPC(t *testing.T) {
 
 	mockMethod = &mocks.Method{}
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(true)
@@ -523,6 +527,7 @@ func TestInvokeRPC(t *testing.T) {
 	redirectNum := 1
 	mockMethod = &mocks.Method{}
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(true)
 	mockMethod.On("Arg", mock.Anything, mock.Anything).
