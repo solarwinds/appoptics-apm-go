@@ -16,6 +16,9 @@ type Method interface {
 	// MessageLen returns the length (number of elements) of the method request
 	MessageLen() int64
 
+	// Message returns the message body, if any
+	Message() [][]byte
+
 	// ResultCode is the return code of the RPC call. It must only be called after
 	// the Call() method is invoked.
 	ResultCode() collector.ResultCode
@@ -59,6 +62,10 @@ func (pe *PostEventsMethod) Arg() string {
 
 func (pe *PostEventsMethod) MessageLen() int64 {
 	return int64(len(pe.messages))
+}
+
+func (pe *PostEventsMethod) Message() [][]byte {
+	return pe.messages
 }
 
 func (pe *PostEventsMethod) Call(ctx context.Context,
@@ -108,6 +115,10 @@ func (pm *PostMetricsMethod) MessageLen() int64 {
 	return int64(len(pm.messages))
 }
 
+func (pm *PostMetricsMethod) Message() [][]byte {
+	return pm.messages
+}
+
 func (pm *PostMetricsMethod) Call(ctx context.Context,
 	c collector.TraceCollectorClient) error {
 	request := &collector.MessageRequest{
@@ -155,6 +166,10 @@ func (ps *PostStatusMethod) MessageLen() int64 {
 	return int64(len(ps.messages))
 }
 
+func (ps *PostStatusMethod) Message() [][]byte {
+	return ps.messages
+}
+
 func (ps *PostStatusMethod) Call(ctx context.Context,
 	c collector.TraceCollectorClient) error {
 	request := &collector.MessageRequest{
@@ -200,6 +215,10 @@ func (ps *GetSettingsMethod) MessageLen() int64 {
 	return 0
 }
 
+func (ps *GetSettingsMethod) Message() [][]byte {
+	return nil
+}
+
 func (gs *GetSettingsMethod) Call(ctx context.Context,
 	c collector.TraceCollectorClient) error {
 	request := &collector.SettingsRequest{
@@ -243,6 +262,10 @@ func (p *PingMethod) Arg() string {
 
 func (p *PingMethod) MessageLen() int64 {
 	return 0
+}
+
+func (p *PingMethod) Message() [][]byte {
+	return nil
 }
 
 func (p *PingMethod) Call(ctx context.Context,

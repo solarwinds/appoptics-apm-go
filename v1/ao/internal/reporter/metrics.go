@@ -107,12 +107,12 @@ type TransMap struct {
 	// is updated periodically.
 	// The default value metricsTransactionsMaxDefault is used when a new TransMap
 	// is initialized.
-	currCap int
+	currCap int32
 	// The maximum capacity which is set by the server settings. This update usually happens in
 	// between two metrics reporting cycles. To avoid affecting the map capacity of the current reporting
 	// cycle, the new capacity got from the server is stored in nextCap and will only be flushed to currCap
 	// when the Reset() is called.
-	nextCap int
+	nextCap int32
 	// Whether there is an overflow. Overflow means the user tried to store more transaction names
 	// than the capacity defined by settings.
 	// This flag is cleared in every metrics cycle.
@@ -123,7 +123,7 @@ type TransMap struct {
 }
 
 // NewTransMap initializes a new TransMap struct
-func NewTransMap(cap int) *TransMap {
+func NewTransMap(cap int32) *TransMap {
 	return &TransMap{
 		transactionNames: make(map[string]struct{}),
 		currCap:          cap,
@@ -134,10 +134,17 @@ func NewTransMap(cap int) *TransMap {
 }
 
 // SetCap sets the capacity of the transaction map
-func (t *TransMap) SetCap(cap int) {
+func (t *TransMap) SetCap(cap int32) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.nextCap = cap
+}
+
+// Cap returns the current capacity
+func (t *TransMap) Cap() int32 {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	return t.currCap
 }
 
 // ResetTransMap resets the transaction map to a initialized state. The new capacity got from the
@@ -159,7 +166,7 @@ func (t *TransMap) IsWithinLimit(name string) bool {
 
 	if _, ok := t.transactionNames[name]; !ok {
 		// only record if we haven't reached the limits yet
-		if len(t.transactionNames) < t.currCap {
+		if int32(len(t.transactionNames)) < t.currCap {
 			t.transactionNames[name] = struct{}{}
 			return true
 		}
