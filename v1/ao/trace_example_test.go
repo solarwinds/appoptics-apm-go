@@ -4,7 +4,7 @@ package ao_test
 
 import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
-	"golang.org/x/net/context"
+	"context"
 )
 
 func ExampleNewTrace() {
