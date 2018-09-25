@@ -6,22 +6,20 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	"gopkg.in/mgo.v2/bson"
 )
 
-// PrintBson prints the BSON message. It's not concurrent-safe and is for testing only
-func PrintBson(message []byte) {
+// SPrintBson prints the BSON message. It's not concurrent-safe and is for testing only
+func SPrintBson(message []byte) string {
 	m := make(map[string]interface{})
 	bson.Unmarshal(message, m)
 	b, _ := json.MarshalIndent(m, "", "  ")
-	fmt.Println(time.Now().Format("15:04:05"), string(b))
+	return string(b)
 }
 
 // GetLineByKeyword reads a file, searches for the keyword and returns the matched line.

@@ -67,7 +67,7 @@ func printMessageRequest(req *pb.MessageRequest) {
 	fmt.Println("Events decoded from BSON->")
 	for idx, m := range req.Messages {
 		fmt.Printf("#%d->", idx)
-		utils.PrintBson(m)
+		fmt.Println(utils.SPrintBson(m))
 	}
 }
 

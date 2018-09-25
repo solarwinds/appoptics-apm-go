@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"gopkg.in/mgo.v2/bson"
 
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
@@ -33,7 +34,7 @@ func assertInitMessage(t *testing.T, bufs [][]byte) {
 	g.AssertGraph(t, bufs, 1, g.AssertNodeMap{
 		{"go", "single"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, 1, n.Map["__Init"])
-			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
+			assert.Equal(t, utils.Version(), n.Map["Go.Oboe.Version"])
 			assert.NotEmpty(t, n.Map["Go.Version"])
 		}},
 	})
