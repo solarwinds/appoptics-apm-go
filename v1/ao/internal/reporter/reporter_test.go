@@ -4,7 +4,6 @@ package reporter
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -47,15 +46,6 @@ var _ = func() (_ struct{}) {
 	config.Refresh()
 	return
 }()
-
-func TestCacheHostname(t *testing.T) {
-	h, _ := os.Hostname()
-	assert.Equal(t, h, host.Hostname())
-	assert.Equal(t, false, reportingDisabled)
-	t.Logf("Forcing hostname error: 'Unable to get hostname' log message expected")
-	checkHostname(func() (string, error) { return "", errors.New("cannot get hostname") })
-	assert.Equal(t, true, reportingDisabled)
-}
 
 // ========================= Test Reporter =============================
 
@@ -145,6 +135,7 @@ func TestNullReporter(t *testing.T) {
 	assert.NoError(t, nullR.reportEvent(nil, nil))
 	assert.NoError(t, nullR.reportStatus(nil, nil))
 	assert.NoError(t, nullR.reportSpan(nil))
+
 }
 
 // ========================= UDP Reporter =============================
@@ -221,7 +212,6 @@ func TestGRPCReporter(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
-	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
 	config.Refresh()
@@ -316,7 +306,6 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
-	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
 	config.Refresh()
@@ -365,7 +354,6 @@ func TestInvalidKey(t *testing.T) {
 	addr := "localhost:4567"
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	reportingDisabled = false
 
 	// start test gRPC server
 	server := StartTestGRPCServer(t, addr)
@@ -455,7 +443,7 @@ func TestInvokeRPC(t *testing.T) {
 		insecureSkipVerify: true,
 		backoff: func(retries int, wait func(d time.Duration)) error {
 			if retries > grpcMaxRetries {
-				return ErrMaxRetriesExceeded
+				return errGiveUpAfterRetries
 			}
 			return nil
 		},
@@ -466,10 +454,12 @@ func TestInvokeRPC(t *testing.T) {
 
 	// Test reporter exiting
 	mockMethod := &mocks.Method{}
+	mockMethod.On("String").Return("mock")
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
-
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_OK)
 
@@ -483,11 +473,12 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod = &mocks.Method{}
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_INVALID_API_KEY)
-
-	mockMethod.On("String").Return("test")
 
 	assert.Equal(t, errInvalidServiceKey, c.InvokeRPC(exit, mockMethod))
 
@@ -495,10 +486,12 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod = &mocks.Method{}
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_LIMIT_EXCEEDED)
-	mockMethod.On("String").Return("test")
 
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(false)
@@ -508,12 +501,14 @@ func TestInvokeRPC(t *testing.T) {
 	failsNum := grpcRetryLogThreshold + (grpcMaxRetries-grpcRetryLogThreshold)/2
 
 	mockMethod = &mocks.Method{}
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(true)
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_OK)
-	mockMethod.On("String").Return("events channel")
 
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(func(ctx context.Context, c pb.TraceCollectorClient) error {
@@ -531,6 +526,8 @@ func TestInvokeRPC(t *testing.T) {
 	// Test redirect
 	redirectNum := 1
 	mockMethod = &mocks.Method{}
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(true)
@@ -545,11 +542,27 @@ func TestInvokeRPC(t *testing.T) {
 				return pb.ResultCode_REDIRECT
 			}
 		})
-	mockMethod.On("String").Return("events channel")
 
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	assert.Equal(t, nil, c.InvokeRPC(exit, mockMethod))
 	assert.True(t, c.isActive())
 	assert.Equal(t, "new-addr:9999", c.address)
+}
+
+func TestInitReporter(t *testing.T) {
+	// Test disable agent
+	os.Setenv("APPOPTICS_DISABLED", "true")
+	config.Refresh()
+	initReporter()
+	require.IsType(t, &nullReporter{}, globalReporter)
+
+	// Test enable agent
+	os.Unsetenv("APPOPTICS_DISABLED")
+	os.Setenv("APPOPTICS_REPORTER", "ssl")
+	config.Refresh()
+	assert.False(t, config.GetDisabled())
+
+	initReporter()
+	require.IsType(t, &grpcReporter{}, globalReporter)
 }

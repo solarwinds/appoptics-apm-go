@@ -17,6 +17,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func init() {
+	Start()
+}
+
 func TestFilteredIfaces(t *testing.T) {
 	ifaces, err := FilteredIfaces()
 	if err != nil {

@@ -20,8 +20,8 @@ type Trace interface {
 	// Inherited from the Span interface
 	//  BeginSpan(spanName string, args ...interface{}) Span
 	//  BeginProfile(profileName string, args ...interface{}) Profile
-	//	End(args ...interface{})
-	//	Info(args ...interface{})
+	// 	End(args ...interface{})
+	// 	Info(args ...interface{})
 	//  Error(class, msg string)
 	//  Err(error)
 	//  IsSampled() bool
@@ -85,9 +85,13 @@ func (t *aoTrace) aoContext() reporter.Context { return t.aoCtx }
 // the beginning of a root span named spanName. If this trace is sampled, it may report
 // event data to AppOptics; otherwise event reporting will be a no-op.
 func NewTrace(spanName string) Trace {
+	if Disabled() {
+		return NewNullTrace()
+	}
+
 	ctx, ok := reporter.NewContext(spanName, "", true, nil)
 	if !ok {
-		return &nullTrace{}
+		return NewNullTrace()
 	}
 	t := &aoTrace{
 		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
@@ -100,6 +104,10 @@ func NewTrace(spanName string) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
+	if Disabled() {
+		return NewNullTrace()
+	}
+
 	ctx, ok := reporter.NewContext(spanName, mdstr, true, func() map[string]interface{} {
 		if cb != nil {
 			return cb()
@@ -107,7 +115,7 @@ func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
 		return nil
 	})
 	if !ok {
-		return &nullTrace{}
+		return NewNullTrace()
 	}
 	t := &aoTrace{
 		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
@@ -314,21 +322,3 @@ func (t *nullTrace) recordMetrics()               {}
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }
-
-// WaitForReady checks if the agent is ready. It will block until the agent is ready
-// or the context is canceled.
-//
-// The agent is considered ready if there is a valid default setting for sampling.
-func WaitForReady(ctx context.Context) bool {
-	return reporter.WaitForReady(ctx)
-}
-
-// Shutdown flush the metrics and stops the agent. The call will block until the agent
-// flushes and is successfully shutdown or the context is canceled. It returns nil
-// for successful shutdown and or error when the context is canceled or the agent
-// has already been closed before.
-//
-// This function should be called only once.
-func Shutdown(ctx context.Context) error {
-	return reporter.Shutdown(ctx)
-}

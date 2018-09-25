@@ -21,9 +21,6 @@ type udpReporter struct {
 
 func udpNewReporter() reporter {
 	var conn *net.UDPConn
-	if reportingDisabled {
-		return &nullReporter{}
-	}
 
 	// collector address override
 	udpAddress := config.GetCollectorUDP()
