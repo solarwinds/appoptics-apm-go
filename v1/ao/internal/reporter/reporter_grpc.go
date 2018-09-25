@@ -274,8 +274,8 @@ func newGRPCReporter() reporter {
 		serviceKey: serviceKey,
 
 		eventMessages:  make(chan []byte, 10000),
-		spanMessages:   make(chan SpanMessage, 1024),
-		statusMessages: make(chan []byte, 1024),
+		spanMessages:   make(chan SpanMessage, 10000),
+		statusMessages: make(chan []byte, 100),
 
 		cond: sync.NewCond(&sync.Mutex{}),
 		done: make(chan struct{}),
