@@ -5,7 +5,6 @@ package reporter
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -812,40 +811,21 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 // settings	new settings
 func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	for _, s := range settings.GetSettings() {
-		log.Debugf("Got sampling setting: %+v\n", s)
-		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Value, s.Ttl, &s.Arguments)
+		log.Debugf("Got sampling setting: %#v\n", s)
+		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Value, s.Ttl, s.Arguments)
 
 		// update MetricsFlushInterval
-		var i int32
-		if interval, ok := s.Arguments["MetricsFlushInterval"]; ok {
-			l := len(interval)
-			if l == 4 {
-				i = int32(binary.LittleEndian.Uint32(interval))
-			} else {
-				log.Warningf("Bad MetricsFlushInterval size: %s", l)
-			}
-		} else {
-			i = grpcMetricIntervalDefault
-		}
-		atomic.StoreInt32(&r.collectMetricInterval, i)
+		mi := parseInt32(s.Arguments, kvMetricsFlushInterval, r.collectMetricInterval)
+		atomic.StoreInt32(&r.collectMetricInterval, mi)
 
 		// update events flush interval
-		if interval, ok := s.Arguments["EventsFlushInterval"]; ok {
-			l := len(interval)
-			if l == 4 {
-				newInterval := int64(binary.LittleEndian.Uint32(interval))
-				config.ReporterOpts().SetEventFlushInterval(newInterval)
-			} else {
-				log.Warningf("Bad EventsFlushInterval size: %s", l)
-			}
-		}
+		o := config.ReporterOpts()
+		ei := parseInt32(s.Arguments, kvEventsFlushInterval, int32(o.GetEventFlushInterval()))
+		o.SetEventFlushInterval(int64(ei))
 
 		// update MaxTransactions
-		capacity := metricsTransactionsMaxDefault
-		if max, ok := s.Arguments["MaxTransactions"]; ok {
-			capacity = int(binary.LittleEndian.Uint32(max))
-		}
-		mTransMap.SetCap(capacity)
+		mt := parseInt32(s.Arguments, kvMaxTransactions, mTransMap.Cap())
+		mTransMap.SetCap(mt)
 	}
 
 	if !r.isReady() && hasDefaultSetting() {

@@ -34,6 +34,15 @@ type reporter interface {
 	WaitForReady(context.Context) bool
 }
 
+// KVs from getSettingsResult arguments
+const (
+	kvBucketCapacity       = "BucketCapacity"
+	kvBucketRate           = "BucketRate"
+	kvMetricsFlushInterval = "MetricsFlushInterval"
+	kvEventsFlushInterval  = "EventsFlushInterval"
+	kvMaxTransactions      = "MaxTransactions"
+)
+
 // currently used reporter
 var globalReporter reporter = &nullReporter{}
 
@@ -147,31 +156,31 @@ func shouldTraceRequest(layer string, traced bool) (bool, int, sampleSource) {
 	return oboeSampleRequest(layer, traced)
 }
 
-func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) *map[string][]byte {
+func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) map[string][]byte {
 	args := make(map[string][]byte)
 
 	if capacity > -1 {
 		bits := math.Float64bits(capacity)
 		bytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(bytes, bits)
-		args["BucketCapacity"] = bytes
+		args[kvBucketCapacity] = bytes
 	}
 	if ratePerSec > -1 {
 		bits := math.Float64bits(ratePerSec)
 		bytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(bytes, bits)
-		args["BucketRate"] = bytes
+		args[kvBucketRate] = bytes
 	}
 	if metricsFlushInterval > -1 {
 		bytes := make([]byte, 4)
 		binary.LittleEndian.PutUint32(bytes, uint32(metricsFlushInterval))
-		args["MetricsFlushInterval"] = bytes
+		args[kvMetricsFlushInterval] = bytes
 	}
 	if maxTransactions > -1 {
 		bytes := make([]byte, 4)
 		binary.LittleEndian.PutUint32(bytes, uint32(maxTransactions))
-		args["MaxTransactions"] = bytes
+		args[kvMaxTransactions] = bytes
 	}
 
-	return &args
+	return args
 }
