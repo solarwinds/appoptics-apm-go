@@ -4,6 +4,8 @@ package reporter
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 )
@@ -12,6 +14,10 @@ import (
 type Method interface {
 	// Call invokes the RPC method through a specified gRPC client
 	Call(ctx context.Context, c collector.TraceCollectorClient) error
+
+	// CallSummary returns a string indicating the summary of this call, e.g., the
+	// data chunks sent out and the round trip time.It is for logging purpose only.
+	CallSummary() string
 
 	// MessageLen returns the length (number of elements) of the method request
 	MessageLen() int64
@@ -39,6 +45,7 @@ type PostEventsMethod struct {
 	serviceKey string
 	messages   [][]byte
 	Resp       *collector.MessageResult
+	rtt        time.Duration
 }
 
 func newPostEventsMethod(key string, msgs [][]byte) *PostEventsMethod {
@@ -77,8 +84,16 @@ func (pe *PostEventsMethod) Call(ctx context.Context,
 		Identity: buildIdentity(),
 	}
 	var err error
+	start := time.Now()
 	pe.Resp, err = c.PostEvents(ctx, request)
+	pe.rtt = time.Now().Sub(start)
 	return err
+}
+
+func (pe *PostEventsMethod) CallSummary() string {
+	rsp := fmt.Sprintf("%v %s", pe.Resp.Result, pe.Resp.Arg)
+	return fmt.Sprintf("[%s] sent %d events, rtt=%v. rsp=%s",
+		pe, pe.MessageLen(), pe.rtt, rsp)
 }
 
 func (pe *PostEventsMethod) RetryOnErr() bool {
@@ -90,6 +105,7 @@ type PostMetricsMethod struct {
 	serviceKey string
 	messages   [][]byte
 	Resp       *collector.MessageResult
+	rtt        time.Duration
 }
 
 func newPostMetricsMethod(key string, msgs [][]byte) *PostMetricsMethod {
@@ -128,8 +144,15 @@ func (pm *PostMetricsMethod) Call(ctx context.Context,
 		Identity: buildIdentity(),
 	}
 	var err error
+	start := time.Now()
 	pm.Resp, err = c.PostMetrics(ctx, request)
+	pm.rtt = time.Now().Sub(start)
 	return err
+}
+
+func (pm *PostMetricsMethod) CallSummary() string {
+	rsp := fmt.Sprintf("%v %s", pm.Resp.Result, pm.Resp.Arg)
+	return fmt.Sprintf("[%s] sent metrics, rtt=%v. rsp=%s", pm, pm.rtt, rsp)
 }
 
 func (pm *PostMetricsMethod) RetryOnErr() bool {
@@ -141,6 +164,7 @@ type PostStatusMethod struct {
 	serviceKey string
 	messages   [][]byte
 	Resp       *collector.MessageResult
+	rtt        time.Duration
 }
 
 func newPostStatusMethod(key string, msgs [][]byte) *PostStatusMethod {
@@ -179,7 +203,9 @@ func (ps *PostStatusMethod) Call(ctx context.Context,
 		Identity: buildIdentity(),
 	}
 	var err error
+	start := time.Now()
 	ps.Resp, err = c.PostStatus(ctx, request)
+	ps.rtt = time.Now().Sub(start)
 	return err
 }
 
@@ -187,10 +213,16 @@ func (ps *PostStatusMethod) RetryOnErr() bool {
 	return true
 }
 
+func (ps *PostStatusMethod) CallSummary() string {
+	rsp := fmt.Sprintf("%v %s", ps.Resp.Result, ps.Resp.Arg)
+	return fmt.Sprintf("[%s] sent status, rtt=%v. rsp=%s", ps, ps.rtt, rsp)
+}
+
 // GetSettingsMethod is the struct for RPC method GetSettings
 type GetSettingsMethod struct {
 	serviceKey string
 	Resp       *collector.SettingsResult
+	rtt        time.Duration
 }
 
 func newGetSettingsMethod(key string) *GetSettingsMethod {
@@ -227,8 +259,15 @@ func (gs *GetSettingsMethod) Call(ctx context.Context,
 		Identity:      buildBestEffortIdentity(),
 	}
 	var err error
+	start := time.Now()
 	gs.Resp, err = c.GetSettings(ctx, request)
+	gs.rtt = time.Now().Sub(start)
 	return err
+}
+
+func (gs *GetSettingsMethod) CallSummary() string {
+	rsp := fmt.Sprintf("%v %s", gs.Resp.Result, gs.Resp.Arg)
+	return fmt.Sprintf("[%s] got settings, rtt=%v. rsp=%s", gs, gs.rtt, rsp)
 }
 
 func (gs *GetSettingsMethod) RetryOnErr() bool {
@@ -239,6 +278,7 @@ type PingMethod struct {
 	conn       string
 	serviceKey string
 	Resp       *collector.MessageResult
+	rtt        time.Duration
 }
 
 func newPingMethod(key string, conn string) *PingMethod {
@@ -274,8 +314,15 @@ func (p *PingMethod) Call(ctx context.Context,
 		ApiKey: p.serviceKey,
 	}
 	var err error
+	start := time.Now()
 	p.Resp, err = c.Ping(ctx, request)
+	p.rtt = time.Now().Sub(start)
 	return err
+}
+
+func (p *PingMethod) CallSummary() string {
+	rsp := fmt.Sprintf("%v %s", p.Resp.Result, p.Resp.Arg)
+	return fmt.Sprintf("[%s] ping back, rtt=%v. rsp=%s", p, p.rtt, rsp)
 }
 
 func (p *PingMethod) RetryOnErr() bool {
