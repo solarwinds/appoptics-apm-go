@@ -20,7 +20,7 @@ import (
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+	"context"
 )
 
 // client/server test based on basictracer-go/examples/dapperish.go

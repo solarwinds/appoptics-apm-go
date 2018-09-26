@@ -24,7 +24,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+	"context"
 )
 
 func handler404(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(404) }
@@ -186,7 +186,9 @@ func TestHTTPSpan(t *testing.T) {
 	assert.Equal(t, 200, m.Status)
 	assert.Equal(t, "GET", m.Method)
 	assert.False(t, m.HasError)
-	assert.InDelta(t, (25*time.Millisecond + nullDuration).Seconds(), m.Duration.Seconds(), (10 * time.Millisecond).Seconds())
+	assert.InDelta(t, (25*time.Millisecond + nullDuration).Seconds(),
+		m.Duration.Seconds(), (10 * time.Millisecond).Seconds(),
+		nullDuration, m.Duration)
 
 	m, ok = r.SpanMessages[3].(*reporter.HTTPSpanMessage)
 	assert.True(t, ok)

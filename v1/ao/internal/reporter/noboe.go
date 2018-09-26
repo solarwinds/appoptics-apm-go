@@ -20,7 +20,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	return false, 0, 6
 }
 
-func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int64, arguments *map[string][]byte) {
+func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int64, arguments map[string][]byte) {
 	mu.Lock()
 	defer mu.Unlock()
 	hasSetting = true
@@ -44,3 +44,6 @@ func hasDefaultSetting() bool {
 	ret := hasSetting
 	return ret
 }
+
+func parseInt32(args map[string][]byte, key string, fb int32) int32       { return fb }
+func parseFloat64(args map[string][]byte, key string, fb float64) float64 { return fb }

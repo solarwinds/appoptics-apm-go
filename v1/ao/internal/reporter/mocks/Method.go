@@ -53,6 +53,22 @@ func (_m *Method) CallSummary() string {
 	return r0
 }
 
+// Message provides a mock function with given fields:
+func (_m *Method) Message() [][]byte {
+	ret := _m.Called()
+
+	var r0 [][]byte
+	if rf, ok := ret.Get(0).(func() [][]byte); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([][]byte)
+		}
+	}
+
+	return r0
+}
+
 // MessageLen provides a mock function with given fields:
 func (_m *Method) MessageLen() int64 {
 	ret := _m.Called()

@@ -10,7 +10,7 @@ import (
 	"errors"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
-	"golang.org/x/net/context"
+	"context"
 )
 
 const (

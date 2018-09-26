@@ -454,8 +454,10 @@ func TestInvokeRPC(t *testing.T) {
 
 	// Test reporter exiting
 	mockMethod := &mocks.Method{}
+	mockMethod.On("String").Return("mock")
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
@@ -472,13 +474,13 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod = &mocks.Method{}
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_INVALID_API_KEY)
-
-	mockMethod.On("String").Return("test")
 
 	assert.Equal(t, errInvalidServiceKey, c.InvokeRPC(exit, mockMethod))
 
@@ -486,12 +488,13 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod = &mocks.Method{}
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_LIMIT_EXCEEDED)
-	mockMethod.On("String").Return("test")
 
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(false)
@@ -501,6 +504,8 @@ func TestInvokeRPC(t *testing.T) {
 	failsNum := grpcRetryLogThreshold + (grpcMaxRetries-grpcRetryLogThreshold)/2
 
 	mockMethod = &mocks.Method{}
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
@@ -508,7 +513,6 @@ func TestInvokeRPC(t *testing.T) {
 		Return(true)
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_OK)
-	mockMethod.On("String").Return("events channel")
 
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(func(ctx context.Context, c pb.TraceCollectorClient) error {
@@ -526,6 +530,8 @@ func TestInvokeRPC(t *testing.T) {
 	// Test redirect
 	redirectNum := 1
 	mockMethod = &mocks.Method{}
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
@@ -541,7 +547,6 @@ func TestInvokeRPC(t *testing.T) {
 				return pb.ResultCode_REDIRECT
 			}
 		})
-	mockMethod.On("String").Return("events channel")
 
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
