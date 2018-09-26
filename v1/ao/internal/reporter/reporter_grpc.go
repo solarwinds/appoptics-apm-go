@@ -5,8 +5,6 @@ package reporter
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/binary"
-	"fmt"
 	"io/ioutil"
 	"math"
 	"strings"
