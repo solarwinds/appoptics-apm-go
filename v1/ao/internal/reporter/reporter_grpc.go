@@ -734,7 +734,7 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 			case nil:
 				log.Info(method.CallSummary())
 			default:
-				log.Infof("eventBatchSender: %s", err)
+				log.Warningf("eventBatchSender: %s", err)
 			}
 		}
 
@@ -784,7 +784,7 @@ func (r *grpcReporter) sendMetrics(msg []byte) {
 	case nil:
 		log.Info(method.CallSummary())
 	default:
-		log.Infof("sendMetrics: %s", err)
+		log.Warningf("sendMetrics: %s", err)
 	}
 }
 
