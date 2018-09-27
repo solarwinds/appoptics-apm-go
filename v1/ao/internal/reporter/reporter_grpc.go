@@ -455,7 +455,7 @@ func (c *grpcConnection) connect() error {
 	// Skip it if the connection is not stale - someone else may have done
 	// the connection.
 	if c.isActive() {
-		log.Debug("[%s] Someone else has done the redirection.", c.name)
+		log.Debugf("[%s] Someone else has done the redirection.", c.name)
 		return nil
 	}
 	// create a new connection object for this client
