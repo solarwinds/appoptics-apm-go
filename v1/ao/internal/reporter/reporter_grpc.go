@@ -1070,7 +1070,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			failsNum = 0
 
 			// server responded, check the result code and perform actions accordingly
-			switch result := m.ResultCode(); result {
+			switch result, _ := m.ResultCode(); result {
 			case collector.ResultCode_OK:
 				atomic.AddInt64(&c.queueStats.numSent, m.MessageLen())
 				return nil

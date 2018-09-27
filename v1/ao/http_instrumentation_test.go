@@ -18,13 +18,14 @@ import (
 
 	"os"
 
+	"context"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"context"
 )
 
 func handler404(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(404) }
@@ -188,7 +189,7 @@ func TestHTTPSpan(t *testing.T) {
 	assert.False(t, m.HasError)
 	assert.InDelta(t, (25*time.Millisecond + nullDuration).Seconds(),
 		m.Duration.Seconds(), (10 * time.Millisecond).Seconds(),
-		nullDuration, m.Duration)
+		nullDuration, fmt.Sprintf("%v", m.Duration))
 
 	m, ok = r.SpanMessages[3].(*reporter.HTTPSpanMessage)
 	assert.True(t, ok)
@@ -622,7 +623,7 @@ func AliceHandler(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
 	l.End() // end HTTP client timing
-	//w.WriteHeader(200)
+	// w.WriteHeader(200)
 	if err != nil {
 		w.Write([]byte(`{"error":true}`))
 	} else {

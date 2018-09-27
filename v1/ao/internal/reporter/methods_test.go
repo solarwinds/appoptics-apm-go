@@ -30,7 +30,9 @@ func TestPostEventsMethod(t *testing.T) {
 
 	err := pe.Call(context.Background(), mockTC)
 	assert.Nil(t, err)
-	assert.Equal(t, collector.ResultCode_OK, pe.ResultCode())
+	code, err := pe.ResultCode()
+	assert.Equal(t, collector.ResultCode_OK, code)
+	assert.Nil(t, err)
 	assert.Equal(t, "", pe.Arg())
 }
 
@@ -52,7 +54,9 @@ func TestPostMetricsMethod(t *testing.T) {
 
 	err := pe.Call(context.Background(), mockTC)
 	assert.Nil(t, err)
-	assert.Equal(t, collector.ResultCode_OK, pe.ResultCode())
+	code, err := pe.ResultCode()
+	assert.Equal(t, collector.ResultCode_OK, code)
+	assert.Nil(t, err)
 	assert.Equal(t, "", pe.Arg())
 }
 
@@ -74,7 +78,8 @@ func TestPostStatusMethod(t *testing.T) {
 
 	err := pe.Call(context.Background(), mockTC)
 	assert.Nil(t, err)
-	assert.Equal(t, collector.ResultCode_OK, pe.ResultCode())
+	code, err := pe.ResultCode()
+	assert.Equal(t, collector.ResultCode_OK, code)
 	assert.Equal(t, "", pe.Arg())
 }
 
@@ -91,7 +96,9 @@ func TestGetSettingsMethod(t *testing.T) {
 
 	err := pe.Call(context.Background(), mockTC)
 	assert.Nil(t, err)
-	assert.Equal(t, collector.ResultCode_OK, pe.ResultCode())
+	code, err := pe.ResultCode()
+	assert.Equal(t, collector.ResultCode_OK, code)
+	assert.Nil(t, err)
 	assert.Equal(t, "", pe.Arg())
 }
 
@@ -108,6 +115,8 @@ func TestPingMethod(t *testing.T) {
 
 	err := pe.Call(context.Background(), mockTC)
 	assert.Nil(t, err)
-	assert.Equal(t, collector.ResultCode_OK, pe.ResultCode())
+	code, err := pe.ResultCode()
+	assert.Equal(t, collector.ResultCode_OK, code)
+	assert.Nil(t, err)
 	assert.Equal(t, "", pe.Arg())
 }

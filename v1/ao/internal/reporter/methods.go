@@ -8,11 +8,14 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
+	"github.com/pkg/errors"
 )
 
 // Method defines the interface of an RPC call
 type Method interface {
-	// Call invokes the RPC method through a specified gRPC client
+	// Call invokes the RPC method through a specified gRPC client. It may return
+	// an error if the call is failed and no result code is returned by the collector
+	// due to some reason, e.g., the transport issue.
 	Call(ctx context.Context, c collector.TraceCollectorClient) error
 
 	// CallSummary returns a string indicating the summary of this call, e.g., the
@@ -27,7 +30,7 @@ type Method interface {
 
 	// ResultCode is the return code of the RPC call. It must only be called after
 	// the Call() method is invoked.
-	ResultCode() collector.ResultCode
+	ResultCode() (collector.ResultCode, error)
 
 	// Arg returns the Arg field of the RPC call result. It must only be called
 	// after the Call() method is invoked.
@@ -40,11 +43,16 @@ type Method interface {
 	RetryOnErr() bool
 }
 
+var (
+	errRPCNotIssued = errors.New("RPC request is not issued yet")
+)
+
 // PostEventsMethod is the struct for RPC method PostEvents
 type PostEventsMethod struct {
 	serviceKey string
 	messages   [][]byte
 	Resp       *collector.MessageResult
+	err        error
 	rtt        time.Duration
 }
 
@@ -52,6 +60,8 @@ func newPostEventsMethod(key string, msgs [][]byte) *PostEventsMethod {
 	return &PostEventsMethod{
 		serviceKey: key,
 		messages:   msgs,
+		Resp:       &collector.MessageResult{},
+		err:        errRPCNotIssued,
 	}
 }
 
@@ -61,8 +71,8 @@ func (pe *PostEventsMethod) String() string {
 
 // ResultCode returns the result code of the PostEvents RPC call. This method
 // should only be invoked after the method Call is called.
-func (pe *PostEventsMethod) ResultCode() collector.ResultCode {
-	return pe.Resp.Result
+func (pe *PostEventsMethod) ResultCode() (collector.ResultCode, error) {
+	return pe.Resp.Result, pe.err
 }
 
 // Arg returns the Arg of the PostEvents RPC call. This method
@@ -90,17 +100,16 @@ func (pe *PostEventsMethod) Call(ctx context.Context,
 		Encoding: collector.EncodingType_BSON,
 		Identity: buildIdentity(),
 	}
-	var err error
 	start := time.Now()
-	pe.Resp, err = c.PostEvents(ctx, request)
+	pe.Resp, pe.err = c.PostEvents(ctx, request)
 	pe.rtt = time.Now().Sub(start)
-	return err
+	return pe.err
 }
 
 // CallSummary returns a string representation of the RPC call result.
 // It is mainly used for debug printing.
 func (pe *PostEventsMethod) CallSummary() string {
-	rsp := fmt.Sprintf("%v %s", pe.Resp.Result, pe.Resp.Arg)
+	rsp := resultRespStr(pe.Resp, pe.err)
 	return fmt.Sprintf("[%s] sent %d events, rtt=%v. rsp=%s",
 		pe, pe.MessageLen(), pe.rtt, rsp)
 }
@@ -115,6 +124,7 @@ type PostMetricsMethod struct {
 	serviceKey string
 	messages   [][]byte
 	Resp       *collector.MessageResult
+	err        error
 	rtt        time.Duration
 }
 
@@ -122,6 +132,8 @@ func newPostMetricsMethod(key string, msgs [][]byte) *PostMetricsMethod {
 	return &PostMetricsMethod{
 		serviceKey: key,
 		messages:   msgs,
+		Resp:       &collector.MessageResult{},
+		err:        errRPCNotIssued,
 	}
 }
 
@@ -131,8 +143,8 @@ func (pm *PostMetricsMethod) String() string {
 
 // ResultCode returns the result code of the RPC call. This method should
 // only be called after the method Call is invoked.
-func (pm *PostMetricsMethod) ResultCode() collector.ResultCode {
-	return pm.Resp.Result
+func (pm *PostMetricsMethod) ResultCode() (collector.ResultCode, error) {
+	return pm.Resp.Result, pm.err
 }
 
 // Arg returns the Arg of the RPC call result
@@ -159,17 +171,16 @@ func (pm *PostMetricsMethod) Call(ctx context.Context,
 		Encoding: collector.EncodingType_BSON,
 		Identity: buildIdentity(),
 	}
-	var err error
 	start := time.Now()
-	pm.Resp, err = c.PostMetrics(ctx, request)
+	pm.Resp, pm.err = c.PostMetrics(ctx, request)
 	pm.rtt = time.Now().Sub(start)
-	return err
+	return pm.err
 }
 
 // CallSummary returns a string representation of the RPC call result. It is
 // mainly used for debug printing.
 func (pm *PostMetricsMethod) CallSummary() string {
-	rsp := fmt.Sprintf("%v %s", pm.Resp.Result, pm.Resp.Arg)
+	rsp := resultRespStr(pm.Resp, pm.err)
 	return fmt.Sprintf("[%s] sent metrics, rtt=%v. rsp=%s", pm, pm.rtt, rsp)
 }
 
@@ -183,6 +194,7 @@ type PostStatusMethod struct {
 	serviceKey string
 	messages   [][]byte
 	Resp       *collector.MessageResult
+	err        error
 	rtt        time.Duration
 }
 
@@ -190,6 +202,8 @@ func newPostStatusMethod(key string, msgs [][]byte) *PostStatusMethod {
 	return &PostStatusMethod{
 		serviceKey: key,
 		messages:   msgs,
+		Resp:       &collector.MessageResult{},
+		err:        errRPCNotIssued,
 	}
 }
 
@@ -198,8 +212,8 @@ func (ps *PostStatusMethod) String() string {
 }
 
 // ResultCode returns the result code of the RPC call.
-func (ps *PostStatusMethod) ResultCode() collector.ResultCode {
-	return ps.Resp.Result
+func (ps *PostStatusMethod) ResultCode() (collector.ResultCode, error) {
+	return ps.Resp.Result, ps.err
 }
 
 // Arg returns the Arg of the RPC call result.
@@ -226,11 +240,10 @@ func (ps *PostStatusMethod) Call(ctx context.Context,
 		Encoding: collector.EncodingType_BSON,
 		Identity: buildIdentity(),
 	}
-	var err error
 	start := time.Now()
-	ps.Resp, err = c.PostStatus(ctx, request)
+	ps.Resp, ps.err = c.PostStatus(ctx, request)
 	ps.rtt = time.Now().Sub(start)
-	return err
+	return ps.err
 }
 
 // RetryOnErr denotes if retry is needed for this RPC method
@@ -241,7 +254,7 @@ func (ps *PostStatusMethod) RetryOnErr() bool {
 // CallSummary returns a string representation for the RPC call result. It is
 // mainly used for debug printing.
 func (ps *PostStatusMethod) CallSummary() string {
-	rsp := fmt.Sprintf("%v %s", ps.Resp.Result, ps.Resp.Arg)
+	rsp := resultRespStr(ps.Resp, ps.err)
 	return fmt.Sprintf("[%s] sent status, rtt=%v. rsp=%s", ps, ps.rtt, rsp)
 }
 
@@ -249,12 +262,15 @@ func (ps *PostStatusMethod) CallSummary() string {
 type GetSettingsMethod struct {
 	serviceKey string
 	Resp       *collector.SettingsResult
+	err        error
 	rtt        time.Duration
 }
 
 func newGetSettingsMethod(key string) *GetSettingsMethod {
 	return &GetSettingsMethod{
 		serviceKey: key,
+		Resp:       &collector.SettingsResult{},
+		err:        errRPCNotIssued,
 	}
 }
 
@@ -263,8 +279,8 @@ func (gs *GetSettingsMethod) String() string {
 }
 
 // ResultCode returns the result code of the RPC call
-func (gs *GetSettingsMethod) ResultCode() collector.ResultCode {
-	return gs.Resp.Result
+func (gs *GetSettingsMethod) ResultCode() (collector.ResultCode, error) {
+	return gs.Resp.Result, gs.err
 }
 
 // Arg returns the Arg of the RPC call result
@@ -290,16 +306,15 @@ func (gs *GetSettingsMethod) Call(ctx context.Context,
 		ClientVersion: grpcReporterVersion,
 		Identity:      buildBestEffortIdentity(),
 	}
-	var err error
 	start := time.Now()
-	gs.Resp, err = c.GetSettings(ctx, request)
+	gs.Resp, gs.err = c.GetSettings(ctx, request)
 	gs.rtt = time.Now().Sub(start)
-	return err
+	return gs.err
 }
 
 // CallSummary returns a string representation of the RPC call result.
 func (gs *GetSettingsMethod) CallSummary() string {
-	rsp := fmt.Sprintf("%v %s", gs.Resp.Result, gs.Resp.Arg)
+	rsp := settingsRespStr(gs.Resp, gs.err)
 	return fmt.Sprintf("[%s] got settings, rtt=%v. rsp=%s", gs, gs.rtt, rsp)
 }
 
@@ -313,6 +328,7 @@ type PingMethod struct {
 	conn       string
 	serviceKey string
 	Resp       *collector.MessageResult
+	err        error
 	rtt        time.Duration
 }
 
@@ -320,6 +336,8 @@ func newPingMethod(key string, conn string) *PingMethod {
 	return &PingMethod{
 		serviceKey: key,
 		conn:       conn,
+		Resp:       &collector.MessageResult{},
+		err:        errRPCNotIssued,
 	}
 }
 
@@ -328,8 +346,8 @@ func (p *PingMethod) String() string {
 }
 
 // ResultCode returns the code of the RPC call result
-func (p *PingMethod) ResultCode() collector.ResultCode {
-	return p.Resp.Result
+func (p *PingMethod) ResultCode() (collector.ResultCode, error) {
+	return p.Resp.Result, p.err
 }
 
 // Arg returns the arg of the RPC call result
@@ -353,21 +371,34 @@ func (p *PingMethod) Call(ctx context.Context,
 	request := &collector.PingRequest{
 		ApiKey: p.serviceKey,
 	}
-	var err error
 	start := time.Now()
-	p.Resp, err = c.Ping(ctx, request)
+	p.Resp, p.err = c.Ping(ctx, request)
 	p.rtt = time.Now().Sub(start)
-	return err
+	return p.err
 }
 
 // CallSummary returns a string representation for the RPC call result. It is
 // mainly used for debug printing.
 func (p *PingMethod) CallSummary() string {
-	rsp := fmt.Sprintf("%v %s", p.Resp.Result, p.Resp.Arg)
+	rsp := resultRespStr(p.Resp, p.err)
 	return fmt.Sprintf("[%s] ping back, rtt=%v. rsp=%s", p, p.rtt, rsp)
 }
 
 // RetryOnErr denotes if this RPC method needs a retry on failure.
 func (p *PingMethod) RetryOnErr() bool {
 	return false
+}
+
+func resultRespStr(r *collector.MessageResult, err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return fmt.Sprintf("%v %s", r.Result, r.Arg)
+}
+
+func settingsRespStr(r *collector.SettingsResult, err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return fmt.Sprintf("%v %s", r.Result, r.Arg)
 }
