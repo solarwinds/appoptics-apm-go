@@ -59,22 +59,29 @@ func (pe *PostEventsMethod) String() string {
 	return "PostEvents"
 }
 
+// ResultCode returns the result code of the PostEvents RPC call. This method
+// should only be invoked after the method Call is called.
 func (pe *PostEventsMethod) ResultCode() collector.ResultCode {
 	return pe.Resp.Result
 }
 
+// Arg returns the Arg of the PostEvents RPC call. This method
+// should only be invoked after the method Call is called.
 func (pe *PostEventsMethod) Arg() string {
 	return pe.Resp.Arg
 }
 
+// MessageLen returns the length of the PostEvents RPC message body.
 func (pe *PostEventsMethod) MessageLen() int64 {
 	return int64(len(pe.messages))
 }
 
+// Message returns the message body of the RPC call
 func (pe *PostEventsMethod) Message() [][]byte {
 	return pe.messages
 }
 
+// Call issues an RPC call with the provided information
 func (pe *PostEventsMethod) Call(ctx context.Context,
 	c collector.TraceCollectorClient) error {
 	request := &collector.MessageRequest{
@@ -90,12 +97,15 @@ func (pe *PostEventsMethod) Call(ctx context.Context,
 	return err
 }
 
+// CallSummary returns a string representation of the RPC call result.
+// It is mainly used for debug printing.
 func (pe *PostEventsMethod) CallSummary() string {
 	rsp := fmt.Sprintf("%v %s", pe.Resp.Result, pe.Resp.Arg)
 	return fmt.Sprintf("[%s] sent %d events, rtt=%v. rsp=%s",
 		pe, pe.MessageLen(), pe.rtt, rsp)
 }
 
+// RetryOnErr denotes if retry is needed for this RPC method
 func (pe *PostEventsMethod) RetryOnErr() bool {
 	return true
 }
@@ -119,22 +129,28 @@ func (pm *PostMetricsMethod) String() string {
 	return "PostMetrics"
 }
 
+// ResultCode returns the result code of the RPC call. This method should
+// only be called after the method Call is invoked.
 func (pm *PostMetricsMethod) ResultCode() collector.ResultCode {
 	return pm.Resp.Result
 }
 
+// Arg returns the Arg of the RPC call result
 func (pm *PostMetricsMethod) Arg() string {
 	return pm.Resp.Arg
 }
 
+// MessageLen returns the length of the RPC call message.
 func (pm *PostMetricsMethod) MessageLen() int64 {
 	return int64(len(pm.messages))
 }
 
+// Message returns the message body of the RPC call.
 func (pm *PostMetricsMethod) Message() [][]byte {
 	return pm.messages
 }
 
+// Call issues an RPC request with the provided information.
 func (pm *PostMetricsMethod) Call(ctx context.Context,
 	c collector.TraceCollectorClient) error {
 	request := &collector.MessageRequest{
@@ -150,11 +166,14 @@ func (pm *PostMetricsMethod) Call(ctx context.Context,
 	return err
 }
 
+// CallSummary returns a string representation of the RPC call result. It is
+// mainly used for debug printing.
 func (pm *PostMetricsMethod) CallSummary() string {
 	rsp := fmt.Sprintf("%v %s", pm.Resp.Result, pm.Resp.Arg)
 	return fmt.Sprintf("[%s] sent metrics, rtt=%v. rsp=%s", pm, pm.rtt, rsp)
 }
 
+// RetryOnErr denotes if retry is needed for this RPC method
 func (pm *PostMetricsMethod) RetryOnErr() bool {
 	return true
 }
@@ -178,22 +197,27 @@ func (ps *PostStatusMethod) String() string {
 	return "PostStatus"
 }
 
+// ResultCode returns the result code of the RPC call.
 func (ps *PostStatusMethod) ResultCode() collector.ResultCode {
 	return ps.Resp.Result
 }
 
+// Arg returns the Arg of the RPC call result.
 func (ps *PostStatusMethod) Arg() string {
 	return ps.Resp.Arg
 }
 
+// MessageLen returns the length of the RPC call message body
 func (ps *PostStatusMethod) MessageLen() int64 {
 	return int64(len(ps.messages))
 }
 
+// Message returns the RPC call message body
 func (ps *PostStatusMethod) Message() [][]byte {
 	return ps.messages
 }
 
+// Call issues an RPC call with the provided information.
 func (ps *PostStatusMethod) Call(ctx context.Context,
 	c collector.TraceCollectorClient) error {
 	request := &collector.MessageRequest{
@@ -209,10 +233,13 @@ func (ps *PostStatusMethod) Call(ctx context.Context,
 	return err
 }
 
+// RetryOnErr denotes if retry is needed for this RPC method
 func (ps *PostStatusMethod) RetryOnErr() bool {
 	return true
 }
 
+// CallSummary returns a string representation for the RPC call result. It is
+// mainly used for debug printing.
 func (ps *PostStatusMethod) CallSummary() string {
 	rsp := fmt.Sprintf("%v %s", ps.Resp.Result, ps.Resp.Arg)
 	return fmt.Sprintf("[%s] sent status, rtt=%v. rsp=%s", ps, ps.rtt, rsp)
@@ -235,22 +262,27 @@ func (gs *GetSettingsMethod) String() string {
 	return "GetSettings"
 }
 
+// ResultCode returns the result code of the RPC call
 func (gs *GetSettingsMethod) ResultCode() collector.ResultCode {
 	return gs.Resp.Result
 }
 
+// Arg returns the Arg of the RPC call result
 func (gs *GetSettingsMethod) Arg() string {
 	return gs.Resp.Arg
 }
 
-func (ps *GetSettingsMethod) MessageLen() int64 {
+// MessageLen returns the length of the RPC message body.
+func (gs *GetSettingsMethod) MessageLen() int64 {
 	return 0
 }
 
-func (ps *GetSettingsMethod) Message() [][]byte {
+// Message returns the message body of the RPC call.
+func (gs *GetSettingsMethod) Message() [][]byte {
 	return nil
 }
 
+// Call issues an RPC call.
 func (gs *GetSettingsMethod) Call(ctx context.Context,
 	c collector.TraceCollectorClient) error {
 	request := &collector.SettingsRequest{
@@ -265,15 +297,18 @@ func (gs *GetSettingsMethod) Call(ctx context.Context,
 	return err
 }
 
+// CallSummary returns a string representation of the RPC call result.
 func (gs *GetSettingsMethod) CallSummary() string {
 	rsp := fmt.Sprintf("%v %s", gs.Resp.Result, gs.Resp.Arg)
 	return fmt.Sprintf("[%s] got settings, rtt=%v. rsp=%s", gs, gs.rtt, rsp)
 }
 
+// RetryOnErr denotes if this method needs a retry on failure.
 func (gs *GetSettingsMethod) RetryOnErr() bool {
 	return true
 }
 
+// PingMethod defines the RPC method `Ping`
 type PingMethod struct {
 	conn       string
 	serviceKey string
@@ -292,22 +327,27 @@ func (p *PingMethod) String() string {
 	return "Ping " + p.conn
 }
 
+// ResultCode returns the code of the RPC call result
 func (p *PingMethod) ResultCode() collector.ResultCode {
 	return p.Resp.Result
 }
 
+// Arg returns the arg of the RPC call result
 func (p *PingMethod) Arg() string {
 	return p.Resp.Arg
 }
 
+// MessageLen returns the length of the RPC call message body.
 func (p *PingMethod) MessageLen() int64 {
 	return 0
 }
 
+// Message returns the message body, if any.
 func (p *PingMethod) Message() [][]byte {
 	return nil
 }
 
+// Call makes an RPC call with the information provided.
 func (p *PingMethod) Call(ctx context.Context,
 	c collector.TraceCollectorClient) error {
 	request := &collector.PingRequest{
@@ -320,11 +360,14 @@ func (p *PingMethod) Call(ctx context.Context,
 	return err
 }
 
+// CallSummary returns a string representation for the RPC call result. It is
+// mainly used for debug printing.
 func (p *PingMethod) CallSummary() string {
 	rsp := fmt.Sprintf("%v %s", p.Resp.Result, p.Resp.Arg)
 	return fmt.Sprintf("[%s] ping back, rtt=%v. rsp=%s", p, p.rtt, rsp)
 }
 
+// RetryOnErr denotes if this RPC method needs a retry on failure.
 func (p *PingMethod) RetryOnErr() bool {
 	return false
 }
