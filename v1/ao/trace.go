@@ -221,13 +221,11 @@ func (t *aoTrace) IsSampled() bool { return t != nil && t.aoCtx.IsSampled() }
 // ExitMetadata reports the X-Trace metadata string that will be used by the exit event.
 // This is useful for setting response headers before reporting the end of the span.
 func (t *aoTrace) ExitMetadata() (mdHex string) {
-	if t.IsSampled() {
-		if t.exitEvent == nil {
-			t.exitEvent = t.aoCtx.NewEvent(reporter.LabelExit, t.layerName(), false)
-		}
-		if t.exitEvent != nil {
-			mdHex = t.exitEvent.MetadataString()
-		}
+	if t.exitEvent == nil {
+		t.exitEvent = t.aoCtx.NewEvent(reporter.LabelExit, t.layerName(), false)
+	}
+	if t.exitEvent != nil {
+		mdHex = t.exitEvent.MetadataString()
 	}
 	return
 }
