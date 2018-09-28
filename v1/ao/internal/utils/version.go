@@ -1,13 +1,16 @@
 package utils
 
-import "runtime"
+import (
+	"runtime"
+	"strings"
+)
 
 var (
 	// The AppOptics Go agent version
-	version = "v1.3.0"
+	version = "1.3.0"
 
 	// The Go version
-	goVersion = runtime.Version()
+	goVersion = strings.TrimPrefix(runtime.Version(), "go")
 )
 
 // Version returns the agent's version

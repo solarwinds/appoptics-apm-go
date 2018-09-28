@@ -122,7 +122,7 @@ func sendInitMessage() {
 
 		e.AddKV("__Init", 1)
 		e.AddKV("Go.Version", utils.GoVersion())
-		e.AddKV("Go.Oboe.Version", utils.Version())
+		e.AddKV("Go.AppOptics.Version", utils.Version())
 
 		e.ReportStatus(c)
 	}
