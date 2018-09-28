@@ -71,6 +71,12 @@ func Shutdown(ctx context.Context) error {
 	return reporter.Shutdown(ctx)
 }
 
+// Closed denotes if the agent is closed (by either calling Shutdown explicitly
+// or being triggered from some internal error).
+func Closed() bool {
+	return reporter.Closed()
+}
+
 // SetLogLevel changes the logging level of the AppOptics agent
 // Valid logging levels: DEBUG, INFO, WARN, ERROR
 func SetLogLevel(level string) error {

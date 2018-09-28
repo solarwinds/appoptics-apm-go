@@ -85,7 +85,7 @@ func (t *aoTrace) aoContext() reporter.Context { return t.aoCtx }
 // the beginning of a root span named spanName. If this trace is sampled, it may report
 // event data to AppOptics; otherwise event reporting will be a no-op.
 func NewTrace(spanName string) Trace {
-	if Disabled() {
+	if Disabled() || Closed() {
 		return NewNullTrace()
 	}
 
@@ -104,7 +104,7 @@ func NewTrace(spanName string) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
-	if Disabled() {
+	if Disabled() || Closed() {
 		return NewNullTrace()
 	}
 
