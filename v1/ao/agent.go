@@ -53,11 +53,16 @@ func Disabled() bool {
 	return disabled
 }
 
-// WaitForReady checks if the agent is ready. It will block until the agent is ready
-// or the context is canceled.
+// WaitForReady checks if the agent is ready. It returns true is the agent is ready,
+// or false if it is not.
 //
+// A call to this method will block until the agent is ready or the context is
+// canceled, or the agent is already closed.
 // The agent is considered ready if there is a valid default setting for sampling.
 func WaitForReady(ctx context.Context) bool {
+	if Closed() {
+		return false
+	}
 	return reporter.WaitForReady(ctx)
 }
 
