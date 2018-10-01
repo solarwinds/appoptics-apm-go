@@ -34,7 +34,7 @@ func assertInitMessage(t *testing.T, bufs [][]byte) {
 	g.AssertGraph(t, bufs, 1, g.AssertNodeMap{
 		{"go", "single"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, 1, n.Map["__Init"])
-			assert.Equal(t, utils.Version(), n.Map["Go.Oboe.Version"])
+			assert.Equal(t, utils.Version(), n.Map["Go.AppOptics.Version"])
 			assert.NotEmpty(t, n.Map["Go.Version"])
 		}},
 	})
