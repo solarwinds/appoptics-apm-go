@@ -26,15 +26,10 @@ var (
 	// It is initialized when the package is imported and won't be changed
 	// in runtime.
 	disabled = false
-
-	// This flag indicates whether the domain name needs to be prepended to
-	// the transaction name of the span message
-	trxNamePrependDomain = false
 )
 
 func init() {
 	initDisabled()
-	initTrxNamePrependDomain()
 }
 
 func initDisabled() {
@@ -42,10 +37,6 @@ func initDisabled() {
 	if disabled {
 		aolog.Warningf("AppOptics agent is disabled.")
 	}
-}
-
-func initTrxNamePrependDomain() {
-	trxNamePrependDomain = config.GetPrependDomain()
 }
 
 // Disabled indicates if the agent is disabled
