@@ -456,7 +456,7 @@ func (c *grpcConnection) connect() error {
 	// Skip it if the connection is not stale - someone else may have done
 	// the connection.
 	if c.isActive() {
-		log.Debug("[%s] Someone else has done the redirection.", c.name)
+		log.Debugf("[%s] Someone else has done the redirection.", c.name)
 		return nil
 	}
 	// create a new connection object for this client
@@ -735,7 +735,7 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 			case nil:
 				log.Info(method.CallSummary())
 			default:
-				log.Infof("eventBatchSender: %s", err)
+				log.Warningf("eventBatchSender: %s", err)
 			}
 		}
 
@@ -785,7 +785,7 @@ func (r *grpcReporter) sendMetrics(msg []byte) {
 	case nil:
 		log.Info(method.CallSummary())
 	default:
-		log.Infof("sendMetrics: %s", err)
+		log.Warningf("sendMetrics: %s", err)
 	}
 }
 
@@ -986,6 +986,9 @@ var (
 	// dropped.
 	errTooManyRedirections = errors.New("too many redirections")
 
+	// The destination returned by the collector is not valid.
+	errInvalidRedirectTarget = errors.New("redirection target is empty.")
+
 	// the operation or loop cannot continue as the reporter is exiting.
 	errReporterExiting = errors.New("reporter is exiting")
 
@@ -1071,7 +1074,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			failsNum = 0
 
 			// server responded, check the result code and perform actions accordingly
-			switch result := m.ResultCode(); result {
+			switch result, _ := m.ResultCode(); result {
 			case collector.ResultCode_OK:
 				atomic.AddInt64(&c.queueStats.numSent, m.MessageLen())
 				return nil
@@ -1086,18 +1089,17 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 				log.Error(m.CallSummary())
 				return errInvalidServiceKey
 			case collector.ResultCode_REDIRECT:
-				if redirects > grpcRedirectMax {
-					log.Errorf("max redirects of %v exceeded. %s",
-						grpcRedirectMax, m.CallSummary())
-					return errTooManyRedirections
-				} else {
-					log.Warningf("channel is redirecting to %s. %s",
-						m.Arg(), m.CallSummary())
+				log.Warning(m.CallSummary())
+				redirects++
 
+				if redirects > grpcRedirectMax {
+					return errTooManyRedirections
+				} else if m.Arg() != "" {
 					c.setAddress(m.Arg())
 					// a proper redirect shouldn't cause delays
 					retriesNum = 0
-					redirects++
+				} else {
+					log.Warning(errors.Wrap(errInvalidRedirectTarget, c.name))
 				}
 			default:
 				log.Info(m.CallSummary())

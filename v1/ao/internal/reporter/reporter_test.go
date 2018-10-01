@@ -462,7 +462,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
-		Return(pb.ResultCode_OK)
+		Return(pb.ResultCode_OK, nil)
 
 	exit := make(chan struct{})
 	close(exit)
@@ -480,7 +480,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
-		Return(pb.ResultCode_INVALID_API_KEY)
+		Return(pb.ResultCode_INVALID_API_KEY, nil)
 
 	assert.Equal(t, errInvalidServiceKey, c.InvokeRPC(exit, mockMethod))
 
@@ -494,7 +494,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
-		Return(pb.ResultCode_LIMIT_EXCEEDED)
+		Return(pb.ResultCode_LIMIT_EXCEEDED, nil)
 
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(false)
@@ -512,7 +512,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(true)
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
-		Return(pb.ResultCode_OK)
+		Return(pb.ResultCode_OK, nil)
 
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(func(ctx context.Context, c pb.TraceCollectorClient) error {
@@ -546,7 +546,7 @@ func TestInvokeRPC(t *testing.T) {
 			} else {
 				return pb.ResultCode_REDIRECT
 			}
-		})
+		}, nil)
 
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
