@@ -42,7 +42,7 @@ func TestNoTraceMetadata(t *testing.T) {
 	md := tr.ExitMetadata()
 	tr.EndCallback(func() ao.KVMap { return ao.KVMap{"Not": "reported"} })
 
-	assert.Equal(t, md, "")
+	assert.NotEqual(t, "", md)
 	assert.Len(t, r.EventBufs, 0)
 }
 
@@ -307,7 +307,7 @@ func TestNoTraceFromMetadata(t *testing.T) {
 	md := tr.ExitMetadata()
 	tr.End()
 
-	assert.Equal(t, md, "")
+	assert.NotEqual(t, "", md)
 	assert.Len(t, r.EventBufs, 0)
 }
 func TestNoTraceFromBadMetadata(t *testing.T) {
@@ -318,7 +318,7 @@ func TestNoTraceFromBadMetadata(t *testing.T) {
 	tr := ao.NewTraceFromID("test", incomingID, nil)
 	md := tr.ExitMetadata()
 	tr.End("Edge", "823723875") // should not report
-	assert.Equal(t, "", md)
+	assert.NotEqual(t, "", md)
 	assert.Len(t, r.EventBufs, 0)
 }
 

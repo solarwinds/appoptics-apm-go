@@ -985,6 +985,9 @@ var (
 	// dropped.
 	errTooManyRedirections = errors.New("too many redirections")
 
+	// The destination returned by the collector is not valid.
+	errInvalidRedirectTarget = errors.New("redirection target is empty.")
+
 	// the operation or loop cannot continue as the reporter is exiting.
 	errReporterExiting = errors.New("reporter is exiting")
 
@@ -1085,18 +1088,17 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 				log.Error(m.CallSummary())
 				return errInvalidServiceKey
 			case collector.ResultCode_REDIRECT:
-				if redirects > grpcRedirectMax {
-					log.Errorf("max redirects of %v exceeded. %s",
-						grpcRedirectMax, m.CallSummary())
-					return errTooManyRedirections
-				} else {
-					log.Warningf("channel is redirecting to %s. %s",
-						m.Arg(), m.CallSummary())
+				log.Warning(m.CallSummary())
+				redirects++
 
+				if redirects > grpcRedirectMax {
+					return errTooManyRedirections
+				} else if m.Arg() != "" {
 					c.setAddress(m.Arg())
 					// a proper redirect shouldn't cause delays
 					retriesNum = 0
-					redirects++
+				} else {
+					log.Warning(errors.Wrap(errInvalidRedirectTarget, c.name))
 				}
 			default:
 				log.Info(m.CallSummary())
