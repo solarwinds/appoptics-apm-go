@@ -45,6 +45,7 @@ type Method interface {
 
 var (
 	errRPCNotIssued = errors.New("RPC request is not issued yet")
+	errGotNilResp   = errors.New("got nil resp from collector")
 )
 
 // PostEventsMethod is the struct for RPC method PostEvents
@@ -393,12 +394,18 @@ func resultRespStr(r *collector.MessageResult, err error) string {
 	if err != nil {
 		return err.Error()
 	}
+	if r == nil {
+		return errGotNilResp.Error()
+	}
 	return fmt.Sprintf("%v %s", r.Result, r.Arg)
 }
 
 func settingsRespStr(r *collector.SettingsResult, err error) string {
 	if err != nil {
 		return err.Error()
+	}
+	if r == nil {
+		return errGotNilResp.Error()
 	}
 	return fmt.Sprintf("%v %s", r.Result, r.Arg)
 }
