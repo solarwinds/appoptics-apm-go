@@ -110,6 +110,11 @@ func Shutdown(ctx context.Context) error {
 	return globalReporter.Shutdown(ctx)
 }
 
+// Closed indicates if the reporter has been shutdown
+func Closed() bool {
+	return globalReporter.Closed()
+}
+
 // ReportSpan is called from the app when a span message is available
 // span	span message to be put on the channel
 //

@@ -17,6 +17,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
+	"github.com/pkg/errors"
 )
 
 // Current settings configuration
@@ -111,6 +112,10 @@ func readEnvSettings() {
 }
 
 func sendInitMessage() {
+	if Closed() {
+		log.Info(errors.Wrap(ErrReporterIsClosed, "send init message"))
+		return
+	}
 	ctx := newContext(true)
 	if c, ok := ctx.(*oboeContext); ok {
 		// create new event from context

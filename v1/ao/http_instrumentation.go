@@ -40,6 +40,11 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 	}
 	// return wrapped HTTP request handler
 	return func(w http.ResponseWriter, r *http.Request) {
+		if Closed() {
+			handler(w, r)
+			return
+		}
+
 		t, w, r := TraceFromHTTPRequestResponse(httpHandlerSpanName, w, r)
 		defer t.End(endArgs...)
 

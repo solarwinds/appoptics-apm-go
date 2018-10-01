@@ -357,6 +357,7 @@ func (r *grpcReporter) Shutdown(ctx context.Context) error {
 			}
 
 			r.closeConns()
+			r.setReady(false)
 			host.Stop()
 			log.Warning("AppOptics agent is stopped.")
 		})

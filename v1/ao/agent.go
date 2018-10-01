@@ -26,15 +26,10 @@ var (
 	// It is initialized when the package is imported and won't be changed
 	// in runtime.
 	disabled = false
-
-	// This flag indicates whether the domain name needs to be prepended to
-	// the transaction name of the span message
-	trxNamePrependDomain = false
 )
 
 func init() {
 	initDisabled()
-	initTrxNamePrependDomain()
 }
 
 func initDisabled() {
@@ -44,20 +39,21 @@ func initDisabled() {
 	}
 }
 
-func initTrxNamePrependDomain() {
-	trxNamePrependDomain = config.GetPrependDomain()
-}
-
 // Disabled indicates if the agent is disabled
 func Disabled() bool {
 	return disabled
 }
 
-// WaitForReady checks if the agent is ready. It will block until the agent is ready
-// or the context is canceled.
+// WaitForReady checks if the agent is ready. It returns true is the agent is ready,
+// or false if it is not.
 //
+// A call to this method will block until the agent is ready or the context is
+// canceled, or the agent is already closed.
 // The agent is considered ready if there is a valid default setting for sampling.
 func WaitForReady(ctx context.Context) bool {
+	if Closed() {
+		return false
+	}
 	return reporter.WaitForReady(ctx)
 }
 
@@ -69,6 +65,12 @@ func WaitForReady(ctx context.Context) bool {
 // This function should be called only once.
 func Shutdown(ctx context.Context) error {
 	return reporter.Shutdown(ctx)
+}
+
+// Closed denotes if the agent is closed (by either calling Shutdown explicitly
+// or being triggered from some internal error).
+func Closed() bool {
+	return reporter.Closed()
 }
 
 // SetLogLevel changes the logging level of the AppOptics agent
