@@ -455,7 +455,7 @@ func (c *grpcConnection) connect() error {
 	// Skip it if the connection is not stale - someone else may have done
 	// the connection.
 	if c.isActive() {
-		log.Debug("[%s] Someone else has done the redirection.", c.name)
+		log.Debugf("[%s] Someone else has done the redirection.", c.name)
 		return nil
 	}
 	// create a new connection object for this client
@@ -734,7 +734,7 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 			case nil:
 				log.Info(method.CallSummary())
 			default:
-				log.Infof("eventBatchSender: %s", err)
+				log.Warningf("eventBatchSender: %s", err)
 			}
 		}
 
@@ -784,7 +784,7 @@ func (r *grpcReporter) sendMetrics(msg []byte) {
 	case nil:
 		log.Info(method.CallSummary())
 	default:
-		log.Infof("sendMetrics: %s", err)
+		log.Warningf("sendMetrics: %s", err)
 	}
 }
 
@@ -1073,7 +1073,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			failsNum = 0
 
 			// server responded, check the result code and perform actions accordingly
-			switch result := m.ResultCode(); result {
+			switch result, _ := m.ResultCode(); result {
 			case collector.ResultCode_OK:
 				atomic.AddInt64(&c.queueStats.numSent, m.MessageLen())
 				return nil
