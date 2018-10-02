@@ -6,14 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
-	"context"
 )
 
-func TestCacheRPCSpans(t *testing.T) {
+func TestSpans(t *testing.T) {
 	r := reporter.SetTestReporter() // enable test reporter
 	ctx := ao.NewContext(context.Background(), ao.NewTrace("myExample"))
 
@@ -30,10 +31,16 @@ func TestCacheRPCSpans(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	l.End()
 
+	// make a query span
+	l = ao.BeginQuerySpan(ctx, "querySpan", "SELECT * FROM TEST_TABLE",
+		"MySQL", "remote.host")
+	time.Sleep(time.Millisecond)
+	l.End()
+
 	ao.End(ctx)
 
-	r.Close(7)
-	g.AssertGraph(t, r.EventBufs, 7, g.AssertNodeMap{
+	r.Close(9)
+	g.AssertGraph(t, r.EventBufs, 9, g.AssertNodeMap{
 		// entry event should have no edges
 		{"myExample", "entry"}: {},
 		{"redis", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
@@ -53,6 +60,14 @@ func TestCacheRPCSpans(t *testing.T) {
 			assert.Equal(t, "thrift", n.Map["RemoteProtocol"])
 		}},
 		{"myServiceClient", "exit"}: {Edges: g.Edges{{"myServiceClient", "entry"}}},
-		{"myExample", "exit"}:       {Edges: g.Edges{{"redis", "exit"}, {"myServiceClient", "exit"}, {"myExample", "entry"}}},
+		{"querySpan", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
+			assert.Equal(t, "query", n.Map["Spec"])
+			assert.Equal(t, "remote.host", n.Map["RemoteHost"])
+			assert.Equal(t, "SELECT * FROM TEST_TABLE", n.Map["Query"])
+			assert.Equal(t, "MySQL", n.Map["Flavor"])
+
+		}},
+		{"querySpan", "exit"}: {Edges: g.Edges{{"querySpan", "entry"}}},
+		{"myExample", "exit"}: {Edges: g.Edges{{"redis", "exit"}, {"myServiceClient", "exit"}, {"querySpan", "exit"}, {"myExample", "entry"}}},
 	})
 }
