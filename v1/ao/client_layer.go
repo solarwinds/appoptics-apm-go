@@ -10,7 +10,11 @@ import "context"
 // Parameter "flavor" specifies the flavor of the query statement, such as "mysql", "postgresql", or "mongodb".
 // Call or defer the returned Span's End() to time the query's client-side latency.
 func BeginQuerySpan(ctx context.Context, spanName, query, flavor, remoteHost string) Span {
-	l, _ := BeginSpan(ctx, spanName, "Query", query, "Flavor", flavor, "RemoteHost", remoteHost)
+	l, _ := BeginSpan(ctx, spanName,
+		"Spec", "query",
+		"Query", query,
+		"Flavor", flavor,
+		"RemoteHost", remoteHost)
 	return l
 }
 
