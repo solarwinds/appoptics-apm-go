@@ -202,6 +202,7 @@ func myHandler( w http.ResponseWriter, r *http.Request ) {
     q1L.End()
 
     fmt.Fprintf(w, "I ran a query")
+}
 
 func main() {
     http.HandleFunc("/endpoint", ao.HTTPHandler(myHandler))

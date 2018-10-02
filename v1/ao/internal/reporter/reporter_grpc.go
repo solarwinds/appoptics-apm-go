@@ -283,8 +283,8 @@ func newGRPCReporter() reporter {
 
 	r.start()
 
-	log.Warningf("AppOptics reporter is initialized. id: %v version: %s.",
-		r.done, utils.Version())
+	log.Warningf("AppOptics reporter v%s is initialized. id: %v Go version: %s.",
+		utils.Version(), r.done, utils.GoVersion())
 	return r
 }
 
