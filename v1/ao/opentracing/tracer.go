@@ -168,7 +168,13 @@ func (s *spanImpl) FinishWithOptions(opts ot.FinishOptions) {
 }
 
 // XXX handle changing operation name
-func (s *spanImpl) SetOperationName(operationName string) ot.Span { return s }
+func (s *spanImpl) SetOperationName(operationName string) ot.Span {
+	s.Lock()
+	defer s.Unlock()
+
+	s.context.span.SetTransactionName(operationName)
+	return s
+}
 
 func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
 	s.Lock()
