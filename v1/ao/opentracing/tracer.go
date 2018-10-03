@@ -87,12 +87,12 @@ type spanImpl struct {
 }
 
 func (s *spanImpl) SetBaggageItem(key, val string) ot.Span {
+	s.Lock()
+	defer s.Unlock()
 	if !s.context.sampled && s.tracer.TrimUnsampledSpans {
 		return s
 	}
 
-	s.Lock()
-	defer s.Unlock()
 	s.context = s.context.WithBaggageItem(key, val)
 	return s
 }
@@ -134,22 +134,45 @@ func (s *spanImpl) BaggageItem(key string) string {
 const otLogPrefix = "OT-Log-"
 
 func (s *spanImpl) LogFields(fields ...log.Field) {
+	s.Lock()
+	defer s.Unlock()
 	for _, field := range fields {
 		s.context.span.AddEndArgs(otLogPrefix+field.Key(), field.Value())
 	}
 }
-func (s *spanImpl) LogKV(keyVals ...interface{}) { s.context.span.AddEndArgs(keyVals...) }
-func (s *spanImpl) Context() ot.SpanContext      { return s.context }
-func (s *spanImpl) Finish()                      { s.context.span.End() }
-func (s *spanImpl) Tracer() ot.Tracer            { return s.tracer }
+func (s *spanImpl) LogKV(keyVals ...interface{}) {
+	s.Lock()
+	defer s.Unlock()
+	s.context.span.AddEndArgs(keyVals...)
+}
+
+func (s *spanImpl) Context() ot.SpanContext {
+	s.Lock()
+	defer s.Unlock()
+	return s.context
+}
+
+func (s *spanImpl) Finish() {
+	s.Lock()
+	defer s.Unlock()
+	s.context.span.End()
+}
+
+func (s *spanImpl) Tracer() ot.Tracer { return s.tracer }
 
 // XXX handle FinishTime, LogRecords
-func (s *spanImpl) FinishWithOptions(opts ot.FinishOptions) { s.context.span.End() }
+func (s *spanImpl) FinishWithOptions(opts ot.FinishOptions) {
+	s.Lock()
+	defer s.Unlock()
+	s.context.span.End()
+}
 
 // XXX handle changing operation name
 func (s *spanImpl) SetOperationName(operationName string) ot.Span { return s }
 
 func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
+	s.Lock()
+	defer s.Unlock()
 	s.context.span.AddEndArgs(translateTagName(key), value)
 	return s
 }
