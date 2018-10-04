@@ -182,7 +182,7 @@ func (s *spanImpl) SetOperationName(operationName string) ot.Span {
 	s.Lock()
 	defer s.Unlock()
 
-	s.context.span.SetTransactionName(operationName)
+	s.context.span.SetOperationName(operationName)
 	return s
 }
 
