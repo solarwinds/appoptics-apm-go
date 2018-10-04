@@ -3,17 +3,18 @@
 package ao
 
 import (
+	"context"
+	"errors"
 	"runtime"
 	"runtime/debug"
 	"sync"
 
-	"errors"
-
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
-	"context"
 )
 
 const (
+	// MaxCustomTransactionNameLength defines the maximum length of a user-provided
+	// transaction name.
 	MaxCustomTransactionNameLength = 255
 )
 
@@ -27,8 +28,8 @@ type Span interface {
 	BeginProfile(profileName string, args ...interface{}) Profile
 	// End ends a Span, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
-	// Add additional KV pairs that will be serialized (and dereferenced, for pointer
-	// values) at the end of this trace's span.
+	// AddEndArgs adds additional KV pairs that will be serialized (and
+	// dereferenced, for pointer values) at the end of this trace's span.
 	AddEndArgs(args ...interface{})
 
 	// Info reports KV pairs provided by args for this Span.
@@ -74,11 +75,28 @@ type Profile interface {
 	Err(error)
 }
 
+// SpanOptions defines the options of creating a span
+type SpanOptions struct {
+	// WithBackTrace indicates whether to include the backtrace in BeginSpan
+	WithBackTrace bool
+}
+
 // BeginSpan starts a new Span, provided a parent context and name. It returns a Span
 // and context bound to the new child Span.
 func BeginSpan(ctx context.Context, spanName string, args ...interface{}) (Span, context.Context) {
+	return BeginSpanWithOptions(ctx, spanName, SpanOptions{}, args...)
+}
+
+// BeginSpanWithOptions starts a span with provided options
+func BeginSpanWithOptions(ctx context.Context, spanName string, opts SpanOptions, args ...interface{}) (Span, context.Context) {
+	kvs := args
+	if opts.WithBackTrace {
+		kvs = make([]interface{}, 0, len(args)+2)
+		kvs = append(kvs, args...)
+		kvs = append(kvs, "Backtrace", string(debug.Stack()))
+	}
 	if parent, ok := fromContext(ctx); ok && parent.ok() { // report span entry from parent context
-		l := newSpan(parent.aoContext().Copy(), spanName, parent, args...)
+		l := newSpan(parent.aoContext().Copy(), spanName, parent, kvs...)
 		return l, newSpanContext(ctx, l)
 	}
 	return nullSpan{}, ctx

@@ -1,6 +1,8 @@
 package ao
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
@@ -38,4 +40,36 @@ func TestErrorSpec(t *testing.T) {
 		assert.IsType(t, "", m["Backtrace"])
 	}
 	assert.True(t, foundErrEvt)
+}
+
+func TestBeginSpan(t *testing.T) {
+	r := reporter.SetTestReporter()
+
+	ctx := NewContext(context.Background(), NewTrace("baseSpan"))
+	s, _ := BeginSpan(ctx, "testSpan")
+
+	subSpan, _ := BeginSpanWithOptions(ctx, "spanWithBackTrace", SpanOptions{WithBackTrace: true})
+	subSpan.End()
+
+	s.End()
+	EndTrace(ctx)
+
+	r.Close(6)
+
+	for _, evt := range r.EventBufs {
+		m := make(map[string]interface{})
+		bson.Unmarshal(evt, m)
+		if m["Label"] != "entry" {
+			continue
+		}
+		layer := m["Layer"]
+		switch layer {
+		case "testSpan":
+			assert.Nil(t, m["Backtrace"], layer)
+		case "spanWithBackTrace":
+			assert.NotNil(t, m["Backtrace"], layer)
+		}
+		// TODO: remove it
+		fmt.Println(m)
+	}
 }
