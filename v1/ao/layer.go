@@ -23,6 +23,10 @@ const (
 type Span interface {
 	// BeginSpan starts a new Span, returning a child of this Span.
 	BeginSpan(spanName string, args ...interface{}) Span
+
+	// BeginSpanWithOptions starts a new child span with provided options
+	BeginSpanWithOptions(spanName string, opts SpanOptions, args ...interface{}) Span
+
 	// BeginProfile starts a new Profile, used to measure a named span
 	// of time spent in this Span.
 	BeginProfile(profileName string, args ...interface{}) Profile
@@ -87,14 +91,19 @@ func BeginSpan(ctx context.Context, spanName string, args ...interface{}) (Span,
 	return BeginSpanWithOptions(ctx, spanName, SpanOptions{}, args...)
 }
 
-// BeginSpanWithOptions starts a span with provided options
-func BeginSpanWithOptions(ctx context.Context, spanName string, opts SpanOptions, args ...interface{}) (Span, context.Context) {
+func addKVsFromOpts(opts SpanOptions, args ...interface{}) []interface{} {
 	kvs := args
 	if opts.WithBackTrace {
 		kvs = make([]interface{}, 0, len(args)+2)
 		kvs = append(kvs, args...)
 		kvs = append(kvs, "Backtrace", string(debug.Stack()))
 	}
+	return kvs
+}
+
+// BeginSpanWithOptions starts a span with provided options
+func BeginSpanWithOptions(ctx context.Context, spanName string, opts SpanOptions, args ...interface{}) (Span, context.Context) {
+	kvs := addKVsFromOpts(opts, args...)
 	if parent, ok := fromContext(ctx); ok && parent.ok() { // report span entry from parent context
 		l := newSpan(parent.aoContext().Copy(), spanName, parent, kvs...)
 		return l, newSpanContext(ctx, l)
@@ -104,8 +113,14 @@ func BeginSpanWithOptions(ctx context.Context, spanName string, opts SpanOptions
 
 // BeginSpan starts a new Span, returning a child of this Span.
 func (s *layerSpan) BeginSpan(spanName string, args ...interface{}) Span {
+	return s.BeginSpanWithOptions(spanName, SpanOptions{}, args...)
+}
+
+// BeginSpanWithOptions starts a new child span with provided options
+func (s *layerSpan) BeginSpanWithOptions(spanName string, opts SpanOptions, args ...interface{}) Span {
 	if s.ok() { // copy parent context and report entry from child
-		return newSpan(s.aoCtx.Copy(), spanName, s, args...)
+		kvs := addKVsFromOpts(opts, args...)
+		return newSpan(s.aoCtx.Copy(), spanName, s, kvs...)
 	}
 	return nullSpan{}
 }
@@ -155,8 +170,8 @@ func (s *span) End(args ...interface{}) {
 	}
 }
 
-// Add KV pairs as variadic args that will be serialized (and dereferenced, for pointer
-// values) at the end of this trace's span.
+// AddEndArgs adds KV pairs as variadic args that will be serialized (and dereferenced,
+// for pointer values) at the end of this trace's span.
 func (s *layerSpan) AddEndArgs(args ...interface{}) {
 	if s.ok() {
 		// ensure even number of args added
@@ -251,7 +266,10 @@ type layerSpan struct{ span }   // satisfies Span
 type profileSpan struct{ span } // satisfies Profile
 type nullSpan struct{}          // a span that is not tracing; satisfies Span & Profile
 
-func (s nullSpan) BeginSpan(spanName string, args ...interface{}) Span   { return nullSpan{} }
+func (s nullSpan) BeginSpan(spanName string, args ...interface{}) Span { return nullSpan{} }
+func (s nullSpan) BeginSpanWithOptions(spanName string, opts SpanOptions, args ...interface{}) Span {
+	return nullSpan{}
+}
 func (s nullSpan) BeginProfile(name string, args ...interface{}) Profile { return nullSpan{} }
 func (s nullSpan) End(args ...interface{})                               {}
 func (s nullSpan) AddEndArgs(args ...interface{})                        {}

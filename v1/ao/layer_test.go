@@ -2,7 +2,6 @@ package ao
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
@@ -49,12 +48,13 @@ func TestBeginSpan(t *testing.T) {
 	s, _ := BeginSpan(ctx, "testSpan")
 
 	subSpan, _ := BeginSpanWithOptions(ctx, "spanWithBackTrace", SpanOptions{WithBackTrace: true})
+	subSpan.BeginSpanWithOptions("spanWithBackTrace", SpanOptions{WithBackTrace: true}).End()
 	subSpan.End()
 
 	s.End()
 	EndTrace(ctx)
 
-	r.Close(6)
+	r.Close(8)
 
 	for _, evt := range r.EventBufs {
 		m := make(map[string]interface{})
@@ -68,8 +68,8 @@ func TestBeginSpan(t *testing.T) {
 			assert.Nil(t, m["Backtrace"], layer)
 		case "spanWithBackTrace":
 			assert.NotNil(t, m["Backtrace"], layer)
+		case "spanWithBackTrace2":
+			assert.NotNil(t, m["Backtrace"], layer)
 		}
-		// TODO: remove it
-		fmt.Println(m)
 	}
 }
