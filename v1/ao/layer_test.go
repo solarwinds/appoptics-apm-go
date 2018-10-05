@@ -73,3 +73,30 @@ func TestBeginSpan(t *testing.T) {
 		}
 	}
 }
+
+func TestSpanInfo(t *testing.T) {
+	r := reporter.SetTestReporter()
+
+	ctx := NewContext(context.Background(), NewTrace("baseSpan"))
+	s, _ := BeginSpan(ctx, "testSpan")
+
+	s.InfoWithOptions(SpanOptions{WithBackTrace: true})
+
+	s.End()
+	EndTrace(ctx)
+
+	r.Close(5)
+
+	for _, evt := range r.EventBufs {
+		m := make(map[string]interface{})
+		bson.Unmarshal(evt, m)
+		if m["Label"] != "info" {
+			continue
+		}
+		layer := m["Layer"]
+		switch layer {
+		case "testSpan":
+			assert.NotNil(t, m["Backtrace"], layer)
+		}
+	}
+}

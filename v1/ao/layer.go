@@ -38,6 +38,10 @@ type Span interface {
 
 	// Info reports KV pairs provided by args for this Span.
 	Info(args ...interface{})
+
+	// InfoWithOptions reports a new info event with the KVs and options provided
+	InfoWithOptions(opts SpanOptions, args ...interface{})
+
 	// Error reports details about an error (along with a stack trace) for this Span.
 	Error(class, msg string)
 	// Err reports details about error err (along with a stack trace) for this Span.
@@ -186,8 +190,14 @@ func (s *layerSpan) AddEndArgs(args ...interface{}) {
 
 // Info reports KV pairs provided by args.
 func (s *layerSpan) Info(args ...interface{}) {
+	s.InfoWithOptions(SpanOptions{}, args...)
+}
+
+// InfoWithOptions reports a new info event with the KVs and options provided
+func (s *layerSpan) InfoWithOptions(opts SpanOptions, args ...interface{}) {
 	if s.ok() {
-		_ = s.aoCtx.ReportEvent(reporter.LabelInfo, s.layerName(), args...)
+		kvs := addKVsFromOpts(opts, args...)
+		s.aoCtx.ReportEvent(reporter.LabelInfo, s.layerName(), kvs...)
 	}
 }
 
@@ -276,6 +286,7 @@ func (s nullSpan) AddEndArgs(args ...interface{})                        {}
 func (s nullSpan) Error(class, msg string)                               {}
 func (s nullSpan) Err(err error)                                         {}
 func (s nullSpan) Info(args ...interface{})                              {}
+func (s nullSpan) InfoWithOptions(opts SpanOptions, args ...interface{}) {}
 func (s nullSpan) IsReporting() bool                                     { return false }
 func (s nullSpan) addChildEdge(reporter.Context)                         {}
 func (s nullSpan) addProfile(Profile)                                    {}
