@@ -100,3 +100,51 @@ func TestSpanInfo(t *testing.T) {
 		}
 	}
 }
+
+func TestFromKVs(t *testing.T) {
+	assert.Equal(t, 0, len(fromKVs()))
+	assert.Equal(t, 0, len(fromKVs("hello")))
+	m := fromKVs("hello", 1)
+	assert.Equal(t, 1, len(m))
+	assert.Equal(t, 1, m["hello"])
+
+	m = fromKVs("hello", 1, 2)
+	assert.Equal(t, 1, len(m))
+	assert.Equal(t, 1, m["hello"])
+
+	m = fromKVs("hello", 1, "world", 2)
+	assert.Equal(t, 2, len(m))
+	assert.Equal(t, 1, m["hello"])
+	assert.Equal(t, 2, m["world"])
+
+	m = fromKVs(1, 1, 2)
+	assert.Equal(t, 0, len(m))
+
+	m = fromKVs(nil, "hello", 1)
+	assert.Equal(t, 1, len(m))
+	assert.Equal(t, 1, m["hello"])
+
+	m = fromKVs(1.1, "hello", 1)
+	assert.Equal(t, 1, len(m))
+	assert.Equal(t, 1, m["hello"])
+
+	m = fromKVs([]string{"1", "2"}, "hello", 1)
+	assert.Equal(t, 1, len(m))
+	assert.Equal(t, 1, m["hello"])
+}
+
+func TestAddKVsFromOpts(t *testing.T) {
+	assert.Equal(t, 0, len(addKVsFromOpts(SpanOptions{})))
+
+	kvs := addKVsFromOpts(SpanOptions{}, "hello")
+	assert.Equal(t, []interface{}{"hello"}, kvs)
+
+	kvs = addKVsFromOpts(SpanOptions{}, "hello", 1)
+	assert.Equal(t, []interface{}{"hello", 1}, kvs)
+
+	kvs = addKVsFromOpts(SpanOptions{WithBackTrace: true})
+	assert.Equal(t, 2, len(kvs))
+
+	kvs = addKVsFromOpts(SpanOptions{WithBackTrace: true}, "hello", 1)
+	assert.Equal(t, 4, len(kvs))
+}

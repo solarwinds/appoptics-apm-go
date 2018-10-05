@@ -105,6 +105,20 @@ func addKVsFromOpts(opts SpanOptions, args ...interface{}) []interface{} {
 	return kvs
 }
 
+func fromKVs(kvs ...interface{}) KVMap {
+	m := make(KVMap)
+	for idx, val := range kvs {
+		if idx >= len(kvs)-1 {
+			break
+		}
+		if valStr, ok := val.(string); ok {
+			m[valStr] = kvs[idx+1]
+		}
+		idx += 2
+	}
+	return m
+}
+
 // BeginSpanWithOptions starts a span with provided options
 func BeginSpanWithOptions(ctx context.Context, spanName string, opts SpanOptions, args ...interface{}) (Span, context.Context) {
 	kvs := addKVsFromOpts(opts, args...)

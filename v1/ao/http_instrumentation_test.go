@@ -189,7 +189,7 @@ func TestHTTPSpan(t *testing.T) {
 	assert.False(t, m.HasError)
 	assert.InDelta(t, (25*time.Millisecond + nullDuration).Seconds(),
 		m.Duration.Seconds(), (10 * time.Millisecond).Seconds(),
-		nullDuration, fmt.Sprintf("%v", m.Duration))
+		fmt.Sprintf("%v, %v", nullDuration, m.Duration))
 
 	m, ok = r.SpanMessages[3].(*reporter.HTTPSpanMessage)
 	assert.True(t, ok)
