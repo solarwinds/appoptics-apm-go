@@ -34,6 +34,7 @@ func TestTraceMetadata(t *testing.T) {
 		}},
 	})
 }
+
 func TestNoTraceMetadata(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterDisableTracing())
 
@@ -131,7 +132,7 @@ func traceExampleCtx(t *testing.T, ctx context.Context) {
 func f0(ctx context.Context) {
 	defer ao.BeginProfile(ctx, "f0").End()
 
-	//	l, _ := ao.BeginSpan(ctx, "http.Get", "RemoteURL", "http://a.b")
+	// 	l, _ := ao.BeginSpan(ctx, "http.Get", "RemoteURL", "http://a.b")
 	l := ao.BeginRemoteURLSpan(ctx, "http.Get", "http://a.b")
 	time.Sleep(5 * time.Millisecond)
 	// _, _ = http.Get("http://a.b")
@@ -347,4 +348,27 @@ func TestNullTrace(t *testing.T) {
 	tr.End()
 	assert.Equal(t, md, "")
 	assert.Len(t, r.EventBufs, 0)
+}
+
+func TestTraceWithOptions(t *testing.T) {
+	r := reporter.SetTestReporter()
+
+	tr := ao.NewTraceWithOptions("test", ao.SpanOptions{})
+	tr.End()
+
+	tr = ao.NewTraceWithOptions("testWithBacktrace", ao.SpanOptions{WithBackTrace: true})
+	tr.End()
+
+	r.Close(4)
+	g.AssertGraph(t, r.EventBufs, 4, g.AssertNodeMap{
+		// entry event should have no edges
+		{"test", "entry"}: {},
+		{"test", "exit"}: {Edges: g.Edges{{"test", "entry"}}, Callback: func(n g.Node) {
+			assert.Nil(t, n.Map["Backtrace"])
+		}},
+		{"testWithBacktrace", "entry"}: {Callback: func(n g.Node) {
+			assert.NotNil(t, n.Map["Backtrace"])
+		}},
+		{"testWithBacktrace", "exit"}: {Edges: g.Edges{{"testWithBacktrace", "entry"}}},
+	})
 }

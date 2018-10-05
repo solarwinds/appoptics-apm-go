@@ -88,6 +88,28 @@ func NewTrace(spanName string) Trace {
 	return NewTraceFromID(spanName, "", nil)
 }
 
+func fromKVs(kvs ...interface{}) KVMap {
+	m := make(KVMap)
+	for idx, val := range kvs {
+		if idx >= len(kvs)-1 {
+			break
+		}
+		if valStr, ok := val.(string); ok {
+			m[valStr] = kvs[idx+1]
+		}
+		idx += 2
+	}
+	return m
+}
+
+// NewTraceWithOptions creates a new trace with the provided options
+func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
+	kvs := addKVsFromOpts(opts)
+	return NewTraceFromID(spanName, "", func() KVMap {
+		return fromKVs(kvs...)
+	})
+}
+
 // NewTraceFromID creates a new Trace for reporting to AppOptics, provided an
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
