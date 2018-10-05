@@ -85,19 +85,7 @@ func (t *aoTrace) aoContext() reporter.Context { return t.aoCtx }
 // the beginning of a root span named spanName. If this trace is sampled, it may report
 // event data to AppOptics; otherwise event reporting will be a no-op.
 func NewTrace(spanName string) Trace {
-	if Disabled() || Closed() {
-		return NewNullTrace()
-	}
-
-	ctx, ok := reporter.NewContext(spanName, "", true, nil)
-	if !ok {
-		return NewNullTrace()
-	}
-	t := &aoTrace{
-		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
-	}
-	t.SetStartTime(time.Now())
-	return t
+	return NewTraceFromID(spanName, "", nil)
 }
 
 // NewTraceFromID creates a new Trace for reporting to AppOptics, provided an
