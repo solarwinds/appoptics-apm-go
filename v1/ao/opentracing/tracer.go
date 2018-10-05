@@ -10,7 +10,7 @@ import (
 	"github.com/opentracing/opentracing-go/log"
 )
 
-// NewTracer returns a new Tracelytics tracer.
+// NewTracer returns a new AppOptics tracer.
 func NewTracer() ot.Tracer {
 	return &Tracer{
 		textMapPropagator: &textMapPropagator{},
@@ -18,7 +18,7 @@ func NewTracer() ot.Tracer {
 	}
 }
 
-// Tracer reports trace data to Tracelytics.
+// Tracer reports trace data to AppOptics.
 type Tracer struct {
 	textMapPropagator  *textMapPropagator
 	binaryPropagator   *binaryPropagator
@@ -86,13 +86,14 @@ type spanImpl struct {
 	context    spanContext
 }
 
+// SetBaggageItem sets the KV as a baggage item.
 func (s *spanImpl) SetBaggageItem(key, val string) ot.Span {
+	s.Lock()
+	defer s.Unlock()
 	if !s.context.sampled && s.tracer.TrimUnsampledSpans {
 		return s
 	}
 
-	s.Lock()
-	defer s.Unlock()
 	s.context = s.context.WithBaggageItem(key, val)
 	return s
 }
@@ -125,6 +126,7 @@ func (c spanContext) WithBaggageItem(key, val string) spanContext {
 	return spanContext{c.span, c.remoteMD, c.sampled, newBaggage}
 }
 
+// BaggageItem returns the baggage item with the provided key.
 func (s *spanImpl) BaggageItem(key string) string {
 	s.Lock()
 	defer s.Unlock()
@@ -133,28 +135,76 @@ func (s *spanImpl) BaggageItem(key string) string {
 
 const otLogPrefix = "OT-Log-"
 
+// LogFields adds the fields to the span.
 func (s *spanImpl) LogFields(fields ...log.Field) {
+	s.Lock()
+	defer s.Unlock()
 	for _, field := range fields {
 		s.context.span.AddEndArgs(otLogPrefix+field.Key(), field.Value())
 	}
 }
-func (s *spanImpl) LogKV(keyVals ...interface{}) { s.context.span.AddEndArgs(keyVals...) }
-func (s *spanImpl) Context() ot.SpanContext      { return s.context }
-func (s *spanImpl) Finish()                      { s.context.span.End() }
-func (s *spanImpl) Tracer() ot.Tracer            { return s.tracer }
 
+// LogKV adds KVs to the span.
+func (s *spanImpl) LogKV(keyVals ...interface{}) {
+	s.Lock()
+	defer s.Unlock()
+	s.context.span.AddEndArgs(keyVals...)
+}
+
+// Context returns the span context.
+func (s *spanImpl) Context() ot.SpanContext {
+	s.Lock()
+	defer s.Unlock()
+	return s.context
+}
+
+// Finish sets the end timestamp and finalizes Span state.
+func (s *spanImpl) Finish() {
+	s.Lock()
+	defer s.Unlock()
+	s.context.span.End()
+}
+
+// Tracer provides the tracer of this span.
+func (s *spanImpl) Tracer() ot.Tracer { return s.tracer }
+
+// FinishWithOptions is like Finish() but with explicit control over
+// timestamps and log data.
 // XXX handle FinishTime, LogRecords
-func (s *spanImpl) FinishWithOptions(opts ot.FinishOptions) { s.context.span.End() }
+func (s *spanImpl) FinishWithOptions(opts ot.FinishOptions) {
+	s.Lock()
+	defer s.Unlock()
+	s.context.span.End()
+}
 
-// XXX handle changing operation name
-func (s *spanImpl) SetOperationName(operationName string) ot.Span { return s }
+// SetOperationName sets or changes the operation name.
+func (s *spanImpl) SetOperationName(operationName string) ot.Span {
+	s.Lock()
+	defer s.Unlock()
 
+	s.context.span.SetOperationName(operationName)
+	return s
+}
+
+// SetTag adds a tag to the span.
 func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
+	s.Lock()
+	defer s.Unlock()
 	s.context.span.AddEndArgs(translateTagName(key), value)
 	return s
 }
 
-// deprecated Log methods are not supported.
-func (s *spanImpl) LogEvent(event string)                                 {}
+// LogEvent logs a event to the span.
+//
+// Deprecated: this method is deprecated.
+func (s *spanImpl) LogEvent(event string) {}
+
+// LogEventWithPayload logs a event with a payload.
+//
+// Deprecated: this method is deprecated.
 func (s *spanImpl) LogEventWithPayload(event string, payload interface{}) {}
-func (s *spanImpl) Log(data ot.LogData)                                   {}
+
+// Log logs the LogData.
+//
+// Deprecated: this method is deprecated.
+func (s *spanImpl) Log(data ot.LogData) {}

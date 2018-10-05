@@ -9,8 +9,9 @@ import (
 
 	"errors"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"context"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
 
 const (
@@ -49,6 +50,9 @@ type Span interface {
 	// SetAsync(true) provides a hint that this Span is a parent of
 	// concurrent overlapping child Spans.
 	SetAsync(bool)
+
+	// SetOperationName sets or changes the span's operation name
+	SetOperationName(string)
 
 	// SetTransactionName sets this service's transaction name.
 	// It is used for categorizing service metrics and traces in AppOptics.
@@ -181,6 +185,11 @@ func (s *layerSpan) SetAsync(val bool) {
 	}
 }
 
+// SetOperationName sets the name of this span
+func (s *span) SetOperationName(name string) {
+	s.setName(name)
+}
+
 // SetTransactionName sets the transaction name used to categorize service requests in AppOptics.
 func (s *span) SetTransactionName(name string) error {
 	if !s.ok() {
@@ -248,6 +257,7 @@ func (s nullSpan) aoContext() reporter.Context                           { retur
 func (s nullSpan) MetadataString() string                                { return "" }
 func (s nullSpan) IsSampled() bool                                       { return false }
 func (s nullSpan) SetAsync(bool)                                         {}
+func (s nullSpan) SetOperationName(string)                               {}
 func (s nullSpan) SetTransactionName(string) error                       { return nil }
 func (s nullSpan) GetTransactionName() string                            { return "" }
 
@@ -280,6 +290,7 @@ type labeler interface {
 	entryLabel() reporter.Label
 	exitLabel() reporter.Label
 	layerName() string
+	setName(string)
 }
 type spanLabeler struct{ name string }
 type profileLabeler struct{ name string }
@@ -288,9 +299,11 @@ type profileLabeler struct{ name string }
 func (l spanLabeler) entryLabel() reporter.Label    { return reporter.LabelEntry }
 func (l spanLabeler) exitLabel() reporter.Label     { return reporter.LabelExit }
 func (l spanLabeler) layerName() string             { return l.name }
+func (l spanLabeler) setName(name string)           { l.name = name }
 func (l profileLabeler) entryLabel() reporter.Label { return reporter.LabelProfileEntry }
 func (l profileLabeler) exitLabel() reporter.Label  { return reporter.LabelProfileExit }
 func (l profileLabeler) layerName() string          { return "" }
+func (l profileLabeler) setName(name string)        { l.name = name }
 
 func newSpan(aoCtx reporter.Context, spanName string, parent Span, args ...interface{}) Span {
 	ll := spanLabeler{spanName}
