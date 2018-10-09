@@ -5,6 +5,7 @@ package ao
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"runtime/debug"
 	"sync"
@@ -258,6 +259,7 @@ func (s *layerSpan) MetadataString() string {
 	return ""
 }
 
+// IsSampled indicates if the layer is sampled.
 func (s *layerSpan) IsSampled() bool {
 	if s.ok() {
 		return s.aoCtx.IsSampled()
@@ -280,14 +282,19 @@ func (s *span) SetOperationName(name string) {
 // SetTransactionName sets the transaction name used to categorize service requests in AppOptics.
 func (s *span) SetTransactionName(name string) error {
 	if !s.ok() {
-		return errors.New("failed to set custom transaction name, invalid span")
+		return errEndedSpan
 	}
 	if name == "" || len(name) > MaxCustomTransactionNameLength {
-		return errors.New("valid length for custom transaction name: 1~255")
+		return errTransactionNameLength
 	}
 	s.aoCtx.SetTransactionName(name)
 	return nil
 }
+
+var (
+	errEndedSpan             = errors.New("span is ended")
+	errTransactionNameLength = fmt.Errorf("name must not be longer than %d", MaxCustomTransactionNameLength)
+)
 
 // GetTransactionName returns the current value of the transaction name
 func (s *span) GetTransactionName() string {

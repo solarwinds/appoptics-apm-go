@@ -17,18 +17,18 @@ import (
 // methods that can be used to help categorize a service's inbound requests on the
 // AppOptics service dashboard.
 type Trace interface {
-	// Inherited from the Span interface
-	//  BeginSpan(spanName string, args ...interface{}) Span
-	//  BeginProfile(profileName string, args ...interface{}) Profile
-	// 	End(args ...interface{})
-	// 	Info(args ...interface{})
-	//  Error(class, msg string)
-	//  Err(error)
-	//  IsSampled() bool
+	// Span inherited from the Span interface
+	// BeginSpan(spanName string, args ...interface{}) Span
+	// BeginProfile(profileName string, args ...interface{}) Profile
+	// End(args ...interface{})
+	// Info(args ...interface{})
+	// Error(class, msg string)
+	// Err(error)
+	// IsSampled() bool
 	Span
 
-	// End a Trace, and include KV pairs returned by func f. Useful
-	// alternative to End() when used with defer to delay evaluation
+	// EndCallback ends a trace, and include KV pairs returned by func f.
+	// Useful alternative to End() when used with defer to delay evaluation
 	// of KVs until the end of the trace (since a deferred function's
 	// arguments are evaluated when the defer statement is
 	// evaluated). Func f will not be called at all if this span is
