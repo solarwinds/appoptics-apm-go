@@ -33,10 +33,10 @@ func TestErrorSpec(t *testing.T) {
 		assert.Equal(t, "testMsg", m["ErrorMsg"])
 		assert.Contains(t, m, "Timestamp_u")
 		assert.Contains(t, m, "X-Trace")
-		assert.Contains(t, m, "Backtrace")
+		assert.Contains(t, m, KeyBackTrace)
 		assert.Equal(t, "1", m["_V"])
 		assert.Equal(t, "testClass", m["ErrorClass"])
-		assert.IsType(t, "", m["Backtrace"])
+		assert.IsType(t, "", m[KeyBackTrace])
 	}
 	assert.True(t, foundErrEvt)
 }
@@ -65,11 +65,11 @@ func TestBeginSpan(t *testing.T) {
 		layer := m["Layer"]
 		switch layer {
 		case "testSpan":
-			assert.Nil(t, m["Backtrace"], layer)
+			assert.Nil(t, m[KeyBackTrace], layer)
 		case "spanWithBackTrace":
-			assert.NotNil(t, m["Backtrace"], layer)
+			assert.NotNil(t, m[KeyBackTrace], layer)
 		case "spanWithBackTrace2":
-			assert.NotNil(t, m["Backtrace"], layer)
+			assert.NotNil(t, m[KeyBackTrace], layer)
 		}
 	}
 }
@@ -96,7 +96,7 @@ func TestSpanInfo(t *testing.T) {
 		layer := m["Layer"]
 		switch layer {
 		case "testSpan":
-			assert.NotNil(t, m["Backtrace"], layer)
+			assert.NotNil(t, m[KeyBackTrace], layer)
 		}
 	}
 }

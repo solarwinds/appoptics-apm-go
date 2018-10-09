@@ -18,7 +18,38 @@ const (
 	MaxCustomTransactionNameLength = 255
 )
 
-// Span is used to measure a span of time associated with an actvity
+// The keys to be used in reporting events
+const (
+	// KeyBackTrace is the key to report current stack trace.
+	KeyBackTrace = "Backtrace"
+)
+
+// Keys for internal use
+const (
+	keyEdge            = "Edge"
+	keySpec            = "Spec"
+	keyErrorClass      = "ErrorClass"
+	keyErrorMsg        = "ErrorMsg"
+	keyAsync           = "Async"
+	keyLanguage        = "Language"
+	keyProfileName     = "ProfileName"
+	keyFunctionName    = "FunctionName"
+	keyFile            = "File"
+	keyLineNumber      = "LineNumber"
+	keyStatus          = "Status"
+	keyController      = "Controller"
+	keyAction          = "Action"
+	keyTransactionName = "TransactionName"
+	keyMethod          = "Method"
+	keyHTTPHost        = "HTTP-Host"
+	keyURL             = "URL"
+	keyRemoteHost      = "Remote-Host"
+	keyQueryString     = "Query-String"
+	keyRemoteStatus    = "RemoteStatus"
+	keyContentLength   = "ContentLength"
+)
+
+// Span is used to measure a span of time associated with an activity
 // such as an RPC call, DB query, or method invocation.
 type Span interface {
 	// BeginSpan starts a new Span, returning a child of this Span.
@@ -100,7 +131,7 @@ func addKVsFromOpts(opts SpanOptions, args ...interface{}) []interface{} {
 	if opts.WithBackTrace {
 		kvs = make([]interface{}, 0, len(args)+2)
 		kvs = append(kvs, args...)
-		kvs = append(kvs, "Backtrace", string(debug.Stack()))
+		kvs = append(kvs, KeyBackTrace, string(debug.Stack()))
 	}
 	return kvs
 }
@@ -175,7 +206,7 @@ func (s *span) End(args ...interface{}) {
 		}
 		args = append(args, s.endArgs...)
 		for _, edge := range s.childEdges { // add Edge KV for each joined child
-			args = append(args, "Edge", edge)
+			args = append(args, keyEdge, edge)
 		}
 		_ = s.aoCtx.ReportEvent(s.exitLabel(), s.layerName(), args...)
 		s.childEdges = nil // clear child edge list
@@ -234,7 +265,7 @@ func (s *layerSpan) IsSampled() bool {
 // SetAsync provides a hint that this Span is a parent of concurrent overlapping child Spans.
 func (s *layerSpan) SetAsync(val bool) {
 	if val {
-		s.AddEndArgs("Async", true)
+		s.AddEndArgs(keyAsync, true)
 	}
 }
 
@@ -259,10 +290,10 @@ func (s *span) GetTransactionName() string {
 func (s *span) Error(class, msg string) {
 	if s.ok() {
 		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
-			"Spec", "error",
-			"ErrorClass", class,
-			"ErrorMsg", msg,
-			"Backtrace", string(debug.Stack()))
+			keySpec, "error",
+			keyErrorClass, class,
+			keyErrorMsg, msg,
+			KeyBackTrace, string(debug.Stack()))
 	}
 }
 
@@ -371,13 +402,13 @@ func newProfile(aoCtx reporter.Context, profileName string, parent Span, args ..
 	}
 	pl := profileLabeler{profileName}
 	if err := aoCtx.ReportEvent(pl.entryLabel(), pl.layerName(), // report profile entry
-		"Language", "go", "ProfileName", profileName,
-		"FunctionName", fname, "File", file, "LineNumber", line,
+		keyLanguage, "go", keyProfileName, profileName,
+		keyFunctionName, fname, keyFile, file, keyLineNumber, line,
 	); err != nil {
 		return nullSpan{}
 	}
 	p := &profileSpan{span{aoCtx: aoCtx.Copy(), labeler: pl, parent: parent,
-		endArgs: []interface{}{"Language", "go", "ProfileName", profileName}}}
+		endArgs: []interface{}{keyLanguage, "go", keyProfileName, profileName}}}
 	if parent != nil && parent.ok() {
 		parent.addProfile(p)
 	}

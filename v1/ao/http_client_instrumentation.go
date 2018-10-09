@@ -41,9 +41,9 @@ func (l HTTPClientSpan) AddHTTPResponse(resp *http.Response, err error) {
 			l.Err(err)
 		}
 		if resp != nil {
-			l.AddEndArgs("RemoteStatus", resp.StatusCode, "ContentLength", resp.ContentLength)
+			l.AddEndArgs(keyRemoteStatus, resp.StatusCode, keyContentLength, resp.ContentLength)
 			if md := resp.Header.Get(HTTPHeaderName); md != "" {
-				l.AddEndArgs("Edge", md)
+				l.AddEndArgs(keyEdge, md)
 			}
 		}
 	}

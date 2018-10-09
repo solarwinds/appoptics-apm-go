@@ -115,7 +115,7 @@ func (w *HTTPResponseWriter) WriteHeader(status int) {
 	if w.t.IsReporting() {               // set trace exit metadata in X-Trace header
 		// if downstream response headers mention a different span, add edge to it
 		if md != "" && md != w.t.ExitMetadata() {
-			w.t.AddEndArgs("Edge", md)
+			w.t.AddEndArgs(keyEdge, md)
 		}
 		w.Header().Set(HTTPHeaderName, w.t.ExitMetadata()) // replace downstream MD with ours
 	}
@@ -127,7 +127,7 @@ func (w *HTTPResponseWriter) WriteHeader(status int) {
 // wrapped http.ResponseWriter and a pointer to an int containing the status.
 func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter {
 	w := &HTTPResponseWriter{Writer: writer, t: t, StatusCode: http.StatusOK}
-	t.AddEndArgs("Status", &w.StatusCode)
+	t.AddEndArgs(keyStatus, &w.StatusCode)
 	// add exit event metadata to X-Trace header
 	if t.IsReporting() {
 		// add/replace response header metadata with this trace's
@@ -142,11 +142,11 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewcontext bool) T
 	// start trace, passing in metadata header
 	t := NewTraceFromID(spanName, r.Header.Get(HTTPHeaderName), func() KVMap {
 		return KVMap{
-			"Method":       r.Method,
-			"HTTP-Host":    r.Host,
-			"URL":          r.URL.EscapedPath(),
-			"Remote-Host":  r.RemoteAddr,
-			"Query-String": r.URL.RawQuery,
+			keyMethod:      r.Method,
+			keyHTTPHost:    r.Host,
+			keyURL:         r.URL.EscapedPath(),
+			keyRemoteHost:  r.RemoteAddr,
+			keyQueryString: r.URL.RawQuery,
 		}
 	})
 	// set the start time and method for metrics collection

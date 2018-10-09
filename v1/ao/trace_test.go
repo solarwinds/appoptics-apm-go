@@ -364,10 +364,10 @@ func TestTraceWithOptions(t *testing.T) {
 		// entry event should have no edges
 		{"test", "entry"}: {},
 		{"test", "exit"}: {Edges: g.Edges{{"test", "entry"}}, Callback: func(n g.Node) {
-			assert.Nil(t, n.Map["Backtrace"])
+			assert.Nil(t, n.Map[ao.KeyBackTrace])
 		}},
 		{"testWithBacktrace", "entry"}: {Callback: func(n g.Node) {
-			assert.NotNil(t, n.Map["Backtrace"])
+			assert.NotNil(t, n.Map[ao.KeyBackTrace])
 		}},
 		{"testWithBacktrace", "exit"}: {Edges: g.Edges{{"testWithBacktrace", "entry"}}},
 	})
