@@ -133,10 +133,15 @@ func BeginSpan(ctx context.Context, spanName string, args ...interface{}) (Span,
 func addKVsFromOpts(opts SpanOptions, args ...interface{}) []interface{} {
 	kvs := args
 	if opts.WithBackTrace {
-		kvs = make([]interface{}, 0, len(args)+2)
-		kvs = append(kvs, args...)
-		kvs = append(kvs, KeyBackTrace, string(debug.Stack()))
+		kvs = mergeKVs(args, []interface{}{KeyBackTrace, string(debug.Stack())})
 	}
+	return kvs
+}
+
+func mergeKVs(left []interface{}, right []interface{}) []interface{} {
+	kvs := make([]interface{}, 0, len(left)+len(right))
+	kvs = append(kvs, left...)
+	kvs = append(kvs, right...)
 	return kvs
 }
 

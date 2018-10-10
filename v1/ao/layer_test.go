@@ -2,6 +2,7 @@ package ao
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
@@ -147,4 +148,22 @@ func TestAddKVsFromOpts(t *testing.T) {
 
 	kvs = addKVsFromOpts(SpanOptions{WithBackTrace: true}, "hello", 1)
 	assert.Equal(t, 4, len(kvs))
+}
+
+func TestMergeKVs(t *testing.T) {
+	cases := []struct {
+		left   []interface{}
+		right  []interface{}
+		merged []interface{}
+	}{
+		{[]interface{}{}, []interface{}{}, []interface{}{}},
+		{[]interface{}{"a"}, []interface{}{}, []interface{}{"a"}},
+		{[]interface{}{}, []interface{}{"a"}, []interface{}{"a"}},
+		{[]interface{}{"a"}, []interface{}{"b"}, []interface{}{"a", "b"}},
+		{[]interface{}{"a", "b"}, []interface{}{"c", "d"}, []interface{}{"a", "b", "c", "d"}},
+	}
+
+	for idx, c := range cases {
+		assert.Equal(t, c.merged, mergeKVs(c.left, c.right), fmt.Sprintf("Test case: #%d", idx))
+	}
 }
