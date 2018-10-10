@@ -72,12 +72,12 @@ func handlerDoubleWrapped(w http.ResponseWriter, r *http.Request) {
 	defer t.End()
 }
 
-func httpTestWithEndpoint(f http.HandlerFunc, ep string) *httptest.ResponseRecorder {
-	return httpTestWithEndpointWithHeaders(f, ep, nil)
+func httpTestWithEndpoint(f http.HandlerFunc, ep string, opts ...ao.SpanOpt) *httptest.ResponseRecorder {
+	return httpTestWithEndpointWithHeaders(f, ep, nil, opts...)
 }
 
-func httpTestWithEndpointWithHeaders(f http.HandlerFunc, ep string, hd map[string]string) *httptest.ResponseRecorder {
-	h := http.HandlerFunc(ao.HTTPHandler(f))
+func httpTestWithEndpointWithHeaders(f http.HandlerFunc, ep string, hd map[string]string, opts ...ao.SpanOpt) *httptest.ResponseRecorder {
+	h := http.HandlerFunc(ao.HTTPHandler(f, opts...))
 	// test a single GET request
 	req, _ := http.NewRequest("GET", ep, nil)
 	for k, v := range hd {
@@ -88,8 +88,8 @@ func httpTestWithEndpointWithHeaders(f http.HandlerFunc, ep string, hd map[strin
 	return w
 }
 
-func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
-	return httpTestWithEndpoint(f, "http://test.com/hello?testq")
+func httpTest(f http.HandlerFunc, opts ...ao.SpanOpt) *httptest.ResponseRecorder {
+	return httpTestWithEndpoint(f, "http://test.com/hello?testq", opts...)
 }
 
 func TestHTTPHandler404(t *testing.T) {
@@ -807,4 +807,30 @@ func TestConcurrentAppNoTrace(t *testing.T) {
 
 	// shouldn't report anything
 	assert.Len(t, r.EventBufs, 0)
+}
+
+func TestHTTPHandlerOpts(t *testing.T) {
+	r := reporter.SetTestReporter() // set up test reporter
+	response := httpTest(handler404, ao.WithBackTrace())
+	assert.Len(t, response.HeaderMap[ao.HTTPHeaderName], 1)
+
+	r.Close(2)
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+		// entry event should have no edges
+		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
+			assert.Equal(t, "/hello", n.Map["URL"])
+			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+			assert.Equal(t, "GET", n.Map["Method"])
+			assert.Equal(t, "testq", n.Map["Query-String"])
+			assert.NotNil(t, n.Map[ao.KeyBackTrace])
+		}},
+		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
+			// assert that response X-Trace header matches trace exit event
+			assert.Equal(t, response.HeaderMap.Get(ao.HTTPHeaderName), n.Map[ao.HTTPHeaderName])
+			assert.EqualValues(t, response.Code, n.Map["Status"])
+			assert.EqualValues(t, 404, n.Map["Status"])
+			assert.Equal(t, "ao_test", n.Map["Controller"])
+			assert.Equal(t, "handler404", n.Map["Action"])
+		}},
+	})
 }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -25,7 +26,7 @@ const httpSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.HTT
 // HTTPHandler wraps an http.HandlerFunc with entry / exit events,
 // returning a new handler that can be used in its place.
 //   http.HandleFunc("/path", ao.HTTPHandler(myHandler))
-func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+func HTTPHandler(handler func(http.ResponseWriter, *http.Request), opts ...SpanOpt) func(http.ResponseWriter, *http.Request) {
 	if Disabled() {
 		return handler
 	}
@@ -45,7 +46,7 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 			return
 		}
 
-		t, w, r := TraceFromHTTPRequestResponse(httpHandlerSpanName, w, r)
+		t, w, r := TraceFromHTTPRequestResponse(httpHandlerSpanName, w, r, opts...)
 		defer t.End(endArgs...)
 
 		defer func() { // catch and report panic, if one occurs
@@ -69,7 +70,7 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 //       defer tr.End()
 //       // ...
 //   }
-func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter,
+func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request, opts ...SpanOpt) (Trace, http.ResponseWriter,
 	*http.Request) {
 
 	// determine if this is a new context, if so set flag isNewContext to start a new HTTP Span
@@ -80,7 +81,7 @@ func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *htt
 		isNewContext = true
 	}
 
-	t := traceFromHTTPRequest(spanName, r, isNewContext)
+	t := traceFromHTTPRequest(spanName, r, isNewContext, opts...)
 
 	// Associate the trace with http.Request to expose it to the handler
 	r = r.WithContext(NewContext(r.Context(), t))
@@ -138,17 +139,29 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 
 // traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
-func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool) Trace {
+func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, opts ...SpanOpt) Trace {
+	so := &SpanOptions{}
+	for _, f := range opts {
+		f(so)
+	}
+
 	// start trace, passing in metadata header
 	t := NewTraceFromID(spanName, r.Header.Get(HTTPHeaderName), func() KVMap {
-		return KVMap{
+		kvs := KVMap{
 			keyMethod:      r.Method,
 			keyHTTPHost:    r.Host,
 			keyURL:         r.URL.EscapedPath(),
 			keyRemoteHost:  r.RemoteAddr,
 			keyQueryString: r.URL.RawQuery,
 		}
+
+		if so.WithBackTrace {
+			kvs[KeyBackTrace] = string(debug.Stack())
+		}
+
+		return kvs
 	})
+
 	// set the start time and method for metrics collection
 	t.SetMethod(r.Method)
 	t.SetPath(r.URL.EscapedPath())

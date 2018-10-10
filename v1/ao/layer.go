@@ -124,6 +124,16 @@ type SpanOptions struct {
 	WithBackTrace bool
 }
 
+// SpanOpt defines the function type that changes the SpanOptions
+type SpanOpt func(*SpanOptions)
+
+// WithBackTrace returns a function that sets the WithBackTrace flag
+func WithBackTrace() SpanOpt {
+	return func(o *SpanOptions) {
+		o.WithBackTrace = true
+	}
+}
+
 // BeginSpan starts a new Span, provided a parent context and name. It returns a Span
 // and context bound to the new child Span.
 func BeginSpan(ctx context.Context, spanName string, args ...interface{}) (Span, context.Context) {
