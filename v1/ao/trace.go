@@ -99,12 +99,12 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 // NewTraceFromID creates a new Trace for reporting to AppOptics, provided an
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
-func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
+func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
 	if Disabled() || Closed() {
 		return NewNullTrace()
 	}
 
-	ctx, ok := reporter.NewContext(spanName, mdstr, true, func() map[string]interface{} {
+	ctx, ok := reporter.NewContext(spanName, mdStr, true, func() map[string]interface{} {
 		if cb != nil {
 			return cb()
 		}

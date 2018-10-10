@@ -72,15 +72,15 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter,
 	*http.Request) {
 
-	// determine if this is a new context, if so set flag isNewcontext to start a new HTTP Span
-	isNewcontext := false
+	// determine if this is a new context, if so set flag isNewContext to start a new HTTP Span
+	isNewContext := false
 	if b, ok := r.Context().Value(httpSpanKey).(bool); !ok || !b {
 		// save KV to ensure future calls won't treat as new context
 		r = r.WithContext(context.WithValue(r.Context(), httpSpanKey, true))
-		isNewcontext = true
+		isNewContext = true
 	}
 
-	t := traceFromHTTPRequest(spanName, r, isNewcontext)
+	t := traceFromHTTPRequest(spanName, r, isNewContext)
 
 	// Associate the trace with http.Request to expose it to the handler
 	r = r.WithContext(NewContext(r.Context(), t))
@@ -138,7 +138,7 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 
 // traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
-func traceFromHTTPRequest(spanName string, r *http.Request, isNewcontext bool) Trace {
+func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool) Trace {
 	// start trace, passing in metadata header
 	t := NewTraceFromID(spanName, r.Header.Get(HTTPHeaderName), func() KVMap {
 		return KVMap{
@@ -160,7 +160,7 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewcontext bool) T
 	t.SetHost(host)
 
 	// Clear the start time if it is not a new context
-	if !isNewcontext {
+	if !isNewContext {
 		t.SetStartTime(time.Time{})
 	}
 	// update incoming metadata in request headers for any downstream readers
