@@ -156,6 +156,9 @@ func TestMergeKVs(t *testing.T) {
 		right  []interface{}
 		merged []interface{}
 	}{
+		{nil, nil, []interface{}{}},
+		{nil, []interface{}{}, []interface{}{}},
+		{[]interface{}{}, nil, []interface{}{}},
 		{[]interface{}{}, []interface{}{}, []interface{}{}},
 		{[]interface{}{"a"}, []interface{}{}, []interface{}{"a"}},
 		{[]interface{}{}, []interface{}{"a"}, []interface{}{"a"}},

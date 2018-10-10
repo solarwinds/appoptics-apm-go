@@ -121,6 +121,9 @@ type Profile interface {
 // SpanOptions defines the options of creating a span
 type SpanOptions struct {
 	// WithBackTrace indicates whether to include the backtrace in BeginSpan
+	// Keep in mind that the cost of this option may be high as it calls
+	// `debug.Stack()` internally to gather the stack trace. Please consider
+	// the impact on performance/memory footprint carefully.
 	WithBackTrace bool
 }
 
@@ -140,6 +143,7 @@ func BeginSpan(ctx context.Context, spanName string, args ...interface{}) (Span,
 	return BeginSpanWithOptions(ctx, spanName, SpanOptions{}, args...)
 }
 
+// addKVsFromOpts adds the KVs correspond to the options to the args
 func addKVsFromOpts(opts SpanOptions, args ...interface{}) []interface{} {
 	kvs := args
 	if opts.WithBackTrace {
@@ -148,6 +152,8 @@ func addKVsFromOpts(opts SpanOptions, args ...interface{}) []interface{} {
 	return kvs
 }
 
+// mergeKVs merges two slices into a single one. An empty slice instead of
+// nil will be returned if both of the arguments are nil.
 func mergeKVs(left []interface{}, right []interface{}) []interface{} {
 	kvs := make([]interface{}, 0, len(left)+len(right))
 	kvs = append(kvs, left...)
@@ -155,6 +161,8 @@ func mergeKVs(left []interface{}, right []interface{}) []interface{} {
 	return kvs
 }
 
+// fromKVs converts a slice of Key-Value pairs to a KVMap.
+// The dangling element of the slice will be dropped.
 func fromKVs(kvs ...interface{}) KVMap {
 	m := make(KVMap)
 	for idx, val := range kvs {
