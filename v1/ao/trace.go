@@ -17,18 +17,18 @@ import (
 // methods that can be used to help categorize a service's inbound requests on the
 // AppOptics service dashboard.
 type Trace interface {
-	// Inherited from the Span interface
-	//  BeginSpan(spanName string, args ...interface{}) Span
-	//  BeginProfile(profileName string, args ...interface{}) Profile
-	// 	End(args ...interface{})
-	// 	Info(args ...interface{})
-	//  Error(class, msg string)
-	//  Err(error)
-	//  IsSampled() bool
+	// Span inherited from the Span interface
+	// BeginSpan(spanName string, args ...interface{}) Span
+	// BeginProfile(profileName string, args ...interface{}) Profile
+	// End(args ...interface{})
+	// Info(args ...interface{})
+	// Error(class, msg string)
+	// Err(error)
+	// IsSampled() bool
 	Span
 
-	// End a Trace, and include KV pairs returned by func f. Useful
-	// alternative to End() when used with defer to delay evaluation
+	// EndCallback ends a trace, and include KV pairs returned by func f.
+	// Useful alternative to End() when used with defer to delay evaluation
 	// of KVs until the end of the trace (since a deferred function's
 	// arguments are evaluated when the defer statement is
 	// evaluated). Func f will not be called at all if this span is
@@ -85,30 +85,26 @@ func (t *aoTrace) aoContext() reporter.Context { return t.aoCtx }
 // the beginning of a root span named spanName. If this trace is sampled, it may report
 // event data to AppOptics; otherwise event reporting will be a no-op.
 func NewTrace(spanName string) Trace {
-	if Disabled() || Closed() {
-		return NewNullTrace()
-	}
+	return NewTraceFromID(spanName, "", nil)
+}
 
-	ctx, ok := reporter.NewContext(spanName, "", true, nil)
-	if !ok {
-		return NewNullTrace()
-	}
-	t := &aoTrace{
-		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
-	}
-	t.SetStartTime(time.Now())
-	return t
+// NewTraceWithOptions creates a new trace with the provided options
+func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
+	kvs := addKVsFromOpts(opts)
+	return NewTraceFromID(spanName, "", func() KVMap {
+		return fromKVs(kvs...)
+	})
 }
 
 // NewTraceFromID creates a new Trace for reporting to AppOptics, provided an
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
-func NewTraceFromID(spanName, mdstr string, cb func() KVMap) Trace {
+func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
 	if Disabled() || Closed() {
 		return NewNullTrace()
 	}
 
-	ctx, ok := reporter.NewContext(spanName, mdstr, true, func() map[string]interface{} {
+	ctx, ok := reporter.NewContext(spanName, mdStr, true, func() map[string]interface{} {
 		if cb != nil {
 			return cb()
 		}
@@ -202,7 +198,7 @@ func (t *aoTrace) reportExit() {
 		}
 
 		for _, edge := range t.childEdges { // add Edge KV for each joined child
-			t.endArgs = append(t.endArgs, "Edge", edge)
+			t.endArgs = append(t.endArgs, keyEdge, edge)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
 			t.exitEvent.ReportContext(t.aoCtx, true, t.endArgs...)
@@ -216,6 +212,7 @@ func (t *aoTrace) reportExit() {
 	}
 }
 
+// IsSampled indicates if the trace is sampled.
 func (t *aoTrace) IsSampled() bool { return t != nil && t.aoCtx.IsSampled() }
 
 // ExitMetadata reports the X-Trace metadata string that will be used by the exit event.
@@ -234,13 +231,13 @@ func (t *aoTrace) ExitMetadata() (mdHex string) {
 // and fill them into trace's httpSpan struct. The data is then sent to the span message channel.
 func (t *aoTrace) recordHTTPSpan() {
 	var controller, action string
-	num := len([]string{"Status", "Controller", "Action"})
+	num := len([]string{keyStatus, keyController, keyAction})
 	for i := 0; (i+1 < len(t.endArgs)) && (num > 0); i += 2 {
 		k, isStr := t.endArgs[i].(string)
 		if !isStr {
 			continue
 		}
-		if k == "Status" {
+		if k == keyStatus {
 			switch v := t.endArgs[i+1].(type) {
 			case int:
 				t.httpSpan.span.Status = v
@@ -248,10 +245,10 @@ func (t *aoTrace) recordHTTPSpan() {
 				t.httpSpan.span.Status = *v
 			}
 			num--
-		} else if k == "Controller" {
+		} else if k == keyController {
 			controller += t.endArgs[i+1].(string)
 			num--
-		} else if k == "Action" {
+		} else if k == keyAction {
 			action += t.endArgs[i+1].(string)
 			num--
 		}
@@ -266,7 +263,7 @@ func (t *aoTrace) recordHTTPSpan() {
 	reporter.ReportSpan(&t.httpSpan.span)
 
 	// This will add the TransactionName KV into the exit event.
-	t.endArgs = append(t.endArgs, "TransactionName", t.httpSpan.span.Transaction)
+	t.endArgs = append(t.endArgs, keyTransactionName, t.httpSpan.span.Transaction)
 }
 
 // finalizeTxnName finalizes the transaction name based on the following factors:

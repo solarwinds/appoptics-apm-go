@@ -24,8 +24,8 @@ const (
 	metricsTransactionsMaxDefault = 200 // default max amount of transaction names we allow per cycle
 	metricsHistPrecisionDefault   = 2   // default histogram precision
 
-	metricsTagNameLenghtMax  = 64  // max number of characters for tag names
-	metricsTagValueLenghtMax = 255 // max number of characters for tag values
+	metricsTagNameLengthMax  = 64  // max number of characters for tag names
+	metricsTagValueLengthMax = 255 // max number of characters for tag values
 )
 
 // Special transaction names
@@ -555,11 +555,11 @@ func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
 	if len(m.Tags) > 0 {
 		start := bsonAppendStartObject(bbuf, "tags")
 		for k, v := range m.Tags {
-			if len(k) > metricsTagNameLenghtMax {
-				k = k[0:metricsTagNameLenghtMax]
+			if len(k) > metricsTagNameLengthMax {
+				k = k[0:metricsTagNameLengthMax]
 			}
-			if len(v) > metricsTagValueLenghtMax {
-				v = v[0:metricsTagValueLenghtMax]
+			if len(v) > metricsTagValueLengthMax {
+				v = v[0:metricsTagValueLengthMax]
 			}
 			bsonAppendString(bbuf, k, v)
 		}
@@ -591,11 +591,11 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	if len(h.tags) > 0 {
 		start := bsonAppendStartObject(bbuf, "tags")
 		for k, v := range h.tags {
-			if len(k) > metricsTagNameLenghtMax {
-				k = k[0:metricsTagNameLenghtMax]
+			if len(k) > metricsTagNameLengthMax {
+				k = k[0:metricsTagNameLengthMax]
 			}
-			if len(v) > metricsTagValueLenghtMax {
-				v = v[0:metricsTagValueLenghtMax]
+			if len(v) > metricsTagValueLengthMax {
+				v = v[0:metricsTagValueLengthMax]
 			}
 			bsonAppendString(bbuf, k, v)
 		}

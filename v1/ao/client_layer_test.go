@@ -3,6 +3,7 @@
 package ao_test
 
 import (
+	"runtime/debug"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ func TestSpans(t *testing.T) {
 
 	// make a query span
 	l = ao.BeginQuerySpan(ctx, "querySpan", "SELECT * FROM TEST_TABLE",
-		"MySQL", "remote.host")
+		"MySQL", "remote.host", ao.KeyBackTrace, string(debug.Stack()))
 	time.Sleep(time.Millisecond)
 	l.End()
 
@@ -65,7 +66,7 @@ func TestSpans(t *testing.T) {
 			assert.Equal(t, "remote.host", n.Map["RemoteHost"])
 			assert.Equal(t, "SELECT * FROM TEST_TABLE", n.Map["Query"])
 			assert.Equal(t, "MySQL", n.Map["Flavor"])
-
+			assert.NotNil(t, n.Map[ao.KeyBackTrace])
 		}},
 		{"querySpan", "exit"}: {Edges: g.Edges{{"querySpan", "entry"}}},
 		{"myExample", "exit"}: {Edges: g.Edges{{"redis", "exit"}, {"myServiceClient", "exit"}, {"querySpan", "exit"}, {"myExample", "entry"}}},
