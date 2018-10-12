@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // InvalidEnv returns a string indicating invalid environment variables
@@ -26,17 +28,54 @@ func NonDefaultEnv(env string, val string) string {
 	return fmt.Sprintf("env found - %s: \"%s\"", env, val)
 }
 
-const validServiceKeyPattern = `^[a-zA-Z0-9]{64}:\S{1,255}$`
+const (
+	validServiceKeyPattern = `^[a-zA-Z0-9]{64}:.{1,255}$`
 
-// IsValidServiceKey verifies if the service key is a valid one.
-// A valid service key is something like 'service_token:service_name'.
-// The service_token should be of 64 characters long and the size of
-// service_name is larger than 0 but up to 255 characters.
-var IsValidServiceKey = regexp.MustCompile(validServiceKeyPattern).MatchString
+	serviceKeyPartsCnt  = 2
+	serviceKeyDelimiter = ":"
 
-// ToServiceKey converts a string to a service key
+	spacesPattern  = `\s+`
+	spacesReplacer = "-"
+
+	invalidCharacters   = `[^a-z0-9.:_-]`
+	invalidCharReplacer = ""
+)
+
+var (
+	// IsValidServiceKey verifies if the service key is a valid one.
+	// A valid service key is something like 'service_token:service_name'.
+	// The service_token should be of 64 characters long and the size of
+	// service_name is larger than 0 but up to 255 characters.
+	IsValidServiceKey = regexp.MustCompile(validServiceKeyPattern).MatchString
+
+	// ReplaceSpacesWith replaces all the spaces with valid characters (hyphen)
+	ReplaceSpacesWith = regexp.MustCompile(spacesPattern).ReplaceAllString
+
+	// RemoveInvalidChars remove invalid characters
+	RemoveInvalidChars = regexp.MustCompile(invalidCharacters).ReplaceAllString
+)
+
+// ToServiceKey converts a string to a service key. The argument should be
+// a valid service key string.
+//
+// It doesn't touch the service key but does the following to the original
+// service name:
+// - convert all characters to lowercase
+// - convert spaces to hyphens
+// - remove invalid characters ( [^a-z0-9.:_-])
 func ToServiceKey(s string) interface{} {
-	return s
+	keyS := strings.Split(s, serviceKeyDelimiter)
+	if len(keyS) != serviceKeyPartsCnt {
+		log.Warningf("invalid service key: %s, no delimiter found.")
+		return s
+	}
+
+	sName := strings.ToLower(keyS[1])
+	sName = ReplaceSpacesWith(sName, spacesReplacer)
+	sName = RemoveInvalidChars(sName, invalidCharReplacer)
+
+	keyS[1] = sName
+	return strings.Join(keyS, serviceKeyDelimiter)
 }
 
 // IsValidHost verifies if the host is in a valid format

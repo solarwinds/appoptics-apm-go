@@ -46,7 +46,7 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsDisabled, "invalidValue")
 
 	c.RefreshConfig()
-	assert.Equal(t, key1, c.GetServiceKey())
+	assert.Equal(t, ToServiceKey(key1), c.GetServiceKey())
 	assert.Equal(t, "test", c.GetHostAlias())
 	assert.Equal(t, false, c.GetSkipVerify())
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
