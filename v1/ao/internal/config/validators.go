@@ -34,7 +34,7 @@ const (
 	serviceKeyPartsCnt  = 2
 	serviceKeyDelimiter = ":"
 
-	spacesPattern  = `\s+`
+	spacesPattern  = `\s`
 	spacesReplacer = "-"
 
 	invalidCharacters   = `[^a-z0-9.:_-]`
