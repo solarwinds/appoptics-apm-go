@@ -91,6 +91,13 @@ func TestToServiceKey(t *testing.T) {
 		{withDemoKey("hE~ l * "), withDemoKey("he-l--")},
 		{withDemoKey("*^&$"), withDemoKey("")},
 		{withDemoKey("he  llo"), withDemoKey("he--llo")},
+		{withDemoKey("a:b"), withDemoKey("a:b")},
+		{withDemoKey(":"), withDemoKey(":")},
+		{withDemoKey(":::"), withDemoKey(":::")},
+		{"badServiceKey", "badServiceKey"},
+		{"badServiceKey:", "badServiceKey:"},
+		{":badServiceKey", ":badservicekey"},
+		{"", ""},
 	}
 	for idx, tc := range cases {
 		assert.Equal(t, tc.after, ToServiceKey(tc.before), fmt.Sprintf("Case #%d", idx))

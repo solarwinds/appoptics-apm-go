@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // InvalidEnv returns a string indicating invalid environment variables
@@ -64,18 +62,21 @@ var (
 // - convert spaces to hyphens
 // - remove invalid characters ( [^a-z0-9.:_-])
 func ToServiceKey(s string) interface{} {
-	keyS := strings.Split(s, serviceKeyDelimiter)
-	if len(keyS) != serviceKeyPartsCnt {
-		log.Warningf("invalid service key: %s, no delimiter found.")
+	parts := strings.SplitN(s, serviceKeyDelimiter, serviceKeyPartsCnt)
+	if len(parts) != serviceKeyPartsCnt {
+		// This should not happen as this method is called after service key
+		// validation, which rejects a key without the delimiter. This check
+		// is added here to avoid out-of-bound slice access later.
 		return s
 	}
 
-	sName := strings.ToLower(keyS[1])
+	sToken, sName := parts[0], parts[1]
+
+	sName = strings.ToLower(sName)
 	sName = ReplaceSpacesWith(sName, spacesReplacer)
 	sName = RemoveInvalidChars(sName, invalidCharReplacer)
 
-	keyS[1] = sName
-	return strings.Join(keyS, serviceKeyDelimiter)
+	return strings.Join([]string{sToken, sName}, serviceKeyDelimiter)
 }
 
 // IsValidHost verifies if the host is in a valid format
