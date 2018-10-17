@@ -26,17 +26,57 @@ func NonDefaultEnv(env string, val string) string {
 	return fmt.Sprintf("env found - %s: \"%s\"", env, val)
 }
 
-const validServiceKeyPattern = `^[a-zA-Z0-9]{64}:\S{1,255}$`
+const (
+	validServiceKeyPattern = `^[a-zA-Z0-9]{64}:.{1,255}$`
 
-// IsValidServiceKey verifies if the service key is a valid one.
-// A valid service key is something like 'service_token:service_name'.
-// The service_token should be of 64 characters long and the size of
-// service_name is larger than 0 but up to 255 characters.
-var IsValidServiceKey = regexp.MustCompile(validServiceKeyPattern).MatchString
+	serviceKeyPartsCnt  = 2
+	serviceKeyDelimiter = ":"
 
-// ToServiceKey converts a string to a service key
+	spacesPattern  = `\s`
+	spacesReplacer = "-"
+
+	invalidCharacters   = `[^a-z0-9.:_-]`
+	invalidCharReplacer = ""
+)
+
+var (
+	// IsValidServiceKey verifies if the service key is a valid one.
+	// A valid service key is something like 'service_token:service_name'.
+	// The service_token should be of 64 characters long and the size of
+	// service_name is larger than 0 but up to 255 characters.
+	IsValidServiceKey = regexp.MustCompile(validServiceKeyPattern).MatchString
+
+	// ReplaceSpacesWith replaces all the spaces with valid characters (hyphen)
+	ReplaceSpacesWith = regexp.MustCompile(spacesPattern).ReplaceAllString
+
+	// RemoveInvalidChars remove invalid characters
+	RemoveInvalidChars = regexp.MustCompile(invalidCharacters).ReplaceAllString
+)
+
+// ToServiceKey converts a string to a service key. The argument should be
+// a valid service key string.
+//
+// It doesn't touch the service key but does the following to the original
+// service name:
+// - convert all characters to lowercase
+// - convert spaces to hyphens
+// - remove invalid characters ( [^a-z0-9.:_-])
 func ToServiceKey(s string) interface{} {
-	return s
+	parts := strings.SplitN(s, serviceKeyDelimiter, serviceKeyPartsCnt)
+	if len(parts) != serviceKeyPartsCnt {
+		// This should not happen as this method is called after service key
+		// validation, which rejects a key without the delimiter. This check
+		// is added here to avoid out-of-bound slice access later.
+		return s
+	}
+
+	sToken, sName := parts[0], parts[1]
+
+	sName = strings.ToLower(sName)
+	sName = ReplaceSpacesWith(sName, spacesReplacer)
+	sName = RemoveInvalidChars(sName, invalidCharReplacer)
+
+	return strings.Join([]string{sToken, sName}, serviceKeyDelimiter)
 }
 
 // IsValidHost verifies if the host is in a valid format
@@ -123,11 +163,11 @@ func ToInt64(i string) interface{} {
 	return int64(n)
 }
 
-// maskServiceKey masks the middle part of the token and returns the
+// MaskServiceKey masks the middle part of the token and returns the
 // masked service key. For example:
 // key: "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go"
 // masked:"ae38********************************************************9217:go"
-func maskServiceKey(validKey string) string {
+func MaskServiceKey(validKey string) string {
 	var sep = ":"
 	var hLen, tLen = 4, 4
 	var mask = "*"
