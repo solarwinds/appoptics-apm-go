@@ -58,7 +58,7 @@ var envs = map[string]Env{
 		optional: false,
 		validate: IsValidServiceKey,
 		convert:  ToServiceKey,
-		mask:     maskServiceKey,
+		mask:     MaskServiceKey,
 	},
 	"TrustedPath": {
 		name:     envAppOpticsTrustedPath,

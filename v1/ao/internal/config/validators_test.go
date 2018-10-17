@@ -50,7 +50,7 @@ func TestMaskServiceKey(t *testing.T) {
 	}
 
 	for key, masked := range keyPairs {
-		assert.Equal(t, masked, maskServiceKey(key))
+		assert.Equal(t, masked, MaskServiceKey(key))
 	}
 }
 

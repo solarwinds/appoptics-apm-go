@@ -163,11 +163,11 @@ func ToInt64(i string) interface{} {
 	return int64(n)
 }
 
-// maskServiceKey masks the middle part of the token and returns the
+// MaskServiceKey masks the middle part of the token and returns the
 // masked service key. For example:
 // key: "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go"
 // masked:"ae38********************************************************9217:go"
-func maskServiceKey(validKey string) string {
+func MaskServiceKey(validKey string) string {
 	var sep = ":"
 	var hLen, tLen = 4, 4
 	var mask = "*"
