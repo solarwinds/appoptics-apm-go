@@ -4,7 +4,6 @@ package reporter
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,6 +18,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
+	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/mocks"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
@@ -46,15 +46,6 @@ var _ = func() (_ struct{}) {
 	config.Refresh()
 	return
 }()
-
-func TestCacheHostname(t *testing.T) {
-	h, _ := os.Hostname()
-	assert.Equal(t, h, host.Hostname())
-	assert.Equal(t, false, reportingDisabled)
-	t.Logf("Forcing hostname error: 'Unable to get hostname' log message expected")
-	checkHostname(func() (string, error) { return "", errors.New("cannot get hostname") })
-	assert.Equal(t, true, reportingDisabled)
-}
 
 // ========================= Test Reporter =============================
 
@@ -144,6 +135,7 @@ func TestNullReporter(t *testing.T) {
 	assert.NoError(t, nullR.reportEvent(nil, nil))
 	assert.NoError(t, nullR.reportStatus(nil, nil))
 	assert.NoError(t, nullR.reportSpan(nil))
+
 }
 
 // ========================= UDP Reporter =============================
@@ -220,7 +212,6 @@ func TestGRPCReporter(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
-	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
 	config.Refresh()
@@ -230,6 +221,30 @@ func TestGRPCReporter(t *testing.T) {
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
 	r := globalReporter.(*grpcReporter)
+
+	// Test WaitForReady
+	// The reporter is not ready when there is no default setting.
+	ctxTm1, cancel1 := context.WithTimeout(context.Background(), 0)
+	defer cancel1()
+	assert.False(t, r.WaitForReady(ctxTm1))
+
+	// The reporter becomes ready after it has got the default setting.
+	ready := make(chan bool, 1)
+	r.getSettings(ready)
+	ctxTm2, cancel2 := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel2()
+	assert.True(t, r.WaitForReady(ctxTm2))
+	assert.True(t, r.isReady())
+
+	// The reporter becomes not ready after the default setting has been deleted
+	removeSetting("")
+	r.checkSettingsTimeout(make(chan bool, 1))
+
+	assert.False(t, r.isReady())
+	ctxTm3, cancel3 := context.WithTimeout(context.Background(), 0)
+	assert.False(t, r.WaitForReady(ctxTm3))
+	defer cancel3()
+
 	ctx := newTestContext(t)
 	ev1, err := ctx.newEvent(LabelInfo, "layer1")
 	assert.NoError(t, err)
@@ -250,7 +265,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	assert.Equal(t, serviceKey, r.serviceKey)
 
-	assert.Equal(t, grpcMetricIntervalDefault, r.collectMetricInterval)
+	assert.Equal(t, int32(grpcMetricIntervalDefault), r.collectMetricInterval)
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
 	assert.Equal(t, grpcSettingsTimeoutCheckIntervalDefault, r.settingsTimeoutCheckInterval)
 
@@ -291,7 +306,6 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
-	reportingDisabled = false
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
 	config.Refresh()
@@ -302,7 +316,8 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
 	r := globalReporter.(*grpcReporter)
-	r.Shutdown()
+	r.ShutdownNow()
+
 	assert.Equal(t, true, r.Closed())
 
 	// // Print current goroutines stack
@@ -310,7 +325,7 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	// runtime.Stack(buf, true)
 	// fmt.Printf("%s", buf)
 
-	e := r.Shutdown()
+	e := r.ShutdownNow()
 	assert.NotEqual(t, nil, e)
 
 	// stop test reporter
@@ -339,7 +354,6 @@ func TestInvalidKey(t *testing.T) {
 	addr := "localhost:4567"
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	reportingDisabled = false
 
 	// start test gRPC server
 	server := StartTestGRPCServer(t, addr)
@@ -348,7 +362,8 @@ func TestInvalidKey(t *testing.T) {
 	// set gRPC reporter
 	config.Refresh()
 	oldReporter := globalReporter
-	// numGo := runtime.NumGoroutine()
+
+	aolog.SetLevel(aolog.INFO)
 	setGlobalReporter("ssl")
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
@@ -363,7 +378,7 @@ func TestInvalidKey(t *testing.T) {
 	// The agent reporter should be closed due to received INVALID_API_KEY from the collector
 	assert.Equal(t, true, r.Closed())
 
-	e := r.Shutdown()
+	e := r.ShutdownNow()
 	assert.NotEqual(t, nil, e)
 
 	// Tear down everything.
@@ -372,18 +387,18 @@ func TestInvalidKey(t *testing.T) {
 	os.Setenv("APPOPTICS_SERVICE_KEY", oldKey)
 
 	patterns := []string{
-		"server responded: Invalid API key",
-		"Shutting down the gRPC reporter",
+		"rsp=INVALID_API_KEY",
+		"Shutting down the reporter",
 		// "periodicTasks goroutine exiting",
 		"eventSender goroutine exiting",
 		"spanMessageAggregator goroutine exiting",
 		"statusSender goroutine exiting",
-		"eventRetrySender goroutine exiting",
+		"eventBatchSender goroutine exiting",
 	}
 	for _, ptn := range patterns {
 		assert.True(t, strings.Contains(buf.String(), ptn))
 	}
-
+	aolog.SetLevel(aolog.WARNING)
 }
 
 func TestDefaultBackoff(t *testing.T) {
@@ -428,25 +443,30 @@ func TestInvokeRPC(t *testing.T) {
 		insecureSkipVerify: true,
 		backoff: func(retries int, wait func(d time.Duration)) error {
 			if retries > grpcMaxRetries {
-				return ErrMaxRetriesExceeded
+				return errGiveUpAfterRetries
 			}
 			return nil
 		},
-		Dialer: &NoopDialer{},
+		Dialer:  &NoopDialer{},
+		flushed: make(chan struct{}),
 	}
 	c.connect()
 
 	// Test reporter exiting
 	mockMethod := &mocks.Method{}
+	mockMethod.On("String").Return("mock")
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
-
+	mockMethod.On("CallSummary").Return("summary")
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
-		Return(pb.ResultCode_OK)
+		Return(pb.ResultCode_OK, nil)
 
 	exit := make(chan struct{})
 	close(exit)
+	c.setFlushed()
 	assert.Equal(t, errReporterExiting, c.InvokeRPC(exit, mockMethod))
 
 	// Test invalid service key
@@ -454,11 +474,13 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod = &mocks.Method{}
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("CallSummary").Return("summary")
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
-		Return(pb.ResultCode_INVALID_API_KEY)
-
-	mockMethod.On("String").Return("test")
+		Return(pb.ResultCode_INVALID_API_KEY, nil)
 
 	assert.Equal(t, errInvalidServiceKey, c.InvokeRPC(exit, mockMethod))
 
@@ -466,10 +488,13 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod = &mocks.Method{}
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("CallSummary").Return("summary")
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
-		Return(pb.ResultCode_LIMIT_EXCEEDED)
-	mockMethod.On("String").Return("test")
+		Return(pb.ResultCode_LIMIT_EXCEEDED, nil)
 
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(false)
@@ -479,12 +504,15 @@ func TestInvokeRPC(t *testing.T) {
 	failsNum := grpcRetryLogThreshold + (grpcMaxRetries-grpcRetryLogThreshold)/2
 
 	mockMethod = &mocks.Method{}
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("CallSummary").Return("summary")
+	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(true)
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
-		Return(pb.ResultCode_OK)
-	mockMethod.On("String").Return("events channel")
+		Return(pb.ResultCode_OK, nil)
 
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(func(ctx context.Context, c pb.TraceCollectorClient) error {
@@ -502,7 +530,10 @@ func TestInvokeRPC(t *testing.T) {
 	// Test redirect
 	redirectNum := 1
 	mockMethod = &mocks.Method{}
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
 		Return(true)
 	mockMethod.On("Arg", mock.Anything, mock.Anything).
@@ -515,12 +546,28 @@ func TestInvokeRPC(t *testing.T) {
 			} else {
 				return pb.ResultCode_REDIRECT
 			}
-		})
-	mockMethod.On("String").Return("events channel")
+		}, nil)
 
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	assert.Equal(t, nil, c.InvokeRPC(exit, mockMethod))
 	assert.True(t, c.isActive())
 	assert.Equal(t, "new-addr:9999", c.address)
+}
+
+func TestInitReporter(t *testing.T) {
+	// Test disable agent
+	os.Setenv("APPOPTICS_DISABLED", "true")
+	config.Refresh()
+	initReporter()
+	require.IsType(t, &nullReporter{}, globalReporter)
+
+	// Test enable agent
+	os.Unsetenv("APPOPTICS_DISABLED")
+	os.Setenv("APPOPTICS_REPORTER", "ssl")
+	config.Refresh()
+	assert.False(t, config.GetDisabled())
+
+	initReporter()
+	require.IsType(t, &grpcReporter{}, globalReporter)
 }

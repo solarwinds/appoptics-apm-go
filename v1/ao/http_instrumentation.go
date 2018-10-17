@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -25,7 +26,10 @@ const httpSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.HTT
 // HTTPHandler wraps an http.HandlerFunc with entry / exit events,
 // returning a new handler that can be used in its place.
 //   http.HandleFunc("/path", ao.HTTPHandler(myHandler))
-func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+func HTTPHandler(handler func(http.ResponseWriter, *http.Request), opts ...SpanOpt) func(http.ResponseWriter, *http.Request) {
+	if Disabled() {
+		return handler
+	}
 	// At wrap time (when binding handler to router): get name of wrapped handler func
 	var endArgs []interface{}
 	if f := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()); f != nil {
@@ -37,7 +41,12 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 	}
 	// return wrapped HTTP request handler
 	return func(w http.ResponseWriter, r *http.Request) {
-		t, w, r := TraceFromHTTPRequestResponse(httpHandlerSpanName, w, r)
+		if Closed() {
+			handler(w, r)
+			return
+		}
+
+		t, w, r := TraceFromHTTPRequestResponse(httpHandlerSpanName, w, r, opts...)
 		defer t.End(endArgs...)
 
 		defer func() { // catch and report panic, if one occurs
@@ -61,18 +70,18 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request)) func(http.Res
 //       defer tr.End()
 //       // ...
 //   }
-func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request) (Trace, http.ResponseWriter,
+func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request, opts ...SpanOpt) (Trace, http.ResponseWriter,
 	*http.Request) {
 
-	// determine if this is a new context, if so set flag isNewcontext to start a new HTTP Span
-	isNewcontext := false
+	// determine if this is a new context, if so set flag isNewContext to start a new HTTP Span
+	isNewContext := false
 	if b, ok := r.Context().Value(httpSpanKey).(bool); !ok || !b {
 		// save KV to ensure future calls won't treat as new context
 		r = r.WithContext(context.WithValue(r.Context(), httpSpanKey, true))
-		isNewcontext = true
+		isNewContext = true
 	}
 
-	t := traceFromHTTPRequest(spanName, r, isNewcontext)
+	t := traceFromHTTPRequest(spanName, r, isNewContext, opts...)
 
 	// Associate the trace with http.Request to expose it to the handler
 	r = r.WithContext(NewContext(r.Context(), t))
@@ -107,7 +116,7 @@ func (w *HTTPResponseWriter) WriteHeader(status int) {
 	if w.t.IsReporting() {               // set trace exit metadata in X-Trace header
 		// if downstream response headers mention a different span, add edge to it
 		if md != "" && md != w.t.ExitMetadata() {
-			w.t.AddEndArgs("Edge", md)
+			w.t.AddEndArgs(keyEdge, md)
 		}
 		w.Header().Set(HTTPHeaderName, w.t.ExitMetadata()) // replace downstream MD with ours
 	}
@@ -119,7 +128,7 @@ func (w *HTTPResponseWriter) WriteHeader(status int) {
 // wrapped http.ResponseWriter and a pointer to an int containing the status.
 func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter {
 	w := &HTTPResponseWriter{Writer: writer, t: t, StatusCode: http.StatusOK}
-	t.AddEndArgs("Status", &w.StatusCode)
+	t.AddEndArgs(keyStatus, &w.StatusCode)
 	// add exit event metadata to X-Trace header
 	if t.IsReporting() {
 		// add/replace response header metadata with this trace's
@@ -130,17 +139,29 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 
 // traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
-func traceFromHTTPRequest(spanName string, r *http.Request, isNewcontext bool) Trace {
+func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, opts ...SpanOpt) Trace {
+	so := &SpanOptions{}
+	for _, f := range opts {
+		f(so)
+	}
+
 	// start trace, passing in metadata header
 	t := NewTraceFromID(spanName, r.Header.Get(HTTPHeaderName), func() KVMap {
-		return KVMap{
-			"Method":       r.Method,
-			"HTTP-Host":    r.Host,
-			"URL":          r.URL.EscapedPath(),
-			"Remote-Host":  r.RemoteAddr,
-			"Query-String": r.URL.RawQuery,
+		kvs := KVMap{
+			keyMethod:      r.Method,
+			keyHTTPHost:    r.Host,
+			keyURL:         r.URL.EscapedPath(),
+			keyRemoteHost:  r.RemoteAddr,
+			keyQueryString: r.URL.RawQuery,
 		}
+
+		if so.WithBackTrace {
+			kvs[KeyBackTrace] = string(debug.Stack())
+		}
+
+		return kvs
 	})
+
 	// set the start time and method for metrics collection
 	t.SetMethod(r.Method)
 	t.SetPath(r.URL.EscapedPath())
@@ -152,7 +173,7 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewcontext bool) T
 	t.SetHost(host)
 
 	// Clear the start time if it is not a new context
-	if !isNewcontext {
+	if !isNewContext {
 		t.SetStartTime(time.Time{})
 	}
 	// update incoming metadata in request headers for any downstream readers

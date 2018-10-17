@@ -2,7 +2,7 @@
 
 package ao
 
-import "golang.org/x/net/context"
+import "context"
 
 type contextKeyT string
 

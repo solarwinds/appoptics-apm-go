@@ -3,6 +3,7 @@
 package config
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,7 +50,7 @@ func TestMaskServiceKey(t *testing.T) {
 	}
 
 	for key, masked := range keyPairs {
-		assert.Equal(t, masked, maskServiceKey(key))
+		assert.Equal(t, masked, MaskServiceKey(key))
 	}
 }
 
@@ -74,4 +75,31 @@ func TestConverters(t *testing.T) {
 	assert.Equal(t, int64(1), ToInt64("1"))
 	assert.Equal(t, "ssl", ToReporterType("ssl").(string))
 	assert.Equal(t, "never", ToTracingMode("never").(string))
+}
+
+func withDemoKey(sn string) string {
+	return "demo_service_key:" + sn
+}
+
+func TestToServiceKey(t *testing.T) {
+	cases := []struct{ before, after string }{
+		{withDemoKey("hello"), withDemoKey("hello")},
+		{withDemoKey("he llo"), withDemoKey("he-llo")},
+		{withDemoKey("he	llo"), withDemoKey("he-llo")},
+		{withDemoKey(" he llo "), withDemoKey("-he-llo-")},
+		{withDemoKey("HE llO "), withDemoKey("he-llo-")},
+		{withDemoKey("hE~ l * "), withDemoKey("he-l--")},
+		{withDemoKey("*^&$"), withDemoKey("")},
+		{withDemoKey("he  llo"), withDemoKey("he--llo")},
+		{withDemoKey("a:b"), withDemoKey("a:b")},
+		{withDemoKey(":"), withDemoKey(":")},
+		{withDemoKey(":::"), withDemoKey(":::")},
+		{"badServiceKey", "badServiceKey"},
+		{"badServiceKey:", "badServiceKey:"},
+		{":badServiceKey", ":badservicekey"},
+		{"", ""},
+	}
+	for idx, tc := range cases {
+		assert.Equal(t, tc.after, ToServiceKey(tc.before), fmt.Sprintf("Case #%d", idx))
+	}
 }

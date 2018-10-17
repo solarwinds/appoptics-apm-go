@@ -6,6 +6,8 @@
 package config
 
 import (
+	"sync"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
@@ -21,6 +23,7 @@ const (
 	defaultHostnameAlias      = ""
 	defaultInsecureSkipVerify = false
 	defaultHistogramPrecision = 2
+	defaultDisabled           = false
 )
 
 // The environment variables
@@ -37,6 +40,7 @@ const (
 	envAppOpticsHistogramPrecision  = "APPOPTICS_HISTOGRAM_PRECISION"
 	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
 	envAppOpticsEventsBatchSize     = "APPOPTICS_EVENTS_BATCHSIZE"
+	envAppOpticsDisabled            = "APPOPTICS_DISABLED"
 )
 
 // The environment variables, validators and converters. This map is not
@@ -54,7 +58,7 @@ var envs = map[string]Env{
 		optional: false,
 		validate: IsValidServiceKey,
 		convert:  ToServiceKey,
-		mask:     maskServiceKey,
+		mask:     MaskServiceKey,
 	},
 	"TrustedPath": {
 		name:     envAppOpticsTrustedPath,
@@ -126,12 +130,21 @@ var envs = map[string]Env{
 		convert:  ToInt64,
 		mask:     nil,
 	},
+	"Disabled": {
+		name:     envAppOpticsDisabled,
+		optional: true,
+		validate: IsValidBool,
+		convert:  ToBool,
+		mask:     nil,
+	},
 }
 
 // Config is the struct to define the agent configuration. The configuration
 // options in this struct (excluding those from ReporterOptions) are not
 // intended for dynamically updating.
 type Config struct {
+	sync.RWMutex
+
 	// Collector defines the host and port of the AppOptics collector
 	Collector string `yaml:"CollectorHost" json:"CollectorHost"`
 
@@ -164,6 +177,8 @@ type Config struct {
 
 	// The reporter options
 	Reporter *ReporterOptions `yaml:"ReporterOptions" json:"ReporterOptions"`
+
+	Disabled bool `yaml:"Disabled" json:"Disabled"`
 }
 
 // Option is a function type that accepts a Config pointer and
@@ -199,8 +214,11 @@ func NewConfig(opts ...Option) *Config {
 
 // RefreshConfig loads the customized settings and merge with default values
 func (c *Config) RefreshConfig(opts ...Option) {
-	c.LoadConfigFile("TODO")
-	c.LoadEnvs()
+	c.Lock()
+	defer c.Unlock()
+
+	c.loadConfigFile("TODO")
+	c.loadEnvs()
 
 	for _, opt := range opts {
 		opt(c)
@@ -208,24 +226,30 @@ func (c *Config) RefreshConfig(opts ...Option) {
 }
 
 func newConfig() *Config {
-	return &Config{
-		Collector:     defaultGRPCCollector,
-		ServiceKey:    defaultServiceKey,
-		TrustedPath:   defaultTrustedPath,
-		CollectorUDP:  defaultCollectorUDP,
-		ReporterType:  defaultReporter,
-		TracingMode:   defaultTracingMode,
-		PrependDomain: defaultPrependDomain,
-		HostAlias:     defaultHostnameAlias,
-		SkipVerify:    defaultInsecureSkipVerify,
-		Precision:     defaultHistogramPrecision,
-		Reporter:      defaultReporterOptions(),
-	}
+	c := &Config{}
+	c.reset()
+	return c
 }
 
-// LoadEnvs loads environment variable values and update the Config object.
-func (c *Config) LoadEnvs() {
+func (c *Config) reset() {
+	c.Collector = defaultGRPCCollector
+	c.ServiceKey = defaultServiceKey
+	c.TrustedPath = defaultTrustedPath
+	c.CollectorUDP = defaultCollectorUDP
+	c.ReporterType = defaultReporter
+	c.TracingMode = defaultTracingMode
+	c.PrependDomain = defaultPrependDomain
+	c.HostAlias = defaultHostnameAlias
+	c.SkipVerify = defaultInsecureSkipVerify
+	c.Precision = defaultHistogramPrecision
+	c.Reporter = defaultReporterOptions()
+	c.Disabled = defaultDisabled
+}
+
+// loadEnvs loads environment variable values and update the Config object.
+func (c *Config) loadEnvs() {
 	// TODO: reflect?
+	c.reset()
 	c.Collector = envs["Collector"].LoadString(c.Collector)
 	c.ServiceKey = envs["ServiceKey"].LoadString(c.ServiceKey)
 
@@ -239,67 +263,97 @@ func (c *Config) LoadEnvs() {
 	c.SkipVerify = envs["SkipVerify"].LoadBool(c.SkipVerify)
 
 	c.Precision = envs["Precision"].LoadInt(c.Precision)
+	c.Disabled = envs["Disabled"].LoadBool(c.Disabled)
 
-	c.Reporter.LoadEnvs()
+	c.Reporter.loadEnvs()
 }
 
-// LoadConfigFile loads from the config file
-func (c *Config) LoadConfigFile(path string) error {
+// loadConfigFile loads from the config file
+func (c *Config) loadConfigFile(path string) error {
 	log.Debug("Loading from config file is not implemented.")
 	return nil
 }
 
 // GetCollector returns the collector address
 func (c *Config) GetCollector() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.Collector
 }
 
 // GetServiceKey returns the service key
 func (c *Config) GetServiceKey() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.ServiceKey
 }
 
 // GetTrustedPath returns the file path of the cert file
 func (c *Config) GetTrustedPath() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.TrustedPath
 }
 
 // GetReporterType returns the reporter type
 func (c *Config) GetReporterType() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.ReporterType
 }
 
 // GetCollectorUDP returns the UDP collector host
 func (c *Config) GetCollectorUDP() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.CollectorUDP
 }
 
 // GetTracingMode returns the UDP collector host
 func (c *Config) GetTracingMode() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.TracingMode
 }
 
 // GetPrependDomain returns the UDP collector host
 func (c *Config) GetPrependDomain() bool {
+	c.RLock()
+	defer c.RUnlock()
 	return c.PrependDomain
 }
 
 // GetHostAlias returns the UDP collector host
 func (c *Config) GetHostAlias() string {
+	c.RLock()
+	defer c.RUnlock()
 	return c.HostAlias
 }
 
 // GetSkipVerify returns the UDP collector host
 func (c *Config) GetSkipVerify() bool {
+	c.RLock()
+	defer c.RUnlock()
 	return c.SkipVerify
 }
 
 // GetPrecision returns the UDP collector host
 func (c *Config) GetPrecision() int {
+	c.RLock()
+	defer c.RUnlock()
 	return c.Precision
+}
+
+// GetDisabled returns if the agent is disabled
+func (c *Config) GetDisabled() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.Disabled
 }
 
 // GetReporter returns the reporter options struct
 func (c *Config) GetReporter() *ReporterOptions {
+	c.RLock()
+	defer c.RUnlock()
 	return c.Reporter
 }

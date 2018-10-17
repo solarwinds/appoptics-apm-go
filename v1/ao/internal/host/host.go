@@ -53,10 +53,6 @@ var (
 	hm          sync.RWMutex
 )
 
-func init() {
-	go observer()
-}
-
 // CurrentID returns a copyID of the current ID
 func CurrentID() ID {
 	hostId.waitForReady()
@@ -76,11 +72,17 @@ func PID() int {
 	return pid
 }
 
+// Start starts the host observer as a standalone goroutine, which will refresh
+// the host metadata periodically
+func Start() {
+	go observer()
+}
+
 // Stop stops the host metadata refreshing goroutine
 func Stop() {
 	exitClosed.Do(func() {
 		close(exit)
-		log.Warning(stopHostIdObserverByUser)
+		log.Info(stopHostIdObserverByUser)
 	})
 }
 

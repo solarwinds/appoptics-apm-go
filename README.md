@@ -202,6 +202,7 @@ func myHandler( w http.ResponseWriter, r *http.Request ) {
     q1L.End()
 
     fmt.Fprintf(w, "I ran a query")
+}
 
 func main() {
     http.HandleFunc("/endpoint", ao.HTTPHandler(myHandler))
@@ -260,13 +261,13 @@ logically matches your application; for more information [see our custom span
 documentation](https://docs.appoptics.com/kb/apm_tracing/custom_instrumentation/).
 
 The [Go blog](https://blog.golang.org/context) recommends propagating request context using the
-package [golang.org/x/net/context](godoc.org/golang.org/x/net/context): "At Google, we require that
-Go programmers pass a [Context](https://godoc.org/golang.org/x/net/context) parameter as the first
+package [context](godoc.org/context): "At Google, we require that
+Go programmers pass a [Context](https://godoc.org/context) parameter as the first
 argument to every function on the call path between incoming and outgoing requests." Frameworks like
 [Gin](https://godoc.org/github.com/gin-gonic/gin#Context) and
 [Gizmo](https://godoc.org/github.com/NYTimes/gizmo/server#ContextHandler) use Context
 implementations, for example. We provide helper methods that allow a Trace to be associated with a
-[context.Context](https://godoc.org/golang.org/x/net/context) interface; for example,
+[context.Context](https://godoc.org/context) interface; for example,
 [ao.BeginSpan](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginSpan) returns both a
 new Span and an associated context, and
 [ao.Info(ctx)](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Info) and
@@ -315,6 +316,7 @@ These environment variables may be set:
 |APPOPTICS_TRUSTEDPATH|No||Path to the certificate used to verify the collector endpoint.|
 |APPOPTICS_INSECURE_SKIP_VERIFY|No|false|Skip verification of the collector endpoint. Possible values: true, false|
 |APPOPTICS_PREPEND_DOMAIN|No|false|Prepend the domain name to the transaction name. Possible values: true, false|
+|APPOPTICS_DISABLED|No|false|Disable the agent. Possible values: true, false|
 
 
 ## Help and examples

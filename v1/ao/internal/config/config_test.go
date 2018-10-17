@@ -18,15 +18,19 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsPrependDomain, "true")
 	os.Setenv(envAppOpticsHistogramPrecision, "2")
 	os.Setenv(envAppOpticsServiceKey, key1)
+	os.Setenv(envAppOpticsDisabled, "true")
 
 	c := NewConfig()
 	assert.Equal(t, "example.com:12345", c.GetCollector())
 	assert.Equal(t, true, c.PrependDomain)
 	assert.Equal(t, 2, c.Precision)
+	assert.Equal(t, true, c.Disabled)
 
 	os.Setenv(envAppOpticsCollector, "test.abc:8080")
+	os.Setenv(envAppOpticsDisabled, "false")
 	c.RefreshConfig()
 	assert.Equal(t, "test.abc:8080", c.GetCollector())
+	assert.Equal(t, false, c.Disabled)
 
 	c = NewConfig(
 		WithCollector("hello.world"),
@@ -39,11 +43,13 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsInsecureSkipVerify, "false")
 	os.Setenv(envAppOpticsTrustedPath, "test.crt")
 	os.Setenv(envAppOpticsCollectorUDP, "hello.udp")
+	os.Setenv(envAppOpticsDisabled, "invalidValue")
 
 	c.RefreshConfig()
-	assert.Equal(t, key1, c.GetServiceKey())
+	assert.Equal(t, ToServiceKey(key1), c.GetServiceKey())
 	assert.Equal(t, "test", c.GetHostAlias())
 	assert.Equal(t, false, c.GetSkipVerify())
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
 	assert.Equal(t, "hello.udp", c.GetCollectorUDP())
+	assert.Equal(t, false, c.GetDisabled())
 }

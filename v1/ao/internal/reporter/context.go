@@ -323,14 +323,13 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 	if mdStr != "" {
 		var err error
 		if ctx, err = newContextFromMetadataString(mdStr); err != nil {
-			log.Info("passed in x-trace seems invalid, ignoring")
+			log.Debug("passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
-			log.Info("passed in x-trace has wrong version, ignoring")
+			log.Debug("passed in x-trace has wrong version, ignoring")
 		} else if ctx.IsSampled() {
 			traced = true
 			addCtxEdge = true
 		} else {
-			log.Info("passed in x-trace indicates that request is not being sampled")
 			return ctx, true
 		}
 	}

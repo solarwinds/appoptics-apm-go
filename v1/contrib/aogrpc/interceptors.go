@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
-	"golang.org/x/net/context"
+	"context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )

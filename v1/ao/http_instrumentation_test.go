@@ -18,13 +18,14 @@ import (
 
 	"os"
 
+	"context"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 )
 
 func handler404(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(404) }
@@ -50,13 +51,17 @@ func checkAOContextAndSetCustomTxnName(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Concurrently set custom transaction names
+	var sw sync.WaitGroup
+	sw.Add(10)
 	for i := 0; i < 10; i++ {
 		go func(i int) {
 			time.Sleep(time.Duration(rand.Intn(5)) * time.Millisecond)
 			ao.SetTransactionName(r.Context(), "my-custom-transaction-name-"+strconv.Itoa(i))
+			sw.Done()
 		}(i)
 	}
-	time.Sleep(10 * time.Millisecond)
+	sw.Wait()
+
 	ao.SetTransactionName(r.Context(), "final-"+ao.GetTransactionName(r.Context()))
 	xtrace = t.MetadataString()
 }
@@ -67,12 +72,12 @@ func handlerDoubleWrapped(w http.ResponseWriter, r *http.Request) {
 	defer t.End()
 }
 
-func httpTestWithEndpoint(f http.HandlerFunc, ep string) *httptest.ResponseRecorder {
-	return httpTestWithEndpointWithHeaders(f, ep, nil)
+func httpTestWithEndpoint(f http.HandlerFunc, ep string, opts ...ao.SpanOpt) *httptest.ResponseRecorder {
+	return httpTestWithEndpointWithHeaders(f, ep, nil, opts...)
 }
 
-func httpTestWithEndpointWithHeaders(f http.HandlerFunc, ep string, hd map[string]string) *httptest.ResponseRecorder {
-	h := http.HandlerFunc(ao.HTTPHandler(f))
+func httpTestWithEndpointWithHeaders(f http.HandlerFunc, ep string, hd map[string]string, opts ...ao.SpanOpt) *httptest.ResponseRecorder {
+	h := http.HandlerFunc(ao.HTTPHandler(f, opts...))
 	// test a single GET request
 	req, _ := http.NewRequest("GET", ep, nil)
 	for k, v := range hd {
@@ -83,8 +88,8 @@ func httpTestWithEndpointWithHeaders(f http.HandlerFunc, ep string, hd map[strin
 	return w
 }
 
-func httpTest(f http.HandlerFunc) *httptest.ResponseRecorder {
-	return httpTestWithEndpoint(f, "http://test.com/hello?testq")
+func httpTest(f http.HandlerFunc, opts ...ao.SpanOpt) *httptest.ResponseRecorder {
+	return httpTestWithEndpoint(f, "http://test.com/hello?testq", opts...)
 }
 
 func TestHTTPHandler404(t *testing.T) {
@@ -182,7 +187,9 @@ func TestHTTPSpan(t *testing.T) {
 	assert.Equal(t, 200, m.Status)
 	assert.Equal(t, "GET", m.Method)
 	assert.False(t, m.HasError)
-	assert.InDelta(t, (25*time.Millisecond + nullDuration).Seconds(), m.Duration.Seconds(), (10 * time.Millisecond).Seconds())
+	assert.InDelta(t, (25*time.Millisecond + nullDuration).Seconds(),
+		m.Duration.Seconds(), (10 * time.Millisecond).Seconds(),
+		fmt.Sprintf("%v, %v", nullDuration, m.Duration))
 
 	m, ok = r.SpanMessages[3].(*reporter.HTTPSpanMessage)
 	assert.True(t, ok)
@@ -616,7 +623,7 @@ func AliceHandler(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
 	l.End() // end HTTP client timing
-	//w.WriteHeader(200)
+	// w.WriteHeader(200)
 	if err != nil {
 		w.Write([]byte(`{"error":true}`))
 	} else {
@@ -800,4 +807,30 @@ func TestConcurrentAppNoTrace(t *testing.T) {
 
 	// shouldn't report anything
 	assert.Len(t, r.EventBufs, 0)
+}
+
+func TestHTTPHandlerOpts(t *testing.T) {
+	r := reporter.SetTestReporter() // set up test reporter
+	response := httpTest(handler404, ao.WithBackTrace())
+	assert.Len(t, response.HeaderMap[ao.HTTPHeaderName], 1)
+
+	r.Close(2)
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+		// entry event should have no edges
+		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
+			assert.Equal(t, "/hello", n.Map["URL"])
+			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+			assert.Equal(t, "GET", n.Map["Method"])
+			assert.Equal(t, "testq", n.Map["Query-String"])
+			assert.NotNil(t, n.Map[ao.KeyBackTrace])
+		}},
+		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
+			// assert that response X-Trace header matches trace exit event
+			assert.Equal(t, response.HeaderMap.Get(ao.HTTPHeaderName), n.Map[ao.HTTPHeaderName])
+			assert.EqualValues(t, response.Code, n.Map["Status"])
+			assert.EqualValues(t, 404, n.Map["Status"])
+			assert.Equal(t, "ao_test", n.Map["Controller"])
+			assert.Equal(t, "handler404", n.Map["Action"])
+		}},
+	})
 }

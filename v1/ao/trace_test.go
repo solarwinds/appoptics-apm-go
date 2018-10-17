@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
@@ -34,6 +34,7 @@ func TestTraceMetadata(t *testing.T) {
 		}},
 	})
 }
+
 func TestNoTraceMetadata(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterDisableTracing())
 
@@ -42,7 +43,7 @@ func TestNoTraceMetadata(t *testing.T) {
 	md := tr.ExitMetadata()
 	tr.EndCallback(func() ao.KVMap { return ao.KVMap{"Not": "reported"} })
 
-	assert.Equal(t, md, "")
+	assert.NotEqual(t, "", md)
 	assert.Len(t, r.EventBufs, 0)
 }
 
@@ -131,7 +132,7 @@ func traceExampleCtx(t *testing.T, ctx context.Context) {
 func f0(ctx context.Context) {
 	defer ao.BeginProfile(ctx, "f0").End()
 
-	//	l, _ := ao.BeginSpan(ctx, "http.Get", "RemoteURL", "http://a.b")
+	// 	l, _ := ao.BeginSpan(ctx, "http.Get", "RemoteURL", "http://a.b")
 	l := ao.BeginRemoteURLSpan(ctx, "http.Get", "http://a.b")
 	time.Sleep(5 * time.Millisecond)
 	// _, _ = http.Get("http://a.b")
@@ -307,7 +308,7 @@ func TestNoTraceFromMetadata(t *testing.T) {
 	md := tr.ExitMetadata()
 	tr.End()
 
-	assert.Equal(t, md, "")
+	assert.NotEqual(t, "", md)
 	assert.Len(t, r.EventBufs, 0)
 }
 func TestNoTraceFromBadMetadata(t *testing.T) {
@@ -318,7 +319,7 @@ func TestNoTraceFromBadMetadata(t *testing.T) {
 	tr := ao.NewTraceFromID("test", incomingID, nil)
 	md := tr.ExitMetadata()
 	tr.End("Edge", "823723875") // should not report
-	assert.Equal(t, "", md)
+	assert.NotEqual(t, "", md)
 	assert.Len(t, r.EventBufs, 0)
 }
 
@@ -347,4 +348,27 @@ func TestNullTrace(t *testing.T) {
 	tr.End()
 	assert.Equal(t, md, "")
 	assert.Len(t, r.EventBufs, 0)
+}
+
+func TestTraceWithOptions(t *testing.T) {
+	r := reporter.SetTestReporter()
+
+	tr := ao.NewTraceWithOptions("test", ao.SpanOptions{})
+	tr.End()
+
+	tr = ao.NewTraceWithOptions("testWithBacktrace", ao.SpanOptions{WithBackTrace: true})
+	tr.End()
+
+	r.Close(4)
+	g.AssertGraph(t, r.EventBufs, 4, g.AssertNodeMap{
+		// entry event should have no edges
+		{"test", "entry"}: {},
+		{"test", "exit"}: {Edges: g.Edges{{"test", "entry"}}, Callback: func(n g.Node) {
+			assert.Nil(t, n.Map[ao.KeyBackTrace])
+		}},
+		{"testWithBacktrace", "entry"}: {Callback: func(n g.Node) {
+			assert.NotNil(t, n.Map[ao.KeyBackTrace])
+		}},
+		{"testWithBacktrace", "exit"}: {Edges: g.Edges{{"testWithBacktrace", "entry"}}},
+	})
 }

@@ -70,7 +70,7 @@ func initLog() {
 
 // ToLogLevel converts a string to a log level, or returns false for any error
 func ToLogLevel(level string) (LogLevel, bool) {
-	lvl := WARNING
+	lvl := defaultLogLevel
 
 	// Accept integers for backward-compatibility.
 	if i, err := strconv.Atoi(level); err == nil {
@@ -120,7 +120,7 @@ func StrToLevel(e string) (LogLevel, error) {
 	if err == nil {
 		return LogLevel(offset), nil
 	} else {
-		return ERROR, err
+		return defaultLogLevel, err
 	}
 }
 
@@ -159,16 +159,14 @@ func logIt(level LogLevel, msg string, args []interface{}) {
 		// skip = 2 is used here as there are wrappers on top of `logIt` (Info,
 		// Infof, Error, etc). By skipping two layers (logIt and its wrapper), you may get
 		// the information of real callers of the logging functions.
-		pc, file, line, ok := runtime.Caller(numberOfLayersToSkip)
+		_, file, line, ok := runtime.Caller(numberOfLayersToSkip)
 		if ok {
-			path := strings.Split(runtime.FuncForPC(pc).Name(), ".")
-			name := path[len(path)-1]
-			pre = fmt.Sprintf("%s %s#%d %s(): ", LevelStr[level], filepath.Base(file), line, name)
+			pre = fmt.Sprintf("%-5s [AO] %s:%d ", LevelStr[level], filepath.Base(file), line)
 		} else {
-			pre = fmt.Sprintf("%s %s#%s %s(): ", LevelStr[level], "na", "na", "na")
+			pre = fmt.Sprintf("%-5s [AO] %s:%s ", LevelStr[level], "na", "na")
 		}
 	} else { // avoid expensive reflections in production
-		pre = fmt.Sprintf("%s ", LevelStr[level])
+		pre = fmt.Sprintf("%-5s [AO] ", LevelStr[level])
 	}
 
 	buffer.WriteString(pre)
