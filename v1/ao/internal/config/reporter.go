@@ -123,7 +123,7 @@ func (r *ReporterOptions) GetEventBatchSize() int64 {
 }
 
 // LoadEnvs load environment variables and refresh reporter options.
-func (r *ReporterOptions) LoadEnvs() {
+func (r *ReporterOptions) loadEnvs() {
 	i := envs["EventsFlushInterval"].LoadInt64(r.EvtFlushInterval)
 	r.SetEventFlushInterval(i)
 

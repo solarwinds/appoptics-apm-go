@@ -24,8 +24,8 @@ const (
 	metricsTransactionsMaxDefault = 200 // default max amount of transaction names we allow per cycle
 	metricsHistPrecisionDefault   = 2   // default histogram precision
 
-	metricsTagNameLenghtMax  = 64  // max number of characters for tag names
-	metricsTagValueLenghtMax = 255 // max number of characters for tag values
+	metricsTagNameLengthMax  = 64  // max number of characters for tag names
+	metricsTagValueLengthMax = 255 // max number of characters for tag values
 )
 
 // Special transaction names
@@ -107,12 +107,12 @@ type TransMap struct {
 	// is updated periodically.
 	// The default value metricsTransactionsMaxDefault is used when a new TransMap
 	// is initialized.
-	currCap int
+	currCap int32
 	// The maximum capacity which is set by the server settings. This update usually happens in
 	// between two metrics reporting cycles. To avoid affecting the map capacity of the current reporting
 	// cycle, the new capacity got from the server is stored in nextCap and will only be flushed to currCap
 	// when the Reset() is called.
-	nextCap int
+	nextCap int32
 	// Whether there is an overflow. Overflow means the user tried to store more transaction names
 	// than the capacity defined by settings.
 	// This flag is cleared in every metrics cycle.
@@ -123,7 +123,7 @@ type TransMap struct {
 }
 
 // NewTransMap initializes a new TransMap struct
-func NewTransMap(cap int) *TransMap {
+func NewTransMap(cap int32) *TransMap {
 	return &TransMap{
 		transactionNames: make(map[string]struct{}),
 		currCap:          cap,
@@ -134,10 +134,17 @@ func NewTransMap(cap int) *TransMap {
 }
 
 // SetCap sets the capacity of the transaction map
-func (t *TransMap) SetCap(cap int) {
+func (t *TransMap) SetCap(cap int32) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.nextCap = cap
+}
+
+// Cap returns the current capacity
+func (t *TransMap) Cap() int32 {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	return t.currCap
 }
 
 // ResetTransMap resets the transaction map to a initialized state. The new capacity got from the
@@ -159,7 +166,7 @@ func (t *TransMap) IsWithinLimit(name string) bool {
 
 	if _, ok := t.transactionNames[name]; !ok {
 		// only record if we haven't reached the limits yet
-		if len(t.transactionNames) < t.currCap {
+		if int32(len(t.transactionNames)) < t.currCap {
 			t.transactionNames[name] = struct{}{}
 			return true
 		}
@@ -548,11 +555,11 @@ func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
 	if len(m.Tags) > 0 {
 		start := bsonAppendStartObject(bbuf, "tags")
 		for k, v := range m.Tags {
-			if len(k) > metricsTagNameLenghtMax {
-				k = k[0:metricsTagNameLenghtMax]
+			if len(k) > metricsTagNameLengthMax {
+				k = k[0:metricsTagNameLengthMax]
 			}
-			if len(v) > metricsTagValueLenghtMax {
-				v = v[0:metricsTagValueLenghtMax]
+			if len(v) > metricsTagValueLengthMax {
+				v = v[0:metricsTagValueLengthMax]
 			}
 			bsonAppendString(bbuf, k, v)
 		}
@@ -584,11 +591,11 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 	if len(h.tags) > 0 {
 		start := bsonAppendStartObject(bbuf, "tags")
 		for k, v := range h.tags {
-			if len(k) > metricsTagNameLenghtMax {
-				k = k[0:metricsTagNameLenghtMax]
+			if len(k) > metricsTagNameLengthMax {
+				k = k[0:metricsTagNameLengthMax]
 			}
-			if len(v) > metricsTagValueLenghtMax {
-				v = v[0:metricsTagValueLenghtMax]
+			if len(v) > metricsTagValueLengthMax {
+				v = v[0:metricsTagValueLengthMax]
 			}
 			bsonAppendString(bbuf, k, v)
 		}

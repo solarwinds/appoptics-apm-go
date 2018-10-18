@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
-	"golang.org/x/net/context"
+	"context"
 )
 
 // measure a DB query

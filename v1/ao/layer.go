@@ -3,36 +3,77 @@
 package ao
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"runtime"
 	"runtime/debug"
 	"sync"
 
-	"errors"
-
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
-	"golang.org/x/net/context"
 )
 
 const (
+	// MaxCustomTransactionNameLength defines the maximum length of a user-provided
+	// transaction name.
 	MaxCustomTransactionNameLength = 255
 )
 
-// Span is used to measure a span of time associated with an actvity
+// The keys to be used in reporting events
+const (
+	// KeyBackTrace is the key to report current stack trace.
+	KeyBackTrace = "Backtrace"
+)
+
+// Keys for internal use
+const (
+	keyEdge            = "Edge"
+	keySpec            = "Spec"
+	keyErrorClass      = "ErrorClass"
+	keyErrorMsg        = "ErrorMsg"
+	keyAsync           = "Async"
+	keyLanguage        = "Language"
+	keyProfileName     = "ProfileName"
+	keyFunctionName    = "FunctionName"
+	keyFile            = "File"
+	keyLineNumber      = "LineNumber"
+	keyStatus          = "Status"
+	keyController      = "Controller"
+	keyAction          = "Action"
+	keyTransactionName = "TransactionName"
+	keyMethod          = "Method"
+	keyHTTPHost        = "HTTP-Host"
+	keyURL             = "URL"
+	keyRemoteHost      = "Remote-Host"
+	keyQueryString     = "Query-String"
+	keyRemoteStatus    = "RemoteStatus"
+	keyContentLength   = "ContentLength"
+)
+
+// Span is used to measure a span of time associated with an activity
 // such as an RPC call, DB query, or method invocation.
 type Span interface {
 	// BeginSpan starts a new Span, returning a child of this Span.
 	BeginSpan(spanName string, args ...interface{}) Span
+
+	// BeginSpanWithOptions starts a new child span with provided options
+	BeginSpanWithOptions(spanName string, opts SpanOptions, args ...interface{}) Span
+
 	// BeginProfile starts a new Profile, used to measure a named span
 	// of time spent in this Span.
 	BeginProfile(profileName string, args ...interface{}) Profile
 	// End ends a Span, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
-	// Add additional KV pairs that will be serialized (and dereferenced, for pointer
-	// values) at the end of this trace's span.
+	// AddEndArgs adds additional KV pairs that will be serialized (and
+	// dereferenced, for pointer values) at the end of this trace's span.
 	AddEndArgs(args ...interface{})
 
 	// Info reports KV pairs provided by args for this Span.
 	Info(args ...interface{})
+
+	// InfoWithOptions reports a new info event with the KVs and options provided
+	InfoWithOptions(opts SpanOptions, args ...interface{})
+
 	// Error reports details about an error (along with a stack trace) for this Span.
 	Error(class, msg string)
 	// Err reports details about error err (along with a stack trace) for this Span.
@@ -49,6 +90,9 @@ type Span interface {
 	// SetAsync(true) provides a hint that this Span is a parent of
 	// concurrent overlapping child Spans.
 	SetAsync(bool)
+
+	// SetOperationName sets or changes the span's operation name
+	SetOperationName(string)
 
 	// SetTransactionName sets this service's transaction name.
 	// It is used for categorizing service metrics and traces in AppOptics.
@@ -74,11 +118,70 @@ type Profile interface {
 	Err(error)
 }
 
+// SpanOptions defines the options of creating a span
+type SpanOptions struct {
+	// WithBackTrace indicates whether to include the backtrace in BeginSpan
+	// Keep in mind that the cost of this option may be high as it calls
+	// `debug.Stack()` internally to gather the stack trace. Please consider
+	// the impact on performance/memory footprint carefully.
+	WithBackTrace bool
+}
+
+// SpanOpt defines the function type that changes the SpanOptions
+type SpanOpt func(*SpanOptions)
+
+// WithBackTrace returns a function that sets the WithBackTrace flag
+func WithBackTrace() SpanOpt {
+	return func(o *SpanOptions) {
+		o.WithBackTrace = true
+	}
+}
+
 // BeginSpan starts a new Span, provided a parent context and name. It returns a Span
 // and context bound to the new child Span.
 func BeginSpan(ctx context.Context, spanName string, args ...interface{}) (Span, context.Context) {
+	return BeginSpanWithOptions(ctx, spanName, SpanOptions{}, args...)
+}
+
+// addKVsFromOpts adds the KVs correspond to the options to the args
+func addKVsFromOpts(opts SpanOptions, args ...interface{}) []interface{} {
+	kvs := args
+	if opts.WithBackTrace {
+		kvs = mergeKVs(args, []interface{}{KeyBackTrace, string(debug.Stack())})
+	}
+	return kvs
+}
+
+// mergeKVs merges two slices into a single one. An empty slice instead of
+// nil will be returned if both of the arguments are nil.
+func mergeKVs(left []interface{}, right []interface{}) []interface{} {
+	kvs := make([]interface{}, 0, len(left)+len(right))
+	kvs = append(kvs, left...)
+	kvs = append(kvs, right...)
+	return kvs
+}
+
+// fromKVs converts a slice of Key-Value pairs to a KVMap.
+// The dangling element of the slice will be dropped.
+func fromKVs(kvs ...interface{}) KVMap {
+	m := make(KVMap)
+	for idx, val := range kvs {
+		if idx >= len(kvs)-1 {
+			break
+		}
+		if valStr, ok := val.(string); ok {
+			m[valStr] = kvs[idx+1]
+		}
+		idx += 2
+	}
+	return m
+}
+
+// BeginSpanWithOptions starts a span with provided options
+func BeginSpanWithOptions(ctx context.Context, spanName string, opts SpanOptions, args ...interface{}) (Span, context.Context) {
+	kvs := addKVsFromOpts(opts, args...)
 	if parent, ok := fromContext(ctx); ok && parent.ok() { // report span entry from parent context
-		l := newSpan(parent.aoContext().Copy(), spanName, parent, args...)
+		l := newSpan(parent.aoContext().Copy(), spanName, parent, kvs...)
 		return l, newSpanContext(ctx, l)
 	}
 	return nullSpan{}, ctx
@@ -86,8 +189,14 @@ func BeginSpan(ctx context.Context, spanName string, args ...interface{}) (Span,
 
 // BeginSpan starts a new Span, returning a child of this Span.
 func (s *layerSpan) BeginSpan(spanName string, args ...interface{}) Span {
+	return s.BeginSpanWithOptions(spanName, SpanOptions{}, args...)
+}
+
+// BeginSpanWithOptions starts a new child span with provided options
+func (s *layerSpan) BeginSpanWithOptions(spanName string, opts SpanOptions, args ...interface{}) Span {
 	if s.ok() { // copy parent context and report entry from child
-		return newSpan(s.aoCtx.Copy(), spanName, s, args...)
+		kvs := addKVsFromOpts(opts, args...)
+		return newSpan(s.aoCtx.Copy(), spanName, s, kvs...)
 	}
 	return nullSpan{}
 }
@@ -124,7 +233,7 @@ func (s *span) End(args ...interface{}) {
 		}
 		args = append(args, s.endArgs...)
 		for _, edge := range s.childEdges { // add Edge KV for each joined child
-			args = append(args, "Edge", edge)
+			args = append(args, keyEdge, edge)
 		}
 		_ = s.aoCtx.ReportEvent(s.exitLabel(), s.layerName(), args...)
 		s.childEdges = nil // clear child edge list
@@ -137,8 +246,8 @@ func (s *span) End(args ...interface{}) {
 	}
 }
 
-// Add KV pairs as variadic args that will be serialized (and dereferenced, for pointer
-// values) at the end of this trace's span.
+// AddEndArgs adds KV pairs as variadic args that will be serialized (and dereferenced,
+// for pointer values) at the end of this trace's span.
 func (s *layerSpan) AddEndArgs(args ...interface{}) {
 	if s.ok() {
 		// ensure even number of args added
@@ -153,8 +262,14 @@ func (s *layerSpan) AddEndArgs(args ...interface{}) {
 
 // Info reports KV pairs provided by args.
 func (s *layerSpan) Info(args ...interface{}) {
+	s.InfoWithOptions(SpanOptions{}, args...)
+}
+
+// InfoWithOptions reports a new info event with the KVs and options provided
+func (s *layerSpan) InfoWithOptions(opts SpanOptions, args ...interface{}) {
 	if s.ok() {
-		_ = s.aoCtx.ReportEvent(reporter.LabelInfo, s.layerName(), args...)
+		kvs := addKVsFromOpts(opts, args...)
+		s.aoCtx.ReportEvent(reporter.LabelInfo, s.layerName(), kvs...)
 	}
 }
 
@@ -167,6 +282,7 @@ func (s *layerSpan) MetadataString() string {
 	return ""
 }
 
+// IsSampled indicates if the layer is sampled.
 func (s *layerSpan) IsSampled() bool {
 	if s.ok() {
 		return s.aoCtx.IsSampled()
@@ -177,21 +293,31 @@ func (s *layerSpan) IsSampled() bool {
 // SetAsync provides a hint that this Span is a parent of concurrent overlapping child Spans.
 func (s *layerSpan) SetAsync(val bool) {
 	if val {
-		s.AddEndArgs("Async", true)
+		s.AddEndArgs(keyAsync, true)
 	}
+}
+
+// SetOperationName sets the name of this span
+func (s *span) SetOperationName(name string) {
+	s.setName(name)
 }
 
 // SetTransactionName sets the transaction name used to categorize service requests in AppOptics.
 func (s *span) SetTransactionName(name string) error {
 	if !s.ok() {
-		return errors.New("failed to set custom transaction name, invalid span")
+		return errEndedSpan
 	}
 	if name == "" || len(name) > MaxCustomTransactionNameLength {
-		return errors.New("valid length for custom transaction name: 1~255")
+		return errTransactionNameLength
 	}
 	s.aoCtx.SetTransactionName(name)
 	return nil
 }
+
+var (
+	errEndedSpan             = errors.New("span is ended")
+	errTransactionNameLength = fmt.Errorf("name must not be longer than %d", MaxCustomTransactionNameLength)
+)
 
 // GetTransactionName returns the current value of the transaction name
 func (s *span) GetTransactionName() string {
@@ -202,10 +328,10 @@ func (s *span) GetTransactionName() string {
 func (s *span) Error(class, msg string) {
 	if s.ok() {
 		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
-			"Spec", "error",
-			"ErrorClass", class,
-			"ErrorMsg", msg,
-			"Backtrace", string(debug.Stack()))
+			keySpec, "error",
+			keyErrorClass, class,
+			keyErrorMsg, msg,
+			KeyBackTrace, string(debug.Stack()))
 	}
 }
 
@@ -233,13 +359,17 @@ type layerSpan struct{ span }   // satisfies Span
 type profileSpan struct{ span } // satisfies Profile
 type nullSpan struct{}          // a span that is not tracing; satisfies Span & Profile
 
-func (s nullSpan) BeginSpan(spanName string, args ...interface{}) Span   { return nullSpan{} }
+func (s nullSpan) BeginSpan(spanName string, args ...interface{}) Span { return nullSpan{} }
+func (s nullSpan) BeginSpanWithOptions(spanName string, opts SpanOptions, args ...interface{}) Span {
+	return nullSpan{}
+}
 func (s nullSpan) BeginProfile(name string, args ...interface{}) Profile { return nullSpan{} }
 func (s nullSpan) End(args ...interface{})                               {}
 func (s nullSpan) AddEndArgs(args ...interface{})                        {}
 func (s nullSpan) Error(class, msg string)                               {}
 func (s nullSpan) Err(err error)                                         {}
 func (s nullSpan) Info(args ...interface{})                              {}
+func (s nullSpan) InfoWithOptions(opts SpanOptions, args ...interface{}) {}
 func (s nullSpan) IsReporting() bool                                     { return false }
 func (s nullSpan) addChildEdge(reporter.Context)                         {}
 func (s nullSpan) addProfile(Profile)                                    {}
@@ -248,6 +378,7 @@ func (s nullSpan) aoContext() reporter.Context                           { retur
 func (s nullSpan) MetadataString() string                                { return "" }
 func (s nullSpan) IsSampled() bool                                       { return false }
 func (s nullSpan) SetAsync(bool)                                         {}
+func (s nullSpan) SetOperationName(string)                               {}
 func (s nullSpan) SetTransactionName(string) error                       { return nil }
 func (s nullSpan) GetTransactionName() string                            { return "" }
 
@@ -280,6 +411,7 @@ type labeler interface {
 	entryLabel() reporter.Label
 	exitLabel() reporter.Label
 	layerName() string
+	setName(string)
 }
 type spanLabeler struct{ name string }
 type profileLabeler struct{ name string }
@@ -288,9 +420,11 @@ type profileLabeler struct{ name string }
 func (l spanLabeler) entryLabel() reporter.Label    { return reporter.LabelEntry }
 func (l spanLabeler) exitLabel() reporter.Label     { return reporter.LabelExit }
 func (l spanLabeler) layerName() string             { return l.name }
+func (l spanLabeler) setName(name string)           { l.name = name }
 func (l profileLabeler) entryLabel() reporter.Label { return reporter.LabelProfileEntry }
 func (l profileLabeler) exitLabel() reporter.Label  { return reporter.LabelProfileExit }
 func (l profileLabeler) layerName() string          { return "" }
+func (l profileLabeler) setName(name string)        { l.name = name }
 
 func newSpan(aoCtx reporter.Context, spanName string, parent Span, args ...interface{}) Span {
 	ll := spanLabeler{spanName}
@@ -310,13 +444,13 @@ func newProfile(aoCtx reporter.Context, profileName string, parent Span, args ..
 	}
 	pl := profileLabeler{profileName}
 	if err := aoCtx.ReportEvent(pl.entryLabel(), pl.layerName(), // report profile entry
-		"Language", "go", "ProfileName", profileName,
-		"FunctionName", fname, "File", file, "LineNumber", line,
+		keyLanguage, "go", keyProfileName, profileName,
+		keyFunctionName, fname, keyFile, file, keyLineNumber, line,
 	); err != nil {
 		return nullSpan{}
 	}
 	p := &profileSpan{span{aoCtx: aoCtx.Copy(), labeler: pl, parent: parent,
-		endArgs: []interface{}{"Language", "go", "ProfileName", profileName}}}
+		endArgs: []interface{}{keyLanguage, "go", keyProfileName, profileName}}}
 	if parent != nil && parent.ok() {
 		parent.addProfile(p)
 	}

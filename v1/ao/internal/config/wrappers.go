@@ -34,6 +34,9 @@ var GetSkipVerify = conf.GetSkipVerify
 // GetPrecision is a wrapper to the method of the global config
 var GetPrecision = conf.GetPrecision
 
+// GetDisabled is a wrapper to the method of the global config
+var GetDisabled = conf.GetDisabled
+
 // ReporterOpts is a wrapper to the method of the global config
 var ReporterOpts = conf.GetReporter
 

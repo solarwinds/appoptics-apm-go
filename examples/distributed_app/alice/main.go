@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"sync"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 )

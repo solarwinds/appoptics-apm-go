@@ -5,7 +5,6 @@ package reporter
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/binary"
 	"io/ioutil"
 	"math"
 	"strings"
@@ -23,6 +22,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -210,8 +210,8 @@ type grpcReporter struct {
 // gRPC reporter errors
 var (
 	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed reporter")
+	ErrShutdownTimeout        = errors.New("Shutdown timeout")
 	ErrReporterIsClosed       = errors.New("the reporter is closed")
-	ErrMaxRetriesExceeded     = errors.New("maximum retries exceeded")
 )
 
 const (
@@ -225,10 +225,6 @@ const (
 //
 // returns	GRPC reporter object
 func newGRPCReporter() reporter {
-	if reportingDisabled {
-		return &nullReporter{}
-	}
-
 	// service key is required, so bail out if not found
 	serviceKey := config.GetServiceKey()
 	if !config.IsValidServiceKey(serviceKey) {
@@ -278,8 +274,8 @@ func newGRPCReporter() reporter {
 		serviceKey: serviceKey,
 
 		eventMessages:  make(chan []byte, 10000),
-		spanMessages:   make(chan SpanMessage, 1024),
-		statusMessages: make(chan []byte, 1024),
+		spanMessages:   make(chan SpanMessage, 10000),
+		statusMessages: make(chan []byte, 100),
 
 		cond: sync.NewCond(&sync.Mutex{}),
 		done: make(chan struct{}),
@@ -287,7 +283,8 @@ func newGRPCReporter() reporter {
 
 	r.start()
 
-	log.Warningf("AppOptics reporter is initialized: %v", r.done)
+	log.Warningf("AppOptics reporter v%s is initialized. id: %v Go version: %s.",
+		utils.Version(), r.done, utils.GoVersion())
 	return r
 }
 
@@ -304,6 +301,8 @@ func (r *grpcReporter) setGracefully(flag bool) {
 }
 
 func (r *grpcReporter) start() {
+	// start up the host observer
+	host.Start()
 	// start up long-running goroutine eventSender() which listens on the events message channel
 	// and reports incoming events to the collector using GRPC
 	go r.eventSender()
@@ -354,10 +353,11 @@ func (r *grpcReporter) Shutdown(ctx context.Context) error {
 			select {
 			case <-r.flushed():
 			case <-ctx.Done():
-				err = errors.New("Shutdown timeout")
+				err = ErrShutdownTimeout
 			}
 
 			r.closeConns()
+			r.setReady(false)
 			host.Stop()
 			log.Warning("AppOptics agent is stopped.")
 		})
@@ -456,7 +456,7 @@ func (c *grpcConnection) connect() error {
 	// Skip it if the connection is not stale - someone else may have done
 	// the connection.
 	if c.isActive() {
-		log.Debug("[%s] Someone else has done the redirection.", c.name)
+		log.Debugf("[%s] Someone else has done the redirection.", c.name)
 		return nil
 	}
 	// create a new connection object for this client
@@ -597,7 +597,7 @@ type Backoff func(retries int, wait func(d time.Duration)) error
 // the retries value. It returns immediately if the retries exceeds a threshold.
 func DefaultBackoff(retries int, wait func(d time.Duration)) error {
 	if retries > grpcMaxRetries {
-		return ErrMaxRetriesExceeded
+		return errGiveUpAfterRetries
 	}
 	delay := int(grpcRetryDelayInitial * math.Pow(grpcRetryDelayMultiplier, float64(retries-1)))
 	if delay > grpcRetryDelayMax*1000 {
@@ -684,7 +684,7 @@ func (r *grpcReporter) eventSender() {
 		if evtBucket.Drainable() || closing {
 			w := evtBucket.Watermark()
 			batches <- evtBucket.Drain()
-			log.Debugf("Pushed %d bytes (%d events) to the sender.", w, len(batches))
+			log.Debugf("Pushed %d bytes to the sender.", w)
 		}
 
 		if closing {
@@ -733,8 +733,9 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 			case errInvalidServiceKey:
 				r.ShutdownNow()
 			case nil:
+				log.Info(method.CallSummary())
 			default:
-				log.Infof("eventBatchSender: %s", err)
+				log.Warningf("eventBatchSender: %s", err)
 			}
 		}
 
@@ -782,8 +783,9 @@ func (r *grpcReporter) sendMetrics(msg []byte) {
 	case errInvalidServiceKey:
 		r.ShutdownNow()
 	case nil:
+		log.Info(method.CallSummary())
 	default:
-		log.Infof("sendMetrics: %s", err)
+		log.Warningf("sendMetrics: %s", err)
 	}
 }
 
@@ -802,6 +804,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	case errInvalidServiceKey:
 		r.ShutdownNow()
 	case nil:
+		log.Info(method.CallSummary())
 		r.updateSettings(method.Resp)
 	default:
 		log.Infof("getSettings: %s", err)
@@ -812,40 +815,21 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 // settings	new settings
 func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	for _, s := range settings.GetSettings() {
-		log.Debugf("Got sampling setting: %+v\n", s)
-		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Value, s.Ttl, &s.Arguments)
+		log.Debugf("Got sampling setting: %#v\n", s)
+		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Value, s.Ttl, s.Arguments)
 
 		// update MetricsFlushInterval
-		var i int32
-		if interval, ok := s.Arguments["MetricsFlushInterval"]; ok {
-			l := len(interval)
-			if l == 4 {
-				i = int32(binary.LittleEndian.Uint32(interval))
-			} else {
-				log.Warningf("Bad MetricsFlushInterval size: %s", l)
-			}
-		} else {
-			i = grpcMetricIntervalDefault
-		}
-		atomic.StoreInt32(&r.collectMetricInterval, i)
+		mi := parseInt32(s.Arguments, kvMetricsFlushInterval, r.collectMetricInterval)
+		atomic.StoreInt32(&r.collectMetricInterval, mi)
 
 		// update events flush interval
-		if interval, ok := s.Arguments["EventsFlushInterval"]; ok {
-			l := len(interval)
-			if l == 4 {
-				newInterval := int64(binary.LittleEndian.Uint32(interval))
-				config.ReporterOpts().SetEventFlushInterval(newInterval)
-			} else {
-				log.Warningf("Bad EventsFlushInterval size: %s", l)
-			}
-		}
+		o := config.ReporterOpts()
+		ei := parseInt32(s.Arguments, kvEventsFlushInterval, int32(o.GetEventFlushInterval()))
+		o.SetEventFlushInterval(int64(ei))
 
 		// update MaxTransactions
-		capacity := metricsTransactionsMaxDefault
-		if max, ok := s.Arguments["MaxTransactions"]; ok {
-			capacity = int(binary.LittleEndian.Uint32(max))
-		}
-		mTransMap.SetCap(capacity)
+		mt := parseInt32(s.Arguments, kvMaxTransactions, mTransMap.Cap())
+		mTransMap.SetCap(mt)
 	}
 
 	if !r.isReady() && hasDefaultSetting() {
@@ -927,6 +911,7 @@ func (r *grpcReporter) statusSender() {
 		case errInvalidServiceKey:
 			r.ShutdownNow()
 		case nil:
+			log.Info(method.CallSummary())
 		default:
 			log.Infof("statusSender: %s", err)
 		}
@@ -982,7 +967,9 @@ func (c *grpcConnection) resetPing() {
 // send a keep alive (ping) request on a given GRPC connection
 func (c *grpcConnection) ping(exit chan struct{}, key string) error {
 	method := newPingMethod(key, c.name)
-	return c.InvokeRPC(exit, method)
+	err := c.InvokeRPC(exit, method)
+	log.Debug(method.CallSummary())
+	return err
 }
 
 // possible errors while issuing an RPC call
@@ -999,11 +986,22 @@ var (
 	// dropped.
 	errTooManyRedirections = errors.New("too many redirections")
 
+	// The destination returned by the collector is not valid.
+	errInvalidRedirectTarget = errors.New("redirection target is empty.")
+
+	// the operation or loop cannot continue as the reporter is exiting.
 	errReporterExiting = errors.New("reporter is exiting")
 
+	// something might be wrong if we run into this error.
 	errShouldNotHappen = errors.New("this should not happen")
 
+	// errNoRetryOnErr means this RPC call method doesn't need retry, e.g., the
+	// Ping method.
 	errNoRetryOnErr = errors.New("method requires no retry")
+
+	// errConnStale means the connection is broken. This usually happens
+	// when an RPC call is timeout.
+	errConnStale = errors.New("connection is stale")
 )
 
 // InvokeRPC makes an RPC call and returns an error if something is broken and
@@ -1024,6 +1022,8 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 	// Number of retries, including gRPC errors and collector errors
 	retriesNum := 0
 
+	printRPCMsg(m)
+
 	for {
 		// Fail-fast in case the reporter has been closed, avoid retrying in
 		// this case.
@@ -1035,23 +1035,20 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		default:
 		}
 
-		var err = errors.New("connection is stale")
+		var err = errConnStale
 		// Protect the call to the client object or we could run into problems
 		// if another goroutine is messing with it at the same time, e.g. doing
 		// a redirection.
 		c.lock.RLock()
-		var cost time.Duration
 		if c.isActive() {
 			ctx, cancel := context.WithTimeout(context.Background(), grpcCtxTimeout)
-			start := time.Now()
 			err = m.Call(ctx, c.client)
-			cost = time.Now().Sub(start)
 
 			code := status.Code(err)
 			if code == codes.DeadlineExceeded ||
 				code == codes.Canceled {
-				log.Infof("[%s] Connection becomes stale: %v", m, err)
-				err = errors.Wrap(err, "connection is stale")
+				log.Infof("[%s] Connection becomes stale: %v.", c.name, err)
+				err = errConnStale
 				c.setActive(false)
 			}
 			cancel()
@@ -1066,9 +1063,9 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			// gRPC handles the reconnection automatically.
 			failsNum++
 			if failsNum == grpcRetryLogThreshold {
-				log.Warningf("[%s] invocation error: %v", m, err)
+				log.Warningf("[%s] invocation error: %v.", m, err)
 			} else {
-				log.Debugf("[%s] (%v) invocation error: %v", m, failsNum, err)
+				log.Debugf("[%s] (%v) invocation error: %v.", m, failsNum, err)
 			}
 		} else {
 			if failsNum >= grpcRetryLogThreshold {
@@ -1077,35 +1074,35 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			failsNum = 0
 
 			// server responded, check the result code and perform actions accordingly
-			switch result := m.ResultCode(); result {
+			switch result, _ := m.ResultCode(); result {
 			case collector.ResultCode_OK:
-				log.Infof("[%s] sent %d data chunks in %v msec", m, m.MessageLen(), cost.Nanoseconds()/1e6)
 				atomic.AddInt64(&c.queueStats.numSent, m.MessageLen())
 				return nil
 
 			case collector.ResultCode_TRY_LATER:
-				log.Infof("[%s] server responded: Try later", m)
+				log.Info(m.CallSummary())
 				atomic.AddInt64(&c.queueStats.numFailed, m.MessageLen())
 			case collector.ResultCode_LIMIT_EXCEEDED:
-				log.Infof("[%s] server responded: Limit exceeded", m)
+				log.Info(m.CallSummary())
 				atomic.AddInt64(&c.queueStats.numFailed, m.MessageLen())
 			case collector.ResultCode_INVALID_API_KEY:
-				log.Errorf("[%s] server responded: Invalid API key.", m)
+				log.Error(m.CallSummary())
 				return errInvalidServiceKey
 			case collector.ResultCode_REDIRECT:
-				if redirects > grpcRedirectMax {
-					log.Errorf("[%s] max redirects of %v exceeded", m, grpcRedirectMax)
-					return errTooManyRedirections
-				} else {
-					log.Warningf("[%s] channel is redirecting to %s", m, m.Arg())
+				log.Warning(m.CallSummary())
+				redirects++
 
+				if redirects > grpcRedirectMax {
+					return errTooManyRedirections
+				} else if m.Arg() != "" {
 					c.setAddress(m.Arg())
 					// a proper redirect shouldn't cause delays
 					retriesNum = 0
-					redirects++
+				} else {
+					log.Warning(errors.Wrap(errInvalidRedirectTarget, c.name))
 				}
 			default:
-				log.Infof("[%s] unknown server response: %v", m, result)
+				log.Info(m.CallSummary())
 			}
 		}
 
@@ -1122,7 +1119,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			time.Sleep(d)
 		})
 		if err != nil {
-			return errGiveUpAfterRetries
+			return err
 		}
 	}
 	return errShouldNotHappen
@@ -1214,4 +1211,19 @@ func (d *DefaultDialer) Dial(c grpcConnection) (*grpc.ClientConn, error) {
 	creds := credentials.NewTLS(tlsConfig)
 
 	return grpc.Dial(c.address, grpc.WithTransportCredentials(creds))
+}
+
+func printRPCMsg(m Method) {
+	if log.Level() > log.DEBUG {
+		return
+	}
+
+	var str []string
+	str = append(str, m.String())
+
+	msgs := m.Message()
+	for _, msg := range msgs {
+		str = append(str, utils.SPrintBson(msg))
+	}
+	log.Debugf("%s", str)
 }

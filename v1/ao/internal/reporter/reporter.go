@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
-	"os"
 	"strings"
 	"time"
 
@@ -35,17 +34,26 @@ type reporter interface {
 	WaitForReady(context.Context) bool
 }
 
+// KVs from getSettingsResult arguments
+const (
+	kvBucketCapacity       = "BucketCapacity"
+	kvBucketRate           = "BucketRate"
+	kvMetricsFlushInterval = "MetricsFlushInterval"
+	kvEventsFlushInterval  = "EventsFlushInterval"
+	kvMaxTransactions      = "MaxTransactions"
+)
+
 // currently used reporter
 var globalReporter reporter = &nullReporter{}
 
 var (
-	reportingDisabled     = false // reporting disabled due to error
 	periodicTasksDisabled = false // disable periodic tasks, for testing
 )
 
 // a noop reporter
 type nullReporter struct{}
 
+func newNullReporter() *nullReporter                                  { return &nullReporter{} }
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
 func (r *nullReporter) reportSpan(span SpanMessage) error             { return nil }
@@ -58,9 +66,17 @@ func (r *nullReporter) WaitForReady(ctx context.Context) bool         { return t
 // that will be used throughout the runtime of the app. Default is 'ssl' but
 // can be overridden via APPOPTICS_REPORTER
 func init() {
-	checkHostname(os.Hostname)
-	setGlobalReporter(config.GetReporterType())
+	initReporter()
 	sendInitMessage()
+}
+
+func initReporter() {
+	r := config.GetReporterType()
+	if config.GetDisabled() {
+		r = "none"
+		log.Warning("AppOptics reporter is disabled.")
+	}
+	setGlobalReporter(r)
 }
 
 func setGlobalReporter(reporterType string) {
@@ -71,12 +87,13 @@ func setGlobalReporter(reporterType string) {
 
 	switch strings.ToLower(reporterType) {
 	case "ssl":
-		fallthrough // using fallthrough since the SSL reporter (GRPC) is our default reporter
+		fallthrough // using fallthrough since the SSL reporter (gRPC) is our default reporter
 	default:
 		globalReporter = newGRPCReporter()
 	case "udp":
 		globalReporter = udpNewReporter()
 	case "none":
+		globalReporter = newNullReporter()
 	}
 }
 
@@ -93,19 +110,17 @@ func Shutdown(ctx context.Context) error {
 	return globalReporter.Shutdown(ctx)
 }
 
+// Closed indicates if the reporter has been shutdown
+func Closed() bool {
+	return globalReporter.Closed()
+}
+
 // ReportSpan is called from the app when a span message is available
 // span	span message to be put on the channel
 //
 // returns	error if channel is full
 func ReportSpan(span SpanMessage) error {
 	return globalReporter.reportSpan(span)
-}
-
-func checkHostname(getter func() (string, error)) {
-	if _, err := getter(); err != nil {
-		log.Error("Unable to get hostname, AppOptics tracing disabled.")
-		reportingDisabled = true
-	}
 }
 
 // check if context and event are valid, add general keys like Timestamp, or hostname
@@ -146,31 +161,31 @@ func shouldTraceRequest(layer string, traced bool) (bool, int, sampleSource) {
 	return oboeSampleRequest(layer, traced)
 }
 
-func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) *map[string][]byte {
+func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) map[string][]byte {
 	args := make(map[string][]byte)
 
 	if capacity > -1 {
 		bits := math.Float64bits(capacity)
 		bytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(bytes, bits)
-		args["BucketCapacity"] = bytes
+		args[kvBucketCapacity] = bytes
 	}
 	if ratePerSec > -1 {
 		bits := math.Float64bits(ratePerSec)
 		bytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(bytes, bits)
-		args["BucketRate"] = bytes
+		args[kvBucketRate] = bytes
 	}
 	if metricsFlushInterval > -1 {
 		bytes := make([]byte, 4)
 		binary.LittleEndian.PutUint32(bytes, uint32(metricsFlushInterval))
-		args["MetricsFlushInterval"] = bytes
+		args[kvMetricsFlushInterval] = bytes
 	}
 	if maxTransactions > -1 {
 		bytes := make([]byte, 4)
 		binary.LittleEndian.PutUint32(bytes, uint32(maxTransactions))
-		args["MaxTransactions"] = bytes
+		args[kvMaxTransactions] = bytes
 	}
 
-	return &args
+	return args
 }
