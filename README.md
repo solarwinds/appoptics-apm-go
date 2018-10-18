@@ -9,14 +9,16 @@
 * [Getting started](#getting-started)
     - [Prerequisites](#prerequisites)
     - [Installing](#installing)
-    - [Building your app with tracing](#building-your-app-with-tracing)
+    - [Running your app with or without tracing](#running-your-app-with-or-without-tracing)
 * [Instrumenting your application](#instrumenting-your-application)
     - [Usage examples](#usage-examples)
     - [Distributed tracing and context propagation](#distributed-tracing-and-context-propagation)
     - [Configuration](#configuration)
 * [Help and examples](#help-and-examples)
     - [Support](#support)
-    - [Demo app](#demo-app)
+    - [Demo web app](#demo-web-app)
+    - [Distributed app](#distributed-app)
+    - [OpenTracing](#opentracing)
 * [License](#license)
 
 
@@ -55,14 +57,14 @@ Note that the service key needs to be configured for a successful setup. See [Co
 for more info.
 
 
-### Building your app with or without tracing
+### Running your app with or without tracing
 
-No tracing occurs when you build your app with the build tag `disable_tracing`. With this tag,
-calls to this API are no-ops, and [empty structs](https://dave.cheney.net/2014/03/25/the-empty-struct) keep span and instrumentation types from making memory allocations. This allows for precise control over which deployments are traced.
+No tracing occurs when the environment variable `APPOPTICS_DISABLED` is explicitly set to `true`. With this environment variable,
+calls to the APIs are no-ops, and [empty structs](https://dave.cheney.net/2014/03/25/the-empty-struct) keep span and instrumentation types from making memory allocations. This allows for precise control over which deployments are traced.
 
 ```
  # Set to disable tracing and APM instrumentation
- $ go build -tags disable_tracing
+ $ export APPOPTICS_DISABLED=true
 ```
 
 ## Instrumenting your application

@@ -2,7 +2,6 @@
 # build dot graph files for specified tests and open as PDFs
 # runs go test $@ in current dir, e.g.:
 # ./test_graphviz.sh -v
-# ./test_graphviz.sh -v -tags disable_tracing
 # ./test_graphviz.sh -v -run TestTraceHTTP
 # ./test_graphviz.sh -v github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/
 graphdir="${DOT_GRAPHDIR:=$(pwd)}"
