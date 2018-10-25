@@ -48,6 +48,7 @@ const (
 	keyQueryString     = "Query-String"
 	keyRemoteStatus    = "RemoteStatus"
 	keyContentLength   = "ContentLength"
+	keySpanID          = "SpanID"
 )
 
 // Span is used to measure a span of time associated with an activity
@@ -231,6 +232,7 @@ func (s *span) End(args ...interface{}) {
 		for _, prof := range s.childProfiles {
 			prof.End()
 		}
+		args = append([]interface{}{keySpanID, s.spanID}, args)
 		args = append(args, s.endArgs...)
 		for _, edge := range s.childEdges { // add Edge KV for each joined child
 			args = append(args, keyEdge, edge)
@@ -268,6 +270,7 @@ func (s *layerSpan) Info(args ...interface{}) {
 // InfoWithOptions reports a new info event with the KVs and options provided
 func (s *layerSpan) InfoWithOptions(opts SpanOptions, args ...interface{}) {
 	if s.ok() {
+		args = append([]interface{}{keySpanID, s.spanID}, args)
 		kvs := addKVsFromOpts(opts, args...)
 		s.aoCtx.ReportEvent(reporter.LabelInfo, s.layerName(), kvs...)
 	}
@@ -328,6 +331,7 @@ func (s *span) GetTransactionName() string {
 func (s *span) Error(class, msg string) {
 	if s.ok() {
 		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
+			keySpanID, s.spanID,
 			keySpec, "error",
 			keyErrorClass, class,
 			keyErrorMsg, msg,
@@ -343,10 +347,18 @@ func (s *span) Err(err error) {
 	s.Error("error", err.Error())
 }
 
+func spanIDFromContext(aoCtx reporter.Context) string {
+	if s := aoCtx.MetadataString(); len(s) >= 58 {
+		return s[42:58]
+	}
+	return ""
+}
+
 // span satisfies the Extent interface and consolidates common reporting routines used by
 // both Span and Profile interfaces.
 type span struct {
 	labeler
+	spanID        string
 	aoCtx         reporter.Context
 	parent        Span
 	childEdges    []reporter.Context // for reporting in exit event
@@ -431,7 +443,7 @@ func newSpan(aoCtx reporter.Context, spanName string, parent Span, args ...inter
 	if err := aoCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
 		return nullSpan{}
 	}
-	return &layerSpan{span: span{aoCtx: aoCtx.Copy(), labeler: ll, parent: parent}}
+	return &layerSpan{span: span{spanID: spanIDFromContext(aoCtx), aoCtx: aoCtx.Copy(), labeler: ll, parent: parent}}
 
 }
 
@@ -449,7 +461,7 @@ func newProfile(aoCtx reporter.Context, profileName string, parent Span, args ..
 	); err != nil {
 		return nullSpan{}
 	}
-	p := &profileSpan{span{aoCtx: aoCtx.Copy(), labeler: pl, parent: parent,
+	p := &profileSpan{span{spanID: spanIDFromContext(aoCtx), aoCtx: aoCtx.Copy(), labeler: pl, parent: parent,
 		endArgs: []interface{}{keyLanguage, "go", keyProfileName, profileName}}}
 	if parent != nil && parent.ok() {
 		parent.addProfile(p)
