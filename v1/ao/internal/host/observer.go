@@ -249,7 +249,7 @@ func getHerokuDynoId() string {
 		if d, has := os.LookupEnv(envDyno); has {
 			dyno = d
 		} else {
-			dyno = "not-found"
+			dyno = ""
 		}
 	})
 	return dyno
