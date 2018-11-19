@@ -166,3 +166,13 @@ func TestGetHerokuDynoId(t *testing.T) {
 	os.Setenv(envDyno, "take-no-effect")
 	assert.Equal(t, "test-dyno", getHerokuDynoId())
 }
+
+func TestInitDyno(t *testing.T) {
+	os.Setenv(envDyno, "test-dyno")
+	initDyno(&dyno)
+	assert.Equal(t, "test-dyno", dyno)
+
+	os.Unsetenv(envDyno)
+	initDyno(&dyno)
+	assert.Equal(t, "", dyno)
+}
