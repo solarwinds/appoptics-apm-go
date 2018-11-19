@@ -246,11 +246,15 @@ func getMACAddressList() []string {
 
 func getHerokuDynoId() string {
 	dynoOnce.Do(func() {
-		if d, has := os.LookupEnv(envDyno); has {
-			dyno = d
-		} else {
-			dyno = ""
-		}
+		initDyno(&dyno)
 	})
 	return dyno
+}
+
+func initDyno(dyno *string) {
+	if d, has := os.LookupEnv(envDyno); has {
+		*dyno = d
+	} else {
+		*dyno = ""
+	}
 }
