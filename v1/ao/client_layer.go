@@ -23,7 +23,7 @@ func BeginQuerySpan(ctx context.Context, spanName, query, flavor, remoteHost str
 // Optional parameter "key" will display in the trace's details, but will not be indexed.
 // Call or defer the returned Span's End() to time the request's client-side latency.
 func BeginCacheSpan(ctx context.Context, spanName, op, key, remoteHost string, hit bool, args ...interface{}) Span {
-	csKVs := []interface{}{"KVOp", op, "KVKey", key, "KVHit", hit, "RemoteHost", remoteHost}
+	csKVs := []interface{}{"Spec", "cache", "KVOp", op, "KVKey", key, "KVHit", hit, "RemoteHost", remoteHost}
 	kvs := mergeKVs(csKVs, args)
 	l, _ := BeginSpan(ctx, spanName, kvs...)
 	return l
@@ -35,7 +35,7 @@ func BeginCacheSpan(ctx context.Context, spanName, op, key, remoteHost string, h
 // metadata headers via http.Request and http.Response.
 // Call or defer the returned Span's End() to time the call's client-side latency.
 func BeginRemoteURLSpan(ctx context.Context, spanName, remoteURL string, args ...interface{}) Span {
-	rsKVs := []interface{}{"IsService", true, "RemoteURL", remoteURL}
+	rsKVs := []interface{}{"Spec", "rsc", "IsService", true, "RemoteURL", remoteURL}
 	kvs := mergeKVs(rsKVs, args)
 	l, _ := BeginSpan(ctx, spanName, kvs...)
 	return l
