@@ -21,7 +21,7 @@ const HTTPHeaderName = "X-Trace"
 const httpHandlerSpanName = "http.HandlerFunc"
 
 // key used for HTTP span to indicate a new context
-const httpSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.HTTPSpan")
+var httpSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.HTTPSpan")
 
 // HTTPHandler wraps an http.HandlerFunc with entry / exit events,
 // returning a new handler that can be used in its place.
