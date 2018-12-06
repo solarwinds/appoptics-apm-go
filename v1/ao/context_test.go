@@ -3,13 +3,13 @@
 package ao
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
-	"context"
 )
 
 func TestContext(t *testing.T) {
@@ -104,4 +104,12 @@ func TestNullSpan(t *testing.T) {
 		{"L1", "entry"}:           {Edges: g.Edges{{"TestNullSpan", "entry"}}},
 		{"L1", "exit"}:            {Edges: g.Edges{{"L1", "entry"}}},
 	})
+}
+
+func BenchmarkTraceFromContextEmpty(b *testing.B) {
+	ctx := context.Background()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		TraceFromContext(ctx)
+	}
 }

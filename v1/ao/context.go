@@ -4,7 +4,7 @@ package ao
 
 import "context"
 
-type contextKeyT string
+type contextKeyT interface{}
 
 var contextKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.Trace")
 var contextSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.Span")
