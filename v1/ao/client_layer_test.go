@@ -59,6 +59,7 @@ func TestSpans(t *testing.T) {
 			assert.Equal(t, "service.net", n.Map["RemoteHost"])
 			assert.Equal(t, "incrKey", n.Map["RemoteController"])
 			assert.Equal(t, "thrift", n.Map["RemoteProtocol"])
+			assert.Equal(t, "rsc", n.Map["Spec"])
 		}},
 		{"myServiceClient", "exit"}: {Edges: g.Edges{{"myServiceClient", "entry"}}},
 		{"querySpan", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
