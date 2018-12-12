@@ -1,13 +1,17 @@
 package aogrpc
 
 import (
+	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
-	"context"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -16,6 +20,47 @@ func actionFromMethod(method string) string {
 	mParts := strings.Split(method, "/")
 
 	return mParts[len(mParts)-1]
+}
+
+// StackTracer is a copy of the stackTracer interface of pkg/errors.
+//
+// This may be fragile as stackTracer is not imported, just try our best though.
+type StackTracer interface {
+	StackTrace() errors.StackTrace
+}
+
+func getErrClass(err error) string {
+	if st, ok := err.(StackTracer); ok {
+		pkg, e := getTopFramePkg(st)
+		if e == nil {
+			return pkg
+		}
+	}
+	// seems we cannot do anything else, so just return the fallback value
+	return "error"
+}
+
+var (
+	errNilStackTracer  = errors.New("nil stackTracer pointer")
+	errEmptyStackTrace = errors.New("empty stack trace")
+	errGetTopFramePkg  = errors.New("failed to get top frame package name")
+)
+
+func getTopFramePkg(st StackTracer) (string, error) {
+	if st == nil {
+		return "", errNilStackTracer
+	}
+	trace := st.StackTrace()
+	if len(trace) == 0 {
+		return "", errEmptyStackTrace
+	}
+	fs := fmt.Sprintf("%+s", trace[0])
+	// it is fragile to use this hard-coded separator
+	frames := strings.Split(fs, "\n\t")
+	if len(frames) != 2 {
+		return "", errGetTopFramePkg
+	}
+	return filepath.Base(filepath.Dir(frames[1])), nil
 }
 
 func tracingContext(ctx context.Context, serverName string, methodName string, statusCode *int) (context.Context, ao.Trace) {
@@ -69,7 +114,7 @@ func UnaryServerInterceptor(serverName string) grpc.UnaryServerInterceptor {
 		resp, err = handler(ctx, req)
 		if err != nil {
 			statusCode = 500
-			ao.Err(ctx, err)
+			ao.Error(ctx, getErrClass(err), err.Error())
 		}
 		return resp, err
 	}
@@ -104,8 +149,8 @@ func StreamServerInterceptor(serverName string) grpc.StreamServerInterceptor {
 			ao.EndTrace(newCtx)
 		}()
 		// if lg.IsDebug() {
-		//	sp := ao.FromContext(newCtx)
-		//	lg.Debug("server stream starting", "xtrace", sp.MetadataString())
+		// 	sp := ao.FromContext(newCtx)
+		// 	lg.Debug("server stream starting", "xtrace", sp.MetadataString())
 		// }
 		wrappedStream := wrapServerStream(stream)
 		wrappedStream.WrappedContext = newCtx
@@ -114,7 +159,7 @@ func StreamServerInterceptor(serverName string) grpc.StreamServerInterceptor {
 			return nil
 		} else if err != nil {
 			statusCode = 500
-			ao.Err(newCtx, err)
+			ao.Error(newCtx, getErrClass(err), err.Error())
 		}
 		return err
 	}
@@ -140,7 +185,7 @@ func UnaryClientInterceptor(target string, serviceName string) grpc.UnaryClientI
 		}
 		err := invoker(ctx, method, req, resp, cc, opts...)
 		if err != nil {
-			span.Err(err)
+			span.Error(getErrClass(err), err.Error())
 			return err
 		}
 		return nil
@@ -219,7 +264,7 @@ func (s *tracedClientStream) closeSpan(err error) {
 func closeSpan(span ao.Span, err error) {
 	// lg.Debug("closing span", "err", err.Error())
 	if err != nil && err != io.EOF {
-		span.Err(err)
+		span.Error(getErrClass(err), err.Error())
 	}
 	span.End()
 }
