@@ -3,7 +3,7 @@ package aogrpc
 import (
 	"fmt"
 	"io"
-	"path/filepath"
+	fp "path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -56,11 +56,12 @@ func getTopFramePkg(st StackTracer) (string, error) {
 	}
 	fs := fmt.Sprintf("%+s", trace[0])
 	// it is fragile to use this hard-coded separator
+	// see: https://github.com/pkg/errors/blob/30136e27e2ac8d167177e8a583aa4c3fea5be833/stack.go#L63
 	frames := strings.Split(fs, "\n\t")
 	if len(frames) != 2 {
 		return "", errGetTopFramePkg
 	}
-	return filepath.Base(filepath.Dir(frames[1])), nil
+	return fp.Base(fp.Dir(frames[1])), nil
 }
 
 func tracingContext(ctx context.Context, serverName string, methodName string, statusCode *int) (context.Context, ao.Trace) {
