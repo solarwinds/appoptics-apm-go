@@ -37,7 +37,7 @@ type oboeSettings struct {
 
 func newOboeSettings() *oboeSettings {
 	return &oboeSettings{
-		bucket: &tokenBucket{},
+		bucket: globalTokenBucket,
 	}
 }
 
@@ -50,25 +50,22 @@ type tokenBucket struct {
 	lock       sync.Mutex
 }
 
-func (b *tokenBucket) setRate(r float64) {
+func (b *tokenBucket) reset() {
 	b.lock.Lock()
 	defer b.lock.Unlock()
-	b.ratePerSec = r
+
+	b.ratePerSec = 0
+	b.capacity = 0
+	b.available = 0
+	b.last = time.Time{}
 }
 
-func (b *tokenBucket) setCap(c float64) {
+func (b *tokenBucket) setRateCap(rate, cap float64) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
-	b.capacity = c
-	if b.available > b.capacity {
-		b.available = b.capacity
-	}
-}
+	b.ratePerSec = rate
+	b.capacity = cap
 
-func (b *tokenBucket) setAvail(a float64) {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-	b.available = a
 	if b.available > b.capacity {
 		b.available = b.capacity
 	}
@@ -91,11 +88,20 @@ var globalSettingsCfg = &oboeSettingsCfg{
 	settings: make(map[oboeSettingKey]*oboeSettings),
 }
 
+// The global token bucket. Trace decisions of all the requests are controlled
+// by this single bucket.
+//
+// The rate and capacity will be initialized by the values fetched from the remote
+// server, therefore it's initialized with only the default values.
+var globalTokenBucket = &tokenBucket{}
+
 func init() {
 	readEnvSettings()
 	rand.Seed(time.Now().UnixNano())
 }
 
+// This method is not thread-safe (initializes the tracingMode without locking)
+// Call it in the init() method only, or protect it by the caller.
 func readEnvSettings() {
 	// Configure tracing mode setting using environment variable
 	mode := config.GetTracingMode()
@@ -123,11 +129,12 @@ func sendInitMessage() {
 			return
 		}
 
-		e.AddKV("__Init", 1)
-		e.AddKV("Go.Version", utils.GoVersion())
-		e.AddKV("Go.AppOptics.Version", utils.Version())
+		// we choose to ignore the errors
+		_ = e.AddKV("__Init", 1)
+		_ = e.AddKV("Go.Version", utils.GoVersion())
+		_ = e.AddKV("Go.AppOptics.Version", utils.Version())
 
-		e.ReportStatus(c)
+		_ = e.ReportStatus(c)
 	}
 }
 
@@ -240,7 +247,6 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
-	// log.Debugf("Sampling with rate=%v, source=%v", sampleRate, sampleSource)
 	return retval, sampleRate, sampleSource
 }
 
@@ -296,8 +302,9 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	ns.ttl = ttl
 	ns.layer = layer
 
-	ns.bucket.capacity = parseFloat64(args, kvBucketCapacity, 0)
-	ns.bucket.ratePerSec = parseFloat64(args, kvBucketRate, 0)
+	rate := parseFloat64(args, kvBucketRate, 0)
+	capacity := parseFloat64(args, kvBucketCapacity, 0)
+	ns.bucket.setRateCap(rate, capacity)
 
 	key := oboeSettingKey{
 		sType: settingType(sType),
@@ -305,19 +312,18 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	}
 
 	globalSettingsCfg.lock.Lock()
-	if s, ok := globalSettingsCfg.settings[key]; ok {
-		ns.bucket.setAvail(s.bucket.avail())
-	}
 	globalSettingsCfg.settings[key] = ns
 	globalSettingsCfg.lock.Unlock()
 }
 
+// Used for tests only
 func resetSettings() {
 	globalSettingsCfg.lock.Lock()
 	defer globalSettingsCfg.lock.Unlock()
 
 	flushRateCounts()
 	globalSettingsCfg.settings = make(map[oboeSettingKey]*oboeSettings)
+	globalTokenBucket.reset()
 	readEnvSettings()
 }
 
