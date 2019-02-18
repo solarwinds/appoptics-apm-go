@@ -118,3 +118,11 @@ func TestNilContext(t *testing.T) {
 	assert.NotPanics(t, func() { assert.False(t, IsSampled(nil)) })
 	assert.NotPanics(t, func() { NewContext(nil, TraceFromContext(nil)) })
 }
+
+func BenchmarkTraceFromContextEmpty(b *testing.B) {
+	ctx := context.Background()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		TraceFromContext(ctx)
+	}
+}
