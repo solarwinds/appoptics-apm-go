@@ -28,6 +28,9 @@ func FromContext(ctx context.Context) Span {
 	return l
 }
 func fromContext(ctx context.Context) (l Span, ok bool) {
+	if ctx == nil {
+		return nil, false
+	}
 	l, ok = ctx.Value(contextSpanKey).(Span)
 	return
 }
@@ -41,6 +44,9 @@ func TraceFromContext(ctx context.Context) Trace {
 	return t
 }
 func traceFromContext(ctx context.Context) (t Trace, ok bool) {
+	if ctx == nil {
+		return nil, false
+	}
 	t, ok = ctx.Value(contextKey).(Trace)
 	return
 }
