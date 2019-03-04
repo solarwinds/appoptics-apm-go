@@ -119,6 +119,15 @@ func IsValidTracingMode(m string) bool {
 	return t == "never" || t == "always"
 }
 
+// IsValidSampleRate checks if the rate is valid
+func IsValidSampleRate(m string) bool {
+	rate, err := strconv.Atoi(m)
+	if err != nil {
+		return false
+	}
+	return rate >= 0 && rate <= maxSampleRate
+}
+
 // ToTracingMode converts a string to a tracing mode
 func ToTracingMode(m string) interface{} {
 	return m
