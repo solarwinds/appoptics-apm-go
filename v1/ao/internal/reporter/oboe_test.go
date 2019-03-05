@@ -3,13 +3,11 @@
 package reporter
 
 import (
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"gopkg.in/mgo.v2/bson"
 
@@ -138,21 +136,6 @@ func TestSamplingRate(t *testing.T) {
 
 	r.Close(0)
 	// XXX assert bufs
-}
-
-func TestSampleTracingDisabled(t *testing.T) {
-	r := SetTestReporter()
-
-	total := 3
-	globalSettingsCfg.tracingMode = TRACE_NEVER
-	traced := callShouldTraceRequest(total, false)
-	assert.EqualValues(t, 0, traced)
-
-	globalSettingsCfg.tracingMode = TRACE_ALWAYS
-	traced = callShouldTraceRequest(total, false)
-	assert.EqualValues(t, 3, traced)
-
-	r.Close(0)
 }
 
 func TestSampleNoValidSettings(t *testing.T) {
@@ -402,29 +385,6 @@ func TestSampleTokenBucket(t *testing.T) {
 //	stopMetrics <- struct{}{}
 //	disableMetrics = true
 //}
-
-func TestOboeTracingMode(t *testing.T) {
-	r := SetTestReporter()
-
-	os.Setenv("APPOPTICS_TRACING_MODE", "ALWAYS")
-	config.Refresh()
-	readEnvSettings()
-	assert.EqualValues(t, globalSettingsCfg.tracingMode, 1) // C.OBOE_TRACE_ALWAYS
-
-	os.Setenv("APPOPTICS_TRACING_MODE", "never")
-	config.Refresh()
-	readEnvSettings()
-	assert.EqualValues(t, globalSettingsCfg.tracingMode, 0) // C.OBOE_TRACE_NEVER
-	ok, _, _ := oboeSampleRequest("myLayer", false)
-	assert.False(t, ok)
-
-	os.Setenv("APPOPTICS_TRACING_MODE", "")
-	config.Refresh()
-	readEnvSettings()
-	assert.EqualValues(t, 1, globalSettingsCfg.tracingMode)
-
-	r.Close(0)
-}
 
 func TestCheckSettingsTimeout(t *testing.T) {
 	sc := &oboeSettingsCfg{

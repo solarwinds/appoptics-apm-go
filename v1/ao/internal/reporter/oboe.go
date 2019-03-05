@@ -20,19 +20,25 @@ import (
 
 // Current settings configuration
 type oboeSettingsCfg struct {
-	tracingMode tracingMode
-	settings    map[oboeSettingKey]*oboeSettings
-	lock        sync.RWMutex
+	settings map[oboeSettingKey]*oboeSettings
+	lock     sync.RWMutex
 	rateCounts
 }
 type oboeSettings struct {
 	timestamp time.Time
-	sType     settingType
 	flags     settingFlag
-	value     int
-	ttl       int64
-	layer     string
-	bucket    *tokenBucket
+	// The sample rate. It could be the original value got from remote server
+	// or a new value after negotiating with local config
+	value int
+	// The sample source after negotiating with local config
+	source sampleSource
+	ttl    int64
+	layer  string
+	bucket *tokenBucket
+}
+
+func (s *oboeSettings) hasOverrideFlag() bool {
+	return s.flags&FLAG_OVERRIDE != 0
 }
 
 func newOboeSettings() *oboeSettings {
@@ -96,23 +102,7 @@ var globalSettingsCfg = &oboeSettingsCfg{
 var globalTokenBucket = &tokenBucket{}
 
 func init() {
-	readEnvSettings()
 	rand.Seed(time.Now().UnixNano())
-}
-
-// This method is not thread-safe (initializes the tracingMode without locking)
-// Call it in the init() method only, or protect it by the caller.
-func readEnvSettings() {
-	// Configure tracing mode setting using environment variable
-	mode := config.GetTracingMode()
-	switch mode {
-	case "always":
-		fallthrough
-	default:
-		globalSettingsCfg.tracingMode = TRACE_ALWAYS
-	case "never":
-		globalSettingsCfg.tracingMode = TRACE_NEVER
-	}
 }
 
 func sendInitMessage() {
@@ -201,32 +191,16 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 		}
 	}
 
-	if globalSettingsCfg.tracingMode == TRACE_NEVER {
-		return false, 0, SAMPLE_SOURCE_NONE
-	}
-
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		// log.Debugf("Sampling disabled for %v until valid settings are retrieved.", layer)
 		return false, 0, SAMPLE_SOURCE_NONE
 	}
 
-	var sampleRate int
-	var sampleSource sampleSource
 	retval := false
 	doRateLimiting := false
 
-	sampleRate = utils.Max(utils.Min(setting.value, maxSamplingRate), 0)
-
-	switch setting.sType {
-	case TYPE_DEFAULT:
-		sampleSource = SAMPLE_SOURCE_DEFAULT
-	case TYPE_LAYER:
-		sampleSource = SAMPLE_SOURCE_LAYER
-	default:
-		sampleSource = SAMPLE_SOURCE_NONE
-	}
+	sampleRate := setting.value
 
 	if !traced {
 		// A new request
@@ -247,7 +221,7 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
-	return retval, sampleRate, sampleSource
+	return retval, sampleRate, setting.source
 }
 
 func bytesToFloat64(b []byte) (float64, error) {
@@ -292,13 +266,47 @@ func parseInt32(args map[string][]byte, key string, fb int32) int32 {
 	return ret
 }
 
+// mergeLocalSetting follow the predefined precedence to decide which one to
+// pick from: either the local configs or the remote ones, or the combination.
+//
+// Note: This function modifies the argument in place.
+func mergeLocalSetting(remote *oboeSettings) *oboeSettings {
+	if remote.hasOverrideFlag() && config.HasLocalSamplingConfig() {
+		// Choose the lower sample rate and merge the flags
+		if remote.value > config.GetSampleRate() {
+			remote.value = config.GetSampleRate()
+			remote.source = SAMPLE_SOURCE_FILE
+			remote.flags |= newTracingMode(config.GetTracingMode()).toFlags()
+		}
+	} else if config.HasLocalSamplingConfig() {
+		// Use local sample rate and tracing mode config
+		remote.value = config.GetSampleRate()
+		remote.flags = newTracingMode(config.GetTracingMode()).toFlags()
+		remote.source = SAMPLE_SOURCE_FILE
+	}
+	return remote
+}
+
+func adjustSampleRate(rate int64) int {
+	if rate < 0 {
+		log.Debugf("Invalid sample rate: %d", rate)
+		return 0
+	}
+
+	if rate > maxSamplingRate {
+		log.Debugf("Invalid sample rate: %d", rate)
+		return maxSamplingRate
+	}
+	return int(rate)
+}
+
 func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int64, args map[string][]byte) {
 	ns := newOboeSettings()
 
 	ns.timestamp = time.Now()
-	ns.sType = settingType(sType)
+	ns.source = settingType(sType).toSampleSource()
 	ns.flags = flagStringToBin(string(flags))
-	ns.value = int(value)
+	ns.value = adjustSampleRate(value)
 	ns.ttl = ttl
 	ns.layer = layer
 
@@ -306,13 +314,15 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	capacity := parseFloat64(args, kvBucketCapacity, 0)
 	ns.bucket.setRateCap(rate, capacity)
 
+	merged := mergeLocalSetting(ns)
+
 	key := oboeSettingKey{
 		sType: settingType(sType),
 		layer: layer,
 	}
 
 	globalSettingsCfg.lock.Lock()
-	globalSettingsCfg.settings[key] = ns
+	globalSettingsCfg.settings[key] = merged
 	globalSettingsCfg.lock.Unlock()
 }
 
@@ -324,7 +334,6 @@ func resetSettings() {
 	flushRateCounts()
 	globalSettingsCfg.settings = make(map[oboeSettingKey]*oboeSettings)
 	globalTokenBucket.reset()
-	readEnvSettings()
 }
 
 // OboeCheckSettingsTimeout checks and deletes expired settings

@@ -45,7 +45,7 @@ type sampleSource int
 // tracing modes
 const (
 	TRACE_NEVER  tracingMode = iota // disable tracing, will neither start nor continue traces
-	TRACE_ALWAYS                    //perform sampling every inbound request for tracing
+	TRACE_ALWAYS                    // perform sampling every inbound request for tracing
 )
 
 // setting types
@@ -75,6 +75,40 @@ const (
 const (
 	maxSamplingRate = 1000000
 )
+
+func (st settingType) toSampleSource() sampleSource {
+	var source sampleSource
+	switch st {
+	case TYPE_DEFAULT:
+		source = SAMPLE_SOURCE_DEFAULT
+	case TYPE_LAYER:
+		source = SAMPLE_SOURCE_LAYER
+	default:
+		source = SAMPLE_SOURCE_NONE
+	}
+	return source
+}
+
+// newTracingMode creates a tracing mode object from a string
+func newTracingMode(mode string) tracingMode {
+	switch mode {
+	case "never":
+		return TRACE_NEVER
+	case "always":
+	default:
+	}
+	return TRACE_ALWAYS
+}
+
+func (tm tracingMode) toFlags() settingFlag {
+	switch tm {
+	case TRACE_ALWAYS:
+		return FLAG_SAMPLE_START | FLAG_SAMPLE_THROUGH_ALWAYS
+	case TRACE_NEVER:
+	default:
+	}
+	return FLAG_OK
+}
 
 func oboeEventInit(evt *event, md *oboeMetadata) error {
 	if evt == nil || md == nil {

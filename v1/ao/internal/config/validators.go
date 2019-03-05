@@ -130,7 +130,7 @@ func IsValidSampleRate(m string) bool {
 
 // ToTracingMode converts a string to a tracing mode
 func ToTracingMode(m string) interface{} {
-	return m
+	return strings.ToLower(strings.TrimSpace(m))
 }
 
 // IsValidBool checks if the string represents a valid boolean value
