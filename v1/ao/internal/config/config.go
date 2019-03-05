@@ -194,6 +194,9 @@ type Config struct {
 	// The sample rate
 	SampleRate int
 
+	// Either local tracing mode or sampling rate is configured
+	samplingConfigured bool
+
 	// Whether the domain should be prepended to the transaction name.
 	PrependDomain bool
 
@@ -270,6 +273,7 @@ func (c *Config) reset() {
 	c.ReporterType = defaultReporter
 	c.TracingMode = defaultTracingMode
 	c.SampleRate = defaultSampleRate
+	c.samplingConfigured = false
 	c.PrependDomain = defaultPrependDomain
 	c.HostAlias = defaultHostnameAlias
 	c.SkipVerify = defaultInsecureSkipVerify
@@ -280,7 +284,6 @@ func (c *Config) reset() {
 
 // loadEnvs loads environment variable values and update the Config object.
 func (c *Config) loadEnvs() {
-	// TODO: reflect?
 	c.reset()
 	c.Collector = envs[cnfCollector].LoadString(c.Collector)
 	c.ServiceKey = envs[cnfServiceKey].LoadString(c.ServiceKey)
@@ -288,8 +291,17 @@ func (c *Config) loadEnvs() {
 	c.TrustedPath = envs[cnfTrustedPath].LoadString(c.TrustedPath)
 	c.CollectorUDP = envs[cnfCollectorUDP].LoadString(c.CollectorUDP)
 	c.ReporterType = envs[cnfReporterType].LoadString(c.ReporterType)
-	c.TracingMode = envs[cnfTracingMode].LoadString(c.TracingMode)
-	c.SampleRate = envs[cnfSampleRate].LoadInt(c.SampleRate)
+
+	tracingMode := envs[cnfTracingMode].LoadString("INVALID")
+	if tracingMode != "INVALID" {
+		c.TracingMode = tracingMode
+		c.samplingConfigured = true
+	}
+	sampleRate := envs[cnfSampleRate].LoadInt(maxSampleRate + 1)
+	if sampleRate != maxSampleRate+1 {
+		c.SampleRate = sampleRate
+		c.samplingConfigured = true
+	}
 
 	c.PrependDomain = envs[cnfPrependDomain].LoadBool(c.PrependDomain)
 	c.HostAlias = envs[cnfHostAlias].LoadString(c.HostAlias)
@@ -354,6 +366,13 @@ func (c *Config) GetSampleRate() int {
 	c.RLock()
 	defer c.RUnlock()
 	return c.SampleRate
+}
+
+// HasLocalSamplingConfig returns if local tracing mode or sampling rate is configured
+func (c *Config) HasLocalSamplingConfig() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.samplingConfigured
 }
 
 // GetPrependDomain returns the prepend domain config
