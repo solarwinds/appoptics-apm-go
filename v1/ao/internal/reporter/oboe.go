@@ -276,8 +276,8 @@ func mergeLocalSetting(remote *oboeSettings) *oboeSettings {
 		if remote.value > config.GetSampleRate() {
 			remote.value = config.GetSampleRate()
 			remote.source = SAMPLE_SOURCE_FILE
-			remote.flags |= newTracingMode(config.GetTracingMode()).toFlags()
 		}
+		remote.flags |= newTracingMode(config.GetTracingMode()).toFlags()
 	} else if config.HasLocalSamplingConfig() {
 		// Use local sample rate and tracing mode config
 		remote.value = config.GetSampleRate()

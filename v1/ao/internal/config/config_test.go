@@ -53,3 +53,26 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "hello.udp", c.GetCollectorUDP())
 	assert.Equal(t, false, c.GetDisabled())
 }
+
+func TestConfig_HasLocalSamplingConfig(t *testing.T) {
+	// Set tracing mode
+	_ = os.Setenv(envAppOpticsTracingMode, "never")
+	Refresh()
+	assert.True(t, HasLocalSamplingConfig())
+	assert.Equal(t, "never", GetTracingMode())
+	assert.Equal(t, defaultSampleRate, GetSampleRate())
+
+	// No local sampling config
+	_ = os.Unsetenv(envAppOpticsTracingMode)
+	Refresh()
+	assert.False(t, HasLocalSamplingConfig())
+	assert.Equal(t, defaultTracingMode, GetTracingMode())
+	assert.Equal(t, defaultSampleRate, GetSampleRate())
+
+	// Set sample rate
+	_ = os.Setenv(envAppOpticsSampleRate, "10000")
+	Refresh()
+	assert.True(t, HasLocalSamplingConfig())
+	assert.Equal(t, defaultTracingMode, GetTracingMode())
+	assert.Equal(t, 10000, GetSampleRate())
+}

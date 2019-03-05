@@ -3,11 +3,13 @@
 package reporter
 
 import (
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"gopkg.in/mgo.v2/bson"
 
@@ -63,10 +65,10 @@ func TestTokenBucket(t *testing.T) {
 				sampled := perConsumerRate.consume(1)
 				ok := b.count(sampled, true, true)
 				if ok {
-					//t.Logf("### OK   id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
+					// t.Logf("### OK   id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
 					atomic.AddInt64(&allowed, 1)
 				} else {
-					//t.Logf("--- DROP id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
+					// t.Logf("--- DROP id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
 					atomic.AddInt64(&dropped, 1)
 				}
 				time.Sleep(sleepInterval)
@@ -143,11 +145,11 @@ func TestSampleNoValidSettings(t *testing.T) {
 
 	total := 1
 
-	//var buf bytes.Buffer
-	//log.SetOutput(&buf)
+	// var buf bytes.Buffer
+	// log.SetOutput(&buf)
 	traced := callShouldTraceRequest(total, false)
-	//log.SetOutput(os.Stderr)
-	//assert.Contains(t, buf.String(), "Sampling disabled for go_test until valid settings are retrieved")
+	// log.SetOutput(os.Stderr)
+	// assert.Contains(t, buf.String(), "Sampling disabled for go_test until valid settings are retrieved")
 	assert.EqualValues(t, 0, traced)
 
 	r.Close(0)
@@ -314,77 +316,77 @@ func TestSampleTokenBucket(t *testing.T) {
 	r.Close(0)
 }
 
-//func TestMetrics(t *testing.T) {
-//	// error sending metrics message: no reporting
-//	r := SetTestReporter()
+// func TestMetrics(t *testing.T) {
+// 	// error sending metrics message: no reporting
+// 	r := SetTestReporter()
 //
-//	randReader = &errorReader{failOn: map[int]bool{0: true}}
-//	sendMetricsMessage(r)
-//	time.Sleep(100 * time.Millisecond)
-//	r.Close(0)
-//	assert.Len(t, r.EventBufs, 0)
+// 	randReader = &errorReader{failOn: map[int]bool{0: true}}
+// 	sendMetricsMessage(r)
+// 	time.Sleep(100 * time.Millisecond)
+// 	r.Close(0)
+// 	assert.Len(t, r.EventBufs, 0)
 //
-//	r = SetTestReporter()
-//	randReader = &errorReader{failOn: map[int]bool{2: true}}
-//	sendMetricsMessage(r)
-//	time.Sleep(100 * time.Millisecond)
-//	r.Close(0)
-//	assert.Len(t, r.EventBufs, 0)
+// 	r = SetTestReporter()
+// 	randReader = &errorReader{failOn: map[int]bool{2: true}}
+// 	sendMetricsMessage(r)
+// 	time.Sleep(100 * time.Millisecond)
+// 	r.Close(0)
+// 	assert.Len(t, r.EventBufs, 0)
 //
-//	randReader = rand.Reader // set back to normal
-//}
+// 	randReader = rand.Reader // set back to normal
+// }
 
-//func assertGetNextInterval(t *testing.T, nowTime, expectedDur string) {
-//	t0, err := time.Parse(time.RFC3339Nano, nowTime)
-//	assert.NoError(t, err)
-//	d0 := getNextInterval(t0)
-//	d0e, err := time.ParseDuration(expectedDur)
-//	assert.NoError(t, err)
-//	assert.Equal(t, d0e, d0)
-//	assert.Equal(t, 0, t0.Add(d0).Second()%counterIntervalSecs)
-//}
+// func assertGetNextInterval(t *testing.T, nowTime, expectedDur string) {
+// 	t0, err := time.Parse(time.RFC3339Nano, nowTime)
+// 	assert.NoError(t, err)
+// 	d0 := getNextInterval(t0)
+// 	d0e, err := time.ParseDuration(expectedDur)
+// 	assert.NoError(t, err)
+// 	assert.Equal(t, d0e, d0)
+// 	assert.Equal(t, 0, t0.Add(d0).Second()%counterIntervalSecs)
+// }
 //
-//func TestGetNextInterval(t *testing.T) {
-//	assertGetNextInterval(t, "2016-01-02T15:04:05.888-04:00", "24.112s")
-//	assertGetNextInterval(t, "2016-01-02T15:04:35.888-04:00", "24.112s")
-//	assertGetNextInterval(t, "2016-01-02T15:04:00.00-04:00", "30s")
-//	assertGetNextInterval(t, "2016-08-15T23:31:30.00-00:00", "30s")
-//	assertGetNextInterval(t, "2016-01-02T15:04:59.999999999-04:00", "1ns")
-//	assertGetNextInterval(t, "2016-01-07T15:04:29.999999999-00:00", "1ns")
-//}
+// func TestGetNextInterval(t *testing.T) {
+// 	assertGetNextInterval(t, "2016-01-02T15:04:05.888-04:00", "24.112s")
+// 	assertGetNextInterval(t, "2016-01-02T15:04:35.888-04:00", "24.112s")
+// 	assertGetNextInterval(t, "2016-01-02T15:04:00.00-04:00", "30s")
+// 	assertGetNextInterval(t, "2016-08-15T23:31:30.00-00:00", "30s")
+// 	assertGetNextInterval(t, "2016-01-02T15:04:59.999999999-04:00", "1ns")
+// 	assertGetNextInterval(t, "2016-01-07T15:04:29.999999999-00:00", "1ns")
+// }
 
-//func TestSendMetrics(t *testing.T) {
-//	if testing.Short() {
-//		t.Skip("Skipping metrics periodic sender test")
-//	}
-//	// full periodic sender test: wait for next interval & report
-//	r := SetTestReporter(TestReporterTimeout(time.Duration(30) * time.Second))
-//	disableMetrics = false
-//	go sendInitMessage()
-//	d0 := getNextInterval(time.Now()) + time.Second
-//	fmt.Printf("[%v] TestSendMetrics Sleeping for %v\n", time.Now(), d0)
-//	time.Sleep(d0)
-//	fmt.Printf("[%v] TestSendMetrics Closing\n", time.Now())
-//	r.Close(4)
-//	g.AssertGraph(t, r.EventBufs, 4, g.AssertNodeMap{
-//		{"go", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-//			assert.Equal(t, 1, n.Map["__Init"])
-//			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
-//			assert.NotEmpty(t, n.Map["Oboe.Version"])
-//			assert.NotEmpty(t, n.Map["Go.Version"])
-//		}},
-//		{"go", "exit"}: {Edges: g.Edges{{"go", "entry"}}},
-//		{metricsLayerName, "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-//			assert.Equal(t, "go", n.Map["ProcessName"])
-//			assert.IsType(t, int64(0), n.Map["JMX.type=threadcount,name=NumGoroutine"])
-//			assert.IsType(t, int64(0), n.Map["JMX.Memory:MemStats.Alloc"])
-//			assert.True(t, len(n.Map) > 10)
-//		}},
-//		{metricsLayerName, "exit"}: {Edges: g.Edges{{metricsLayerName, "entry"}}},
-//	})
-//	stopMetrics <- struct{}{}
-//	disableMetrics = true
-//}
+// func TestSendMetrics(t *testing.T) {
+// 	if testing.Short() {
+// 		t.Skip("Skipping metrics periodic sender test")
+// 	}
+// 	// full periodic sender test: wait for next interval & report
+// 	r := SetTestReporter(TestReporterTimeout(time.Duration(30) * time.Second))
+// 	disableMetrics = false
+// 	go sendInitMessage()
+// 	d0 := getNextInterval(time.Now()) + time.Second
+// 	fmt.Printf("[%v] TestSendMetrics Sleeping for %v\n", time.Now(), d0)
+// 	time.Sleep(d0)
+// 	fmt.Printf("[%v] TestSendMetrics Closing\n", time.Now())
+// 	r.Close(4)
+// 	g.AssertGraph(t, r.EventBufs, 4, g.AssertNodeMap{
+// 		{"go", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
+// 			assert.Equal(t, 1, n.Map["__Init"])
+// 			assert.Equal(t, initVersion, n.Map["Go.Oboe.Version"])
+// 			assert.NotEmpty(t, n.Map["Oboe.Version"])
+// 			assert.NotEmpty(t, n.Map["Go.Version"])
+// 		}},
+// 		{"go", "exit"}: {Edges: g.Edges{{"go", "entry"}}},
+// 		{metricsLayerName, "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
+// 			assert.Equal(t, "go", n.Map["ProcessName"])
+// 			assert.IsType(t, int64(0), n.Map["JMX.type=threadcount,name=NumGoroutine"])
+// 			assert.IsType(t, int64(0), n.Map["JMX.Memory:MemStats.Alloc"])
+// 			assert.True(t, len(n.Map) > 10)
+// 		}},
+// 		{metricsLayerName, "exit"}: {Edges: g.Edges{{metricsLayerName, "entry"}}},
+// 	})
+// 	stopMetrics <- struct{}{}
+// 	disableMetrics = true
+// }
 
 func TestCheckSettingsTimeout(t *testing.T) {
 	sc := &oboeSettingsCfg{
@@ -410,4 +412,93 @@ func TestCheckSettingsTimeout(t *testing.T) {
 	sc.checkSettingsTimeout()
 	assert.Contains(t, sc.settings, k2, k2.layer)
 	assert.NotContains(t, sc.settings, k1, k1.layer)
+}
+
+func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
+	// No remote setting
+	resetSettings()
+	trace, rate, source := shouldTraceRequest(testLayer, false)
+	assert.False(t, trace)
+	assert.Equal(t, source, SAMPLE_SOURCE_NONE)
+	assert.Equal(t, rate, 0)
+
+	resetSettings()
+	// Remote setting has the override flag && local config has lower rate
+	_ = os.Setenv("APPOPTICS_TRACING_MODE", "always")
+	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
+	config.Refresh()
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+	trace, rate, source = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
+	assert.Equal(t, 10000, rate)
+
+	// Remote setting has the override flag && local config has higher rate
+	_ = os.Setenv("APPOPTICS_TRACING_MODE", "always")
+	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
+	config.Refresh()
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000, 120, argsToMap(1000000, 1000000, -1, -1))
+	trace, rate, source = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
+	assert.Equal(t, 1000, rate)
+
+	// Remote setting doesn't have the override flag && local config has lower rate
+	_ = os.Setenv("APPOPTICS_TRACING_MODE", "always")
+	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
+	config.Refresh()
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+	trace, rate, source = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
+	assert.Equal(t, 10000, rate)
+	// Remote setting doesn't have the override flag && local config has higher rate
+	_ = os.Setenv("APPOPTICS_TRACING_MODE", "always")
+	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
+	config.Refresh()
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000, 120, argsToMap(1000000, 1000000, -1, -1))
+	trace, rate, source = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
+	assert.Equal(t, 10000, rate)
+	// Remote setting has the override flag && no local config
+	_ = os.Unsetenv("APPOPTICS_TRACING_MODE")
+	_ = os.Unsetenv("APPOPTICS_SAMPLE_RATE")
+	config.Refresh()
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		10000, 120, argsToMap(1000000, 1000000, -1, -1))
+	trace, rate, source = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
+	assert.Equal(t, 10000, rate)
+	// Remote setting doesn't have the override flag && no local config
+	_ = os.Unsetenv("APPOPTICS_TRACING_MODE")
+	_ = os.Unsetenv("APPOPTICS_SAMPLE_RATE")
+	config.Refresh()
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		10000, 120, argsToMap(1000000, 1000000, -1, -1))
+	trace, rate, source = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
+	assert.Equal(t, 10000, rate)
+	// Remote setting has the override flag && local tracing mode = NEVER
+	_ = os.Setenv("APPOPTICS_TRACING_MODE", "never")
+	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
+	config.Refresh()
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+	trace, rate, source = shouldTraceRequest(testLayer, false)
+	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
+	assert.Equal(t, 10000, rate)
+}
+
+func TestAdjustSampleRate(t *testing.T) {
+	assert.Equal(t, maxSamplingRate, adjustSampleRate(maxSamplingRate+1))
+	assert.Equal(t, 0, adjustSampleRate(-1))
+	assert.Equal(t, maxSamplingRate-1, adjustSampleRate(maxSamplingRate-1))
 }
