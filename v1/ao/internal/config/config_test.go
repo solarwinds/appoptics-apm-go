@@ -28,9 +28,12 @@ func TestLoadConfig(t *testing.T) {
 
 	os.Setenv(envAppOpticsCollector, "test.abc:8080")
 	os.Setenv(envAppOpticsDisabled, "false")
+	os.Setenv(envAppOpticsTracingMode, "always")
+
 	c.RefreshConfig()
 	assert.Equal(t, "test.abc:8080", c.GetCollector())
 	assert.Equal(t, false, c.Disabled)
+	assert.Equal(t, "enabled", c.GetTracingMode())
 
 	c = NewConfig(
 		WithCollector("hello.world"),
@@ -56,10 +59,10 @@ func TestLoadConfig(t *testing.T) {
 
 func TestConfig_HasLocalSamplingConfig(t *testing.T) {
 	// Set tracing mode
-	_ = os.Setenv(envAppOpticsTracingMode, "never")
+	_ = os.Setenv(envAppOpticsTracingMode, "disabled")
 	Refresh()
 	assert.True(t, HasLocalSamplingConfig())
-	assert.Equal(t, "never", GetTracingMode())
+	assert.Equal(t, "disabled", GetTracingMode())
 	assert.Equal(t, defaultSampleRate, GetSampleRate())
 
 	// No local sampling config
@@ -69,7 +72,7 @@ func TestConfig_HasLocalSamplingConfig(t *testing.T) {
 	assert.Equal(t, defaultTracingMode, GetTracingMode())
 	assert.Equal(t, defaultSampleRate, GetSampleRate())
 
-	// Set sample rate
+	// Set sample rate to 10000
 	_ = os.Setenv(envAppOpticsSampleRate, "10000")
 	Refresh()
 	assert.True(t, HasLocalSamplingConfig())

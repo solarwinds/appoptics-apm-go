@@ -424,7 +424,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 
 	resetSettings()
 	// Remote setting has the override flag && local config has lower rate
-	_ = os.Setenv("APPOPTICS_TRACING_MODE", "always")
+	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
 	config.Refresh()
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -435,7 +435,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	assert.Equal(t, 10000, rate)
 
 	// Remote setting has the override flag && local config has higher rate
-	_ = os.Setenv("APPOPTICS_TRACING_MODE", "always")
+	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
 	config.Refresh()
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -446,7 +446,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	assert.Equal(t, 1000, rate)
 
 	// Remote setting doesn't have the override flag && local config has lower rate
-	_ = os.Setenv("APPOPTICS_TRACING_MODE", "always")
+	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
 	config.Refresh()
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -456,7 +456,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
 	assert.Equal(t, 10000, rate)
 	// Remote setting doesn't have the override flag && local config has higher rate
-	_ = os.Setenv("APPOPTICS_TRACING_MODE", "always")
+	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
 	config.Refresh()
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -485,8 +485,8 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	trace, rate, source = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 	assert.Equal(t, 10000, rate)
-	// Remote setting has the override flag && local tracing mode = NEVER
-	_ = os.Setenv("APPOPTICS_TRACING_MODE", "never")
+	// Remote setting has the override flag && local tracing mode = DISABLED
+	_ = os.Setenv("APPOPTICS_TRACING_MODE", "disabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
 	config.Refresh()
 	updateSetting(int32(TYPE_DEFAULT), "",

@@ -18,7 +18,7 @@ const (
 	defaultTrustedPath        = ""
 	defaultCollectorUDP       = "127.0.0.1:7831"
 	defaultReporter           = "ssl"
-	defaultTracingMode        = "always"
+	defaultTracingMode        = "enabled"
 	maxSampleRate             = 1000000
 	defaultSampleRate         = maxSampleRate
 	defaultPrependDomain      = false

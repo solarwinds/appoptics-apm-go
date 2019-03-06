@@ -44,8 +44,8 @@ type sampleSource int
 
 // tracing modes
 const (
-	TRACE_NEVER  tracingMode = iota // disable tracing, will neither start nor continue traces
-	TRACE_ALWAYS                    // perform sampling every inbound request for tracing
+	TRACE_DISABLED tracingMode = iota // disable tracing, will neither start nor continue traces
+	TRACE_ENABLED                     // perform sampling every inbound request for tracing
 )
 
 // setting types
@@ -92,19 +92,19 @@ func (st settingType) toSampleSource() sampleSource {
 // newTracingMode creates a tracing mode object from a string
 func newTracingMode(mode string) tracingMode {
 	switch mode {
-	case "never":
-		return TRACE_NEVER
-	case "always":
+	case "disabled":
+		return TRACE_DISABLED
+	case "enabled":
 	default:
 	}
-	return TRACE_ALWAYS
+	return TRACE_ENABLED
 }
 
 func (tm tracingMode) toFlags() settingFlag {
 	switch tm {
-	case TRACE_ALWAYS:
+	case TRACE_ENABLED:
 		return FLAG_SAMPLE_START | FLAG_SAMPLE_THROUGH_ALWAYS
-	case TRACE_NEVER:
+	case TRACE_DISABLED:
 	default:
 	}
 	return FLAG_OK

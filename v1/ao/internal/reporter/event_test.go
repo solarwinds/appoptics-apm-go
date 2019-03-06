@@ -185,7 +185,7 @@ func TestSettingTypeToSampleSource(t *testing.T) {
 }
 
 func TestTracingModeToFlags(t *testing.T) {
-	assert.Equal(t, FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS, newTracingMode("always").toFlags())
-	assert.Equal(t, FLAG_OK, newTracingMode("never").toFlags())
+	assert.Equal(t, FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS, newTracingMode("enabled").toFlags())
+	assert.Equal(t, FLAG_OK, newTracingMode("disabled").toFlags())
 	assert.Equal(t, FLAG_OK, tracingMode(100).toFlags())
 }
