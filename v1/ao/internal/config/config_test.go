@@ -28,9 +28,12 @@ func TestLoadConfig(t *testing.T) {
 
 	os.Setenv(envAppOpticsCollector, "test.abc:8080")
 	os.Setenv(envAppOpticsDisabled, "false")
+	os.Setenv(envAppOpticsTracingMode, "always")
+
 	c.RefreshConfig()
 	assert.Equal(t, "test.abc:8080", c.GetCollector())
 	assert.Equal(t, false, c.Disabled)
+	assert.Equal(t, "enabled", c.GetTracingMode())
 
 	c = NewConfig(
 		WithCollector("hello.world"),
@@ -52,4 +55,27 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
 	assert.Equal(t, "hello.udp", c.GetCollectorUDP())
 	assert.Equal(t, false, c.GetDisabled())
+}
+
+func TestConfig_HasLocalSamplingConfig(t *testing.T) {
+	// Set tracing mode
+	_ = os.Setenv(envAppOpticsTracingMode, "disabled")
+	Refresh()
+	assert.True(t, HasLocalSamplingConfig())
+	assert.Equal(t, "disabled", GetTracingMode())
+	assert.Equal(t, defaultSampleRate, GetSampleRate())
+
+	// No local sampling config
+	_ = os.Unsetenv(envAppOpticsTracingMode)
+	Refresh()
+	assert.False(t, HasLocalSamplingConfig())
+	assert.Equal(t, defaultTracingMode, GetTracingMode())
+	assert.Equal(t, defaultSampleRate, GetSampleRate())
+
+	// Set sample rate to 10000
+	_ = os.Setenv(envAppOpticsSampleRate, "10000")
+	Refresh()
+	assert.True(t, HasLocalSamplingConfig())
+	assert.Equal(t, defaultTracingMode, GetTracingMode())
+	assert.Equal(t, 10000, GetSampleRate())
 }

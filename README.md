@@ -311,7 +311,7 @@ These environment variables may be set:
 |APPOPTICS_SERVICE_KEY|Yes||The service key identifies the service being instrumented within your Organization. It should be in the form of ``<api token>:<service name>``.|
 |APPOPTICS_DEBUG_LEVEL|No|WARN|Logging level to adjust the logging verbosity. Increase the logging verbosity to one of the debug levels to get more detailed information. Possible values: DEBUG, INFO, WARN, ERROR|
 |APPOPTICS_HOSTNAME_ALIAS|No||A logical/readable hostname that can be used to easily identify the host|
-|APPOPTICS_TRACING_MODE|No|always|Mode "always" will instruct AppOptics to consider sampling every inbound request for tracing. Mode "never" will disable tracing, and will neither start nor continue traces.|
+|APPOPTICS_TRACING_MODE|No|enabled|Mode "enabled" will instruct AppOptics to consider sampling every inbound request for tracing. Mode "disabled" will disable tracing, and will neither start nor continue traces.|
 |APPOPTICS_REPORTER|No|ssl|The reporter that will be used throughout the runtime of the app. Possible values: ssl, udp, none|
 |APPOPTICS_COLLECTOR|No|collector.appoptics.com:443|SSL collector endpoint address and port (only used if APPOPTICS_REPORTER = ssl).|
 |APPOPTICS_COLLECTOR_UDP|No|127.0.0.1:7831|UDP collector endpoint address and port (only used if APPOPTICS_REPORTER = udp).|

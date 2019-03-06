@@ -18,7 +18,9 @@ const (
 	defaultTrustedPath        = ""
 	defaultCollectorUDP       = "127.0.0.1:7831"
 	defaultReporter           = "ssl"
-	defaultTracingMode        = "always"
+	defaultTracingMode        = "enabled"
+	maxSampleRate             = 1000000
+	defaultSampleRate         = maxSampleRate
 	defaultPrependDomain      = false
 	defaultHostnameAlias      = ""
 	defaultInsecureSkipVerify = false
@@ -34,6 +36,7 @@ const (
 	envAppOpticsCollectorUDP        = "APPOPTICS_COLLECTOR_UDP"
 	envAppOpticsReporter            = "APPOPTICS_REPORTER"
 	envAppOpticsTracingMode         = "APPOPTICS_TRACING_MODE"
+	envAppOpticsSampleRate          = "APPOPTICS_SAMPLE_RATE"
 	envAppOpticsPrependDomain       = "APPOPTICS_PREPEND_DOMAIN"
 	envAppOpticsHostnameAlias       = "APPOPTICS_HOSTNAME_ALIAS"
 	envAppOpticsInsecureSkipVerify  = "APPOPTICS_INSECURE_SKIP_VERIFY"
@@ -43,94 +46,119 @@ const (
 	envAppOpticsDisabled            = "APPOPTICS_DISABLED"
 )
 
+// The configuration items
+const (
+	cnfCollector           = "Collector"
+	cnfServiceKey          = "ServiceKey"
+	cnfTrustedPath         = "TrustedPath"
+	cnfCollectorUDP        = "CollectorUDP"
+	cnfReporterType        = "ReporterType"
+	cnfTracingMode         = "TracingMode"
+	cnfSampleRate          = "SampleRate"
+	cnfPrependDomain       = "PrependDomain"
+	cnfHostAlias           = "HostAlias"
+	cnfSkipVerify          = "SkipVerify"
+	cnfPrecision           = "Precision"
+	cnfEventsFlushInterval = "EventsFlushInterval"
+	cnfEventsBatchSize     = "EventsBatchSize"
+	cnfDisabled            = "Disabled"
+)
+
 // The environment variables, validators and converters. This map is not
 // concurrent-safe and should not be modified after initialization.
 var envs = map[string]Env{
-	"Collector": {
+	cnfCollector: {
 		name:     envAppOpticsCollector,
 		optional: true,
 		validate: IsValidHost,
 		convert:  ToHost,
 		mask:     nil,
 	},
-	"ServiceKey": {
+	cnfServiceKey: {
 		name:     envAppOpticsServiceKey,
 		optional: false,
 		validate: IsValidServiceKey,
 		convert:  ToServiceKey,
 		mask:     MaskServiceKey,
 	},
-	"TrustedPath": {
+	cnfTrustedPath: {
 		name:     envAppOpticsTrustedPath,
 		optional: true,
 		validate: IsValidFileString,
 		convert:  ToFileString,
 		mask:     nil,
 	},
-	"CollectorUDP": {
+	cnfCollectorUDP: {
 		name:     envAppOpticsCollectorUDP,
 		optional: true,
 		validate: IsValidHost,
 		convert:  ToHost,
 		mask:     nil,
 	},
-	"ReporterType": {
+	cnfReporterType: {
 		name:     envAppOpticsReporter,
 		optional: true,
 		validate: IsValidReporterType,
 		convert:  ToReporterType,
 		mask:     nil,
 	},
-	"TracingMode": {
+	cnfTracingMode: {
 		name:     envAppOpticsTracingMode,
 		optional: true,
 		validate: IsValidTracingMode,
 		convert:  ToTracingMode,
 		mask:     nil,
 	},
-	"PrependDomain": {
+	cnfSampleRate: {
+		name:     envAppOpticsSampleRate,
+		optional: true,
+		validate: IsValidSampleRate,
+		convert:  ToInteger,
+		mask:     nil,
+	},
+	cnfPrependDomain: {
 		name:     envAppOpticsPrependDomain,
 		optional: true,
 		validate: IsValidBool,
 		convert:  ToBool,
 		mask:     nil,
 	},
-	"HostAlias": {
+	cnfHostAlias: {
 		name:     envAppOpticsHostnameAlias,
 		optional: true,
 		validate: IsValidHostnameAlias,
 		convert:  ToHostnameAlias,
 		mask:     nil,
 	},
-	"SkipVerify": {
+	cnfSkipVerify: {
 		name:     envAppOpticsInsecureSkipVerify,
 		optional: true,
 		validate: IsValidBool,
 		convert:  ToBool,
 		mask:     nil,
 	},
-	"Precision": {
+	cnfPrecision: {
 		name:     envAppOpticsHistogramPrecision,
 		optional: true,
 		validate: IsValidInteger,
 		convert:  ToInteger,
 		mask:     nil,
 	},
-	"EventsFlushInterval": {
+	cnfEventsFlushInterval: {
 		name:     envAppOpticsEventsFlushInterval,
 		optional: true,
 		validate: IsValidInteger,
 		convert:  ToInt64,
 		mask:     nil,
 	},
-	"EventsBatchSize": {
+	cnfEventsBatchSize: {
 		name:     envAppOpticsEventsBatchSize,
 		optional: true,
 		validate: IsValidInteger,
 		convert:  ToInt64,
 		mask:     nil,
 	},
-	"Disabled": {
+	cnfDisabled: {
 		name:     envAppOpticsDisabled,
 		optional: true,
 		validate: IsValidBool,
@@ -162,6 +190,12 @@ type Config struct {
 
 	// The tracing mode
 	TracingMode string
+
+	// The sample rate
+	SampleRate int
+
+	// Either local tracing mode or sampling rate is configured
+	samplingConfigured bool
 
 	// Whether the domain should be prepended to the transaction name.
 	PrependDomain bool
@@ -238,6 +272,8 @@ func (c *Config) reset() {
 	c.CollectorUDP = defaultCollectorUDP
 	c.ReporterType = defaultReporter
 	c.TracingMode = defaultTracingMode
+	c.SampleRate = defaultSampleRate
+	c.samplingConfigured = false
 	c.PrependDomain = defaultPrependDomain
 	c.HostAlias = defaultHostnameAlias
 	c.SkipVerify = defaultInsecureSkipVerify
@@ -248,22 +284,31 @@ func (c *Config) reset() {
 
 // loadEnvs loads environment variable values and update the Config object.
 func (c *Config) loadEnvs() {
-	// TODO: reflect?
 	c.reset()
-	c.Collector = envs["Collector"].LoadString(c.Collector)
-	c.ServiceKey = envs["ServiceKey"].LoadString(c.ServiceKey)
+	c.Collector = envs[cnfCollector].LoadString(c.Collector)
+	c.ServiceKey = envs[cnfServiceKey].LoadString(c.ServiceKey)
 
-	c.TrustedPath = envs["TrustedPath"].LoadString(c.TrustedPath)
-	c.CollectorUDP = envs["CollectorUDP"].LoadString(c.CollectorUDP)
-	c.ReporterType = envs["ReporterType"].LoadString(c.ReporterType)
-	c.TracingMode = envs["TracingMode"].LoadString(c.TracingMode)
+	c.TrustedPath = envs[cnfTrustedPath].LoadString(c.TrustedPath)
+	c.CollectorUDP = envs[cnfCollectorUDP].LoadString(c.CollectorUDP)
+	c.ReporterType = envs[cnfReporterType].LoadString(c.ReporterType)
 
-	c.PrependDomain = envs["PrependDomain"].LoadBool(c.PrependDomain)
-	c.HostAlias = envs["HostAlias"].LoadString(c.HostAlias)
-	c.SkipVerify = envs["SkipVerify"].LoadBool(c.SkipVerify)
+	tracingMode := envs[cnfTracingMode].LoadString("INVALID")
+	if tracingMode != "INVALID" {
+		c.TracingMode = tracingMode
+		c.samplingConfigured = true
+	}
+	sampleRate := envs[cnfSampleRate].LoadInt(maxSampleRate + 1)
+	if sampleRate != maxSampleRate+1 {
+		c.SampleRate = sampleRate
+		c.samplingConfigured = true
+	}
 
-	c.Precision = envs["Precision"].LoadInt(c.Precision)
-	c.Disabled = envs["Disabled"].LoadBool(c.Disabled)
+	c.PrependDomain = envs[cnfPrependDomain].LoadBool(c.PrependDomain)
+	c.HostAlias = envs[cnfHostAlias].LoadString(c.HostAlias)
+	c.SkipVerify = envs[cnfSkipVerify].LoadBool(c.SkipVerify)
+
+	c.Precision = envs[cnfPrecision].LoadInt(c.Precision)
+	c.Disabled = envs[cnfDisabled].LoadBool(c.Disabled)
 
 	c.Reporter.loadEnvs()
 }
@@ -309,35 +354,49 @@ func (c *Config) GetCollectorUDP() string {
 	return c.CollectorUDP
 }
 
-// GetTracingMode returns the UDP collector host
+// GetTracingMode returns the local tracing mode
 func (c *Config) GetTracingMode() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.TracingMode
 }
 
-// GetPrependDomain returns the UDP collector host
+// GetSampleRate returns the local sample rate
+func (c *Config) GetSampleRate() int {
+	c.RLock()
+	defer c.RUnlock()
+	return c.SampleRate
+}
+
+// HasLocalSamplingConfig returns if local tracing mode or sampling rate is configured
+func (c *Config) HasLocalSamplingConfig() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.samplingConfigured
+}
+
+// GetPrependDomain returns the prepend domain config
 func (c *Config) GetPrependDomain() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.PrependDomain
 }
 
-// GetHostAlias returns the UDP collector host
+// GetHostAlias returns the host alias
 func (c *Config) GetHostAlias() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.HostAlias
 }
 
-// GetSkipVerify returns the UDP collector host
+// GetSkipVerify returns the config of skipping hostname verification
 func (c *Config) GetSkipVerify() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.SkipVerify
 }
 
-// GetPrecision returns the UDP collector host
+// GetPrecision returns the histogram precision
 func (c *Config) GetPrecision() int {
 	c.RLock()
 	defer c.RUnlock()

@@ -177,3 +177,15 @@ func TestEventNoEdge(t *testing.T) {
 		{"go_test", "exit"}:  {},
 	})
 }
+
+func TestSettingTypeToSampleSource(t *testing.T) {
+	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, TYPE_DEFAULT.toSampleSource())
+	assert.Equal(t, SAMPLE_SOURCE_LAYER, TYPE_LAYER.toSampleSource())
+	assert.Equal(t, SAMPLE_SOURCE_NONE, settingType(100).toSampleSource())
+}
+
+func TestTracingModeToFlags(t *testing.T) {
+	assert.Equal(t, FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS, newTracingMode("enabled").toFlags())
+	assert.Equal(t, FLAG_OK, newTracingMode("disabled").toFlags())
+	assert.Equal(t, FLAG_OK, tracingMode(100).toFlags())
+}

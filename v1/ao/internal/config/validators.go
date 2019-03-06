@@ -116,12 +116,28 @@ func ToReporterType(t string) interface{} {
 // IsValidTracingMode checks if the mode is valid
 func IsValidTracingMode(m string) bool {
 	t := strings.ToLower(strings.TrimSpace(m))
-	return t == "never" || t == "always"
+	return t == "disabled" || t == "enabled" || t == "always" || t == "never"
+}
+
+// IsValidSampleRate checks if the rate is valid
+func IsValidSampleRate(m string) bool {
+	rate, err := strconv.Atoi(m)
+	if err != nil {
+		return false
+	}
+	return rate >= 0 && rate <= maxSampleRate
 }
 
 // ToTracingMode converts a string to a tracing mode
 func ToTracingMode(m string) interface{} {
-	return m
+	mode := strings.ToLower(strings.TrimSpace(m))
+	if mode == "always" {
+		mode = "enabled"
+	} else if mode == "never" {
+		mode = "disabled"
+	}
+
+	return mode
 }
 
 // IsValidBool checks if the string represents a valid boolean value
