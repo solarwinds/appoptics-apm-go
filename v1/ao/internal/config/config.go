@@ -6,7 +6,15 @@
 package config
 
 import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"sync"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 )
 
 // The default values for environment variables
@@ -61,6 +69,15 @@ const (
 	cnfEventsBatchSize     = "EventsBatchSize"
 	cnfDisabled            = "Disabled"
 )
+
+// Errors
+var (
+	ErrUnsupportedFormat = errors.New("unsupported format")
+	ErrFileTooLarge      = errors.New("file size exceeds limit")
+)
+
+// max config file size = 1MB
+const maxConfigFileSize = 1024 * 1024
 
 // The environment variables, validators and converters. This map is not
 // concurrent-safe and should not be modified after initialization.
@@ -175,7 +192,7 @@ type Config struct {
 	Collector string `yaml:"CollectorHost,omitempty" json:"CollectorHost,omitempty"`
 
 	// ServiceKey defines the service key and service name
-	ServiceKey string `yaml:"ServiceKey" json:"ServiceKey"`
+	ServiceKey string `yaml:"ServiceKey,omitempty" json:"ServiceKey,omitempty"`
 
 	// The file path of the cert file for gRPC connection
 	TrustedPath string `yaml:"TrustedPath,omitempty" json:"TrustedPath,omitempty"`
@@ -235,32 +252,43 @@ func WithServiceKey(key string) Option {
 // with options provided as arguments. It may print errors if there are invalid
 // values in the configuration file or the environment variables.
 //
-// It returns a config with best-effort, e.g., fall back to default values for
-// invalid environment variables. The reporter will be the final decision maker
-// on whether to start up.
+// If there is an error (e.g., invalid config option value), it will return a
+// config with default values and DISABLE the agent.
 func NewConfig(opts ...Option) *Config {
 	c := newConfig()
-	c.RefreshConfig(opts...)
+	if err := c.RefreshConfig(opts...); err != nil {
+		log.Errorf("Agent disabled due to config init failure: %s", err.Error())
+		c.reset()
+		c.setDisabled(true)
+	}
 	return c
 }
 
+func (c *Config) validate() error {
+	// TODO
+	return nil
+}
+
 // RefreshConfig loads the customized settings and merge with default values
-func (c *Config) RefreshConfig(opts ...Option) {
+func (c *Config) RefreshConfig(opts ...Option) error {
 	c.Lock()
 	defer c.Unlock()
 
-	c.loadConfigFile("TODO")
+	c.reset()
+
+	if err := c.loadConfigFile(); err != nil {
+		return errors.Wrap(err, "RefreshConfig")
+	}
 	c.loadEnvs()
 
 	for _, opt := range opts {
 		opt(c)
 	}
+	return c.validate()
 }
 
 func newConfig() *Config {
-	c := &Config{}
-	c.reset()
-	return c
+	return &Config{}
 }
 
 func (c *Config) reset() {
@@ -310,10 +338,79 @@ func (c *Config) loadEnvs() {
 	c.Reporter.loadEnvs()
 }
 
-// loadConfigFile loads from the config file
-func (c *Config) loadConfigFile(path string) error {
+func (c *Config) getConfigPath() string {
+	path, ok := os.LookupEnv("APPOPTICS_CONFIG_FILE")
+	if ok {
+		return path
+	}
 
+	candidates := []string{
+		"./appoptics-goagent.yaml",
+		"./appoptics-goagent.yml",
+		"/appoptics-goagent.yaml",
+		"/appoptics-goagent.yml",
+	}
+
+	for _, file := range candidates {
+		abs, err := filepath.Abs(file)
+		if err != nil {
+			continue
+		}
+		if _, e := os.Stat(abs); e != nil {
+			continue
+		}
+		return abs
+	}
+
+	return ""
+}
+
+func (c *Config) loadYaml(path string) error {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return errors.Wrap(err, "loadYaml")
+	}
+
+	// The config struct is modified in place so we won't tolerate any error
+	err = yaml.Unmarshal(data, &c)
+	if err != nil {
+		return errors.Wrap(err, "loadYaml")
+	}
 	return nil
+}
+
+func (c *Config) checkFileSize(path string) error {
+	file, err := os.Stat(path)
+	if err != nil {
+		return errors.Wrap(err, "checkFileSize")
+	}
+	size := file.Size()
+	if size > maxConfigFileSize {
+		return errors.Wrap(ErrFileTooLarge, fmt.Sprintf("File size: %d", size))
+	}
+	return nil
+}
+
+// loadConfigFile loads from the config file
+func (c *Config) loadConfigFile() error {
+	path := c.getConfigPath()
+	if path == "" {
+		log.Info("No config file found.")
+		return nil
+	}
+
+	if err := c.checkFileSize(path); err != nil {
+		return errors.Wrap(err, "loadConfigFile")
+	}
+	ext := filepath.Ext(path)
+
+	switch ext {
+	case ".yml", ".yaml":
+		log.Warningf("Loading config file: %s", path)
+		return c.loadYaml(path)
+	default:
+		return errors.Wrap(ErrUnsupportedFormat, fmt.Sprintf("loadConfigFile: %s", path))
+	}
 }
 
 // GetCollector returns the collector address
@@ -405,6 +502,12 @@ func (c *Config) GetDisabled() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.Disabled
+}
+
+func (c *Config) setDisabled(disabled bool) {
+	c.RLock()
+	defer c.RUnlock()
+	c.Disabled = disabled
 }
 
 // GetReporter returns the reporter options struct
