@@ -49,37 +49,37 @@ const (
 // must be accessed through atomic operators
 type ReporterOptions struct {
 	// Events flush interval in seconds
-	EvtFlushInterval int64
+	EvtFlushInterval int64 `yaml:"EventFlushInterval,omitempty" json:"EventFlushInterval,omitempty"`
 
 	// Event sending batch size in KB
-	EvtFlushBatchSize int64
+	EvtFlushBatchSize int64 `yaml:"EventFlushBatchSize,omitempty" json:"EventFlushBatchSize,omitempty"`
 
 	// Metrics flush interval in seconds
-	MetricFlushInterval int64
+	MetricFlushInterval int64 `yaml:"MetricFlushInterval,omitempty" json:"MetricFlushInterval,omitempty"`
 
 	// GetSettings interval in seconds
-	GetSettingsInterval int64
+	GetSettingsInterval int64 `yaml:"GetSettingsInterval,omitempty" json:"GetSettingsInterval,omitempty"`
 
 	// Settings timeout interval in seconds
-	SettingsTimeoutInterval int64
+	SettingsTimeoutInterval int64 `yaml:"SettingsTimeoutInterval,omitempty" json:"SettingsTimeoutInterval,omitempty"`
 
 	// Ping interval in seconds
-	PingInterval int64
+	PingInterval int64 `yaml:"PingInterval,omitempty" json:"PingInterval,omitempty"`
 
 	// Retry backoff initial delay
-	RetryDelayInitial int64
+	RetryDelayInitial int64 `yaml:"RetryDelayInitial,omitempty" json:"RetryDelayInitial,omitempty"`
 
 	// Maximum retry delay
-	RetryDelayMax int
+	RetryDelayMax int `yaml:"RetryDelayMax,omitempty" json:"RetryDelayMax,omitempty"`
 
 	// Maximum redirect times
-	RedirectMax int
+	RedirectMax int `yaml:"RedirectMax,omitempty" json:"RedirectMax,omitempty"`
 
 	// The threshold of retries before debug printing
-	RetryLogThreshold int
+	RetryLogThreshold int `yaml:"RetryLogThreshold,omitempty" json:"RetryLogThreshold,omitempty"`
 
 	// The maximum retries
-	MaxRetries int
+	MaxRetries int `yaml:"MaxRetries,omitempty" json:"MaxRetries,omitempty"`
 }
 
 // defaultReporterOptions creates an ReporterOptions object with the

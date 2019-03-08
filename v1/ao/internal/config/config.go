@@ -7,8 +7,6 @@ package config
 
 import (
 	"sync"
-
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 // The default values for environment variables
@@ -174,45 +172,45 @@ type Config struct {
 	sync.RWMutex
 
 	// Collector defines the host and port of the AppOptics collector
-	Collector string `yaml:"CollectorHost" json:"CollectorHost"`
+	Collector string `yaml:"CollectorHost,omitempty" json:"CollectorHost,omitempty"`
 
 	// ServiceKey defines the service key and service name
-	ServiceKey string
+	ServiceKey string `yaml:"ServiceKey" json:"ServiceKey"`
 
 	// The file path of the cert file for gRPC connection
-	TrustedPath string
+	TrustedPath string `yaml:"TrustedPath,omitempty" json:"TrustedPath,omitempty"`
 
 	// The host and port of the UDP collector
-	CollectorUDP string `yaml:"CollectorHostUDP" json:"CollectorHostUDP"`
+	CollectorUDP string `yaml:"CollectorHostUDP,omitempty" json:"CollectorHostUDP,omitempty"`
 
 	// The reporter type, ssl or udp
-	ReporterType string
+	ReporterType string `yaml:"ReporterType,omitempty" json:"ReporterType,omitempty"`
 
 	// The tracing mode
-	TracingMode string
+	TracingMode string `yaml:"TracingMode,omitempty" json:"TracingMode,omitempty"`
 
 	// The sample rate
-	SampleRate int
+	SampleRate int `yaml:"SampleRate,omitempty" json:"SampleRate,omitempty"`
 
 	// Either local tracing mode or sampling rate is configured
 	samplingConfigured bool
 
 	// Whether the domain should be prepended to the transaction name.
-	PrependDomain bool
+	PrependDomain bool `yaml:"PrependDomain,omitempty" json:"PrependDomain,omitempty"`
 
 	// The alias of the hostname
-	HostAlias string `yaml:"HostnameAlias" json:"HostnameAlias"`
+	HostAlias string `yaml:"HostnameAlias,omitempty" json:"HostnameAlias,omitempty"`
 
 	// Whether to skip verification of hostname
-	SkipVerify bool `yaml:"InsecureSkipVerify" json:"InsecureSkipVerify"`
+	SkipVerify bool `yaml:"InsecureSkipVerify,omitempty" json:"InsecureSkipVerify,omitempty"`
 
 	// The precision of the histogram
-	Precision int `yaml:"HistogramPrecision" json:"HistogramPrecision"`
+	Precision int `yaml:"HistogramPrecision,omitempty" json:"HistogramPrecision,omitempty"`
 
 	// The reporter options
-	Reporter *ReporterOptions `yaml:"ReporterOptions" json:"ReporterOptions"`
+	Reporter *ReporterOptions `yaml:"ReporterOptions,omitempty" json:"ReporterOptions,omitempty"`
 
-	Disabled bool `yaml:"Disabled" json:"Disabled"`
+	Disabled bool `yaml:"Disabled,omitempty" json:"Disabled,omitempty"`
 }
 
 // Option is a function type that accepts a Config pointer and
@@ -284,7 +282,6 @@ func (c *Config) reset() {
 
 // loadEnvs loads environment variable values and update the Config object.
 func (c *Config) loadEnvs() {
-	c.reset()
 	c.Collector = envs[cnfCollector].LoadString(c.Collector)
 	c.ServiceKey = envs[cnfServiceKey].LoadString(c.ServiceKey)
 
@@ -315,7 +312,7 @@ func (c *Config) loadEnvs() {
 
 // loadConfigFile loads from the config file
 func (c *Config) loadConfigFile(path string) error {
-	log.Debug("Loading from config file is not implemented.")
+
 	return nil
 }
 
