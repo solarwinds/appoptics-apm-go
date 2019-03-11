@@ -135,7 +135,7 @@ func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 		s.SetTracingMode(aux.TracingMode)
 	}
 	if aux.SampleRate != -1 {
-		s.SetSampleRate(strconv.Itoa(aux.SampleRate))
+		s.SetSampleRate(aux.SampleRate)
 	}
 	return nil
 }
@@ -172,8 +172,8 @@ func (s *SamplingConfig) SetTracingMode(mode string) {
 // SetSampleRate assigns the sample rate and set the corresponding flag.
 // Note: Do not change the method name as it (`Set`+Field name) is used in method
 // `loadEnvsInternal` to assign the values loaded from env variables dynamically.
-func (s *SamplingConfig) SetSampleRate(rate string) {
-	s.SampleRate = ToInteger(rate)
+func (s *SamplingConfig) SetSampleRate(rate int) {
+	s.SampleRate = rate
 	s.SampleRateConfigured = true
 }
 
@@ -393,20 +393,62 @@ func initStruct(c interface{}) interface{} {
 
 	for i := 0; i < val.NumField(); i++ {
 		fieldVal := reflect.Indirect(val.Field(i))
-		typeVal := val.Type().Field(i)
+		field := val.Type().Field(i)
 
-		if typeVal.Anonymous || !fieldVal.CanSet() {
+		if field.Anonymous || !fieldVal.CanSet() {
 			continue
 		}
 		if fieldVal.Kind() == reflect.Struct {
 			initStruct(val.Field(i).Interface())
 		} else {
-			defaultVal := typeVal.Tag.Get("default")
-			fieldVal.Set(stringToValue(defaultVal, typeVal.Type.Kind()))
+			tagDefault := field.Tag.Get("default")
+			setField(c, field, stringToValue(tagDefault, field.Type.Kind()))
 		}
 	}
 
 	return c
+}
+
+// setField assigns `val` to struct c's field specified by the name `field`. It
+// first checks if there is a setter method `Set+FieldName` for this field, and
+// calls the setter if so. Otherwise if will set the value directly via the
+// reflect.Value.Set function.
+//
+// The setter, if provided, if preferred as there may be some extra work around,
+// for example it may need to acquire a mutex, or set some other flags.
+// The `val` must have the same dynamic type as the field, otherwise it will panic.
+func setField(c interface{}, field reflect.StructField, val reflect.Value) {
+	cVal := reflect.Indirect(reflect.ValueOf(c))
+	if cVal.Kind() != reflect.Struct {
+		return
+	}
+
+	fieldVal := reflect.Indirect(cVal.FieldByName(field.Name))
+	if !fieldVal.IsValid() {
+		return
+	}
+
+	fieldKind := field.Type.Kind()
+	if !fieldVal.CanSet() || field.Anonymous || fieldKind == reflect.Struct {
+		log.Warningf("Failed to set field: %s val: %v", field.Name, val.Interface())
+		return
+	}
+
+	setMethodName := fmt.Sprintf("Set%s", field.Name)
+	setMethodV := reflect.ValueOf(c).MethodByName(setMethodName)
+	// setMethod may be invalid, but we call setMethodV.IsValid() first before
+	// all the other methods so it should be safe.
+	setMethod, _ := reflect.TypeOf(c).MethodByName(setMethodName)
+	setMethodT := setMethod.Type
+
+	// Call the setter if we have found a valid one
+	if setMethodV.IsValid() &&
+		setMethodT.NumIn() == 2 && // In(0) is the receiver
+		setMethodT.In(1).Kind() == fieldKind {
+		setMethodV.Call([]reflect.Value{val})
+	} else {
+		fieldVal.Set(val)
+	}
 }
 
 // stringToValue converts a string to a value specified by the kind.
@@ -484,20 +526,7 @@ func loadEnvsInternal(c interface{}) {
 				continue
 			}
 
-			setMethodName := fmt.Sprintf("Set%s", field.Name)
-			setMethodV := reflect.ValueOf(c).MethodByName(setMethodName)
-			setMethod, _ := reflect.TypeOf(c).MethodByName(setMethodName)
-			setMethodT := setMethod.Type
-
-			if setMethodV.IsValid() &&
-				setMethodT.NumIn() == 2 && // In(0) is the receiver
-				setMethodT.In(1).Kind() == reflect.String {
-				setMethodV.Call([]reflect.Value{
-					reflect.ValueOf(envVal),
-				})
-			} else {
-				fieldV.Set(stringToValue(envVal, fieldK))
-			}
+			setField(c, field, stringToValue(envVal, fieldK))
 		}
 	}
 }
