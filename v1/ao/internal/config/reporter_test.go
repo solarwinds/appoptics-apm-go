@@ -9,7 +9,7 @@ import (
 )
 
 func TestLoadEnvs(t *testing.T) {
-	r := defaultReporterOptions()
+	r := &ReporterOptions{}
 
 	r.SetEventFlushInterval(20)
 	assert.Equal(t, r.GetEventFlushInterval(), int64(20))

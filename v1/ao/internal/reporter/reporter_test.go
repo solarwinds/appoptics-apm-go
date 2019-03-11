@@ -40,7 +40,7 @@ var _ = func() (_ struct{}) {
 	periodicTasksDisabled = true
 
 	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
-	os.Setenv("APPOPTICS_REPORTER", "none")
+	// os.Setenv("APPOPTICS_REPORTER", "none")
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 
 	config.Refresh()

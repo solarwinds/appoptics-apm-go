@@ -4,114 +4,73 @@ package config
 
 import (
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/pkg/errors"
 )
 
-// Env defines the necessary properties and behaviors of a environment variable
-// While loading the environment variable, it validates the value with the
-// validator first, if passed it convert the value to a specified data type.
-// It also logs significant events during loading, e.g., values that does not
-// pass the validation, a mandatory env is missing, or a non-default value.
-type Env struct {
+// EnvVar defines the necessary properties and behaviors of a environment variable
+type EnvVar struct {
 	// the name of the environment variable
 	name string
-
-	// is the environment variable optional or not
-	optional bool
-
-	// the validator function
-	validate func(string) bool
-
-	// the converter function
-	convert func(string) interface{}
-
-	// the function to mask sensitive data
-	mask func(string) string
 }
 
-// LoadString loads the env and returns a string value
-func (e Env) LoadString(fallback string) string {
-	v := e.load(fallback)
-	if s, ok := v.(string); ok {
-		return s
+// Env creates a new EnvVar object
+func Env(name string) EnvVar {
+	return EnvVar{name}
+}
+
+// ToString loads the env and returns a string value
+func (e EnvVar) ToString(fallback string) string {
+	v := os.Getenv(e.name)
+	if v != "" {
+		return v
 	}
 	return fallback
 }
 
-// LoadBool loads the env and returns a bool value
-func (e Env) LoadBool(fallback bool) bool {
-	v := e.load(fallback)
-	if s, ok := v.(bool); ok {
-		return s
+func toBool(s string) (bool, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "yes" || s == "true" {
+		return true, nil
+	} else if s == "no" || s == "false" {
+		return false, nil
 	}
-	return fallback
+	return false, errors.New("cannot convert input to bool")
 }
 
-// LoadInt loads the env and returns a int value
-func (e Env) LoadInt(fallback int) int {
-	v := e.load(fallback)
-	if s, ok := v.(int); ok {
-		return s
+// ToBool loads the env and returns a bool value
+func (e EnvVar) ToBool(fallback bool) bool {
+	v := os.Getenv(e.name)
+	if v == "" {
+		return fallback
 	}
-	return fallback
-}
-
-// LoadInt64 loads the env and returns a int64 value
-func (e Env) LoadInt64(fallback int64) int64 {
-	v := e.load(fallback)
-	if s, ok := v.(int64); ok {
-		return s
-	}
-	return fallback
-}
-
-// load loads the environment variable and returns the value
-func (e Env) load(fallback interface{}) interface{} {
-	validate := e.validate
-	if validate == nil {
-		validate = func(string) bool { return true }
-	}
-
-	convert := e.convert
-	if convert == nil {
-		convert = func(s string) interface{} { return s }
-	}
-
-	if s, ok := os.LookupEnv(e.name); ok {
-		if validate(s) {
-			e.reportNonDefault(s)
-			return convert(s)
-		} else {
-			e.reportInvalid(s)
-			return fallback
-		}
+	if b, err := toBool(v); err != nil {
+		log.Warningf("Ignore invalid bool value: %s=%s", e.name, v)
+		return fallback
 	} else {
-		if e.optional {
-			return fallback
-		} else {
-			// this is a mandatory variable but missing
-			e.reportMissing()
-		}
+		return b
 	}
-	return fallback
 }
 
-func (e Env) reportInvalid(v string) {
-	if e.mask != nil {
-		v = e.mask(v)
-	}
-	log.Warning(InvalidEnv(e.name, v))
+// ToInt loads the env and returns a int value
+func (e EnvVar) ToInt(fallback int) int {
+	return int(e.ToInt64(int64(fallback)))
 }
 
-func (e Env) reportMissing() {
-	log.Warning(MissingEnv(e.name))
-}
-
-func (e Env) reportNonDefault(v string) {
-	mask := e.mask
-	if mask == nil {
-		mask = func(s string) string { return s }
+// ToInt64 loads the env and returns a int64 value
+func (e EnvVar) ToInt64(fallback int64) int64 {
+	v := os.Getenv(e.name)
+	if v == "" {
+		return fallback
 	}
-	log.Warning(NonDefaultEnv(e.name, mask(v)))
+
+	i, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		log.Warningf("Ignore invalid int/int64 value: %s=%s", e.name, v)
+		return fallback
+	}
+	return i
 }

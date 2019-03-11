@@ -6,98 +6,41 @@ import (
 	"sync/atomic"
 )
 
-// default values of the reporter parameters
-const (
-	// the default interval in seconds to flush events to the collector
-	eventFlushIntervalDefault = 2
-
-	// the default message batch size (in KB) for each RPC call
-	eventFlushBatchSizeDefault = 2000
-
-	// the default interval in seconds to flush metrics
-	metricIntervalDefault = 30
-
-	// the default interval in seconds to get settings from collector
-	getSettingsIntervalDefault = 30
-
-	// the default settings TTL check interval in seconds
-	settingsTimeoutCheckIntervalDefault = 10
-
-	// the default ping interval in seconds
-	pingIntervalDefault = 20
-
-	// the default initial retry delay in milliseconds
-	retryDelayInitial = 500
-
-	// the default retry delay multiplier for back-off
-	retryDelayMultiplier = 1.5
-
-	// the maximum retry delay time in seconds
-	retryDelayMax = 60
-
-	// the maximum redirects
-	redirectMax = 20
-
-	// the threshold of retries before logging a warning
-	retryLogThreshold = 10
-
-	// the maximum delays
-	maxRetries = 20
-)
-
 // ReporterOptions defines the options of a reporter. The fields of it
 // must be accessed through atomic operators
 type ReporterOptions struct {
 	// Events flush interval in seconds
-	EvtFlushInterval int64 `yaml:"EventFlushInterval,omitempty" json:"EventFlushInterval,omitempty"`
+	EvtFlushInterval int64 `yaml:",omitempty" env:"APPOPTICS_EVENTS_FLUSH_INTERVAL" default:"2"`
 
 	// Event sending batch size in KB
-	EvtFlushBatchSize int64 `yaml:"EventFlushBatchSize,omitempty" json:"EventFlushBatchSize,omitempty"`
+	EvtFlushBatchSize int64 `yaml:",omitempty" env:"APPOPTICS_EVENTS_BATCHSIZE" default:"2000"`
 
 	// Metrics flush interval in seconds
-	MetricFlushInterval int64 `yaml:"MetricFlushInterval,omitempty" json:"MetricFlushInterval,omitempty"`
+	MetricFlushInterval int64 `yaml:",omitempty" default:"30"`
 
 	// GetSettings interval in seconds
-	GetSettingsInterval int64 `yaml:"GetSettingsInterval,omitempty" json:"GetSettingsInterval,omitempty"`
+	GetSettingsInterval int64 `yaml:",omitempty" default:"30"`
 
 	// Settings timeout interval in seconds
-	SettingsTimeoutInterval int64 `yaml:"SettingsTimeoutInterval,omitempty" json:"SettingsTimeoutInterval,omitempty"`
+	SettingsTimeoutInterval int64 `yaml:",omitempty" default:"10"`
 
 	// Ping interval in seconds
-	PingInterval int64 `yaml:"PingInterval,omitempty" json:"PingInterval,omitempty"`
+	PingInterval int64 `yaml:",omitempty" default:"20"`
 
 	// Retry backoff initial delay
-	RetryDelayInitial int64 `yaml:"RetryDelayInitial,omitempty" json:"RetryDelayInitial,omitempty"`
+	RetryDelayInitial int64 `yaml:",omitempty" default:"500"`
 
 	// Maximum retry delay
-	RetryDelayMax int `yaml:"RetryDelayMax,omitempty" json:"RetryDelayMax,omitempty"`
+	RetryDelayMax int `yaml:",omitempty" default:"60"`
 
 	// Maximum redirect times
-	RedirectMax int `yaml:"RedirectMax,omitempty" json:"RedirectMax,omitempty"`
+	RedirectMax int `yaml:",omitempty" default:"20"`
 
 	// The threshold of retries before debug printing
-	RetryLogThreshold int `yaml:"RetryLogThreshold,omitempty" json:"RetryLogThreshold,omitempty"`
+	RetryLogThreshold int `yaml:",omitempty" default:"10"`
 
 	// The maximum retries
-	MaxRetries int `yaml:"MaxRetries,omitempty" json:"MaxRetries,omitempty"`
-}
-
-// defaultReporterOptions creates an ReporterOptions object with the
-// default values.
-func defaultReporterOptions() *ReporterOptions {
-	return &ReporterOptions{
-		EvtFlushInterval:        eventFlushIntervalDefault,
-		EvtFlushBatchSize:       eventFlushBatchSizeDefault,
-		MetricFlushInterval:     metricIntervalDefault,
-		GetSettingsInterval:     getSettingsIntervalDefault,
-		SettingsTimeoutInterval: settingsTimeoutCheckIntervalDefault,
-		PingInterval:            pingIntervalDefault,
-		RetryDelayInitial:       retryDelayInitial,
-		RetryDelayMax:           retryDelayMax,
-		RedirectMax:             redirectMax,
-		RetryLogThreshold:       retryLogThreshold,
-		MaxRetries:              maxRetries,
-	}
+	MaxRetries int `yaml:",omitempty" default:"20"`
 }
 
 // SetEventFlushInterval sets the event flush interval to i
@@ -124,9 +67,14 @@ func (r *ReporterOptions) GetEventBatchSize() int64 {
 
 // LoadEnvs load environment variables and refresh reporter options.
 func (r *ReporterOptions) loadEnvs() {
-	i := envs["EventsFlushInterval"].LoadInt64(r.EvtFlushInterval)
+	i := Env(envAppOpticsEventsFlushInterval).ToInt64(r.EvtFlushInterval)
 	r.SetEventFlushInterval(i)
 
-	b := envs["EventsBatchSize"].LoadInt64(r.EvtFlushBatchSize)
+	b := Env(envAppOpticsEventsBatchSize).ToInt64(r.EvtFlushBatchSize)
 	r.SetEventBatchSize(b)
+}
+
+func (r *ReporterOptions) validate() error {
+	// TODO
+	return nil
 }

@@ -4,7 +4,6 @@ package config
 
 import (
 	"os"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,154 +12,45 @@ import (
 func TestLoadString(t *testing.T) {
 	var envName = "TEST_STRING"
 
-	cases := []struct {
-		setEnv   bool
-		e        Env
-		val      string
-		fallback string
-		expected string
-	}{
-		{true,
-			Env{
-				envName,
-				true,
-				func(string) bool { return true },
-				func(s string) interface{} { return s },
-				nil,
-			},
-			"hello",
-			"fallback",
-			"hello",
-		},
-		{true,
-			Env{
-				envName,
-				true,
-				func(string) bool { return true },
-				func(s string) interface{} { return s },
-				nil,
-			},
-			"",
-			"fallback",
-			""},
-		{true,
-			Env{
-				envName,
-				false,
-				func(string) bool { return false },
-				func(s string) interface{} { return s },
-				nil,
-			},
-			"",
-			"fallback1",
-			"fallback1"},
-		{false,
-			Env{
-				envName,
-				true,
-				func(string) bool { return true },
-				func(s string) interface{} { return s },
-				nil,
-			},
-			"",
-			"fallback2",
-			"fallback2"},
-	}
+	os.Setenv(envName, "hello")
+	assert.Equal(t, "hello", Env("TEST_STRING").ToString("fallback"))
 
-	for i, c := range cases {
-		os.Unsetenv(envName)
-		if c.setEnv {
-			os.Setenv(envName, c.val)
-		}
-		assert.Equal(t, c.expected, c.e.LoadString(c.fallback), i)
-	}
+	os.Setenv(envName, "")
+	assert.Equal(t, "fallback", Env("TEST_STRING").ToString("fallback"))
+
+	os.Unsetenv(envName)
+	assert.Equal(t, "fallback", Env("TEST_STRING").ToString("fallback"))
 }
 
 func TestLoadBool(t *testing.T) {
 	var envName = "TEST_BOOL"
+	os.Setenv(envName, "true")
+	assert.Equal(t, true, Env(envName).ToBool(false))
 
-	cases := []struct {
-		setEnv   bool
-		e        Env
-		val      string
-		fallback bool
-		expected bool
-	}{
-		{true,
-			Env{
-				envName,
-				true,
-				func(string) bool { return true },
-				func(s string) interface{} { return s == "true" },
-				nil,
-			},
-			"false",
-			true,
-			false,
-		},
-		{true,
-			Env{
-				envName,
-				true,
-				func(string) bool { return false },
-				func(s string) interface{} { return s == "true" },
-				nil,
-			},
-			"",
-			true,
-			true},
-		{false,
-			Env{
-				envName,
-				true,
-				func(string) bool { return false },
-				func(s string) interface{} { return s == "true" },
-				nil,
-			},
-			"abc",
-			false,
-			false},
-	}
+	os.Setenv(envName, "false")
+	assert.Equal(t, false, Env(envName).ToBool(false))
 
-	for i, c := range cases {
-		if c.setEnv {
-			os.Setenv(envName, c.val)
-		}
-		assert.Equal(t, c.expected, c.e.LoadBool(c.fallback), i)
-	}
+	os.Setenv(envName, "yes")
+	assert.Equal(t, true, Env(envName).ToBool(false))
+
+	os.Setenv(envName, "no")
+	assert.Equal(t, false, Env(envName).ToBool(false))
+
+	os.Setenv(envName, "123")
+	assert.Equal(t, false, Env(envName).ToBool(false))
+
+	os.Setenv(envName, "True")
+	assert.Equal(t, true, Env(envName).ToBool(false))
 }
 
 func TestLoadInt(t *testing.T) {
 	var envName = "TEST_INT"
+	os.Setenv(envName, "123")
+	assert.Equal(t, 123, Env(envName).ToInt(456))
 
-	cases := []struct {
-		setEnv   bool
-		e        Env
-		val      string
-		fallback int
-		expected int
-	}{
-		{true,
-			Env{
-				envName,
-				true,
-				func(string) bool { return true },
-				func(s string) interface{} {
-					i, _ := strconv.Atoi(s)
-					return i
-				},
-				nil,
-			},
-			"2",
-			1,
-			2,
-		},
-	}
+	os.Setenv(envName, "abc")
+	assert.Equal(t, 456, Env(envName).ToInt(456))
 
-	for i, c := range cases {
-		if c.setEnv {
-			os.Setenv(envName, c.val)
-		}
-		assert.Equal(t, c.expected, c.e.LoadInt(c.fallback), i)
-	}
+	os.Setenv(envName, "123a")
+	assert.Equal(t, 456, Env(envName).ToInt(456))
 }

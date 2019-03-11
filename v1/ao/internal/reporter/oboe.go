@@ -271,14 +271,14 @@ func parseInt32(args map[string][]byte, key string, fb int32) int32 {
 //
 // Note: This function modifies the argument in place.
 func mergeLocalSetting(remote *oboeSettings) *oboeSettings {
-	if remote.hasOverrideFlag() && config.HasLocalSamplingConfig() {
+	if remote.hasOverrideFlag() && config.SamplingConfigured() {
 		// Choose the lower sample rate and merge the flags
 		if remote.value > config.GetSampleRate() {
 			remote.value = config.GetSampleRate()
 			remote.source = SAMPLE_SOURCE_FILE
 		}
 		remote.flags &= newTracingMode(config.GetTracingMode()).toFlags()
-	} else if config.HasLocalSamplingConfig() {
+	} else if config.SamplingConfigured() {
 		// Use local sample rate and tracing mode config
 		remote.value = config.GetSampleRate()
 		remote.flags = newTracingMode(config.GetTracingMode()).toFlags()

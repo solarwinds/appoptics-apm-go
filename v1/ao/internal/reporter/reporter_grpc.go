@@ -234,12 +234,13 @@ const (
 func newGRPCReporter() reporter {
 	// service key is required, so bail out if not found
 	serviceKey := config.GetServiceKey()
-	log.Warningf("Using converted service key: \"%s\"", config.MaskServiceKey(serviceKey))
 
 	if !config.IsValidServiceKey(serviceKey) {
 		log.Error(fullTextInvalidServiceKey)
 		return &nullReporter{}
 	}
+
+	log.Warningf("Using converted service key: \"%s\"", config.MaskServiceKey(serviceKey))
 
 	// collector address override
 	addr := config.GetCollector()

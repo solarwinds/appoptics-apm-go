@@ -74,13 +74,12 @@ func TestIsValidReporterType(t *testing.T) {
 }
 
 func TestConverters(t *testing.T) {
-	assert.Equal(t, int64(1), ToInt64("1"))
 	assert.Equal(t, "ssl", ToReporterType("ssl").(string))
-	assert.Equal(t, "disabled", ToTracingMode("disabled").(string))
-	assert.Equal(t, "disabled", ToTracingMode("never").(string))
-	assert.Equal(t, "enabled", ToTracingMode("always").(string))
-	assert.Equal(t, "enabled", ToTracingMode("ALWAYS").(string))
-	assert.Equal(t, "disabled", ToTracingMode("NEVER").(string))
+	assert.Equal(t, "disabled", ToTracingMode("disabled"))
+	assert.Equal(t, "disabled", ToTracingMode("never"))
+	assert.Equal(t, "enabled", ToTracingMode("always"))
+	assert.Equal(t, "enabled", ToTracingMode("ALWAYS"))
+	assert.Equal(t, "disabled", ToTracingMode("NEVER"))
 }
 
 func withDemoKey(sn string) string {

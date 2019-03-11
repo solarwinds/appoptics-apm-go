@@ -22,8 +22,8 @@ var GetTracingMode = conf.GetTracingMode
 // GetSampleRate is a wrapper to the method of the global config
 var GetSampleRate = conf.GetSampleRate
 
-// HasLocalSamplingConfig is a wrapper to the method of the global config
-var HasLocalSamplingConfig = conf.HasLocalSamplingConfig
+// SamplingConfigured is a wrapper to the method of the global config
+var SamplingConfigured = conf.SamplingConfigured
 
 // GetCollectorUDP is a wrapper to the method of the global config
 var GetCollectorUDP = conf.GetCollectorUDP

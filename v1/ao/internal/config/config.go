@@ -3,6 +3,13 @@
 // Package config is responsible for loading the configuration from various
 // sources, e.g., environment variables, configuration files and user input.
 // It also accepts dynamic settings from the collector server.
+//
+// In order to add a new configuration item, you need to:
+// - add a field to the Config struct and assign the corresponding env variable
+//   name and the default value via struct tags.
+// - add validation code to method `Config.validate()` (optional).
+// - add a method to retrieve the config value and a wrapper for the default
+//   global variable `conf` (see wrappers.go).
 package config
 
 import (
@@ -10,6 +17,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
@@ -17,21 +27,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// The default values for environment variables
 const (
-	defaultGRPCCollector      = "collector.appoptics.com:443"
-	defaultServiceKey         = ""
-	defaultTrustedPath        = ""
-	defaultCollectorUDP       = "127.0.0.1:7831"
-	defaultReporter           = "ssl"
-	defaultTracingMode        = "enabled"
-	maxSampleRate             = 1000000
-	defaultSampleRate         = maxSampleRate
-	defaultPrependDomain      = false
-	defaultHostnameAlias      = ""
-	defaultInsecureSkipVerify = false
-	defaultHistogramPrecision = 2
-	defaultDisabled           = false
+	maxSampleRate = 1000000
+	// max config file size = 1MB
+	maxConfigFileSize = 1024 * 1024
 )
 
 // The environment variables
@@ -50,184 +49,144 @@ const (
 	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
 	envAppOpticsEventsBatchSize     = "APPOPTICS_EVENTS_BATCHSIZE"
 	envAppOpticsDisabled            = "APPOPTICS_DISABLED"
-)
-
-// The configuration items
-const (
-	cnfCollector           = "Collector"
-	cnfServiceKey          = "ServiceKey"
-	cnfTrustedPath         = "TrustedPath"
-	cnfCollectorUDP        = "CollectorUDP"
-	cnfReporterType        = "ReporterType"
-	cnfTracingMode         = "TracingMode"
-	cnfSampleRate          = "SampleRate"
-	cnfPrependDomain       = "PrependDomain"
-	cnfHostAlias           = "HostAlias"
-	cnfSkipVerify          = "SkipVerify"
-	cnfPrecision           = "Precision"
-	cnfEventsFlushInterval = "EventsFlushInterval"
-	cnfEventsBatchSize     = "EventsBatchSize"
-	cnfDisabled            = "Disabled"
+	envAppOpticsConfigFile          = "APPOPTICS_CONFIG_FILE"
 )
 
 // Errors
 var (
 	ErrUnsupportedFormat = errors.New("unsupported format")
 	ErrFileTooLarge      = errors.New("file size exceeds limit")
+	ErrInvalidServiceKey = errors.New("invalid service key")
 )
-
-// max config file size = 1MB
-const maxConfigFileSize = 1024 * 1024
-
-// The environment variables, validators and converters. This map is not
-// concurrent-safe and should not be modified after initialization.
-var envs = map[string]Env{
-	cnfCollector: {
-		name:     envAppOpticsCollector,
-		optional: true,
-		validate: IsValidHost,
-		convert:  ToHost,
-		mask:     nil,
-	},
-	cnfServiceKey: {
-		name:     envAppOpticsServiceKey,
-		optional: false,
-		validate: IsValidServiceKey,
-		convert:  ToServiceKey,
-		mask:     MaskServiceKey,
-	},
-	cnfTrustedPath: {
-		name:     envAppOpticsTrustedPath,
-		optional: true,
-		validate: IsValidFileString,
-		convert:  ToFileString,
-		mask:     nil,
-	},
-	cnfCollectorUDP: {
-		name:     envAppOpticsCollectorUDP,
-		optional: true,
-		validate: IsValidHost,
-		convert:  ToHost,
-		mask:     nil,
-	},
-	cnfReporterType: {
-		name:     envAppOpticsReporter,
-		optional: true,
-		validate: IsValidReporterType,
-		convert:  ToReporterType,
-		mask:     nil,
-	},
-	cnfTracingMode: {
-		name:     envAppOpticsTracingMode,
-		optional: true,
-		validate: IsValidTracingMode,
-		convert:  ToTracingMode,
-		mask:     nil,
-	},
-	cnfSampleRate: {
-		name:     envAppOpticsSampleRate,
-		optional: true,
-		validate: IsValidSampleRate,
-		convert:  ToInteger,
-		mask:     nil,
-	},
-	cnfPrependDomain: {
-		name:     envAppOpticsPrependDomain,
-		optional: true,
-		validate: IsValidBool,
-		convert:  ToBool,
-		mask:     nil,
-	},
-	cnfHostAlias: {
-		name:     envAppOpticsHostnameAlias,
-		optional: true,
-		validate: IsValidHostnameAlias,
-		convert:  ToHostnameAlias,
-		mask:     nil,
-	},
-	cnfSkipVerify: {
-		name:     envAppOpticsInsecureSkipVerify,
-		optional: true,
-		validate: IsValidBool,
-		convert:  ToBool,
-		mask:     nil,
-	},
-	cnfPrecision: {
-		name:     envAppOpticsHistogramPrecision,
-		optional: true,
-		validate: IsValidInteger,
-		convert:  ToInteger,
-		mask:     nil,
-	},
-	cnfEventsFlushInterval: {
-		name:     envAppOpticsEventsFlushInterval,
-		optional: true,
-		validate: IsValidInteger,
-		convert:  ToInt64,
-		mask:     nil,
-	},
-	cnfEventsBatchSize: {
-		name:     envAppOpticsEventsBatchSize,
-		optional: true,
-		validate: IsValidInteger,
-		convert:  ToInt64,
-		mask:     nil,
-	},
-	cnfDisabled: {
-		name:     envAppOpticsDisabled,
-		optional: true,
-		validate: IsValidBool,
-		convert:  ToBool,
-		mask:     nil,
-	},
-}
 
 // Config is the struct to define the agent configuration. The configuration
 // options in this struct (excluding those from ReporterOptions) are not
 // intended for dynamically updating.
 type Config struct {
-	sync.RWMutex
+	sync.RWMutex `yaml:"-"`
 
 	// Collector defines the host and port of the AppOptics collector
-	Collector string `yaml:"CollectorHost,omitempty" json:"CollectorHost,omitempty"`
+	Collector string `yaml:",omitempty" env:"APPOPTICS_COLLECTOR" default:"collector.appoptics.com:443"`
 
 	// ServiceKey defines the service key and service name
-	ServiceKey string `yaml:"ServiceKey,omitempty" json:"ServiceKey,omitempty"`
+	ServiceKey string `yaml:",omitempty" env:"APPOPTICS_SERVICE_KEY"`
 
 	// The file path of the cert file for gRPC connection
-	TrustedPath string `yaml:"TrustedPath,omitempty" json:"TrustedPath,omitempty"`
+	TrustedPath string `yaml:",omitempty" env:"APPOPTICS_TRUSTEDPATH"`
 
 	// The host and port of the UDP collector
-	CollectorUDP string `yaml:"CollectorHostUDP,omitempty" json:"CollectorHostUDP,omitempty"`
+	CollectorUDP string `yaml:",omitempty" env:"APPOPTICS_COLLECTOR_UDP"`
 
 	// The reporter type, ssl or udp
-	ReporterType string `yaml:"ReporterType,omitempty" json:"ReporterType,omitempty"`
+	ReporterType string `yaml:",omitempty" env:"APPOPTICS_REPORTER" default:"ssl"`
 
-	// The tracing mode
-	TracingMode string `yaml:"TracingMode,omitempty" json:"TracingMode,omitempty"`
-
-	// The sample rate
-	SampleRate int `yaml:"SampleRate,omitempty" json:"SampleRate,omitempty"`
-
-	// Either local tracing mode or sampling rate is configured
-	samplingConfigured bool
+	Sampling *SamplingConfig `yaml:",omitempty"`
 
 	// Whether the domain should be prepended to the transaction name.
-	PrependDomain bool `yaml:"PrependDomain,omitempty" json:"PrependDomain,omitempty"`
+	PrependDomain bool `yaml:",omitempty" env:"APPOPTICS_PREPEND_DOMAIN"`
 
 	// The alias of the hostname
-	HostAlias string `yaml:"HostnameAlias,omitempty" json:"HostnameAlias,omitempty"`
+	HostAlias string `yaml:",omitempty" env:"APPOPTICS_HOSTNAME_ALIAS"`
 
 	// Whether to skip verification of hostname
-	SkipVerify bool `yaml:"InsecureSkipVerify,omitempty" json:"InsecureSkipVerify,omitempty"`
+	SkipVerify bool `yaml:",omitempty" env:"APPOPTICS_INSECURE_SKIP_VERIFY"`
 
 	// The precision of the histogram
-	Precision int `yaml:"HistogramPrecision,omitempty" json:"HistogramPrecision,omitempty"`
+	Precision int `yaml:",omitempty" env:"APPOPTICS_HISTOGRAM_PRECISION" default:"2"`
 
 	// The reporter options
-	Reporter *ReporterOptions `yaml:"ReporterOptions,omitempty" json:"ReporterOptions,omitempty"`
+	ReporterProperties *ReporterOptions `yaml:",omitempty"`
 
-	Disabled bool `yaml:"Disabled,omitempty" json:"Disabled,omitempty"`
+	Disabled bool `yaml:",omitempty" env:"APPOPTICS_DISABLED"`
+}
+
+// SamplingConfig defines the configuration options for the sampling decision
+type SamplingConfig struct {
+	// The tracing mode
+	TracingMode string `yaml:",omitempty" env:"APPOPTICS_TRACING_MODE" default:"enabled"`
+	// If the tracing mode is configured explicitly
+	TracingModeConfigured bool `yaml:"-"`
+
+	// The sample rate
+	SampleRate int `yaml:",omitempty" env:"APPOPTICS_SAMPLE_RATE" default:"1000000"`
+	// If the sample rate is configured explicitly
+	SampleRateConfigured bool `yaml:"-"`
+}
+
+// Configured returns if either the tracing mode or the sampling rate has been configured
+func (s *SamplingConfig) Configured() bool {
+	return s.TracingModeConfigured || s.SampleRateConfigured
+}
+
+// UnmarshalYAML is the customized unmarshal method for SamplingConfig
+func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux = SamplingConfig{
+		TracingMode: "Invalid",
+		SampleRate:  -1,
+	}
+	if err := unmarshal(&aux); err != nil {
+		return errors.Wrap(err, "failed to unmarshal SamplingConfig")
+	}
+
+	if aux.TracingMode != "Invalid" {
+		s.SetTracingMode(aux.TracingMode)
+	}
+	if aux.SampleRate != -1 {
+		s.SetSampleRate(strconv.Itoa(aux.SampleRate))
+	}
+	return nil
+}
+
+func (s *SamplingConfig) resetTracingMode() {
+	s.TracingMode = getFieldDefaultValue(s, "TracingMode")
+	s.TracingModeConfigured = false
+}
+
+func (s *SamplingConfig) resetSampleRate() {
+	s.SampleRate = ToInteger(getFieldDefaultValue(s, "SampleRate"))
+	s.SampleRateConfigured = false
+}
+
+func (s *SamplingConfig) validate() {
+	if ok := IsValidTracingMode(s.TracingMode); !ok {
+		log.Warning(InvalidEnv("TracingMode", s.TracingMode))
+		s.resetTracingMode()
+	}
+	if ok := IsValidSampleRate(s.SampleRate); !ok {
+		log.Warning(InvalidEnv("SampleRate", strconv.Itoa(s.SampleRate)))
+		s.resetSampleRate()
+	}
+}
+
+// SetTracingMode assigns the tracing mode and set the corresponding flag.
+// Note: Do not change the method name as it (`Set`+Field name) is used in method
+// `loadEnvsInternal` to assign the values loaded from env variables dynamically.
+func (s *SamplingConfig) SetTracingMode(mode string) {
+	s.TracingMode = ToTracingMode(mode)
+	s.TracingModeConfigured = true
+}
+
+// SetSampleRate assigns the sample rate and set the corresponding flag.
+// Note: Do not change the method name as it (`Set`+Field name) is used in method
+// `loadEnvsInternal` to assign the values loaded from env variables dynamically.
+func (s *SamplingConfig) SetSampleRate(rate string) {
+	s.SampleRate = ToInteger(rate)
+	s.SampleRateConfigured = true
+}
+
+func getFieldDefaultValue(i interface{}, name string) string {
+	iv := reflect.Indirect(reflect.ValueOf(i))
+	if iv.Kind() != reflect.Struct {
+		panic("calling getFieldDefaultValue with non-struct type")
+	}
+
+	it := iv.Type()
+	field, ok := it.FieldByName(name)
+	if !ok {
+		panic(fmt.Sprintf("invalid field: %s", name))
+	}
+
+	return field.Tag.Get("default")
 }
 
 // Option is a function type that accepts a Config pointer and
@@ -257,16 +216,49 @@ func WithServiceKey(key string) Option {
 func NewConfig(opts ...Option) *Config {
 	c := newConfig()
 	if err := c.RefreshConfig(opts...); err != nil {
-		log.Errorf("Agent disabled due to config init failure: %s", err.Error())
+		e := errors.Wrap(err, "Config init failed, falling back to default values")
+		log.Error(e)
 		c.reset()
-		c.setDisabled(true)
 	}
 	return c
 }
 
 func (c *Config) validate() error {
-	// TODO
-	return nil
+	if ok := IsValidHost(c.Collector); !ok {
+		log.Warning(InvalidEnv("Collector", c.Collector))
+		c.Collector = getFieldDefaultValue(c, "Collector")
+	}
+
+	c.ServiceKey = ToServiceKey(c.ServiceKey)
+	if ok := IsValidServiceKey(c.ServiceKey); !ok {
+		log.Warning(MissingEnv("ServiceKey"))
+		return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("\"%s\"", c.ServiceKey))
+	}
+
+	if ok := IsValidFile(c.TrustedPath); !ok {
+		log.Warning(InvalidEnv("TrustedPath", c.TrustedPath))
+		c.TrustedPath = getFieldDefaultValue(c, "TrustedPath")
+	}
+
+	if ok := IsValidHost(c.CollectorUDP); !ok {
+		log.Warning(InvalidEnv("CollectorUDP", c.CollectorUDP))
+		c.CollectorUDP = getFieldDefaultValue(c, "CollectorUDP")
+	}
+
+	c.ReporterType = strings.ToLower(strings.TrimSpace(c.ReporterType))
+	if ok := IsValidReporterType(c.ReporterType); !ok {
+		log.Warning(InvalidEnv("ReporterType", c.ReporterType))
+		c.ReporterType = getFieldDefaultValue(c, "ReporterType")
+	}
+
+	c.Sampling.validate()
+
+	if ok := IsValidHostnameAlias(c.HostAlias); !ok {
+		log.Warning(InvalidEnv("HostAlias", c.HostAlias))
+		c.HostAlias = getFieldDefaultValue(c, "HostAlias")
+	}
+
+	return c.ReporterProperties.validate()
 }
 
 // RefreshConfig loads the customized settings and merge with default values
@@ -284,64 +276,238 @@ func (c *Config) RefreshConfig(opts ...Option) error {
 	for _, opt := range opts {
 		opt(c)
 	}
-	return c.validate()
+	if err := c.validate(); err != nil {
+		return errors.Wrap(err, "RefreshConfig")
+	}
+
+	c.printDelta()
+
+	return nil
+}
+
+func (c *Config) printDelta() {
+	base := newConfig().reset()
+	log.Warningf("Accepted config items: \n%s", getDelta(base, c).sanitize())
+}
+
+// DeltaItem defines a delta item  of two Config objects
+type DeltaItem struct {
+	key        string
+	env        string
+	value      string
+	defaultVal string
+}
+
+// Delta defines the overall delta of two Config objects
+type Delta struct {
+	delta []DeltaItem
+}
+
+func (d *Delta) add(item ...DeltaItem) {
+	d.delta = append(d.delta, item...)
+}
+
+func (d *Delta) items() []DeltaItem {
+	return d.delta
+}
+
+func (d *Delta) sanitize() *Delta {
+	for idx, item := range d.delta {
+		if item.key == "ServiceKey" {
+			d.delta[idx].value = MaskServiceKey(d.delta[idx].value)
+			break
+		}
+	}
+	return d
+}
+
+func (d *Delta) String() string {
+	var s []string
+	for _, item := range d.delta {
+		s = append(s, fmt.Sprintf("%s(%s)=%s (default=%s)",
+			item.key,
+			item.env,
+			item.value,
+			item.defaultVal))
+	}
+	return strings.Join(s, "\n")
+}
+
+// getDelta compares two instances of the same struct and returns the delta.
+func getDelta(base, changed interface{}) *Delta {
+	delta := &Delta{}
+
+	baseVal := reflect.Indirect(reflect.ValueOf(base))
+	changedVal := reflect.Indirect(reflect.ValueOf(changed))
+
+	if changedVal.Kind() != reflect.Struct {
+		return delta
+	}
+
+	for i := 0; i < changedVal.NumField(); i++ {
+		typeFieldChanged := changedVal.Type().Field(i)
+		if typeFieldChanged.Anonymous {
+			continue
+		}
+
+		fieldChanged := reflect.Indirect(changedVal.Field(i))
+		fieldBase := reflect.Indirect(baseVal.Field(i))
+
+		if fieldChanged.Kind() == reflect.Struct {
+			subDelta := getDelta(fieldBase.Interface(), fieldChanged.Interface())
+			delta.add(subDelta.items()...)
+		} else {
+			if fieldChanged.CanSet() &&
+				fieldBase.Interface() != fieldChanged.Interface() {
+				kv := DeltaItem{
+					key:        typeFieldChanged.Name,
+					env:        typeFieldChanged.Tag.Get("env"),
+					value:      fmt.Sprintf("%v", fieldChanged.Interface()),
+					defaultVal: fmt.Sprintf("%v", fieldBase.Interface()),
+				}
+				delta.add(kv)
+			}
+		}
+	}
+	return delta
 }
 
 func newConfig() *Config {
-	return &Config{}
+	return &Config{
+		Sampling:           &SamplingConfig{},
+		ReporterProperties: &ReporterOptions{},
+	}
 }
 
-func (c *Config) reset() {
-	c.Collector = defaultGRPCCollector
-	c.ServiceKey = defaultServiceKey
-	c.TrustedPath = defaultTrustedPath
-	c.CollectorUDP = defaultCollectorUDP
-	c.ReporterType = defaultReporter
-	c.TracingMode = defaultTracingMode
-	c.SampleRate = defaultSampleRate
-	c.samplingConfigured = false
-	c.PrependDomain = defaultPrependDomain
-	c.HostAlias = defaultHostnameAlias
-	c.SkipVerify = defaultInsecureSkipVerify
-	c.Precision = defaultHistogramPrecision
-	c.Reporter = defaultReporterOptions()
-	c.Disabled = defaultDisabled
+func (c *Config) reset() *Config {
+	return initStruct(c).(*Config)
+}
+
+// initStruct initialize the struct with the default values of the struct tags
+// The input must be an addressable struct object (or its pointer)
+func initStruct(c interface{}) interface{} {
+	val := reflect.Indirect(reflect.ValueOf(c))
+
+	for i := 0; i < val.NumField(); i++ {
+		fieldVal := reflect.Indirect(val.Field(i))
+		typeVal := val.Type().Field(i)
+
+		if typeVal.Anonymous || !fieldVal.CanSet() {
+			continue
+		}
+		if fieldVal.Kind() == reflect.Struct {
+			initStruct(val.Field(i).Interface())
+		} else {
+			defaultVal := typeVal.Tag.Get("default")
+			fieldVal.Set(stringToValue(defaultVal, typeVal.Type.Kind()))
+		}
+	}
+
+	return c
+}
+
+// stringToValue converts a string to a value specified by the kind.
+func stringToValue(s string, kind reflect.Kind) reflect.Value {
+	s = strings.TrimSpace(s)
+
+	var val interface{}
+	var err error
+	switch kind {
+	case reflect.Int:
+		if s == "" {
+			s = "0"
+		}
+		val, err = strconv.Atoi(s)
+		if err != nil {
+			log.Warningf("Ignore invalid int value: %s", s)
+		}
+	case reflect.Int64:
+		if s == "" {
+			s = "0"
+		}
+		val, err = strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			log.Warningf("Ignore invalid int64 value: %s", s)
+		}
+	case reflect.String:
+		val = s
+	case reflect.Bool:
+		if s == "" {
+			s = "false"
+		}
+		val, err = toBool(s)
+		if err != nil {
+			log.Warningf("Ignore invalid bool value: %s", errors.Wrap(err, s))
+		}
+	default:
+		panic(fmt.Sprintf("Unsupported kind: %v, val: %s", kind, s))
+	}
+	return reflect.ValueOf(val)
 }
 
 // loadEnvs loads environment variable values and update the Config object.
 func (c *Config) loadEnvs() {
-	c.Collector = envs[cnfCollector].LoadString(c.Collector)
-	c.ServiceKey = envs[cnfServiceKey].LoadString(c.ServiceKey)
-
-	c.TrustedPath = envs[cnfTrustedPath].LoadString(c.TrustedPath)
-	c.CollectorUDP = envs[cnfCollectorUDP].LoadString(c.CollectorUDP)
-	c.ReporterType = envs[cnfReporterType].LoadString(c.ReporterType)
-
-	tracingMode := envs[cnfTracingMode].LoadString("INVALID")
-	if tracingMode != "INVALID" {
-		c.TracingMode = tracingMode
-		c.samplingConfigured = true
-	}
-	sampleRate := envs[cnfSampleRate].LoadInt(maxSampleRate + 1)
-	if sampleRate != maxSampleRate+1 {
-		c.SampleRate = sampleRate
-		c.samplingConfigured = true
-	}
-
-	c.PrependDomain = envs[cnfPrependDomain].LoadBool(c.PrependDomain)
-	c.HostAlias = envs[cnfHostAlias].LoadString(c.HostAlias)
-	c.SkipVerify = envs[cnfSkipVerify].LoadBool(c.SkipVerify)
-
-	c.Precision = envs[cnfPrecision].LoadInt(c.Precision)
-	c.Disabled = envs[cnfDisabled].LoadBool(c.Disabled)
-
-	c.Reporter.loadEnvs()
+	loadEnvsInternal(c)
 }
 
+// c must be a pointer to a struct object
+func loadEnvsInternal(c interface{}) {
+	cv := reflect.Indirect(reflect.ValueOf(c))
+	ct := cv.Type()
+
+	if !cv.CanSet() {
+		// TODO: log a warning?
+		return
+	}
+
+	for i := 0; i < ct.NumField(); i++ {
+		fieldV := reflect.Indirect(cv.Field(i))
+		if !fieldV.CanSet() || ct.Field(i).Anonymous {
+			continue
+		}
+
+		field := ct.Field(i)
+		fieldK := fieldV.Kind()
+		if fieldK == reflect.Struct {
+			loadEnvsInternal(cv.Field(i).Interface())
+		} else {
+			tagV := field.Tag.Get("env")
+			if tagV == "" {
+				continue
+			}
+
+			envVal := os.Getenv(tagV)
+			if envVal == "" {
+				continue
+			}
+
+			setMethodName := fmt.Sprintf("Set%s", field.Name)
+			setMethodV := reflect.ValueOf(c).MethodByName(setMethodName)
+			setMethod, _ := reflect.TypeOf(c).MethodByName(setMethodName)
+			setMethodT := setMethod.Type
+
+			if setMethodV.IsValid() &&
+				setMethodT.NumIn() == 2 && // In(0) is the receiver
+				setMethodT.In(1).Kind() == reflect.String {
+				setMethodV.Call([]reflect.Value{
+					reflect.ValueOf(envVal),
+				})
+			} else {
+				fieldV.Set(stringToValue(envVal, fieldK))
+			}
+		}
+	}
+}
+
+// getConfigPath returns the absolute path of the config file.
 func (c *Config) getConfigPath() string {
-	path, ok := os.LookupEnv("APPOPTICS_CONFIG_FILE")
+	path, ok := os.LookupEnv(envAppOpticsConfigFile)
 	if ok {
-		return path
+		if abs, err := filepath.Abs(path); err == nil {
+			return abs
+		} else {
+			log.Warningf("Ignore config file %s: %s", path, err)
+		}
 	}
 
 	candidates := []string{
@@ -409,7 +575,7 @@ func (c *Config) loadConfigFile() error {
 		log.Warningf("Loading config file: %s", path)
 		return c.loadYaml(path)
 	default:
-		return errors.Wrap(ErrUnsupportedFormat, fmt.Sprintf("loadConfigFile: %s", path))
+		return errors.Wrap(ErrUnsupportedFormat, path)
 	}
 }
 
@@ -452,21 +618,21 @@ func (c *Config) GetCollectorUDP() string {
 func (c *Config) GetTracingMode() string {
 	c.RLock()
 	defer c.RUnlock()
-	return c.TracingMode
+	return c.Sampling.TracingMode
 }
 
 // GetSampleRate returns the local sample rate
 func (c *Config) GetSampleRate() int {
 	c.RLock()
 	defer c.RUnlock()
-	return c.SampleRate
+	return c.Sampling.SampleRate
 }
 
-// HasLocalSamplingConfig returns if local tracing mode or sampling rate is configured
-func (c *Config) HasLocalSamplingConfig() bool {
+// SamplingConfigured returns if tracing mode or sampling rate is configured
+func (c *Config) SamplingConfigured() bool {
 	c.RLock()
 	defer c.RUnlock()
-	return c.samplingConfigured
+	return c.Sampling.Configured()
 }
 
 // GetPrependDomain returns the prepend domain config
@@ -514,5 +680,5 @@ func (c *Config) setDisabled(disabled bool) {
 func (c *Config) GetReporter() *ReporterOptions {
 	c.RLock()
 	defer c.RUnlock()
-	return c.Reporter
+	return c.ReporterProperties
 }

@@ -39,7 +39,7 @@ func TestLoadConfig(t *testing.T) {
 		WithCollector("hello.world"),
 		WithServiceKey(key2))
 	assert.Equal(t, "hello.world", c.GetCollector())
-	assert.Equal(t, key2, c.GetServiceKey())
+	assert.Equal(t, ToServiceKey(key2), c.GetServiceKey())
 
 	os.Setenv(envAppOpticsServiceKey, key1)
 	os.Setenv(envAppOpticsHostnameAlias, "test")
@@ -61,21 +61,31 @@ func TestConfig_HasLocalSamplingConfig(t *testing.T) {
 	// Set tracing mode
 	_ = os.Setenv(envAppOpticsTracingMode, "disabled")
 	Refresh()
-	assert.True(t, HasLocalSamplingConfig())
+	assert.True(t, SamplingConfigured())
 	assert.Equal(t, "disabled", GetTracingMode())
-	assert.Equal(t, defaultSampleRate, GetSampleRate())
+	assert.Equal(t, ToInteger(getFieldDefaultValue(&SamplingConfig{}, "SampleRate")), GetSampleRate())
 
 	// No local sampling config
 	_ = os.Unsetenv(envAppOpticsTracingMode)
 	Refresh()
-	assert.False(t, HasLocalSamplingConfig())
-	assert.Equal(t, defaultTracingMode, GetTracingMode())
-	assert.Equal(t, defaultSampleRate, GetSampleRate())
+	assert.False(t, SamplingConfigured())
+	assert.Equal(t, getFieldDefaultValue(&SamplingConfig{}, "TracingMode"), GetTracingMode())
+	assert.Equal(t, ToInteger(getFieldDefaultValue(&SamplingConfig{}, "SampleRate")), GetSampleRate())
 
 	// Set sample rate to 10000
 	_ = os.Setenv(envAppOpticsSampleRate, "10000")
 	Refresh()
-	assert.True(t, HasLocalSamplingConfig())
-	assert.Equal(t, defaultTracingMode, GetTracingMode())
+	assert.True(t, SamplingConfigured())
+	assert.Equal(t, getFieldDefaultValue(&SamplingConfig{}, "TracingMode"), GetTracingMode())
 	assert.Equal(t, 10000, GetSampleRate())
+}
+
+func TestPrintDelta(t *testing.T) {
+	changed := newConfig().reset()
+	changed.Collector = "test.com:443"
+	changed.PrependDomain = true
+	changed.ReporterProperties.EvtFlushInterval = 100
+
+	assert.Equal(t, "Collector(APPOPTICS_COLLECTOR)=test.com:443 (default=collector.appoptics.com:443)\nPrependDomain(APPOPTICS_PREPEND_DOMAIN)=true (default=false)",
+		getDelta(newConfig().reset(), changed).sanitize().String())
 }
