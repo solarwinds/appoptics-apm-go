@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
@@ -73,7 +74,7 @@ const (
 )
 
 const (
-	maxSamplingRate = 1000000
+	maxSamplingRate = config.MaxSampleRate
 )
 
 func (st settingType) toSampleSource() sampleSource {

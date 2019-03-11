@@ -28,7 +28,10 @@ import (
 )
 
 const (
-	maxSampleRate = 1000000
+	// MaxSampleRate is the maximum sample rate we can have
+	MaxSampleRate = 1000000
+	// MinSampleRate is the minimum sample rate we can have
+	MinSampleRate = 0
 	// max config file size = 1MB
 	maxConfigFileSize = 1024 * 1024
 )

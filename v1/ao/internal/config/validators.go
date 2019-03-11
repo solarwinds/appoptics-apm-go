@@ -121,7 +121,7 @@ func IsValidTracingMode(m string) bool {
 
 // IsValidSampleRate checks if the rate is valid
 func IsValidSampleRate(rate int) bool {
-	return rate >= 0 && rate <= maxSampleRate
+	return rate >= MinSampleRate && rate <= MaxSampleRate
 }
 
 // ToTracingMode converts a string to a tracing mode
