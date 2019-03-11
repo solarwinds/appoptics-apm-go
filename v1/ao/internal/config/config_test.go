@@ -5,6 +5,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -88,4 +89,121 @@ func TestPrintDelta(t *testing.T) {
 
 	assert.Equal(t, "Collector(APPOPTICS_COLLECTOR)=test.com:443 (default=collector.appoptics.com:443)\nPrependDomain(APPOPTICS_PREPEND_DOMAIN)=true (default=false)",
 		getDelta(newConfig().reset(), changed).sanitize().String())
+}
+
+func TestConfigInit(t *testing.T) {
+	c := newConfig()
+
+	// Set them to true, the call to `reset` in next step should reset them to false
+	c.Sampling.sampleRateConfigured = true
+	c.Sampling.tracingModeConfigured = true
+
+	c.reset()
+
+	defaultC := Config{
+		Collector:    "collector.appoptics.com:443",
+		ServiceKey:   "",
+		TrustedPath:  "",
+		CollectorUDP: "",
+		ReporterType: "ssl",
+		Sampling: &SamplingConfig{
+			TracingMode:           "enabled",
+			tracingModeConfigured: false,
+			SampleRate:            1000000,
+			sampleRateConfigured:  false,
+		},
+		PrependDomain: false,
+		HostAlias:     "",
+		SkipVerify:    false,
+		Precision:     2,
+		ReporterProperties: &ReporterOptions{
+			EventFlushInterval:      2,
+			EventFlushBatchSize:     2000,
+			MetricFlushInterval:     30,
+			GetSettingsInterval:     30,
+			SettingsTimeoutInterval: 10,
+			PingInterval:            20,
+			RetryDelayInitial:       500,
+			RetryDelayMax:           60,
+			RedirectMax:             20,
+			RetryLogThreshold:       10,
+			MaxRetries:              20,
+		},
+		Disabled: false,
+	}
+	assert.Equal(t, *c, defaultC)
+}
+
+func ClearEnvs() {
+	for _, kv := range os.Environ() {
+		kvSlice := strings.Split(kv, "=")
+		k := kvSlice[0]
+		os.Unsetenv(k)
+	}
+}
+
+func SetEnvs(kvs []string) {
+	for _, kv := range kvs {
+		kvSlice := strings.Split(kv, "=")
+		k, v := kvSlice[0], kvSlice[1]
+		os.Setenv(k, v)
+	}
+}
+
+func TestEnvsLoading(t *testing.T) {
+	ClearEnvs()
+
+	envs := []string{
+		"APPOPTICS_COLLECTOR=collector.test.com",
+		"APPOPTICS_SERVICE_KEY=ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
+		"APPOPTICS_TRUSTEDPATH=/collector.crt",
+		"APPOPTICS_COLLECTOR_UDP=udp.test.com",
+		"APPOPTICS_REPORTER=udp",
+		"APPOPTICS_TRACING_MODE=never",
+		"APPOPTICS_SAMPLE_RATE=1000",
+		"APPOPTICS_PREPEND_DOMAIN=true",
+		"APPOPTICS_HOSTNAME_ALIAS=alias",
+		"APPOPTICS_INSECURE_SKIP_VERIFY=true",
+		"APPOPTICS_HISTOGRAM_PRECISION=4",
+		"APPOPTICS_EVENTS_FLUSH_INTERVAL=4",
+		"APPOPTICS_EVENTS_BATCHSIZE=4000",
+		"APPOPTICS_DISABLED=true",
+	}
+	SetEnvs(envs)
+
+	envConfig := Config{
+		Collector:    "collector.test.com",
+		ServiceKey:   "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
+		TrustedPath:  "/collector.crt",
+		CollectorUDP: "udp.test.com",
+		ReporterType: "udp",
+		Sampling: &SamplingConfig{
+			TracingMode:           "disabled",
+			tracingModeConfigured: true,
+			SampleRate:            1000,
+			sampleRateConfigured:  true,
+		},
+		PrependDomain: true,
+		HostAlias:     "alias",
+		SkipVerify:    true,
+		Precision:     2 * 2,
+		ReporterProperties: &ReporterOptions{
+			EventFlushInterval:      2 * 2,
+			EventFlushBatchSize:     2000 * 2,
+			MetricFlushInterval:     30,
+			GetSettingsInterval:     30,
+			SettingsTimeoutInterval: 10,
+			PingInterval:            20,
+			RetryDelayInitial:       500,
+			RetryDelayMax:           60,
+			RedirectMax:             20,
+			RetryLogThreshold:       10,
+			MaxRetries:              20,
+		},
+		Disabled: true,
+	}
+
+	c := NewConfig()
+
+	assert.Equal(t, *c, envConfig)
 }

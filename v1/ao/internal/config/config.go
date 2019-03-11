@@ -108,17 +108,17 @@ type SamplingConfig struct {
 	// The tracing mode
 	TracingMode string `yaml:",omitempty" env:"APPOPTICS_TRACING_MODE" default:"enabled"`
 	// If the tracing mode is configured explicitly
-	TracingModeConfigured bool `yaml:"-"`
+	tracingModeConfigured bool `yaml:"-"`
 
 	// The sample rate
 	SampleRate int `yaml:",omitempty" env:"APPOPTICS_SAMPLE_RATE" default:"1000000"`
 	// If the sample rate is configured explicitly
-	SampleRateConfigured bool `yaml:"-"`
+	sampleRateConfigured bool `yaml:"-"`
 }
 
 // Configured returns if either the tracing mode or the sampling rate has been configured
 func (s *SamplingConfig) Configured() bool {
-	return s.TracingModeConfigured || s.SampleRateConfigured
+	return s.tracingModeConfigured || s.sampleRateConfigured
 }
 
 // UnmarshalYAML is the customized unmarshal method for SamplingConfig
@@ -140,24 +140,24 @@ func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 	return nil
 }
 
-func (s *SamplingConfig) resetTracingMode() {
+func (s *SamplingConfig) ResetTracingMode() {
 	s.TracingMode = getFieldDefaultValue(s, "TracingMode")
-	s.TracingModeConfigured = false
+	s.tracingModeConfigured = false
 }
 
-func (s *SamplingConfig) resetSampleRate() {
+func (s *SamplingConfig) ResetSampleRate() {
 	s.SampleRate = ToInteger(getFieldDefaultValue(s, "SampleRate"))
-	s.SampleRateConfigured = false
+	s.sampleRateConfigured = false
 }
 
 func (s *SamplingConfig) validate() {
 	if ok := IsValidTracingMode(s.TracingMode); !ok {
 		log.Warning(InvalidEnv("TracingMode", s.TracingMode))
-		s.resetTracingMode()
+		s.ResetTracingMode()
 	}
 	if ok := IsValidSampleRate(s.SampleRate); !ok {
 		log.Warning(InvalidEnv("SampleRate", strconv.Itoa(s.SampleRate)))
-		s.resetSampleRate()
+		s.ResetSampleRate()
 	}
 }
 
@@ -166,7 +166,7 @@ func (s *SamplingConfig) validate() {
 // `loadEnvsInternal` to assign the values loaded from env variables dynamically.
 func (s *SamplingConfig) SetTracingMode(mode string) {
 	s.TracingMode = ToTracingMode(mode)
-	s.TracingModeConfigured = true
+	s.tracingModeConfigured = true
 }
 
 // SetSampleRate assigns the sample rate and set the corresponding flag.
@@ -174,7 +174,7 @@ func (s *SamplingConfig) SetTracingMode(mode string) {
 // `loadEnvsInternal` to assign the values loaded from env variables dynamically.
 func (s *SamplingConfig) SetSampleRate(rate int) {
 	s.SampleRate = rate
-	s.SampleRateConfigured = true
+	s.sampleRateConfigured = true
 }
 
 func getFieldDefaultValue(i interface{}, name string) string {
@@ -390,10 +390,12 @@ func (c *Config) reset() *Config {
 // The input must be an addressable struct object (or its pointer)
 func initStruct(c interface{}) interface{} {
 	val := reflect.Indirect(reflect.ValueOf(c))
+	valType := val.Type()
+	pVarType := reflect.ValueOf(c).Type()
 
 	for i := 0; i < val.NumField(); i++ {
 		fieldVal := reflect.Indirect(val.Field(i))
-		field := val.Type().Field(i)
+		field := valType.Field(i)
 
 		if field.Anonymous || !fieldVal.CanSet() {
 			continue
@@ -401,8 +403,18 @@ func initStruct(c interface{}) interface{} {
 		if fieldVal.Kind() == reflect.Struct {
 			initStruct(val.Field(i).Interface())
 		} else {
-			tagDefault := field.Tag.Get("default")
-			setField(c, field, stringToValue(tagDefault, field.Type.Kind()))
+			tagDefault := getFieldDefaultValue(c, field.Name)
+			defaultVal := stringToValue(tagDefault, field.Type.Kind())
+
+			resetMethod := fmt.Sprintf("%s%s", "Reset", field.Name)
+			var prefix string
+
+			if _, ok := pVarType.MethodByName(resetMethod); ok {
+				prefix = "Reset"
+			} else {
+				prefix = "Set"
+			}
+			setField(c, prefix, field, defaultVal)
 		}
 	}
 
@@ -417,7 +429,7 @@ func initStruct(c interface{}) interface{} {
 // The setter, if provided, if preferred as there may be some extra work around,
 // for example it may need to acquire a mutex, or set some other flags.
 // The `val` must have the same dynamic type as the field, otherwise it will panic.
-func setField(c interface{}, field reflect.StructField, val reflect.Value) {
+func setField(c interface{}, setterPrefix string, field reflect.StructField, val reflect.Value) {
 	cVal := reflect.Indirect(reflect.ValueOf(c))
 	if cVal.Kind() != reflect.Struct {
 		return
@@ -434,7 +446,7 @@ func setField(c interface{}, field reflect.StructField, val reflect.Value) {
 		return
 	}
 
-	setMethodName := fmt.Sprintf("Set%s", field.Name)
+	setMethodName := fmt.Sprintf("%s%s", setterPrefix, field.Name)
 	setMethodV := reflect.ValueOf(c).MethodByName(setMethodName)
 	// setMethod may be invalid, but we call setMethodV.IsValid() first before
 	// all the other methods so it should be safe.
@@ -442,10 +454,13 @@ func setField(c interface{}, field reflect.StructField, val reflect.Value) {
 	setMethodT := setMethod.Type
 
 	// Call the setter if we have found a valid one
-	if setMethodV.IsValid() &&
-		setMethodT.NumIn() == 2 && // In(0) is the receiver
-		setMethodT.In(1).Kind() == fieldKind {
-		setMethodV.Call([]reflect.Value{val})
+	if setMethodV.IsValid() {
+		var in []reflect.Value
+		// The method should not have more than 2 parameters, while In(0) is the receiver
+		if setMethodT.NumIn() == 2 && setMethodT.In(1).Kind() == fieldKind {
+			in = append(in, val)
+		}
+		setMethodV.Call(in)
 	} else {
 		fieldVal.Set(val)
 	}
@@ -526,7 +541,7 @@ func loadEnvsInternal(c interface{}) {
 				continue
 			}
 
-			setField(c, field, stringToValue(envVal, fieldK))
+			setField(c, "Set", field, stringToValue(envVal, fieldK))
 		}
 	}
 }
