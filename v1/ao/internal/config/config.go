@@ -123,7 +123,10 @@ func (s *SamplingConfig) Configured() bool {
 
 // UnmarshalYAML is the customized unmarshal method for SamplingConfig
 func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var aux = SamplingConfig{
+	var aux = struct {
+		TracingMode string
+		SampleRate  int
+	}{
 		TracingMode: "Invalid",
 		SampleRate:  -1,
 	}
@@ -290,7 +293,7 @@ func (c *Config) RefreshConfig(opts ...Option) error {
 
 func (c *Config) printDelta() {
 	base := newConfig().reset()
-	log.Warningf("Accepted config items: \n%s", getDelta(base, c).sanitize())
+	log.Warningf("Accepted config items: \n%s", getDelta(base, c, "").sanitize())
 }
 
 // DeltaItem defines a delta item  of two Config objects
@@ -337,7 +340,7 @@ func (d *Delta) String() string {
 }
 
 // getDelta compares two instances of the same struct and returns the delta.
-func getDelta(base, changed interface{}) *Delta {
+func getDelta(base, changed interface{}, keyPrefix string) *Delta {
 	delta := &Delta{}
 
 	baseVal := reflect.Indirect(reflect.ValueOf(base))
@@ -357,13 +360,21 @@ func getDelta(base, changed interface{}) *Delta {
 		fieldBase := reflect.Indirect(baseVal.Field(i))
 
 		if fieldChanged.Kind() == reflect.Struct {
-			subDelta := getDelta(fieldBase.Interface(), fieldChanged.Interface())
+			prefix := typeFieldChanged.Name
+			baseField := baseVal.Field(i).Interface()
+			changedField := changedVal.Field(i).Interface()
+
+			subDelta := getDelta(baseField, changedField, prefix)
 			delta.add(subDelta.items()...)
 		} else {
-			if fieldChanged.CanSet() &&
+			if fieldChanged.CanSet() && // only collect the exported fields
 				fieldBase.Interface() != fieldChanged.Interface() {
+				keyName := typeFieldChanged.Name
+				if keyPrefix != "" {
+					keyName = fmt.Sprintf("%s.%s", keyPrefix, typeFieldChanged.Name)
+				}
 				kv := DeltaItem{
-					key:        typeFieldChanged.Name,
+					key:        keyName,
 					env:        typeFieldChanged.Tag.Get("env"),
 					value:      fmt.Sprintf("%v", fieldChanged.Interface()),
 					defaultVal: fmt.Sprintf("%v", fieldBase.Interface()),
@@ -456,7 +467,8 @@ func setField(c interface{}, setterPrefix string, field reflect.StructField, val
 	// Call the setter if we have found a valid one
 	if setMethodV.IsValid() {
 		var in []reflect.Value
-		// The method should not have more than 2 parameters, while In(0) is the receiver
+		// The method should not have more than 2 parameters, while the receiver
+		// is the first parameter.
 		if setMethodT.NumIn() == 2 && setMethodT.In(1).Kind() == fieldKind {
 			in = append(in, val)
 		}

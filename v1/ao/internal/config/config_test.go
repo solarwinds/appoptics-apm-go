@@ -3,12 +3,14 @@
 package config
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v2"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -87,8 +89,11 @@ func TestPrintDelta(t *testing.T) {
 	changed.PrependDomain = true
 	changed.ReporterProperties.EventFlushInterval = 100
 
-	assert.Equal(t, "Collector(APPOPTICS_COLLECTOR)=test.com:443 (default=collector.appoptics.com:443)\nPrependDomain(APPOPTICS_PREPEND_DOMAIN)=true (default=false)",
-		getDelta(newConfig().reset(), changed).sanitize().String())
+	assert.Equal(t,
+		`Collector(APPOPTICS_COLLECTOR)=test.com:443 (default=collector.appoptics.com:443)
+PrependDomain(APPOPTICS_PREPEND_DOMAIN)=true (default=false)
+ReporterProperties.EventFlushInterval(APPOPTICS_EVENTS_FLUSH_INTERVAL)=100 (default=2)`,
+		getDelta(newConfig().reset(), changed, "").sanitize().String())
 }
 
 func TestConfigInit(t *testing.T) {
@@ -206,4 +211,109 @@ func TestEnvsLoading(t *testing.T) {
 	c := NewConfig()
 
 	assert.Equal(t, *c, envConfig)
+}
+
+func TestYamlConfig(t *testing.T) {
+	yamlConfig := Config{
+		Collector:    "yaml.test.com",
+		ServiceKey:   "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189218:go",
+		TrustedPath:  "/yaml-collector.crt",
+		CollectorUDP: "yamludp.test.com",
+		ReporterType: "udp",
+		Sampling: &SamplingConfig{
+			TracingMode:           "disabled",
+			tracingModeConfigured: true,
+			SampleRate:            100,
+			sampleRateConfigured:  true,
+		},
+		PrependDomain: true,
+		HostAlias:     "yaml-alias",
+		SkipVerify:    true,
+		Precision:     2 * 3,
+		ReporterProperties: &ReporterOptions{
+			EventFlushInterval:      2 * 3,
+			EventFlushBatchSize:     2000 * 3,
+			MetricFlushInterval:     30,
+			GetSettingsInterval:     30,
+			SettingsTimeoutInterval: 10,
+			PingInterval:            20,
+			RetryDelayInitial:       500,
+			RetryDelayMax:           60,
+			RedirectMax:             20,
+			RetryLogThreshold:       10,
+			MaxRetries:              20,
+		},
+		Disabled: true,
+	}
+
+	out, err := yaml.Marshal(yamlConfig)
+	assert.Nil(t, err)
+
+	err = ioutil.WriteFile("/tmp/appoptics-config.yaml", out, 0644)
+	assert.Nil(t, err)
+
+	// Test with config file
+	ClearEnvs()
+	os.Setenv("APPOPTICS_CONFIG_FILE", "/tmp/appoptics-config.yaml")
+
+	c := NewConfig()
+	assert.Equal(t, *c, yamlConfig)
+
+	// Test with both config file and env variables
+	envs := []string{
+		"APPOPTICS_COLLECTOR=collector.test.com",
+		"APPOPTICS_SERVICE_KEY=ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
+		"APPOPTICS_TRUSTEDPATH=/collector.crt",
+		"APPOPTICS_COLLECTOR_UDP=udp.test.com",
+		"APPOPTICS_REPORTER=udp",
+		"APPOPTICS_TRACING_MODE=never",
+		"APPOPTICS_SAMPLE_RATE=1000",
+		"APPOPTICS_PREPEND_DOMAIN=true",
+		"APPOPTICS_HOSTNAME_ALIAS=alias",
+		"APPOPTICS_INSECURE_SKIP_VERIFY=true",
+		"APPOPTICS_HISTOGRAM_PRECISION=4",
+		"APPOPTICS_EVENTS_FLUSH_INTERVAL=4",
+		"APPOPTICS_EVENTS_BATCHSIZE=4000",
+		"APPOPTICS_DISABLED=true",
+	}
+	ClearEnvs()
+	SetEnvs(envs)
+	os.Setenv("APPOPTICS_CONFIG_FILE", "/tmp/appoptics-config.yaml")
+
+	envConfig := Config{
+		Collector:    "collector.test.com",
+		ServiceKey:   "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
+		TrustedPath:  "/collector.crt",
+		CollectorUDP: "udp.test.com",
+		ReporterType: "udp",
+		Sampling: &SamplingConfig{
+			TracingMode:           "disabled",
+			tracingModeConfigured: true,
+			SampleRate:            1000,
+			sampleRateConfigured:  true,
+		},
+		PrependDomain: true,
+		HostAlias:     "alias",
+		SkipVerify:    true,
+		Precision:     2 * 2,
+		ReporterProperties: &ReporterOptions{
+			EventFlushInterval:      2 * 2,
+			EventFlushBatchSize:     2000 * 2,
+			MetricFlushInterval:     30,
+			GetSettingsInterval:     30,
+			SettingsTimeoutInterval: 10,
+			PingInterval:            20,
+			RetryDelayInitial:       500,
+			RetryDelayMax:           60,
+			RedirectMax:             20,
+			RetryLogThreshold:       10,
+			MaxRetries:              20,
+		},
+		Disabled: true,
+	}
+
+	c = NewConfig()
+	assert.Equal(t, *c, envConfig)
+
+	os.Unsetenv("APPOPTICS_CONFIG_FILE")
 }
