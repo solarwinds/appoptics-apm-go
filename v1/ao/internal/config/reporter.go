@@ -10,10 +10,10 @@ import (
 // must be accessed through atomic operators
 type ReporterOptions struct {
 	// Events flush interval in seconds
-	EvtFlushInterval int64 `yaml:",omitempty" env:"APPOPTICS_EVENTS_FLUSH_INTERVAL" default:"2"`
+	EventFlushInterval int64 `yaml:",omitempty" env:"APPOPTICS_EVENTS_FLUSH_INTERVAL" default:"2"`
 
 	// Event sending batch size in KB
-	EvtFlushBatchSize int64 `yaml:",omitempty" env:"APPOPTICS_EVENTS_BATCHSIZE" default:"2000"`
+	EventFlushBatchSize int64 `yaml:",omitempty" env:"APPOPTICS_EVENTS_BATCHSIZE" default:"2000"`
 
 	// Metrics flush interval in seconds
 	MetricFlushInterval int64 `yaml:",omitempty" default:"30"`
@@ -45,33 +45,33 @@ type ReporterOptions struct {
 
 // SetEventFlushInterval sets the event flush interval to i
 func (r *ReporterOptions) SetEventFlushInterval(i int64) {
-	atomic.StoreInt64(&r.EvtFlushInterval, i)
+	atomic.StoreInt64(&r.EventFlushInterval, i)
 }
 
-// SetEventBatchSize sets the event flush interval to i
-func (r *ReporterOptions) SetEventBatchSize(i int64) {
-	atomic.StoreInt64(&r.EvtFlushBatchSize, i)
+// SetEventFlushBatchSize sets the event flush interval to i
+func (r *ReporterOptions) SetEventFlushBatchSize(i int64) {
+	atomic.StoreInt64(&r.EventFlushBatchSize, i)
 }
 
 // GetEventFlushInterval returns the current event flush interval
 func (r *ReporterOptions) GetEventFlushInterval() int64 {
 
-	return atomic.LoadInt64(&r.EvtFlushInterval)
+	return atomic.LoadInt64(&r.EventFlushInterval)
 }
 
-// GetEventBatchSize returns the current event flush interval
-func (r *ReporterOptions) GetEventBatchSize() int64 {
+// GetEventFlushBatchSize returns the current event flush interval
+func (r *ReporterOptions) GetEventFlushBatchSize() int64 {
 
-	return atomic.LoadInt64(&r.EvtFlushBatchSize)
+	return atomic.LoadInt64(&r.EventFlushBatchSize)
 }
 
 // LoadEnvs load environment variables and refresh reporter options.
 func (r *ReporterOptions) loadEnvs() {
-	i := Env(envAppOpticsEventsFlushInterval).ToInt64(r.EvtFlushInterval)
+	i := Env(envAppOpticsEventsFlushInterval).ToInt64(r.EventFlushInterval)
 	r.SetEventFlushInterval(i)
 
-	b := Env(envAppOpticsEventsBatchSize).ToInt64(r.EvtFlushBatchSize)
-	r.SetEventBatchSize(b)
+	b := Env(envAppOpticsEventsBatchSize).ToInt64(r.EventFlushBatchSize)
+	r.SetEventFlushBatchSize(b)
 }
 
 func (r *ReporterOptions) validate() error {

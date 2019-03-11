@@ -84,7 +84,7 @@ func TestPrintDelta(t *testing.T) {
 	changed := newConfig().reset()
 	changed.Collector = "test.com:443"
 	changed.PrependDomain = true
-	changed.ReporterProperties.EvtFlushInterval = 100
+	changed.ReporterProperties.EventFlushInterval = 100
 
 	assert.Equal(t, "Collector(APPOPTICS_COLLECTOR)=test.com:443 (default=collector.appoptics.com:443)\nPrependDomain(APPOPTICS_PREPEND_DOMAIN)=true (default=false)",
 		getDelta(newConfig().reset(), changed).sanitize().String())

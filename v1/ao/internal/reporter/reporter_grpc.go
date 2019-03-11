@@ -661,7 +661,7 @@ func (r *grpcReporter) eventSender() {
 	// This event bucket is drainable either after it reaches HWM, or the flush
 	// interval has passed.
 	evtBucket := NewBytesBucket(r.eventMessages,
-		WithHWM(int(opts.GetEventBatchSize()*1024)),
+		WithHWM(int(opts.GetEventFlushBatchSize()*1024)),
 		WithIntervalGetter(opts.GetEventFlushInterval))
 
 	var closing bool

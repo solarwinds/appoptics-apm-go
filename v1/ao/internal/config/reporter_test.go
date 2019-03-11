@@ -14,6 +14,6 @@ func TestLoadEnvs(t *testing.T) {
 	r.SetEventFlushInterval(20)
 	assert.Equal(t, r.GetEventFlushInterval(), int64(20))
 
-	r.SetEventBatchSize(2000)
-	assert.Equal(t, r.GetEventBatchSize(), int64(2000))
+	r.SetEventFlushBatchSize(2000)
+	assert.Equal(t, r.GetEventFlushBatchSize(), int64(2000))
 }
