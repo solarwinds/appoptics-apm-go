@@ -143,11 +143,13 @@ func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 	return nil
 }
 
+// ResetTracingMode resets the tracing mode to its default value and clear the flag.
 func (s *SamplingConfig) ResetTracingMode() {
 	s.TracingMode = getFieldDefaultValue(s, "TracingMode")
 	s.tracingModeConfigured = false
 }
 
+// ResetSampleRate resets the sample rate to its default value and clear the flag.
 func (s *SamplingConfig) ResetSampleRate() {
 	s.SampleRate = ToInteger(getFieldDefaultValue(s, "SampleRate"))
 	s.sampleRateConfigured = false
@@ -180,16 +182,16 @@ func (s *SamplingConfig) SetSampleRate(rate int) {
 	s.sampleRateConfigured = true
 }
 
-func getFieldDefaultValue(i interface{}, name string) string {
+// Get the value of the `default` tag of a field in the struct.
+func getFieldDefaultValue(i interface{}, fieldName string) string {
 	iv := reflect.Indirect(reflect.ValueOf(i))
 	if iv.Kind() != reflect.Struct {
 		panic("calling getFieldDefaultValue with non-struct type")
 	}
 
-	it := iv.Type()
-	field, ok := it.FieldByName(name)
+	field, ok := iv.Type().FieldByName(fieldName)
 	if !ok {
-		panic(fmt.Sprintf("invalid field: %s", name))
+		panic(fmt.Sprintf("invalid field: %s", fieldName))
 	}
 
 	return field.Tag.Get("default")
@@ -213,17 +215,16 @@ func WithServiceKey(key string) Option {
 	}
 }
 
-// NewConfig initializes a ReporterOptions object and override default values
-// with options provided as arguments. It may print errors if there are invalid
-// values in the configuration file or the environment variables.
+// NewConfig initializes a Config object and override default values with options
+// provided as arguments. It may print errors if there are invalid values in the
+// configuration file or the environment variables.
 //
-// If there is an error (e.g., invalid config option value), it will return a
-// config with default values and DISABLE the agent.
+// If there is a fatal error (e.g., invalid config file), it will return a config
+// object with default values.
 func NewConfig(opts ...Option) *Config {
 	c := newConfig()
 	if err := c.RefreshConfig(opts...); err != nil {
-		e := errors.Wrap(err, "Config init failed, falling back to default values")
-		log.Error(e)
+		log.Error(errors.Wrap(err, "Failed to initialize configuration"))
 		c.reset()
 	}
 	return c
@@ -267,7 +268,7 @@ func (c *Config) validate() error {
 	return c.ReporterProperties.validate()
 }
 
-// RefreshConfig loads the customized settings and merge with default values
+// RefreshConfig loads configuration from config file and environment variables.
 func (c *Config) RefreshConfig(opts ...Option) error {
 	c.Lock()
 	defer c.Unlock()
@@ -330,7 +331,7 @@ func (d *Delta) sanitize() *Delta {
 func (d *Delta) String() string {
 	var s []string
 	for _, item := range d.delta {
-		s = append(s, fmt.Sprintf("%s(%s)=%s (default=%s)",
+		s = append(s, fmt.Sprintf(" - %s (%s) = %s (default: %s)",
 			item.key,
 			item.env,
 			item.value,
@@ -397,30 +398,34 @@ func (c *Config) reset() *Config {
 	return initStruct(c).(*Config)
 }
 
-// initStruct initialize the struct with the default values of the struct tags
-// The input must be an addressable struct object (or its pointer)
+// initStruct initializes the struct with the default values defined in the struct
+// tags.
+// The input must be a pointer to a settable struct object.
 func initStruct(c interface{}) interface{} {
-	val := reflect.Indirect(reflect.ValueOf(c))
-	valType := val.Type()
-	pVarType := reflect.ValueOf(c).Type()
+	cVal := reflect.Indirect(reflect.ValueOf(c))
+	cType := cVal.Type()
+	cPtrType := reflect.ValueOf(c).Type()
 
-	for i := 0; i < val.NumField(); i++ {
-		fieldVal := reflect.Indirect(val.Field(i))
-		field := valType.Field(i)
+	for i := 0; i < cVal.NumField(); i++ {
+		fieldVal := reflect.Indirect(cVal.Field(i))
+		field := cType.Field(i)
 
 		if field.Anonymous || !fieldVal.CanSet() {
 			continue
 		}
 		if fieldVal.Kind() == reflect.Struct {
-			initStruct(val.Field(i).Interface())
+			// Need to use its pointer, otherwise it won't be addressable after
+			// passed into the nested method
+			initStruct(getValPtr(cVal.Field(i)).Interface())
 		} else {
-			tagDefault := getFieldDefaultValue(c, field.Name)
-			defaultVal := stringToValue(tagDefault, field.Type.Kind())
+			tagVal := getFieldDefaultValue(c, field.Name)
+			defaultVal := stringToValue(tagVal, field.Type)
 
 			resetMethod := fmt.Sprintf("%s%s", "Reset", field.Name)
 			var prefix string
 
-			if _, ok := pVarType.MethodByName(resetMethod); ok {
+			// The *T type is required to fetch the method defined with *T
+			if _, ok := cPtrType.MethodByName(resetMethod); ok {
 				prefix = "Reset"
 			} else {
 				prefix = "Set"
@@ -433,14 +438,16 @@ func initStruct(c interface{}) interface{} {
 }
 
 // setField assigns `val` to struct c's field specified by the name `field`. It
-// first checks if there is a setter method `Set+FieldName` for this field, and
-// calls the setter if so. Otherwise if will set the value directly via the
-// reflect.Value.Set function.
+// first checks if there is a setter method `setterPrefix+FieldName` for this
+// field, and calls the setter if so. Otherwise it sets the value directly via the
+// reflect.Value.Set method.
 //
-// The setter, if provided, if preferred as there may be some extra work around,
-// for example it may need to acquire a mutex, or set some other flags.
+// The setter, if provided, is preferred as there may be some extra work around,
+// for example it may need to acquire a mutex, or set some flags.
 // The `val` must have the same dynamic type as the field, otherwise it will panic.
-func setField(c interface{}, setterPrefix string, field reflect.StructField, val reflect.Value) {
+//
+// The dynamic type of the first argument `c` must be a pointer to a struct object.
+func setField(c interface{}, prefix string, field reflect.StructField, val reflect.Value) {
 	cVal := reflect.Indirect(reflect.ValueOf(c))
 	if cVal.Kind() != reflect.Struct {
 		return
@@ -457,12 +464,12 @@ func setField(c interface{}, setterPrefix string, field reflect.StructField, val
 		return
 	}
 
-	setMethodName := fmt.Sprintf("%s%s", setterPrefix, field.Name)
+	setMethodName := fmt.Sprintf("%s%s", prefix, field.Name)
 	setMethodV := reflect.ValueOf(c).MethodByName(setMethodName)
 	// setMethod may be invalid, but we call setMethodV.IsValid() first before
 	// all the other methods so it should be safe.
-	setMethod, _ := reflect.TypeOf(c).MethodByName(setMethodName)
-	setMethodT := setMethod.Type
+	setMethodM, _ := reflect.TypeOf(c).MethodByName(setMethodName)
+	setMethodT := setMethodM.Type
 
 	// Call the setter if we have found a valid one
 	if setMethodV.IsValid() {
@@ -478,12 +485,14 @@ func setField(c interface{}, setterPrefix string, field reflect.StructField, val
 	}
 }
 
-// stringToValue converts a string to a value specified by the kind.
-func stringToValue(s string, kind reflect.Kind) reflect.Value {
+// stringToValue converts a string to a value of the type specified by typ.
+func stringToValue(s string, typ reflect.Type) reflect.Value {
 	s = strings.TrimSpace(s)
 
 	var val interface{}
 	var err error
+
+	kind := typ.Kind()
 	switch kind {
 	case reflect.Int:
 		if s == "" {
@@ -514,11 +523,13 @@ func stringToValue(s string, kind reflect.Kind) reflect.Value {
 	default:
 		panic(fmt.Sprintf("Unsupported kind: %v, val: %s", kind, s))
 	}
-	return reflect.ValueOf(val)
+	// convert to the target type as `typ` may be a user defined type
+	return reflect.ValueOf(val).Convert(typ)
 }
 
 // loadEnvs loads environment variable values and update the Config object.
 func (c *Config) loadEnvs() {
+	log.Warning("Loading environment variables.")
 	loadEnvsInternal(c)
 }
 
@@ -541,7 +552,9 @@ func loadEnvsInternal(c interface{}) {
 		field := ct.Field(i)
 		fieldK := fieldV.Kind()
 		if fieldK == reflect.Struct {
-			loadEnvsInternal(cv.Field(i).Interface())
+			// Need to use its pointer, otherwise it won't be addressable after
+			// passed into the nested method
+			loadEnvsInternal(getValPtr(cv.Field(i)).Interface())
 		} else {
 			tagV := field.Tag.Get("env")
 			if tagV == "" {
@@ -553,9 +566,17 @@ func loadEnvsInternal(c interface{}) {
 				continue
 			}
 
-			setField(c, "Set", field, stringToValue(envVal, fieldK))
+			setField(c, "Set", field, stringToValue(envVal, fieldV.Type()))
 		}
 	}
+}
+
+// getValPtr returns the pointer value of the input argument if it's not a Ptr
+func getValPtr(val reflect.Value) reflect.Value {
+	if val.Kind() == reflect.Ptr {
+		return val
+	}
+	return val.Addr()
 }
 
 // getConfigPath returns the absolute path of the config file.
@@ -616,7 +637,7 @@ func (c *Config) checkFileSize(path string) error {
 	return nil
 }
 
-// loadConfigFile loads from the config file
+// loadConfigFile loads configuration from the config file.
 func (c *Config) loadConfigFile() error {
 	path := c.getConfigPath()
 	if path == "" {

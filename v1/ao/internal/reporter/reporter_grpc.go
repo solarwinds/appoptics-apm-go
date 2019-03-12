@@ -240,8 +240,6 @@ func newGRPCReporter() reporter {
 		return &nullReporter{}
 	}
 
-	log.Warningf("Using converted service key: \"%s\"", config.MaskServiceKey(serviceKey))
-
 	// collector address override
 	addr := config.GetCollector()
 
