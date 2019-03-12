@@ -46,5 +46,8 @@ var GetDisabled = conf.GetDisabled
 // ReporterOpts is a wrapper to the method of the global config
 var ReporterOpts = conf.GetReporter
 
+// DebugLevel is a wrapper to the method of the global config
+var DebugLevel = conf.GetDebugLevel
+
 // Load reads the customized configurations
 var Load = conf.Load

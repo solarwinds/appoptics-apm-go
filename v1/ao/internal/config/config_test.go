@@ -90,9 +90,9 @@ func TestPrintDelta(t *testing.T) {
 	changed.ReporterProperties.EventFlushInterval = 100
 
 	assert.Equal(t,
-		`Collector(APPOPTICS_COLLECTOR)=test.com:443 (default=collector.appoptics.com:443)
-PrependDomain(APPOPTICS_PREPEND_DOMAIN)=true (default=false)
-ReporterProperties.EventFlushInterval(APPOPTICS_EVENTS_FLUSH_INTERVAL)=100 (default=2)`,
+		` - Collector (APPOPTICS_COLLECTOR) = test.com:443 (default: collector.appoptics.com:443)
+ - PrependDomain (APPOPTICS_PREPEND_DOMAIN) = true (default: false)
+ - ReporterProperties.EventFlushInterval (APPOPTICS_EVENTS_FLUSH_INTERVAL) = 100 (default: 2)`,
 		getDelta(newConfig().reset(), changed, "").sanitize().String())
 }
 
@@ -243,7 +243,8 @@ func TestYamlConfig(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		Disabled: true,
+		Disabled:   true,
+		DebugLevel: "info",
 	}
 
 	out, err := yaml.Marshal(yamlConfig)
@@ -309,11 +310,12 @@ func TestYamlConfig(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		Disabled: true,
+		Disabled:   true,
+		DebugLevel: "info",
 	}
 
 	c = NewConfig()
-	assert.Equal(t, *c, envConfig)
+	assert.Equal(t, envConfig, *c)
 
 	os.Unsetenv("APPOPTICS_CONFIG_FILE")
 }

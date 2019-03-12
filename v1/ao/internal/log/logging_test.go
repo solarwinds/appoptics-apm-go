@@ -41,12 +41,12 @@ func TestDebugLevel(t *testing.T) {
 
 	for _, test := range tests {
 		os.Setenv(test.key, test.val)
-		initLog()
+		SetLevelFromStr(os.Getenv(envAppOpticsLogLevel))
 		assert.EqualValues(t, test.expected, Level(), "Test-"+test.val)
 	}
 
 	os.Unsetenv("APPOPTICS_DEBUG_LEVEL")
-	initLog()
+	SetLevelFromStr(os.Getenv(envAppOpticsLogLevel))
 	assert.EqualValues(t, Level(), defaultLogLevel)
 }
 
@@ -55,7 +55,7 @@ func TestLog(t *testing.T) {
 	log.SetOutput(&buffer)
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
-	initLog()
+	SetLevelFromStr(os.Getenv(envAppOpticsLogLevel))
 
 	tests := map[string]string{
 		"hello world": "hello world\n",

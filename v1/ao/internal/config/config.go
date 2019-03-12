@@ -101,6 +101,8 @@ type Config struct {
 	ReporterProperties *ReporterOptions `yaml:",omitempty"`
 
 	Disabled bool `yaml:",omitempty" env:"APPOPTICS_DISABLED"`
+
+	DebugLevel string `yaml:",omitempty" env:"APPOPTICS_DEBUG_LEVEL"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -263,6 +265,11 @@ func (c *Config) validate() error {
 	if ok := IsValidHostnameAlias(c.HostAlias); !ok {
 		log.Warning(InvalidEnv("HostAlias", c.HostAlias))
 		c.HostAlias = getFieldDefaultValue(c, "HostAlias")
+	}
+
+	if _, valid := log.ToLogLevel(c.DebugLevel); !valid {
+		log.Warning(InvalidEnv("DebugLevel", c.DebugLevel))
+		c.DebugLevel = ""
 	}
 
 	return c.ReporterProperties.validate()
@@ -761,4 +768,12 @@ func (c *Config) GetReporter() *ReporterOptions {
 	c.RLock()
 	defer c.RUnlock()
 	return c.ReporterProperties
+}
+
+// GetDebugLevel returns the global logging level. Note that it may return an
+// empty string
+func (c *Config) GetDebugLevel() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.DebugLevel
 }

@@ -55,16 +55,18 @@ var (
 )
 
 func init() {
-	initLog()
+	SetLevelFromStr(os.Getenv(envAppOpticsLogLevel))
 }
 
-func initLog() {
+// SetLevelFromStr parses the input string to a LogLevel and change the level of
+// the global logger accordingly.
+func SetLevelFromStr(s string) {
 	level := defaultLogLevel
-	if s, ok := os.LookupEnv(envAppOpticsLogLevel); ok {
-		if l, valid := ToLogLevel(s); valid {
-			level = l
-		}
+
+	if l, valid := ToLogLevel(s); valid {
+		level = l
 	}
+
 	SetLevel(level)
 }
 
