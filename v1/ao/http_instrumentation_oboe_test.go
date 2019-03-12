@@ -15,7 +15,7 @@ import (
 
 func TestCustomTransactionNameWithDomain(t *testing.T) {
 	os.Setenv("APPOPTICS_PREPEND_DOMAIN", "true")
-	config.Refresh()
+	config.Load()
 	r := reporter.SetTestReporter() // set up test reporter
 
 	// Test prepending the domain to transaction names.

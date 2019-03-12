@@ -46,5 +46,5 @@ var GetDisabled = conf.GetDisabled
 // ReporterOpts is a wrapper to the method of the global config
 var ReporterOpts = conf.GetReporter
 
-// Refresh reloads the customized configurations
-var Refresh = conf.RefreshConfig
+// Load reads the customized configurations
+var Load = conf.Load

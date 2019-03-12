@@ -426,7 +426,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// Remote setting has the override flag && local config has lower rate
 	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
-	config.Refresh()
+	config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
@@ -437,7 +437,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// Remote setting has the override flag && local config has higher rate
 	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
-	config.Refresh()
+	config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000, 120, argsToMap(1000000, 1000000, -1, -1))
@@ -448,7 +448,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// Remote setting doesn't have the override flag && local config has lower rate
 	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
-	config.Refresh()
+	config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
@@ -458,7 +458,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// Remote setting doesn't have the override flag && local config has higher rate
 	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
-	config.Refresh()
+	config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000, 120, argsToMap(1000000, 1000000, -1, -1))
@@ -468,7 +468,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// Remote setting has the override flag && no local config
 	_ = os.Unsetenv("APPOPTICS_TRACING_MODE")
 	_ = os.Unsetenv("APPOPTICS_SAMPLE_RATE")
-	config.Refresh()
+	config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		10000, 120, argsToMap(1000000, 1000000, -1, -1))
@@ -478,7 +478,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// Remote setting doesn't have the override flag && no local config
 	_ = os.Unsetenv("APPOPTICS_TRACING_MODE")
 	_ = os.Unsetenv("APPOPTICS_SAMPLE_RATE")
-	config.Refresh()
+	config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		10000, 120, argsToMap(1000000, 1000000, -1, -1))
@@ -488,7 +488,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// Remote setting has the override flag && local tracing mode = DISABLED
 	_ = os.Setenv("APPOPTICS_TRACING_MODE", "disabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
-	config.Refresh()
+	config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))

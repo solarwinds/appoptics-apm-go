@@ -223,7 +223,7 @@ func WithServiceKey(key string) Option {
 // object with default values.
 func NewConfig(opts ...Option) *Config {
 	c := newConfig()
-	if err := c.RefreshConfig(opts...); err != nil {
+	if err := c.Load(opts...); err != nil {
 		log.Error(errors.Wrap(err, "Failed to initialize configuration"))
 		c.reset()
 	}
@@ -268,15 +268,15 @@ func (c *Config) validate() error {
 	return c.ReporterProperties.validate()
 }
 
-// RefreshConfig loads configuration from config file and environment variables.
-func (c *Config) RefreshConfig(opts ...Option) error {
+// Load reads configuration from config file and environment variables.
+func (c *Config) Load(opts ...Option) error {
 	c.Lock()
 	defer c.Unlock()
 
 	c.reset()
 
 	if err := c.loadConfigFile(); err != nil {
-		return errors.Wrap(err, "RefreshConfig")
+		return errors.Wrap(err, "Load")
 	}
 	c.loadEnvs()
 
@@ -284,7 +284,7 @@ func (c *Config) RefreshConfig(opts ...Option) error {
 		opt(c)
 	}
 	if err := c.validate(); err != nil {
-		return errors.Wrap(err, "RefreshConfig")
+		return errors.Wrap(err, "Load")
 	}
 
 	c.printDelta()
@@ -620,7 +620,7 @@ func (c *Config) loadYaml(path string) error {
 	// The config struct is modified in place so we won't tolerate any error
 	err = yaml.Unmarshal(data, &c)
 	if err != nil {
-		return errors.Wrap(err, "loadYaml")
+		return errors.Wrap(err, fmt.Sprintf("loadYaml: %s", path))
 	}
 	return nil
 }

@@ -78,7 +78,7 @@ func TestConfiguredHostname(t *testing.T) {
 	old, has = os.LookupEnv("APPOPTICS_HOSTNAME_ALIAS")
 	os.Setenv("APPOPTICS_HOSTNAME_ALIAS", "testAlias")
 	os.Setenv("APPOPTICS_SERVICE_KEY", "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go")
-	config.Refresh()
+	config.Load()
 	assert.Equal(t, "testAlias", ConfiguredHostname())
 	assert.True(t, strings.Contains(buf.String(), "Accepted config items"), buf.String())
 	assert.True(t, strings.Contains(buf.String(), "APPOPTICS_HOSTNAME_ALIAS"), buf.String())
