@@ -14,3 +14,6 @@ coverage:
         only_pulls: false
         flags: null
         paths: null
+    patch:
+      default:
+        enabled: no
