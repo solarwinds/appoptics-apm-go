@@ -4,7 +4,6 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,11 +18,6 @@ func InvalidEnv(env string, val string) string {
 // MissingEnv returns a string indicating missing environment variables
 func MissingEnv(env string) string {
 	return fmt.Sprintf("missing env - %s", env)
-}
-
-// NonDefaultEnv returns a string indicating non-default environment variables
-func NonDefaultEnv(env string, val string) string {
-	return fmt.Sprintf("env found - %s: \"%s\"", env, val)
 }
 
 const (
@@ -85,32 +79,16 @@ func IsValidHost(host string) bool {
 	return true
 }
 
-// ToHost converts a string to a host in interface{} format
-func ToHost(s string) interface{} {
-	return s
-}
-
 // IsValidFile checks if the string represents a valid file.
 func IsValidFile(file string) bool {
 	// TODO
 	return true
 }
 
-// ToFileString converts a string to an interface{} represents a file path
-func ToFileString(file string) interface{} {
-	path, _ := filepath.Abs(file)
-	return path
-}
-
 // IsValidReporterType checks if the reporter type is valid.
 func IsValidReporterType(t string) bool {
 	t = strings.ToLower(strings.TrimSpace(t))
 	return t == "ssl" || t == "udp"
-}
-
-// ToReporterType converts a string to a reporter type
-func ToReporterType(t string) interface{} {
-	return t
 }
 
 // IsValidTracingMode checks if the mode is valid
@@ -136,26 +114,9 @@ func ToTracingMode(m string) string {
 	return mode
 }
 
-// IsValidBool checks if the string represents a valid boolean value
-func IsValidBool(b string) bool {
-	t := strings.ToLower(strings.TrimSpace(b))
-	return t == "true" || t == "false" || t == "yes" || t == "no"
-}
-
 // IsValidHostnameAlias checks if the alias is valid
 func IsValidHostnameAlias(a string) bool {
 	return true
-}
-
-// ToHostnameAlias converts a string to a hostname alias
-func ToHostnameAlias(a string) interface{} {
-	return a
-}
-
-// IsValidInteger checks if the string represents a valid integer
-func IsValidInteger(i string) bool {
-	_, valid := strconv.Atoi(i)
-	return valid == nil
 }
 
 // ToInteger converts a string to an integer

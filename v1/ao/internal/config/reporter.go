@@ -65,15 +65,6 @@ func (r *ReporterOptions) GetEventFlushBatchSize() int64 {
 	return atomic.LoadInt64(&r.EventFlushBatchSize)
 }
 
-// LoadEnvs load environment variables and refresh reporter options.
-func (r *ReporterOptions) loadEnvs() {
-	i := Env(envAppOpticsEventsFlushInterval).ToInt64(r.EventFlushInterval)
-	r.SetEventFlushInterval(i)
-
-	b := Env(envAppOpticsEventsBatchSize).ToInt64(r.EventFlushBatchSize)
-	r.SetEventFlushBatchSize(b)
-}
-
 func (r *ReporterOptions) validate() error {
 	// TODO
 	return nil

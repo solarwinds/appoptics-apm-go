@@ -74,7 +74,6 @@ func TestIsValidReporterType(t *testing.T) {
 }
 
 func TestConverters(t *testing.T) {
-	assert.Equal(t, "ssl", ToReporterType("ssl").(string))
 	assert.Equal(t, "disabled", ToTracingMode("disabled"))
 	assert.Equal(t, "disabled", ToTracingMode("never"))
 	assert.Equal(t, "enabled", ToTracingMode("always"))

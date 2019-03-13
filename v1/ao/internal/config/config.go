@@ -492,93 +492,14 @@ func setField(c interface{}, prefix string, field reflect.StructField, val refle
 	}
 }
 
-// stringToValue converts a string to a value of the type specified by typ.
-func stringToValue(s string, typ reflect.Type) reflect.Value {
-	s = strings.TrimSpace(s)
-
-	var val interface{}
-	var err error
-
-	kind := typ.Kind()
-	switch kind {
-	case reflect.Int:
-		if s == "" {
-			s = "0"
-		}
-		val, err = strconv.Atoi(s)
-		if err != nil {
-			log.Warningf("Ignore invalid int value: %s", s)
-		}
-	case reflect.Int64:
-		if s == "" {
-			s = "0"
-		}
-		val, err = strconv.ParseInt(s, 10, 64)
-		if err != nil {
-			log.Warningf("Ignore invalid int64 value: %s", s)
-		}
-	case reflect.String:
-		val = s
-	case reflect.Bool:
-		if s == "" {
-			s = "false"
-		}
-		val, err = toBool(s)
-		if err != nil {
-			log.Warningf("Ignore invalid bool value: %s", errors.Wrap(err, s))
-		}
-	default:
-		panic(fmt.Sprintf("Unsupported kind: %v, val: %s", kind, s))
-	}
-	// convert to the target type as `typ` may be a user defined type
-	return reflect.ValueOf(val).Convert(typ)
-}
-
 // loadEnvs loads environment variable values and update the Config object.
 func (c *Config) loadEnvs() {
 	log.Warning("Loading environment variables.")
 	loadEnvsInternal(c)
 }
 
-// c must be a pointer to a struct object
-func loadEnvsInternal(c interface{}) {
-	cv := reflect.Indirect(reflect.ValueOf(c))
-	ct := cv.Type()
-
-	if !cv.CanSet() {
-		// TODO: log a warning?
-		return
-	}
-
-	for i := 0; i < ct.NumField(); i++ {
-		fieldV := reflect.Indirect(cv.Field(i))
-		if !fieldV.CanSet() || ct.Field(i).Anonymous {
-			continue
-		}
-
-		field := ct.Field(i)
-		fieldK := fieldV.Kind()
-		if fieldK == reflect.Struct {
-			// Need to use its pointer, otherwise it won't be addressable after
-			// passed into the nested method
-			loadEnvsInternal(getValPtr(cv.Field(i)).Interface())
-		} else {
-			tagV := field.Tag.Get("env")
-			if tagV == "" {
-				continue
-			}
-
-			envVal := os.Getenv(tagV)
-			if envVal == "" {
-				continue
-			}
-
-			setField(c, "Set", field, stringToValue(envVal, fieldV.Type()))
-		}
-	}
-}
-
 // getValPtr returns the pointer value of the input argument if it's not a Ptr
+// The val must be addressable, otherwise it will panic.
 func getValPtr(val reflect.Value) reflect.Value {
 	if val.Kind() == reflect.Ptr {
 		return val

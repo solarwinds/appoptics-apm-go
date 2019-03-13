@@ -3,33 +3,15 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/pkg/errors"
 )
-
-// EnvVar defines the necessary properties and behaviors of a environment variable
-type EnvVar struct {
-	// the name of the environment variable
-	name string
-}
-
-// Env creates a new EnvVar object
-func Env(name string) EnvVar {
-	return EnvVar{name}
-}
-
-// ToString loads the env and returns a string value
-func (e EnvVar) ToString(fallback string) string {
-	v := os.Getenv(e.name)
-	if v != "" {
-		return v
-	}
-	return fallback
-}
 
 func toBool(s string) (bool, error) {
 	s = strings.ToLower(strings.TrimSpace(s))
@@ -41,36 +23,81 @@ func toBool(s string) (bool, error) {
 	return false, errors.New("cannot convert input to bool")
 }
 
-// ToBool loads the env and returns a bool value
-func (e EnvVar) ToBool(fallback bool) bool {
-	v := os.Getenv(e.name)
-	if v == "" {
-		return fallback
+// c must be a pointer to a struct object
+func loadEnvsInternal(c interface{}) {
+	cv := reflect.Indirect(reflect.ValueOf(c))
+	ct := cv.Type()
+
+	if !cv.CanSet() {
+		return
 	}
-	if b, err := toBool(v); err != nil {
-		log.Warningf("Ignore invalid bool value: %s=%s", e.name, v)
-		return fallback
-	} else {
-		return b
+
+	for i := 0; i < ct.NumField(); i++ {
+		fieldV := reflect.Indirect(cv.Field(i))
+		if !fieldV.CanSet() || ct.Field(i).Anonymous {
+			continue
+		}
+
+		field := ct.Field(i)
+		fieldK := fieldV.Kind()
+		if fieldK == reflect.Struct {
+			// Need to use its pointer, otherwise it won't be addressable after
+			// passed into the nested method
+			loadEnvsInternal(getValPtr(cv.Field(i)).Interface())
+		} else {
+			tagV := field.Tag.Get("env")
+			if tagV == "" {
+				continue
+			}
+
+			envVal := os.Getenv(tagV)
+			if envVal == "" {
+				continue
+			}
+
+			setField(c, "Set", field, stringToValue(envVal, fieldV.Type()))
+		}
 	}
 }
 
-// ToInt loads the env and returns a int value
-func (e EnvVar) ToInt(fallback int) int {
-	return int(e.ToInt64(int64(fallback)))
-}
+// stringToValue converts a string to a value of the type specified by typ.
+func stringToValue(s string, typ reflect.Type) reflect.Value {
+	s = strings.TrimSpace(s)
 
-// ToInt64 loads the env and returns a int64 value
-func (e EnvVar) ToInt64(fallback int64) int64 {
-	v := os.Getenv(e.name)
-	if v == "" {
-		return fallback
-	}
+	var val interface{}
+	var err error
 
-	i, err := strconv.ParseInt(v, 10, 64)
-	if err != nil {
-		log.Warningf("Ignore invalid int/int64 value: %s=%s", e.name, v)
-		return fallback
+	kind := typ.Kind()
+	switch kind {
+	case reflect.Int:
+		if s == "" {
+			s = "0"
+		}
+		val, err = strconv.Atoi(s)
+		if err != nil {
+			log.Warningf("Ignore invalid int value: %s", s)
+		}
+	case reflect.Int64:
+		if s == "" {
+			s = "0"
+		}
+		val, err = strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			log.Warningf("Ignore invalid int64 value: %s", s)
+		}
+	case reflect.String:
+		val = s
+	case reflect.Bool:
+		if s == "" {
+			s = "false"
+		}
+		val, err = toBool(s)
+		if err != nil {
+			log.Warningf("Ignore invalid bool value: %s", errors.Wrap(err, s))
+		}
+	default:
+		panic(fmt.Sprintf("Unsupported kind: %v, val: %s", kind, s))
 	}
-	return i
+	// convert to the target type as `typ` may be a user defined type
+	return reflect.ValueOf(val).Convert(typ)
 }

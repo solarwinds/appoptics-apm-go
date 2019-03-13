@@ -3,54 +3,71 @@
 package config
 
 import (
-	"os"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestLoadString(t *testing.T) {
-	var envName = "TEST_STRING"
+func TestToBool(t *testing.T) {
+	b, err := toBool("yes")
+	assert.True(t, b)
+	assert.Nil(t, err)
 
-	os.Setenv(envName, "hello")
-	assert.Equal(t, "hello", Env("TEST_STRING").ToString("fallback"))
+	b, err = toBool("true")
+	assert.True(t, b)
+	assert.Nil(t, err)
 
-	os.Setenv(envName, "")
-	assert.Equal(t, "fallback", Env("TEST_STRING").ToString("fallback"))
+	b, err = toBool("YES")
+	assert.True(t, b)
+	assert.Nil(t, err)
 
-	os.Unsetenv(envName)
-	assert.Equal(t, "fallback", Env("TEST_STRING").ToString("fallback"))
+	b, err = toBool("no")
+	assert.False(t, b)
+	assert.Nil(t, err)
+
+	b, err = toBool("false")
+	assert.False(t, b)
+	assert.Nil(t, err)
+
+	b, err = toBool("NO")
+	assert.False(t, b)
+	assert.Nil(t, err)
+
+	b, err = toBool("invalid")
+	assert.False(t, b)
+	assert.NotNil(t, err)
 }
 
-func TestLoadBool(t *testing.T) {
-	var envName = "TEST_BOOL"
-	os.Setenv(envName, "true")
-	assert.Equal(t, true, Env(envName).ToBool(false))
+func TestStringToValue(t *testing.T) {
+	typInt := reflect.TypeOf(1)
+	typInt64 := reflect.TypeOf(int64(1))
+	typString := reflect.TypeOf("a")
+	typBool := reflect.TypeOf(false)
 
-	os.Setenv(envName, "false")
-	assert.Equal(t, false, Env(envName).ToBool(false))
+	type NewStr string
+	typNewStr := reflect.TypeOf(NewStr("newStr"))
 
-	os.Setenv(envName, "yes")
-	assert.Equal(t, true, Env(envName).ToBool(false))
+	assert.Equal(t, stringToValue("1", typInt).Interface(), 1)
+	assert.Equal(t, stringToValue("1", typInt).Kind(), reflect.Int)
 
-	os.Setenv(envName, "no")
-	assert.Equal(t, false, Env(envName).ToBool(false))
+	assert.Equal(t, stringToValue("", typInt).Interface(), 0)
+	assert.Equal(t, stringToValue("a", typInt).Interface(), 0)
 
-	os.Setenv(envName, "123")
-	assert.Equal(t, false, Env(envName).ToBool(false))
+	assert.Equal(t, stringToValue("1", typInt64).Interface(), int64(1))
+	assert.Equal(t, stringToValue("1", typInt64).Kind(), reflect.Int64)
+	assert.Equal(t, stringToValue("", typInt64).Interface(), int64(0))
+	assert.Equal(t, stringToValue("a", typInt64).Interface(), int64(0))
 
-	os.Setenv(envName, "True")
-	assert.Equal(t, true, Env(envName).ToBool(false))
-}
+	assert.Equal(t, stringToValue("a", typString).Interface(), "a")
+	assert.Equal(t, stringToValue("a", typString).Kind(), reflect.String)
+	assert.Equal(t, stringToValue("1", typString).Interface(), "1")
+	assert.Equal(t, stringToValue("A", typString).Interface(), "A")
 
-func TestLoadInt(t *testing.T) {
-	var envName = "TEST_INT"
-	os.Setenv(envName, "123")
-	assert.Equal(t, 123, Env(envName).ToInt(456))
+	assert.Equal(t, stringToValue("yes", typBool).Interface(), true)
+	assert.Equal(t, stringToValue("yes", typBool).Kind(), reflect.Bool)
+	assert.Equal(t, stringToValue("false", typBool).Interface(), false)
 
-	os.Setenv(envName, "abc")
-	assert.Equal(t, 456, Env(envName).ToInt(456))
-
-	os.Setenv(envName, "123a")
-	assert.Equal(t, 456, Env(envName).ToInt(456))
+	assert.Equal(t, stringToValue("hello", typNewStr).Interface(), NewStr("hello"))
+	assert.Equal(t, stringToValue("hello", typNewStr).Type(), reflect.TypeOf(NewStr("hello")))
 }
