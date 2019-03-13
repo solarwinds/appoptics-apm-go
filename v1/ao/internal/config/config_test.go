@@ -3,12 +3,15 @@
 package config
 
 import (
+	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v2"
 )
@@ -318,4 +321,108 @@ func TestYamlConfig(t *testing.T) {
 	assert.Equal(t, envConfig, *c)
 
 	os.Unsetenv("APPOPTICS_CONFIG_FILE")
+}
+
+func TestSamplingConfigValidate(t *testing.T) {
+	s := &SamplingConfig{
+		TracingMode:           "invalid",
+		tracingModeConfigured: true,
+		SampleRate:            10000000,
+		sampleRateConfigured:  true,
+	}
+	s.validate()
+	assert.Equal(t, "enabled", s.TracingMode)
+	assert.Equal(t, false, s.tracingModeConfigured)
+	assert.Equal(t, 1000000, s.SampleRate)
+	assert.Equal(t, false, s.sampleRateConfigured)
+}
+
+func TestInvalidConfigFile(t *testing.T) {
+	var buf utils.SafeBuffer
+	var writers []io.Writer
+
+	writers = append(writers, &buf)
+	writers = append(writers, os.Stderr)
+
+	log.SetOutput(io.MultiWriter(writers...))
+
+	defer func() {
+		log.SetOutput(os.Stderr)
+	}()
+
+	ClearEnvs()
+	os.Setenv("APPOPTICS_SERVICE_KEY", "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go")
+	os.Setenv("APPOPTICS_CONFIG_FILE", "/tmp/appoptics-config.json")
+	_ = ioutil.WriteFile("/tmp/appoptics-config.json", []byte("hello"), 0644)
+
+	_ = NewConfig()
+	assert.Contains(t, buf.String(), ErrUnsupportedFormat.Error())
+	_ = os.Remove("/tmp/file-not-exist.yaml")
+
+	buf.Reset()
+	ClearEnvs()
+	os.Setenv("APPOPTICS_SERVICE_KEY", "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go")
+	os.Setenv("APPOPTICS_CONFIG_FILE", "/tmp/file-not-exist.yaml")
+	_ = NewConfig()
+	assert.Contains(t, buf.String(), "no such file or directory")
+}
+
+func TestInvalidConfig(t *testing.T) {
+	var buf utils.SafeBuffer
+	var writers []io.Writer
+
+	writers = append(writers, &buf)
+	writers = append(writers, os.Stderr)
+
+	log.SetOutput(io.MultiWriter(writers...))
+
+	defer func() {
+		log.SetOutput(os.Stderr)
+	}()
+
+	invalid := Config{
+		Collector:    "",
+		ServiceKey:   "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
+		TrustedPath:  "",
+		CollectorUDP: "",
+		ReporterType: "invalid",
+		Sampling: &SamplingConfig{
+			TracingMode:           "disabled",
+			tracingModeConfigured: true,
+			SampleRate:            1000,
+			sampleRateConfigured:  true,
+		},
+		PrependDomain: true,
+		HostAlias:     "alias",
+		SkipVerify:    true,
+		Precision:     2 * 2,
+		ReporterProperties: &ReporterOptions{
+			EventFlushInterval:      2 * 2,
+			EventFlushBatchSize:     2000 * 2,
+			MetricFlushInterval:     30,
+			GetSettingsInterval:     30,
+			SettingsTimeoutInterval: 10,
+			PingInterval:            20,
+			RetryDelayInitial:       500,
+			RetryDelayMax:           60,
+			RedirectMax:             20,
+			RetryLogThreshold:       10,
+			MaxRetries:              20,
+		},
+		Disabled:   true,
+		DebugLevel: "info",
+	}
+
+	assert.Nil(t, invalid.validate())
+
+	assert.Equal(t, "collector.appoptics.com:443", invalid.Collector)
+	assert.Contains(t, buf.String(), "invalid env, discarded - Collector:", buf.String())
+
+	assert.Equal(t, "", invalid.CollectorUDP)
+	assert.Contains(t, buf.String(), "invalid env, discarded - CollectorUDP:", buf.String())
+
+	assert.Equal(t, "ssl", invalid.ReporterType)
+	assert.Contains(t, buf.String(), "invalid env, discarded - ReporterType:", buf.String())
+
+	assert.Equal(t, "alias", invalid.HostAlias)
 }

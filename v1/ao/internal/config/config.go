@@ -678,12 +678,6 @@ func (c *Config) GetDisabled() bool {
 	return c.Disabled
 }
 
-func (c *Config) setDisabled(disabled bool) {
-	c.RLock()
-	defer c.RUnlock()
-	c.Disabled = disabled
-}
-
 // GetReporter returns the reporter options struct
 func (c *Config) GetReporter() *ReporterOptions {
 	c.RLock()
