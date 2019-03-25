@@ -47,11 +47,12 @@ var LevelStr = []string{
 	ERROR:   "ERROR",
 }
 
-const defaultLogLevel = WARNING
+// DefaultLevel defines the default log level
+const DefaultLevel = WARNING
 
 // The global log level.
 var (
-	globalLevel = &logLevel{LogLevel: defaultLogLevel}
+	globalLevel = &logLevel{LogLevel: DefaultLevel}
 )
 
 func init() {
@@ -61,7 +62,7 @@ func init() {
 // SetLevelFromStr parses the input string to a LogLevel and change the level of
 // the global logger accordingly.
 func SetLevelFromStr(s string) {
-	level := defaultLogLevel
+	level := DefaultLevel
 
 	if l, valid := ToLogLevel(s); valid {
 		level = l
@@ -72,7 +73,7 @@ func SetLevelFromStr(s string) {
 
 // ToLogLevel converts a string to a log level, or returns false for any error
 func ToLogLevel(level string) (LogLevel, bool) {
-	lvl := defaultLogLevel
+	lvl := DefaultLevel
 
 	// Accept integers for backward-compatibility.
 	if i, err := strconv.Atoi(level); err == nil {
@@ -122,7 +123,7 @@ func StrToLevel(e string) (LogLevel, error) {
 	if err == nil {
 		return LogLevel(offset), nil
 	} else {
-		return defaultLogLevel, err
+		return DefaultLevel, err
 	}
 }
 

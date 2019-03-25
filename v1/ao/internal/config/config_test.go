@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v2"
@@ -109,7 +110,7 @@ func TestConfigInit(t *testing.T) {
 	c.reset()
 
 	defaultC := Config{
-		Collector:    "collector.appoptics.com:443",
+		Collector:    defaultSSLCollector,
 		ServiceKey:   "",
 		TrustedPath:  "",
 		CollectorUDP: "",
@@ -415,7 +416,7 @@ func TestInvalidConfig(t *testing.T) {
 
 	assert.Nil(t, invalid.validate())
 
-	assert.Equal(t, "collector.appoptics.com:443", invalid.Collector)
+	assert.Equal(t, defaultSSLCollector, invalid.Collector)
 	assert.Contains(t, buf.String(), "invalid env, discarded - Collector:", buf.String())
 
 	assert.Equal(t, "", invalid.CollectorUDP)
@@ -425,4 +426,22 @@ func TestInvalidConfig(t *testing.T) {
 	assert.Contains(t, buf.String(), "invalid env, discarded - ReporterType:", buf.String())
 
 	assert.Equal(t, "alias", invalid.HostAlias)
+}
+
+// TestConfigDefaultValues is to verify the default values defined in struct Config
+// are all correct
+func TestConfigDefaultValues(t *testing.T) {
+	// A Config object initialized with default values
+	c := newConfig().reset()
+
+	// check default log level
+	level, ok := aolog.ToLogLevel(c.DebugLevel)
+	assert.Equal(t, level, aolog.DefaultLevel)
+	assert.True(t, ok)
+
+	// check default ssl collector url
+	assert.Equal(t, defaultSSLCollector, c.Collector)
+
+	// check the default sample rate
+	assert.Equal(t, MaxSampleRate, c.Sampling.SampleRate)
 }

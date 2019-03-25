@@ -34,6 +34,8 @@ const (
 	MinSampleRate = 0
 	// max config file size = 1MB
 	maxConfigFileSize = 1024 * 1024
+	// the default collector url
+	defaultSSLCollector = "collector.appoptics.com:443"
 )
 
 // The environment variables
@@ -69,51 +71,52 @@ type Config struct {
 	sync.RWMutex `yaml:"-"`
 
 	// Collector defines the host and port of the AppOptics collector
-	Collector string `yaml:",omitempty" env:"APPOPTICS_COLLECTOR" default:"collector.appoptics.com:443"`
+	Collector string `yaml:"Collector,omitempty" env:"APPOPTICS_COLLECTOR" default:"collector.appoptics.com:443"`
 
 	// ServiceKey defines the service key and service name
-	ServiceKey string `yaml:",omitempty" env:"APPOPTICS_SERVICE_KEY"`
+	ServiceKey string `yaml:"ServiceKey,omitempty" env:"APPOPTICS_SERVICE_KEY"`
 
 	// The file path of the cert file for gRPC connection
-	TrustedPath string `yaml:",omitempty" env:"APPOPTICS_TRUSTEDPATH"`
+	TrustedPath string `yaml:"TrustedPath,omitempty" env:"APPOPTICS_TRUSTEDPATH"`
 
 	// The host and port of the UDP collector
-	CollectorUDP string `yaml:",omitempty" env:"APPOPTICS_COLLECTOR_UDP"`
+	CollectorUDP string `yaml:"CollectorUDP,omitempty" env:"APPOPTICS_COLLECTOR_UDP"`
 
 	// The reporter type, ssl or udp
-	ReporterType string `yaml:",omitempty" env:"APPOPTICS_REPORTER" default:"ssl"`
+	ReporterType string `yaml:"ReporterType,omitempty" env:"APPOPTICS_REPORTER" default:"ssl"`
 
-	Sampling *SamplingConfig `yaml:",omitempty"`
+	Sampling *SamplingConfig `yaml:"Sampling,omitempty"`
 
 	// Whether the domain should be prepended to the transaction name.
-	PrependDomain bool `yaml:",omitempty" env:"APPOPTICS_PREPEND_DOMAIN"`
+	PrependDomain bool `yaml:"PrependDomain,omitempty" env:"APPOPTICS_PREPEND_DOMAIN"`
 
 	// The alias of the hostname
-	HostAlias string `yaml:",omitempty" env:"APPOPTICS_HOSTNAME_ALIAS"`
+	HostAlias string `yaml:"HostAlias,omitempty" env:"APPOPTICS_HOSTNAME_ALIAS"`
 
 	// Whether to skip verification of hostname
-	SkipVerify bool `yaml:",omitempty" env:"APPOPTICS_INSECURE_SKIP_VERIFY"`
+	SkipVerify bool `yaml:"SkipVerify,omitempty" env:"APPOPTICS_INSECURE_SKIP_VERIFY"`
 
 	// The precision of the histogram
-	Precision int `yaml:",omitempty" env:"APPOPTICS_HISTOGRAM_PRECISION" default:"2"`
+	Precision int `yaml:"Precision,omitempty" env:"APPOPTICS_HISTOGRAM_PRECISION" default:"2"`
 
 	// The reporter options
-	ReporterProperties *ReporterOptions `yaml:",omitempty"`
+	ReporterProperties *ReporterOptions `yaml:"ReporterProperties,omitempty"`
 
-	Disabled bool `yaml:",omitempty" env:"APPOPTICS_DISABLED"`
+	Disabled bool `yaml:"Disabled,omitempty" env:"APPOPTICS_DISABLED"`
 
-	DebugLevel string `yaml:",omitempty" env:"APPOPTICS_DEBUG_LEVEL"`
+	// The default log level. It should follow the level defined in log.DefaultLevel
+	DebugLevel string `yaml:"DebugLevel,omitempty" env:"APPOPTICS_DEBUG_LEVEL" default:"warning"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
 type SamplingConfig struct {
 	// The tracing mode
-	TracingMode string `yaml:",omitempty" env:"APPOPTICS_TRACING_MODE" default:"enabled"`
+	TracingMode string `yaml:"TracingMode,omitempty" env:"APPOPTICS_TRACING_MODE" default:"enabled"`
 	// If the tracing mode is configured explicitly
 	tracingModeConfigured bool `yaml:"-"`
 
 	// The sample rate
-	SampleRate int `yaml:",omitempty" env:"APPOPTICS_SAMPLE_RATE" default:"1000000"`
+	SampleRate int `yaml:"SampleRate,omitempty" env:"APPOPTICS_SAMPLE_RATE" default:"1000000"`
 	// If the sample rate is configured explicitly
 	sampleRateConfigured bool `yaml:"-"`
 }
@@ -269,7 +272,7 @@ func (c *Config) validate() error {
 
 	if _, valid := log.ToLogLevel(c.DebugLevel); !valid {
 		log.Warning(InvalidEnv("DebugLevel", c.DebugLevel))
-		c.DebugLevel = ""
+		c.DebugLevel = getFieldDefaultValue(c, "DebugLevel")
 	}
 
 	return c.ReporterProperties.validate()
@@ -326,10 +329,10 @@ func (d *Delta) items() []DeltaItem {
 }
 
 func (d *Delta) sanitize() *Delta {
-	for idx, item := range d.delta {
-		if item.key == "ServiceKey" {
+	for idx := range d.delta {
+		// mask the sensitive service key
+		if d.delta[idx].key == "ServiceKey" {
 			d.delta[idx].value = MaskServiceKey(d.delta[idx].value)
-			break
 		}
 	}
 	return d
@@ -401,6 +404,8 @@ func newConfig() *Config {
 	}
 }
 
+// reset reads the field tag `default` from the struct definition and initialize
+// the struct object with the default value.
 func (c *Config) reset() *Config {
 	return initStruct(c).(*Config)
 }

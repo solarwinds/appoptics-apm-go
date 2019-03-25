@@ -76,7 +76,7 @@ func ToServiceKey(s string) string {
 // IsValidHost verifies if the host is in a valid format
 func IsValidHost(host string) bool {
 	// TODO
-	return host != ""
+	return true
 }
 
 // IsValidFile checks if the string represents a valid file.
