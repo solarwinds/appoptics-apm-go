@@ -105,7 +105,7 @@ type Config struct {
 	Disabled bool `yaml:"Disabled,omitempty" env:"APPOPTICS_DISABLED"`
 
 	// The default log level. It should follow the level defined in log.DefaultLevel
-	DebugLevel string `yaml:"DebugLevel,omitempty" env:"APPOPTICS_DEBUG_LEVEL" default:"warning"`
+	DebugLevel string `yaml:"DebugLevel,omitempty" env:"APPOPTICS_DEBUG_LEVEL" default:"warn"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -129,8 +129,8 @@ func (s *SamplingConfig) Configured() bool {
 // UnmarshalYAML is the customized unmarshal method for SamplingConfig
 func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var aux = struct {
-		TracingMode string
-		SampleRate  int
+		TracingMode string `yaml:"TracingMode"`
+		SampleRate  int    `yaml:"SampleRate"`
 	}{
 		TracingMode: "Invalid",
 		SampleRate:  -1,
@@ -250,11 +250,6 @@ func (c *Config) validate() error {
 	if ok := IsValidFile(c.TrustedPath); !ok {
 		log.Warning(InvalidEnv("TrustedPath", c.TrustedPath))
 		c.TrustedPath = getFieldDefaultValue(c, "TrustedPath")
-	}
-
-	if ok := IsValidHost(c.CollectorUDP); !ok {
-		log.Warning(InvalidEnv("CollectorUDP", c.CollectorUDP))
-		c.CollectorUDP = getFieldDefaultValue(c, "CollectorUDP")
 	}
 
 	c.ReporterType = strings.ToLower(strings.TrimSpace(c.ReporterType))
@@ -550,11 +545,24 @@ func (c *Config) loadYaml(path string) error {
 		return errors.Wrap(err, "loadYaml")
 	}
 
+	// A pointer field may be assigned with nil in unmarshal, so just keep the
+	// old default value and re-assign it later.
+	origSampling := c.Sampling
+	origReporterProperties := c.ReporterProperties
+
 	// The config struct is modified in place so we won't tolerate any error
 	err = yaml.Unmarshal(data, &c)
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("loadYaml: %s", path))
 	}
+
+	if c.Sampling == nil {
+		c.Sampling = origSampling
+	}
+	if c.ReporterProperties == nil {
+		c.ReporterProperties = origReporterProperties
+	}
+
 	return nil
 }
 

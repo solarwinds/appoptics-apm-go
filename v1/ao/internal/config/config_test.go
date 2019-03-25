@@ -138,7 +138,8 @@ func TestConfigInit(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		Disabled: false,
+		Disabled:   false,
+		DebugLevel: "warn",
 	}
 	assert.Equal(t, *c, defaultC)
 }
@@ -209,7 +210,8 @@ func TestEnvsLoading(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		Disabled: true,
+		Disabled:   true,
+		DebugLevel: "warn",
 	}
 
 	c := NewConfig()
@@ -259,10 +261,10 @@ func TestYamlConfig(t *testing.T) {
 
 	// Test with config file
 	ClearEnvs()
-	os.Setenv("APPOPTICS_CONFIG_FILE", "/tmp/appoptics-config.yaml")
+	os.Setenv(envAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
 
 	c := NewConfig()
-	assert.Equal(t, *c, yamlConfig)
+	assert.Equal(t, yamlConfig, *c)
 
 	// Test with both config file and env variables
 	envs := []string{
@@ -418,9 +420,6 @@ func TestInvalidConfig(t *testing.T) {
 
 	assert.Equal(t, defaultSSLCollector, invalid.Collector)
 	assert.Contains(t, buf.String(), "invalid env, discarded - Collector:", buf.String())
-
-	assert.Equal(t, "", invalid.CollectorUDP)
-	assert.Contains(t, buf.String(), "invalid env, discarded - CollectorUDP:", buf.String())
 
 	assert.Equal(t, "ssl", invalid.ReporterType)
 	assert.Contains(t, buf.String(), "invalid env, discarded - ReporterType:", buf.String())
