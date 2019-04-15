@@ -8,12 +8,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestLoadEnvs(t *testing.T) {
-	r := defaultReporterOptions()
+func TestReporterOptions(t *testing.T) {
+	r := &ReporterOptions{}
 
 	r.SetEventFlushInterval(20)
 	assert.Equal(t, r.GetEventFlushInterval(), int64(20))
 
-	r.SetEventBatchSize(2000)
-	assert.Equal(t, r.GetEventBatchSize(), int64(2000))
+	r.SetEventFlushBatchSize(2000)
+	assert.Equal(t, r.GetEventFlushBatchSize(), int64(2000))
+
+	assert.Nil(t, r.validate())
 }

@@ -4,7 +4,6 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,11 +18,6 @@ func InvalidEnv(env string, val string) string {
 // MissingEnv returns a string indicating missing environment variables
 func MissingEnv(env string) string {
 	return fmt.Sprintf("missing env - %s", env)
-}
-
-// NonDefaultEnv returns a string indicating non-default environment variables
-func NonDefaultEnv(env string, val string) string {
-	return fmt.Sprintf("env found - %s: \"%s\"", env, val)
 }
 
 const (
@@ -61,7 +55,7 @@ var (
 // - convert all characters to lowercase
 // - convert spaces to hyphens
 // - remove invalid characters ( [^a-z0-9.:_-])
-func ToServiceKey(s string) interface{} {
+func ToServiceKey(s string) string {
 	parts := strings.SplitN(s, serviceKeyDelimiter, serviceKeyPartsCnt)
 	if len(parts) != serviceKeyPartsCnt {
 		// This should not happen as this method is called after service key
@@ -82,35 +76,19 @@ func ToServiceKey(s string) interface{} {
 // IsValidHost verifies if the host is in a valid format
 func IsValidHost(host string) bool {
 	// TODO
-	return true
+	return host != ""
 }
 
-// ToHost converts a string to a host in interface{} format
-func ToHost(s string) interface{} {
-	return s
-}
-
-// IsValidFileString checks if the string represents a valid file.
-func IsValidFileString(file string) bool {
+// IsValidFile checks if the string represents a valid file.
+func IsValidFile(file string) bool {
 	// TODO
 	return true
-}
-
-// ToFileString converts a string to an interface{} represents a file path
-func ToFileString(file string) interface{} {
-	path, _ := filepath.Abs(file)
-	return path
 }
 
 // IsValidReporterType checks if the reporter type is valid.
 func IsValidReporterType(t string) bool {
 	t = strings.ToLower(strings.TrimSpace(t))
 	return t == "ssl" || t == "udp"
-}
-
-// ToReporterType converts a string to a reporter type
-func ToReporterType(t string) interface{} {
-	return t
 }
 
 // IsValidTracingMode checks if the mode is valid
@@ -120,16 +98,12 @@ func IsValidTracingMode(m string) bool {
 }
 
 // IsValidSampleRate checks if the rate is valid
-func IsValidSampleRate(m string) bool {
-	rate, err := strconv.Atoi(m)
-	if err != nil {
-		return false
-	}
-	return rate >= 0 && rate <= maxSampleRate
+func IsValidSampleRate(rate int) bool {
+	return rate >= MinSampleRate && rate <= MaxSampleRate
 }
 
 // ToTracingMode converts a string to a tracing mode
-func ToTracingMode(m string) interface{} {
+func ToTracingMode(m string) string {
 	mode := strings.ToLower(strings.TrimSpace(m))
 	if mode == "always" {
 		mode = "enabled"
@@ -140,43 +114,15 @@ func ToTracingMode(m string) interface{} {
 	return mode
 }
 
-// IsValidBool checks if the string represents a valid boolean value
-func IsValidBool(b string) bool {
-	t := strings.ToLower(strings.TrimSpace(b))
-	return t == "true" || t == "false"
-}
-
-// ToBool converts a string to a boolean, the string must have been validated.
-func ToBool(b string) interface{} {
-	return strings.ToLower(strings.TrimSpace(b)) == "true"
-}
-
 // IsValidHostnameAlias checks if the alias is valid
 func IsValidHostnameAlias(a string) bool {
-	return a != ""
-}
-
-// ToHostnameAlias converts a string to a hostname alias
-func ToHostnameAlias(a string) interface{} {
-	return a
-}
-
-// IsValidInteger checks if the string represents a valid integer
-func IsValidInteger(i string) bool {
-	_, valid := strconv.Atoi(i)
-	return valid == nil
+	return true
 }
 
 // ToInteger converts a string to an integer
-func ToInteger(i string) interface{} {
+func ToInteger(i string) int {
 	n, _ := strconv.Atoi(i)
 	return n
-}
-
-// ToInt64 converts a string to an int64
-func ToInt64(i string) interface{} {
-	n, _ := strconv.Atoi(i)
-	return int64(n)
 }
 
 // MaskServiceKey masks the middle part of the token and returns the

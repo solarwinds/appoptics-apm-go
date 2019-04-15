@@ -3,115 +3,101 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/pkg/errors"
 )
 
-// Env defines the necessary properties and behaviors of a environment variable
-// While loading the environment variable, it validates the value with the
-// validator first, if passed it convert the value to a specified data type.
-// It also logs significant events during loading, e.g., values that does not
-// pass the validation, a mandatory env is missing, or a non-default value.
-type Env struct {
-	// the name of the environment variable
-	name string
-
-	// is the environment variable optional or not
-	optional bool
-
-	// the validator function
-	validate func(string) bool
-
-	// the converter function
-	convert func(string) interface{}
-
-	// the function to mask sensitive data
-	mask func(string) string
+func toBool(s string) (bool, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "yes" || s == "true" {
+		return true, nil
+	} else if s == "no" || s == "false" {
+		return false, nil
+	}
+	return false, errors.New("cannot convert input to bool")
 }
 
-// LoadString loads the env and returns a string value
-func (e Env) LoadString(fallback string) string {
-	v := e.load(fallback)
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return fallback
-}
+// c must be a pointer to a struct object
+func loadEnvsInternal(c interface{}) {
+	cv := reflect.Indirect(reflect.ValueOf(c))
+	ct := cv.Type()
 
-// LoadBool loads the env and returns a bool value
-func (e Env) LoadBool(fallback bool) bool {
-	v := e.load(fallback)
-	if s, ok := v.(bool); ok {
-		return s
-	}
-	return fallback
-}
-
-// LoadInt loads the env and returns a int value
-func (e Env) LoadInt(fallback int) int {
-	v := e.load(fallback)
-	if s, ok := v.(int); ok {
-		return s
-	}
-	return fallback
-}
-
-// LoadInt64 loads the env and returns a int64 value
-func (e Env) LoadInt64(fallback int64) int64 {
-	v := e.load(fallback)
-	if s, ok := v.(int64); ok {
-		return s
-	}
-	return fallback
-}
-
-// load loads the environment variable and returns the value
-func (e Env) load(fallback interface{}) interface{} {
-	validate := e.validate
-	if validate == nil {
-		validate = func(string) bool { return true }
+	if !cv.CanSet() {
+		return
 	}
 
-	convert := e.convert
-	if convert == nil {
-		convert = func(s string) interface{} { return s }
-	}
-
-	if s, ok := os.LookupEnv(e.name); ok {
-		if validate(s) {
-			e.reportNonDefault(s)
-			return convert(s)
-		} else {
-			e.reportInvalid(s)
-			return fallback
+	for i := 0; i < ct.NumField(); i++ {
+		fieldV := reflect.Indirect(cv.Field(i))
+		if !fieldV.CanSet() || ct.Field(i).Anonymous {
+			continue
 		}
-	} else {
-		if e.optional {
-			return fallback
+
+		field := ct.Field(i)
+		fieldK := fieldV.Kind()
+		if fieldK == reflect.Struct {
+			// Need to use its pointer, otherwise it won't be addressable after
+			// passed into the nested method
+			loadEnvsInternal(getValPtr(cv.Field(i)).Interface())
 		} else {
-			// this is a mandatory variable but missing
-			e.reportMissing()
+			tagV := field.Tag.Get("env")
+			if tagV == "" {
+				continue
+			}
+
+			envVal := os.Getenv(tagV)
+			if envVal == "" {
+				continue
+			}
+
+			setField(c, "Set", field, stringToValue(envVal, fieldV.Type()))
 		}
 	}
-	return fallback
 }
 
-func (e Env) reportInvalid(v string) {
-	if e.mask != nil {
-		v = e.mask(v)
+// stringToValue converts a string to a value of the type specified by typ.
+func stringToValue(s string, typ reflect.Type) reflect.Value {
+	s = strings.TrimSpace(s)
+
+	var val interface{}
+	var err error
+
+	kind := typ.Kind()
+	switch kind {
+	case reflect.Int:
+		if s == "" {
+			s = "0"
+		}
+		val, err = strconv.Atoi(s)
+		if err != nil {
+			log.Warningf("Ignore invalid int value: %s", s)
+		}
+	case reflect.Int64:
+		if s == "" {
+			s = "0"
+		}
+		val, err = strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			log.Warningf("Ignore invalid int64 value: %s", s)
+		}
+	case reflect.String:
+		val = s
+	case reflect.Bool:
+		if s == "" {
+			s = "false"
+		}
+		val, err = toBool(s)
+		if err != nil {
+			log.Warningf("Ignore invalid bool value: %s", errors.Wrap(err, s))
+		}
+	default:
+		panic(fmt.Sprintf("Unsupported kind: %v, val: %s", kind, s))
 	}
-	log.Warning(InvalidEnv(e.name, v))
-}
-
-func (e Env) reportMissing() {
-	log.Warning(MissingEnv(e.name))
-}
-
-func (e Env) reportNonDefault(v string) {
-	mask := e.mask
-	if mask == nil {
-		mask = func(s string) string { return s }
-	}
-	log.Warning(NonDefaultEnv(e.name, mask(v)))
+	// convert to the target type as `typ` may be a user defined type
+	return reflect.ValueOf(val).Convert(typ)
 }

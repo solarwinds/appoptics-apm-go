@@ -40,6 +40,9 @@ var (
 	// make sure the channel exit is not closed twice, it's effectively immutable.
 	exitClosed sync.Once
 
+	// make sure the host observer starts only once
+	startOnce sync.Once
+
 	// the cache for initDistro information and its lock
 	distro     string
 	distroOnce sync.Once
@@ -75,7 +78,9 @@ func PID() int {
 // Start starts the host observer as a standalone goroutine, which will refresh
 // the host metadata periodically
 func Start() {
-	go observer()
+	startOnce.Do(func() {
+		go observer()
+	})
 }
 
 // Stop stops the host metadata refreshing goroutine

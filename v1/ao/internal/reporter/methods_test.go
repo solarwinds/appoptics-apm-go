@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/mocks"
 	"github.com/pkg/errors"
@@ -14,6 +15,7 @@ import (
 )
 
 func TestPostEventsMethod(t *testing.T) {
+	host.Start()
 	pe := newPostEventsMethod(
 		"test-ket",
 		[][]byte{

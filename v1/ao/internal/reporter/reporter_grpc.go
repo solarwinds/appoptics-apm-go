@@ -234,7 +234,6 @@ const (
 func newGRPCReporter() reporter {
 	// service key is required, so bail out if not found
 	serviceKey := config.GetServiceKey()
-	log.Warningf("Using converted service key: \"%s\"", config.MaskServiceKey(serviceKey))
 
 	if !config.IsValidServiceKey(serviceKey) {
 		log.Error(fullTextInvalidServiceKey)
@@ -660,7 +659,7 @@ func (r *grpcReporter) eventSender() {
 	// This event bucket is drainable either after it reaches HWM, or the flush
 	// interval has passed.
 	evtBucket := NewBytesBucket(r.eventMessages,
-		WithHWM(int(opts.GetEventBatchSize()*1024)),
+		WithHWM(int(opts.GetEventFlushBatchSize()*1024)),
 		WithIntervalGetter(opts.GetEventFlushInterval))
 
 	var closing bool
@@ -824,7 +823,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 // settings	new settings
 func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	for _, s := range settings.GetSettings() {
-		log.Debugf("Got sampling setting: %#v\n", s)
+		log.Debugf("Got sampling setting: %#v\n", s.String())
 		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Value, s.Ttl, s.Arguments)
 
 		// update MetricsFlushInterval

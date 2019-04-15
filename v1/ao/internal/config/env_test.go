@@ -3,164 +3,71 @@
 package config
 
 import (
-	"os"
-	"strconv"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestLoadString(t *testing.T) {
-	var envName = "TEST_STRING"
+func TestToBool(t *testing.T) {
+	b, err := toBool("yes")
+	assert.True(t, b)
+	assert.Nil(t, err)
 
-	cases := []struct {
-		setEnv   bool
-		e        Env
-		val      string
-		fallback string
-		expected string
-	}{
-		{true,
-			Env{
-				envName,
-				true,
-				func(string) bool { return true },
-				func(s string) interface{} { return s },
-				nil,
-			},
-			"hello",
-			"fallback",
-			"hello",
-		},
-		{true,
-			Env{
-				envName,
-				true,
-				func(string) bool { return true },
-				func(s string) interface{} { return s },
-				nil,
-			},
-			"",
-			"fallback",
-			""},
-		{true,
-			Env{
-				envName,
-				false,
-				func(string) bool { return false },
-				func(s string) interface{} { return s },
-				nil,
-			},
-			"",
-			"fallback1",
-			"fallback1"},
-		{false,
-			Env{
-				envName,
-				true,
-				func(string) bool { return true },
-				func(s string) interface{} { return s },
-				nil,
-			},
-			"",
-			"fallback2",
-			"fallback2"},
-	}
+	b, err = toBool("true")
+	assert.True(t, b)
+	assert.Nil(t, err)
 
-	for i, c := range cases {
-		os.Unsetenv(envName)
-		if c.setEnv {
-			os.Setenv(envName, c.val)
-		}
-		assert.Equal(t, c.expected, c.e.LoadString(c.fallback), i)
-	}
+	b, err = toBool("YES")
+	assert.True(t, b)
+	assert.Nil(t, err)
+
+	b, err = toBool("no")
+	assert.False(t, b)
+	assert.Nil(t, err)
+
+	b, err = toBool("false")
+	assert.False(t, b)
+	assert.Nil(t, err)
+
+	b, err = toBool("NO")
+	assert.False(t, b)
+	assert.Nil(t, err)
+
+	b, err = toBool("invalid")
+	assert.False(t, b)
+	assert.NotNil(t, err)
 }
 
-func TestLoadBool(t *testing.T) {
-	var envName = "TEST_BOOL"
+func TestStringToValue(t *testing.T) {
+	typInt := reflect.TypeOf(1)
+	typInt64 := reflect.TypeOf(int64(1))
+	typString := reflect.TypeOf("a")
+	typBool := reflect.TypeOf(false)
 
-	cases := []struct {
-		setEnv   bool
-		e        Env
-		val      string
-		fallback bool
-		expected bool
-	}{
-		{true,
-			Env{
-				envName,
-				true,
-				func(string) bool { return true },
-				func(s string) interface{} { return s == "true" },
-				nil,
-			},
-			"false",
-			true,
-			false,
-		},
-		{true,
-			Env{
-				envName,
-				true,
-				func(string) bool { return false },
-				func(s string) interface{} { return s == "true" },
-				nil,
-			},
-			"",
-			true,
-			true},
-		{false,
-			Env{
-				envName,
-				true,
-				func(string) bool { return false },
-				func(s string) interface{} { return s == "true" },
-				nil,
-			},
-			"abc",
-			false,
-			false},
-	}
+	type NewStr string
+	typNewStr := reflect.TypeOf(NewStr("newStr"))
 
-	for i, c := range cases {
-		if c.setEnv {
-			os.Setenv(envName, c.val)
-		}
-		assert.Equal(t, c.expected, c.e.LoadBool(c.fallback), i)
-	}
-}
+	assert.Equal(t, stringToValue("1", typInt).Interface(), 1)
+	assert.Equal(t, stringToValue("1", typInt).Kind(), reflect.Int)
 
-func TestLoadInt(t *testing.T) {
-	var envName = "TEST_INT"
+	assert.Equal(t, stringToValue("", typInt).Interface(), 0)
+	assert.Equal(t, stringToValue("a", typInt).Interface(), 0)
 
-	cases := []struct {
-		setEnv   bool
-		e        Env
-		val      string
-		fallback int
-		expected int
-	}{
-		{true,
-			Env{
-				envName,
-				true,
-				func(string) bool { return true },
-				func(s string) interface{} {
-					i, _ := strconv.Atoi(s)
-					return i
-				},
-				nil,
-			},
-			"2",
-			1,
-			2,
-		},
-	}
+	assert.Equal(t, stringToValue("1", typInt64).Interface(), int64(1))
+	assert.Equal(t, stringToValue("1", typInt64).Kind(), reflect.Int64)
+	assert.Equal(t, stringToValue("", typInt64).Interface(), int64(0))
+	assert.Equal(t, stringToValue("a", typInt64).Interface(), int64(0))
 
-	for i, c := range cases {
-		if c.setEnv {
-			os.Setenv(envName, c.val)
-		}
-		assert.Equal(t, c.expected, c.e.LoadInt(c.fallback), i)
-	}
+	assert.Equal(t, stringToValue("a", typString).Interface(), "a")
+	assert.Equal(t, stringToValue("a", typString).Kind(), reflect.String)
+	assert.Equal(t, stringToValue("1", typString).Interface(), "1")
+	assert.Equal(t, stringToValue("A", typString).Interface(), "A")
+
+	assert.Equal(t, stringToValue("yes", typBool).Interface(), true)
+	assert.Equal(t, stringToValue("yes", typBool).Kind(), reflect.Bool)
+	assert.Equal(t, stringToValue("false", typBool).Interface(), false)
+
+	assert.Equal(t, stringToValue("hello", typNewStr).Interface(), NewStr("hello"))
+	assert.Equal(t, stringToValue("hello", typNewStr).Type(), reflect.TypeOf(NewStr("hello")))
 }

@@ -40,10 +40,9 @@ var _ = func() (_ struct{}) {
 	periodicTasksDisabled = true
 
 	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
-	os.Setenv("APPOPTICS_REPORTER", "none")
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 
-	config.Refresh()
+	config.Load()
 	return
 }()
 
@@ -206,7 +205,7 @@ func assertSSLMode(t *testing.T) {
 func TestGRPCReporter(t *testing.T) {
 	// start test gRPC server
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
-	config.Refresh()
+	config.Load()
 	addr := "localhost:4567"
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
@@ -214,7 +213,7 @@ func TestGRPCReporter(t *testing.T) {
 	// set gRPC reporter
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	config.Refresh()
+	config.Load()
 	oldReporter := globalReporter
 	setGlobalReporter("ssl")
 
@@ -308,7 +307,7 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	// set gRPC reporter
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
-	config.Refresh()
+	config.Load()
 	oldReporter := globalReporter
 	// numGo := runtime.NumGoroutine()
 	setGlobalReporter("ssl")
@@ -360,7 +359,7 @@ func TestInvalidKey(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// set gRPC reporter
-	config.Refresh()
+	config.Load()
 	oldReporter := globalReporter
 
 	aolog.SetLevel(aolog.INFO)
@@ -558,14 +557,14 @@ func TestInvokeRPC(t *testing.T) {
 func TestInitReporter(t *testing.T) {
 	// Test disable agent
 	os.Setenv("APPOPTICS_DISABLED", "true")
-	config.Refresh()
+	config.Load()
 	initReporter()
 	require.IsType(t, &nullReporter{}, globalReporter)
 
 	// Test enable agent
 	os.Unsetenv("APPOPTICS_DISABLED")
 	os.Setenv("APPOPTICS_REPORTER", "ssl")
-	config.Refresh()
+	config.Load()
 	assert.False(t, config.GetDisabled())
 
 	initReporter()

@@ -12,11 +12,11 @@ import (
 func TestWrappers(t *testing.T) {
 	os.Unsetenv(envAppOpticsCollector)
 	os.Unsetenv(envAppOpticsHistogramPrecision)
-	Refresh()
+	Load()
 
 	assert.NotEqual(t, nil, conf)
-	assert.Equal(t, defaultGRPCCollector, GetCollector())
-	assert.Equal(t, defaultHistogramPrecision, GetPrecision())
+	assert.Equal(t, getFieldDefaultValue(&Config{}, "Collector"), GetCollector())
+	assert.Equal(t, ToInteger(getFieldDefaultValue(&Config{}, "Precision")), GetPrecision())
 
 	assert.NotEqual(t, nil, ReporterOpts())
 }

@@ -66,6 +66,7 @@ func (r *nullReporter) WaitForReady(ctx context.Context) bool         { return t
 // that will be used throughout the runtime of the app. Default is 'ssl' but
 // can be overridden via APPOPTICS_REPORTER
 func init() {
+	log.SetLevelFromStr(config.DebugLevel())
 	initReporter()
 	sendInitMessage()
 }

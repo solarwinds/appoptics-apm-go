@@ -20,7 +20,7 @@ func TestBytesBucket(t *testing.T) {
 	}
 
 	os.Setenv("APPOPTICS_EVENTS_FLUSH_INTERVAL", "2")
-	config.Refresh()
+	config.Load()
 
 	opts := config.ReporterOpts()
 

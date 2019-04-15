@@ -119,7 +119,7 @@ func TestHTTPHandler404(t *testing.T) {
 
 func TestHTTPHandler200(t *testing.T) {
 	os.Setenv("APPOPTICS_PREPEND_DOMAIN", "false")
-	config.Refresh()
+	config.Load()
 	r := reporter.SetTestReporter() // set up test reporter
 	response := httpTestWithEndpoint(handler200, "http://test.com/hello world/one/two/three?testq")
 
