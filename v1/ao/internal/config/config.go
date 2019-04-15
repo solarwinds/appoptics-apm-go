@@ -352,7 +352,7 @@ func getDelta(base, changed interface{}, keyPrefix string) *Delta {
 	baseVal := reflect.Indirect(reflect.ValueOf(base))
 	changedVal := reflect.Indirect(reflect.ValueOf(changed))
 
-	if changedVal.Kind() != reflect.Struct {
+	if baseVal.Kind() != reflect.Struct || changedVal.Kind() != reflect.Struct {
 		return delta
 	}
 
