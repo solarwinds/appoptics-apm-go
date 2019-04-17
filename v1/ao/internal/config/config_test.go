@@ -3,6 +3,7 @@
 package config
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -249,6 +250,10 @@ func TestYamlConfig(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
+		TransactionFiltering: []TransactionFilter{
+			{"url", "%s+%d+%s+", "", "disabled"},
+			{"url", "", ".jpg", "disabled"},
+		},
 		Disabled:   true,
 		DebugLevel: "info",
 	}
@@ -315,6 +320,10 @@ func TestYamlConfig(t *testing.T) {
 			RedirectMax:             20,
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
+		},
+		TransactionFiltering: []TransactionFilter{
+			{"url", "%s+%d+%s+", "", "disabled"},
+			{"url", "", ".jpg", "disabled"},
 		},
 		Disabled:   true,
 		DebugLevel: "info",
@@ -443,4 +452,31 @@ func TestConfigDefaultValues(t *testing.T) {
 
 	// check the default sample rate
 	assert.Equal(t, MaxSampleRate, c.Sampling.SampleRate)
+}
+
+func TestTransactionFilter_UnmarshalYAML(t *testing.T) {
+	var testCases = []struct {
+		filter TransactionFilter
+		err    error
+	}{
+		{TransactionFilter{"invalid", "%s+%d+%s+", "", "disabled"}, ErrTFInvalidType},
+		{TransactionFilter{"url", "%s+%d+%s+", "", "enabled"}, nil},
+		{TransactionFilter{"url", "%s+%d+%s+", "", "disabled"}, nil},
+		{TransactionFilter{"url", "", ".jpg", "disabled"}, nil},
+		{TransactionFilter{"url", "%s+%d+%s+", ".jpg", "disabled"}, ErrTFInvalidRegExExt},
+		{TransactionFilter{"url", "%s+%d+%s+", "", "disabled"}, nil},
+		{TransactionFilter{"url", "%s+%d+%s+", "", "invalid"}, ErrTFInvalidTracing},
+	}
+
+	for idx, testCase := range testCases {
+		bytes, err := yaml.Marshal(testCase.filter)
+		assert.Nil(t, err, fmt.Sprintf("Case #%d", idx))
+
+		var filter TransactionFilter
+		err = yaml.Unmarshal(bytes, &filter)
+		assert.Equal(t, testCase.err, err, fmt.Sprintf("Case #%d", idx))
+		if err == nil {
+			assert.Equal(t, testCase.filter, filter, fmt.Sprintf("Case #%d", idx))
+		}
+	}
 }

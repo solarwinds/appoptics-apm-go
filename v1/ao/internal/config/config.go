@@ -102,6 +102,9 @@ type Config struct {
 	// The reporter options
 	ReporterProperties *ReporterOptions `yaml:"ReporterProperties,omitempty"`
 
+	// The transaction filtering config
+	TransactionFiltering []TransactionFilter `yaml:"TransactionFiltering,omitempty"`
+
 	Disabled bool `yaml:"Disabled,omitempty" env:"APPOPTICS_DISABLED"`
 
 	// The default log level. It should follow the level defined in log.DefaultLevel
@@ -119,6 +122,68 @@ type SamplingConfig struct {
 	SampleRate int `yaml:"SampleRate,omitempty" env:"APPOPTICS_SAMPLE_RATE" default:"1000000"`
 	// If the sample rate is configured explicitly
 	sampleRateConfigured bool `yaml:"-"`
+}
+
+// FilterType defines the type of the transaction filter
+type FilterType string
+
+const (
+	// URL based filter
+	URL FilterType = "url"
+)
+
+// TracingMode defines the tracing mode which is either `enabled` or `disabled`
+type TracingMode string
+
+const (
+	// Enabled means tracing is enabled
+	Enabled TracingMode = "enabled"
+	// Disabled means tracing is disabled
+	Disabled TracingMode = "disabled"
+)
+
+// TransactionFilter defines the transaction filtering based on a filter type.
+type TransactionFilter struct {
+	Type       FilterType  `yaml:"Type"`
+	RegEx      string      `yaml:"RegEx,omitempty"`
+	Extensions string      `yaml:"Extensions,omitempty"`
+	Tracing    TracingMode `yaml:"Tracing"`
+}
+
+// TransactionFilter unmarshal errors
+var (
+	ErrTFInvalidType     = errors.New("invalid Type")
+	ErrTFInvalidTracing  = errors.New("invalid Tracing")
+	ErrTFInvalidRegExExt = errors.New("must set either RegEx or Extensions, but not both")
+)
+
+// UnmarshalYAML is the customized unmarshal method for TransactionFilter
+func (f *TransactionFilter) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var aux = struct {
+		Type       FilterType  `yaml:"Type"`
+		RegEx      string      `yaml:"RegEx,omitempty"`
+		Extensions string      `yaml:"Extensions,omitempty"`
+		Tracing    TracingMode `yaml:"Tracing"`
+	}{}
+
+	if err := unmarshal(&aux); err != nil {
+		return errors.Wrap(err, "failed to unmarshal TransactionFilter")
+	}
+	if aux.Type != URL {
+		return ErrTFInvalidType
+	}
+	if aux.Tracing != Enabled && aux.Tracing != Disabled {
+		return ErrTFInvalidTracing
+	}
+	if (aux.RegEx == "") == (aux.Extensions == "") {
+		return ErrTFInvalidRegExExt
+	}
+
+	f.Type = aux.Type
+	f.RegEx = aux.RegEx
+	f.Extensions = aux.Extensions
+	f.Tracing = aux.Tracing
+	return nil
 }
 
 // Configured returns if either the tracing mode or the sampling rate has been configured
@@ -373,8 +438,11 @@ func getDelta(base, changed interface{}, keyPrefix string) *Delta {
 			subDelta := getDelta(baseField, changedField, prefix)
 			delta.add(subDelta.items()...)
 		} else {
-			if fieldChanged.CanSet() && // only collect the exported fields
-				fieldBase.Interface() != fieldChanged.Interface() {
+			if !fieldChanged.CanSet() { // only collect the exported fields
+				continue
+			}
+
+			if !reflect.DeepEqual(fieldBase.Interface(), fieldChanged.Interface()) {
 				keyName := typeFieldChanged.Name
 				if keyPrefix != "" {
 					keyName = fmt.Sprintf("%s.%s", keyPrefix, typeFieldChanged.Name)
@@ -704,4 +772,11 @@ func (c *Config) GetDebugLevel() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.DebugLevel
+}
+
+// GetTransactionFiltering returns the transaction filtering config
+func (c *Config) GetTransactionFiltering() []TransactionFilter {
+	c.RLock()
+	defer c.RUnlock()
+	return c.TransactionFiltering
 }
