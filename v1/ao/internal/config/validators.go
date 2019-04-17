@@ -92,9 +92,8 @@ func IsValidReporterType(t string) bool {
 }
 
 // IsValidTracingMode checks if the mode is valid
-func IsValidTracingMode(m string) bool {
-	t := strings.ToLower(strings.TrimSpace(m))
-	return t == "disabled" || t == "enabled" || t == "always" || t == "never"
+func IsValidTracingMode(m TracingMode) bool {
+	return m == EnabledTracingMode || m == DisabledTracingMode
 }
 
 // IsValidSampleRate checks if the rate is valid
@@ -102,13 +101,16 @@ func IsValidSampleRate(rate int) bool {
 	return rate >= MinSampleRate && rate <= MaxSampleRate
 }
 
-// ToTracingMode converts a string to a tracing mode
-func ToTracingMode(m string) string {
-	mode := strings.ToLower(strings.TrimSpace(m))
-	if mode == "always" {
-		mode = "enabled"
-	} else if mode == "never" {
-		mode = "disabled"
+// NormalizeTracingMode converts an old-style tracing mode (always/never) to a
+// new-style tracing mode (enabled/disabled).
+func NormalizeTracingMode(m TracingMode) TracingMode {
+	modeStr := strings.ToLower(strings.TrimSpace(string(m)))
+	mode := m
+
+	if modeStr == "always" {
+		mode = EnabledTracingMode
+	} else if modeStr == "never" {
+		mode = DisabledTracingMode
 	}
 
 	return mode

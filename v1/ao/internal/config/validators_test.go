@@ -59,9 +59,9 @@ func TestIsValidTracingMode(t *testing.T) {
 	assert.Equal(t, true, IsValidTracingMode("disabled"))
 	assert.Equal(t, false, IsValidTracingMode("abc"))
 	assert.Equal(t, false, IsValidTracingMode(""))
-	assert.Equal(t, true, IsValidTracingMode("ENABLED"))
-	assert.Equal(t, true, IsValidTracingMode("ALWAYS"))
-	assert.Equal(t, true, IsValidTracingMode("NEVER"))
+	assert.Equal(t, false, IsValidTracingMode("ENABLED"))
+	assert.Equal(t, false, IsValidTracingMode("ALWAYS"))
+	assert.Equal(t, false, IsValidTracingMode("NEVER"))
 }
 
 func TestIsValidReporterType(t *testing.T) {
@@ -74,11 +74,11 @@ func TestIsValidReporterType(t *testing.T) {
 }
 
 func TestConverters(t *testing.T) {
-	assert.Equal(t, "disabled", ToTracingMode("disabled"))
-	assert.Equal(t, "disabled", ToTracingMode("never"))
-	assert.Equal(t, "enabled", ToTracingMode("always"))
-	assert.Equal(t, "enabled", ToTracingMode("ALWAYS"))
-	assert.Equal(t, "disabled", ToTracingMode("NEVER"))
+	assert.Equal(t, DisabledTracingMode, NormalizeTracingMode("disabled"))
+	assert.Equal(t, DisabledTracingMode, NormalizeTracingMode("never"))
+	assert.Equal(t, EnabledTracingMode, NormalizeTracingMode("always"))
+	assert.Equal(t, EnabledTracingMode, NormalizeTracingMode("ALWAYS"))
+	assert.Equal(t, DisabledTracingMode, NormalizeTracingMode("NEVER"))
 }
 
 func withDemoKey(sn string) string {

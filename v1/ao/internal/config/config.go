@@ -105,7 +105,7 @@ type Config struct {
 	// The transaction filtering config
 	TransactionFiltering []TransactionFilter `yaml:"TransactionFiltering,omitempty"`
 
-	Disabled bool `yaml:"Disabled,omitempty" env:"APPOPTICS_DISABLED"`
+	Disabled bool `yaml:"DisabledTracingMode,omitempty" env:"APPOPTICS_DISABLED"`
 
 	// The default log level. It should follow the level defined in log.DefaultLevel
 	DebugLevel string `yaml:"DebugLevel,omitempty" env:"APPOPTICS_DEBUG_LEVEL" default:"warn"`
@@ -114,7 +114,7 @@ type Config struct {
 // SamplingConfig defines the configuration options for the sampling decision
 type SamplingConfig struct {
 	// The tracing mode
-	TracingMode string `yaml:"TracingMode,omitempty" env:"APPOPTICS_TRACING_MODE" default:"enabled"`
+	TracingMode TracingMode `yaml:"TracingMode,omitempty" env:"APPOPTICS_TRACING_MODE" default:"enabled"`
 	// If the tracing mode is configured explicitly
 	tracingModeConfigured bool `yaml:"-"`
 
@@ -136,10 +136,10 @@ const (
 type TracingMode string
 
 const (
-	// Enabled means tracing is enabled
-	Enabled TracingMode = "enabled"
-	// Disabled means tracing is disabled
-	Disabled TracingMode = "disabled"
+	// EnabledTracingMode means tracing is enabled
+	EnabledTracingMode TracingMode = "enabled"
+	// DisabledTracingMode means tracing is disabled
+	DisabledTracingMode TracingMode = "disabled"
 )
 
 // TransactionFilter defines the transaction filtering based on a filter type.
@@ -172,7 +172,7 @@ func (f *TransactionFilter) UnmarshalYAML(unmarshal func(interface{}) error) err
 	if aux.Type != URL {
 		return ErrTFInvalidType
 	}
-	if aux.Tracing != Enabled && aux.Tracing != Disabled {
+	if aux.Tracing != EnabledTracingMode && aux.Tracing != DisabledTracingMode {
 		return ErrTFInvalidTracing
 	}
 	if (aux.RegEx == "") == (aux.Extensions == nil) {
@@ -194,8 +194,8 @@ func (s *SamplingConfig) Configured() bool {
 // UnmarshalYAML is the customized unmarshal method for SamplingConfig
 func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var aux = struct {
-		TracingMode string `yaml:"TracingMode"`
-		SampleRate  int    `yaml:"SampleRate"`
+		TracingMode TracingMode `yaml:"TracingMode"`
+		SampleRate  int         `yaml:"SampleRate"`
 	}{
 		TracingMode: "Invalid",
 		SampleRate:  -1,
@@ -215,7 +215,7 @@ func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 
 // ResetTracingMode resets the tracing mode to its default value and clear the flag.
 func (s *SamplingConfig) ResetTracingMode() {
-	s.TracingMode = getFieldDefaultValue(s, "TracingMode")
+	s.TracingMode = TracingMode(getFieldDefaultValue(s, "TracingMode"))
 	s.tracingModeConfigured = false
 }
 
@@ -227,7 +227,7 @@ func (s *SamplingConfig) ResetSampleRate() {
 
 func (s *SamplingConfig) validate() {
 	if ok := IsValidTracingMode(s.TracingMode); !ok {
-		log.Warning(InvalidEnv("TracingMode", s.TracingMode))
+		log.Warning(InvalidEnv("TracingMode", string(s.TracingMode)))
 		s.ResetTracingMode()
 	}
 	if ok := IsValidSampleRate(s.SampleRate); !ok {
@@ -239,8 +239,8 @@ func (s *SamplingConfig) validate() {
 // SetTracingMode assigns the tracing mode and set the corresponding flag.
 // Note: Do not change the method name as it (`Set`+Field name) is used in method
 // `loadEnvsInternal` to assign the values loaded from env variables dynamically.
-func (s *SamplingConfig) SetTracingMode(mode string) {
-	s.TracingMode = ToTracingMode(mode)
+func (s *SamplingConfig) SetTracingMode(mode TracingMode) {
+	s.TracingMode = NormalizeTracingMode(mode)
 	s.tracingModeConfigured = true
 }
 
@@ -704,7 +704,7 @@ func (c *Config) GetCollectorUDP() string {
 }
 
 // GetTracingMode returns the local tracing mode
-func (c *Config) GetTracingMode() string {
+func (c *Config) GetTracingMode() TracingMode {
 	c.RLock()
 	defer c.RUnlock()
 	return c.Sampling.TracingMode

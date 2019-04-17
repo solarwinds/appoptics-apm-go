@@ -91,11 +91,11 @@ func (st settingType) toSampleSource() sampleSource {
 }
 
 // newTracingMode creates a tracing mode object from a string
-func newTracingMode(mode string) tracingMode {
+func newTracingMode(mode config.TracingMode) tracingMode {
 	switch mode {
-	case "disabled":
+	case config.DisabledTracingMode:
 		return TRACE_DISABLED
-	case "enabled":
+	case config.EnabledTracingMode:
 	default:
 	}
 	return TRACE_ENABLED

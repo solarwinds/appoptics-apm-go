@@ -35,8 +35,8 @@ func TestCache(t *testing.T) {
 func TestUrlFilter(t *testing.T) {
 	filter := newURLFilter()
 	filter.loadConfig([]config.TransactionFilter{
-		{Type: "url", RegEx: `user\d{3}`, Tracing: config.Disabled},
-		{Type: "url", Extensions: []string{".png", ".jpg"}, Tracing: config.Disabled},
+		{Type: "url", RegEx: `user\d{3}`, Tracing: config.DisabledTracingMode},
+		{Type: "url", Extensions: []string{".png", ".jpg"}, Tracing: config.DisabledTracingMode},
 	})
 
 	assert.False(t, filter.ShouldTrace("user123"))

@@ -39,7 +39,7 @@ func initDisabled() {
 	}
 }
 
-// Disabled indicates if the agent is disabled
+// DisabledTracingMode indicates if the agent is disabled
 func Disabled() bool {
 	return disabled
 }

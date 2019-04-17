@@ -105,7 +105,7 @@ func newURLFilter() *urlFilter {
 
 func (f *urlFilter) loadConfig(filters []config.TransactionFilter) {
 	for _, filter := range filters {
-		if filter.Tracing == config.Enabled {
+		if filter.Tracing == config.EnabledTracingMode {
 			continue
 		}
 

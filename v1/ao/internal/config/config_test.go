@@ -41,7 +41,7 @@ func TestLoadConfig(t *testing.T) {
 	c.Load()
 	assert.Equal(t, "test.abc:8080", c.GetCollector())
 	assert.Equal(t, false, c.Disabled)
-	assert.Equal(t, "enabled", c.GetTracingMode())
+	assert.Equal(t, "enabled", string(c.GetTracingMode()))
 
 	c = NewConfig(
 		WithCollector("hello.world"),
@@ -70,21 +70,21 @@ func TestConfig_HasLocalSamplingConfig(t *testing.T) {
 	_ = os.Setenv(envAppOpticsTracingMode, "disabled")
 	Load()
 	assert.True(t, SamplingConfigured())
-	assert.Equal(t, "disabled", GetTracingMode())
+	assert.Equal(t, "disabled", string(GetTracingMode()))
 	assert.Equal(t, ToInteger(getFieldDefaultValue(&SamplingConfig{}, "SampleRate")), GetSampleRate())
 
 	// No local sampling config
 	_ = os.Unsetenv(envAppOpticsTracingMode)
 	Load()
 	assert.False(t, SamplingConfigured())
-	assert.Equal(t, getFieldDefaultValue(&SamplingConfig{}, "TracingMode"), GetTracingMode())
+	assert.Equal(t, getFieldDefaultValue(&SamplingConfig{}, "TracingMode"), string(GetTracingMode()))
 	assert.Equal(t, ToInteger(getFieldDefaultValue(&SamplingConfig{}, "SampleRate")), GetSampleRate())
 
 	// Set sample rate to 10000
 	_ = os.Setenv(envAppOpticsSampleRate, "10000")
 	Load()
 	assert.True(t, SamplingConfigured())
-	assert.Equal(t, getFieldDefaultValue(&SamplingConfig{}, "TracingMode"), GetTracingMode())
+	assert.Equal(t, getFieldDefaultValue(&SamplingConfig{}, "TracingMode"), string(GetTracingMode()))
 	assert.Equal(t, 10000, GetSampleRate())
 }
 
@@ -343,7 +343,7 @@ func TestSamplingConfigValidate(t *testing.T) {
 		sampleRateConfigured:  true,
 	}
 	s.validate()
-	assert.Equal(t, "enabled", s.TracingMode)
+	assert.Equal(t, EnabledTracingMode, s.TracingMode)
 	assert.Equal(t, false, s.tracingModeConfigured)
 	assert.Equal(t, 1000000, s.SampleRate)
 	assert.Equal(t, false, s.sampleRateConfigured)

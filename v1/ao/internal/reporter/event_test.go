@@ -6,6 +6,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/stretchr/testify/assert"
 )
@@ -185,7 +186,7 @@ func TestSettingTypeToSampleSource(t *testing.T) {
 }
 
 func TestTracingModeToFlags(t *testing.T) {
-	assert.Equal(t, FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS, newTracingMode("enabled").toFlags())
-	assert.Equal(t, FLAG_OK, newTracingMode("disabled").toFlags())
+	assert.Equal(t, FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS, newTracingMode(config.EnabledTracingMode).toFlags())
+	assert.Equal(t, FLAG_OK, newTracingMode(config.DisabledTracingMode).toFlags())
 	assert.Equal(t, FLAG_OK, tracingMode(100).toFlags())
 }
