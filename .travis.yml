@@ -20,6 +20,7 @@ install:
   - go get google.golang.org/grpc
   - go get github.com/uluyol/hdrhist
   - go get gopkg.in/yaml.v2
+  - go get github.com/coocood/freecache
 
 script:
   - cd $GOPATH/src/github.com/appoptics/appoptics-apm-go/v1
