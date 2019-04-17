@@ -251,7 +251,7 @@ func TestYamlConfig(t *testing.T) {
 			MaxRetries:              20,
 		},
 		TransactionFiltering: []TransactionFilter{
-			{"url", "%s+%d+%s+", nil, "disabled"},
+			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
 		Disabled:   true,
@@ -322,7 +322,7 @@ func TestYamlConfig(t *testing.T) {
 			MaxRetries:              20,
 		},
 		TransactionFiltering: []TransactionFilter{
-			{"url", "%s+%d+%s+", nil, "disabled"},
+			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
 		Disabled:   true,
@@ -459,13 +459,13 @@ func TestTransactionFilter_UnmarshalYAML(t *testing.T) {
 		filter TransactionFilter
 		err    error
 	}{
-		{TransactionFilter{"invalid", "%s+%d+%s+", nil, "disabled"}, ErrTFInvalidType},
-		{TransactionFilter{"url", "%s+%d+%s+", nil, "enabled"}, nil},
-		{TransactionFilter{"url", "%s+%d+%s+", nil, "disabled"}, nil},
+		{TransactionFilter{"invalid", `\s+\d+\s+`, nil, "disabled"}, ErrTFInvalidType},
+		{TransactionFilter{"url", `\s+\d+\s+`, nil, "enabled"}, nil},
+		{TransactionFilter{"url", `\s+\d+\s+`, nil, "disabled"}, nil},
 		{TransactionFilter{"url", "", []string{".jpg"}, "disabled"}, nil},
-		{TransactionFilter{"url", "%s+%d+%s+", []string{".jpg"}, "disabled"}, ErrTFInvalidRegExExt},
-		{TransactionFilter{"url", "%s+%d+%s+", nil, "disabled"}, nil},
-		{TransactionFilter{"url", "%s+%d+%s+", nil, "invalid"}, ErrTFInvalidTracing},
+		{TransactionFilter{"url", `\s+\d+\s+`, []string{".jpg"}, "disabled"}, ErrTFInvalidRegExExt},
+		{TransactionFilter{"url", `\s+\d+\s+`, nil, "disabled"}, nil},
+		{TransactionFilter{"url", `\s+\d+\s+`, nil, "invalid"}, ErrTFInvalidTracing},
 	}
 
 	for idx, testCase := range testCases {

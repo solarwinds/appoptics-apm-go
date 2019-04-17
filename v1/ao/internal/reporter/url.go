@@ -3,10 +3,8 @@
 package reporter
 
 import (
-	"fmt"
 	"path/filepath"
 	"regexp"
-	"sort"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
@@ -24,13 +22,19 @@ func init() {
 // Cache is a cache to store the disabled url patterns
 type Cache struct{ *freecache.Cache }
 
+// Trace decisions in cache
+const (
+	traceEnabled  = "t"
+	traceDisabled = "f"
+)
+
 // SetURLTrace sets a url and its trace decision into the cache
 func (c *Cache) SetURLTrace(url string, trace bool) {
-	val := []byte("t")
+	val := traceEnabled
 	if !trace {
-		val = []byte("f")
+		val = traceDisabled
 	}
-	_ = c.Set([]byte(url), val, 0)
+	_ = c.Set([]byte(url), []byte(val), 0)
 }
 
 // GetURLTrace gets the trace decision of a URL
@@ -39,12 +43,8 @@ func (c *Cache) GetURLTrace(url string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if string(traceStr) == "t" {
-		return true, nil
-	} else {
-		return false, fmt.Errorf("invalid value fetched from cache: %s", traceStr)
-	}
 
+	return string(traceStr) == "t", nil
 }
 
 // Filter defines a URL filter
@@ -73,20 +73,23 @@ func (f *RegexFilter) Match(url string) bool {
 
 // ExtensionFilter is a extension-based filter
 type ExtensionFilter struct {
-	Exts []string
+	Exts map[string]struct{}
 }
 
 // NewExtensionFilter create a new instance of ExtensionFilter
 func NewExtensionFilter(extensions []string) *ExtensionFilter {
-	exts := append(extensions[:0:0], extensions...)
-	sort.Strings(exts)
+	exts := make(map[string]struct{})
+	for _, ext := range extensions {
+		exts[ext] = struct{}{}
+	}
 	return &ExtensionFilter{Exts: exts}
 }
 
 // Match checks if the url matches the filter
 func (f *ExtensionFilter) Match(url string) bool {
 	ext := filepath.Ext(url)
-	return sort.SearchStrings(f.Exts, ext) != len(f.Exts)
+	_, ok := f.Exts[ext]
+	return ok
 }
 
 type urlFilter struct {
