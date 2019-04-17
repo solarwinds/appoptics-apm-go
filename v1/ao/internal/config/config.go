@@ -146,7 +146,7 @@ const (
 type TransactionFilter struct {
 	Type       FilterType  `yaml:"Type"`
 	RegEx      string      `yaml:"RegEx,omitempty"`
-	Extensions string      `yaml:"Extensions,omitempty"`
+	Extensions []string    `yaml:"Extensions,omitempty"`
 	Tracing    TracingMode `yaml:"Tracing"`
 }
 
@@ -162,7 +162,7 @@ func (f *TransactionFilter) UnmarshalYAML(unmarshal func(interface{}) error) err
 	var aux = struct {
 		Type       FilterType  `yaml:"Type"`
 		RegEx      string      `yaml:"RegEx,omitempty"`
-		Extensions string      `yaml:"Extensions,omitempty"`
+		Extensions []string    `yaml:"Extensions,omitempty"`
 		Tracing    TracingMode `yaml:"Tracing"`
 	}{}
 
@@ -175,7 +175,7 @@ func (f *TransactionFilter) UnmarshalYAML(unmarshal func(interface{}) error) err
 	if aux.Tracing != Enabled && aux.Tracing != Disabled {
 		return ErrTFInvalidTracing
 	}
-	if (aux.RegEx == "") == (aux.Extensions == "") {
+	if (aux.RegEx == "") == (aux.Extensions == nil) {
 		return ErrTFInvalidRegExExt
 	}
 
@@ -450,8 +450,8 @@ func getDelta(base, changed interface{}, keyPrefix string) *Delta {
 				kv := DeltaItem{
 					key:        keyName,
 					env:        typeFieldChanged.Tag.Get("env"),
-					value:      fmt.Sprintf("%v", fieldChanged.Interface()),
-					defaultVal: fmt.Sprintf("%v", fieldBase.Interface()),
+					value:      fmt.Sprintf("%+v", fieldChanged.Interface()),
+					defaultVal: fmt.Sprintf("%+v", fieldBase.Interface()),
 				}
 				delta.add(kv)
 			}
