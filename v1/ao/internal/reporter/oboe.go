@@ -26,7 +26,10 @@ type oboeSettingsCfg struct {
 }
 type oboeSettings struct {
 	timestamp time.Time
-	flags     settingFlag
+	// the flags which may be modified through merging local settings.
+	flags settingFlag
+	// the original flags retrieved from the remote collector.
+	originalFlags settingFlag
 	// The sample rate. It could be the original value got from remote server
 	// or a new value after negotiating with local config
 	value int
@@ -38,7 +41,7 @@ type oboeSettings struct {
 }
 
 func (s *oboeSettings) hasOverrideFlag() bool {
-	return s.flags&FLAG_OVERRIDE != 0
+	return s.originalFlags&FLAG_OVERRIDE != 0
 }
 
 func newOboeSettings() *oboeSettings {
@@ -200,13 +203,7 @@ func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sample
 	retval := false
 	doRateLimiting := false
 
-	sampleRate := setting.value
-	flags := setting.flags
-
-	urlTracingMode := urls.getTracingMode(url)
-	if !urlTracingMode.isUnknown() {
-		flags = urlTracingMode.toFlags()
-	}
+	sampleRate, flags, source := mergeURLSetting(setting, url)
 
 	if !traced {
 		// A new request
@@ -227,7 +224,18 @@ func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sample
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
-	return retval, sampleRate, setting.source
+	return retval, sampleRate, source
+}
+
+// ShouldRecordMetrics decides if the metrics of this transaction needs to be collected.
+func ShouldRecordMetrics(transactionName string) bool {
+	setting, ok := getSetting("")
+	if !ok {
+		return false
+	}
+
+	_, flags, _ := mergeURLSetting(setting, transactionName)
+	return flags&(FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS) != 0
 }
 
 func bytesToFloat64(b []byte) (float64, error) {
@@ -293,6 +301,28 @@ func mergeLocalSetting(remote *oboeSettings) *oboeSettings {
 	return remote
 }
 
+// mergeURLSetting merges the service level setting (merged from remote and local
+// settings) and the per-URL sampling flags, if any.
+func mergeURLSetting(setting *oboeSettings, url string) (int, settingFlag, sampleSource) {
+	if url == "" {
+		return setting.value, setting.flags, setting.source
+	}
+
+	urlTracingMode := urls.getTracingMode(url)
+	if urlTracingMode.isUnknown() {
+		return setting.value, setting.flags, setting.source
+	}
+
+	flags := urlTracingMode.toFlags()
+	source := SAMPLE_SOURCE_FILE
+
+	if setting.hasOverrideFlag() {
+		flags &= setting.originalFlags
+	}
+
+	return setting.value, flags, source
+}
+
 func adjustSampleRate(rate int64) int {
 	if rate < 0 {
 		log.Debugf("Invalid sample rate: %d", rate)
@@ -312,6 +342,7 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	ns.timestamp = time.Now()
 	ns.source = settingType(sType).toSampleSource()
 	ns.flags = flagStringToBin(string(flags))
+	ns.originalFlags = ns.flags
 	ns.value = adjustSampleRate(value)
 	ns.ttl = ttl
 	ns.layer = layer
