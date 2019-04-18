@@ -241,6 +241,14 @@ func TestSampleFlags(t *testing.T) {
 	assert.False(t, ok)
 	assert.EqualValues(t, 1, c.through)
 
+	// Transaction filtering
+	urls.loadConfig([]config.TransactionFilter{
+		{Type: "url", RegEx: `user\d{3}`, Tracing: config.DisabledTracingMode},
+		{Type: "url", Extensions: []string{".png", ".jpg"}, Tracing: config.DisabledTracingMode},
+	})
+	ok, _, _ = shouldTraceRequestWithURL(testLayer, false, "http://test.com/user123")
+	assert.False(t, ok)
+
 	resetSettings()
 	c = globalSettingsCfg
 
