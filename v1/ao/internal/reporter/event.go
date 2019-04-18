@@ -102,9 +102,10 @@ func newTracingMode(mode config.TracingMode) tracingMode {
 	case config.DisabledTracingMode:
 		return TRACE_DISABLED
 	case config.EnabledTracingMode:
+		return TRACE_ENABLED
 	default:
 	}
-	return TRACE_ENABLED
+	return TRACE_UNKNOWN
 }
 
 func (tm tracingMode) isUnknown() bool {

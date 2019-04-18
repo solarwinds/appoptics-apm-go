@@ -159,7 +159,7 @@ func TestHTTPHandlerNoTrace(t *testing.T) {
 var httpSpanSleep time.Duration
 
 func TestHTTPSpan(t *testing.T) {
-	r := reporter.SetTestReporter(reporter.TestReporterDisableDefaultSetting(true)) // set up test reporter
+	r := reporter.SetTestReporter(reporter.TestReporterDisableDefaultSetting(false)) // set up test reporter
 
 	httpSpanSleep = time.Duration(0) // fire off first request just as preparation for the following requests
 	httpTest(handlerDelay200)
@@ -204,7 +204,7 @@ func TestHTTPSpan(t *testing.T) {
 }
 
 func TestSingleHTTPSpan(t *testing.T) {
-	r := reporter.SetTestReporter(reporter.TestReporterDisableDefaultSetting(true)) // set up test reporter
+	r := reporter.SetTestReporter(reporter.TestReporterDisableDefaultSetting(false)) // set up test reporter
 	httpTest(handlerDoubleWrapped)
 	r.Close(1)
 

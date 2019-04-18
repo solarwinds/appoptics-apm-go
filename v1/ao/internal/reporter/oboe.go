@@ -197,7 +197,7 @@ func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sample
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		return false, 0, SAMPLE_SOURCE_NONE, true
+		return false, 0, SAMPLE_SOURCE_NONE, false
 	}
 
 	retval := false

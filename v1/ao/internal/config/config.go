@@ -161,6 +161,7 @@ var (
 
 // UnmarshalYAML is the customized unmarshal method for TransactionFilter
 func (f *TransactionFilter) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	initStruct(f)
 	var aux = struct {
 		Type       FilterType  `yaml:"Type"`
 		RegEx      string      `yaml:"RegEx,omitempty"`
@@ -195,6 +196,7 @@ func (s *SamplingConfig) Configured() bool {
 
 // UnmarshalYAML is the customized unmarshal method for SamplingConfig
 func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	initStruct(s)
 	var aux = struct {
 		TracingMode TracingMode `yaml:"TracingMode"`
 		SampleRate  int         `yaml:"SampleRate"`
