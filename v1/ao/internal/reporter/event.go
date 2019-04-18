@@ -78,6 +78,11 @@ const (
 	maxSamplingRate = config.MaxSampleRate
 )
 
+// Enabled returns if the trace is enabled or not.
+func (f settingFlag) Enabled() bool {
+	return f&(FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS) != 0
+}
+
 func (st settingType) toSampleSource() sampleSource {
 	var source sampleSource
 	switch st {

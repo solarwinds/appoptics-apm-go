@@ -185,11 +185,11 @@ func (b *tokenBucket) update(now time.Time) {
 	}
 }
 
-func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sampleSource) {
+func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sampleSource, bool) {
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {
 			if !r.UseSettings {
-				return r.ShouldTrace, 0, SAMPLE_SOURCE_NONE // trace tests
+				return r.ShouldTrace, 0, SAMPLE_SOURCE_NONE, true // trace tests
 			}
 		}
 	}
@@ -197,7 +197,7 @@ func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sample
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		return false, 0, SAMPLE_SOURCE_NONE
+		return false, 0, SAMPLE_SOURCE_NONE, true
 	}
 
 	retval := false
@@ -224,18 +224,7 @@ func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sample
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
-	return retval, sampleRate, source
-}
-
-// ShouldRecordMetrics decides if the metrics of this transaction needs to be collected.
-func ShouldRecordMetrics(transactionName string) bool {
-	setting, ok := getSetting("")
-	if !ok {
-		return false
-	}
-
-	_, flags, _ := mergeURLSetting(setting, transactionName)
-	return flags&(FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS) != 0
+	return retval, sampleRate, source, flags.Enabled()
 }
 
 func bytesToFloat64(b []byte) (float64, error) {

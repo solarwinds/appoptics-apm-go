@@ -261,13 +261,13 @@ func (t *aoTrace) recordHTTPSpan() {
 		}
 	}
 
-	transactionName := t.finalizeTxnName(controller, action)
+	t.finalizeTxnName(controller, action)
 
 	if t.httpSpan.span.Status >= 500 && t.httpSpan.span.Status < 600 {
 		t.httpSpan.span.HasError = true
 	}
 
-	if !reporter.ShouldRecordMetrics(transactionName) {
+	if t.aoCtx.GetEnabled() {
 		_ = reporter.ReportSpan(&t.httpSpan.span)
 	}
 
@@ -277,7 +277,7 @@ func (t *aoTrace) recordHTTPSpan() {
 
 // finalizeTxnName finalizes the transaction name based on the following factors:
 // custom transaction name, action/controller, Path and the value of APPOPTICS_PREPEND_DOMAIN
-func (t *aoTrace) finalizeTxnName(controller string, action string) string {
+func (t *aoTrace) finalizeTxnName(controller string, action string) {
 	// The precedence:
 	// custom transaction name > framework specific transaction naming > controller.action > 1st and 2nd segment of Path
 	customTxnName := t.aoCtx.GetTransactionName()
@@ -295,8 +295,6 @@ func (t *aoTrace) finalizeTxnName(controller string, action string) string {
 		t.httpSpan.span.Transaction = reporter.UnknownTransactionName
 	}
 	t.prependDomainToTxnName()
-
-	return t.httpSpan.span.Transaction
 }
 
 // prependDomainToTxnName prepends the domain to the transaction name if APPOPTICS_PREPEND_DOMAIN = true
