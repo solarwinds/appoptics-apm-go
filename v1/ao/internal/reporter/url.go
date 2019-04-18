@@ -12,137 +12,146 @@ import (
 	"github.com/pkg/errors"
 )
 
-var globalURLFilter *urlFilter
+var globalURLFilter *urlFilters
 
 func init() {
 	globalURLFilter = newURLFilter()
 	globalURLFilter.loadConfig(config.GetTransactionFiltering())
 }
 
-// Cache is a cache to store the disabled url patterns
-type Cache struct{ *freecache.Cache }
+// urlCache is a cache to store the disabled url patterns
+type urlCache struct{ *freecache.Cache }
 
-// Trace decisions in cache
 const (
-	traceEnabled  = "t"
-	traceDisabled = "f"
+	cacheExpireSeconds = 600
 )
 
-// SetURLTrace sets a url and its trace decision into the cache
-func (c *Cache) SetURLTrace(url string, trace bool) {
-	val := traceEnabled
-	if !trace {
-		val = traceDisabled
-	}
-	_ = c.Set([]byte(url), []byte(val), 0)
+// setURLTrace sets a url and its trace decision into the cache
+func (c *urlCache) setURLTrace(url string, trace tracingMode) {
+	_ = c.Set([]byte(url), []byte(string(trace)), cacheExpireSeconds)
 }
 
-// GetURLTrace gets the trace decision of a URL
-func (c *Cache) GetURLTrace(url string) (bool, error) {
+// getURLTrace gets the trace decision of a URL
+func (c *urlCache) getURLTrace(url string) (tracingMode, error) {
 	traceStr, err := c.Get([]byte(url))
 	if err != nil {
-		return false, err
+		return TRACE_UNKNOWN, err
 	}
 
-	return string(traceStr) == "t", nil
+	return newTracingMode(config.TracingMode(traceStr)), nil
 }
 
-// Filter defines a URL filter
-type Filter interface {
-	Match(url string) bool
+// urlFilter defines a URL filter
+type urlFilter interface {
+	match(url string) bool
+	tracingMode() tracingMode
 }
 
-// RegexFilter is a regular expression based URL filter
-type RegexFilter struct {
-	Regex *regexp.Regexp
+// regexFilter is a regular expression based URL filter
+type regexFilter struct {
+	regex *regexp.Regexp
+	trace tracingMode
 }
 
-// NewRegexFilter creates a new RegexFilter instance
-func NewRegexFilter(regex string) (*RegexFilter, error) {
+// newRegexFilter creates a new regexFilter instance
+func newRegexFilter(regex string, mode tracingMode) (*regexFilter, error) {
 	re, err := regexp.Compile(regex)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse regexp")
 	}
-	return &RegexFilter{Regex: re}, nil
+	return &regexFilter{regex: re, trace: mode}, nil
 }
 
-// Match checks if the url matches the filter
-func (f *RegexFilter) Match(url string) bool {
-	return f.Regex.MatchString(url)
+// match checks if the url matches the filter
+func (f *regexFilter) match(url string) bool {
+	return f.regex.MatchString(url)
 }
 
-// ExtensionFilter is a extension-based filter
-type ExtensionFilter struct {
-	Exts map[string]struct{}
+// tracingMode returns the tracing mode of this url pattern
+func (f *regexFilter) tracingMode() tracingMode {
+	return f.trace
 }
 
-// NewExtensionFilter create a new instance of ExtensionFilter
-func NewExtensionFilter(extensions []string) *ExtensionFilter {
+// extensionFilter is a extension-based filter
+type extensionFilter struct {
+	Exts  map[string]struct{}
+	trace tracingMode
+}
+
+// newExtensionFilter create a new instance of extensionFilter
+func newExtensionFilter(extensions []string, mode tracingMode) *extensionFilter {
 	exts := make(map[string]struct{})
 	for _, ext := range extensions {
 		exts[ext] = struct{}{}
 	}
-	return &ExtensionFilter{Exts: exts}
+	return &extensionFilter{Exts: exts, trace: mode}
 }
 
-// Match checks if the url matches the filter
-func (f *ExtensionFilter) Match(url string) bool {
+// match checks if the url matches the filter
+func (f *extensionFilter) match(url string) bool {
 	ext := filepath.Ext(url)
 	_, ok := f.Exts[ext]
 	return ok
 }
 
-type urlFilter struct {
-	cache   *Cache
-	filters []Filter
+// tracingMode returns the tracing mode of this extension pattern
+func (f *extensionFilter) tracingMode() tracingMode {
+	return f.trace
 }
 
-func newURLFilter() *urlFilter {
-	return &urlFilter{
-		cache: &Cache{freecache.NewCache(1024 * 1024)},
+type urlFilters struct {
+	cache   *urlCache
+	filters []urlFilter
+}
+
+func newURLFilter() *urlFilters {
+	return &urlFilters{
+		cache: &urlCache{freecache.NewCache(1024 * 1024)},
 	}
 }
 
-func (f *urlFilter) loadConfig(filters []config.TransactionFilter) {
+func (f *urlFilters) loadConfig(filters []config.TransactionFilter) {
 	for _, filter := range filters {
 		if filter.Tracing == config.EnabledTracingMode {
 			continue
 		}
 
 		if filter.RegEx != "" {
-			re, err := NewRegexFilter(filter.RegEx)
+			re, err := newRegexFilter(filter.RegEx, newTracingMode(filter.Tracing))
 			if err != nil {
-				log.Warningf("Ignoring bad regex: %s, error=", filter.RegEx, err.Error())
+				log.Warningf("Ignore bad regex: %s, error=", filter.RegEx, err.Error())
 			}
 			f.filters = append(f.filters, re)
 		} else {
-			f.filters = append(f.filters, NewExtensionFilter(filter.Extensions))
+			f.filters = append(f.filters,
+				newExtensionFilter(filter.Extensions, newTracingMode(filter.Tracing)))
 		}
 	}
 }
 
-// ShouldTrace checks if the URL should be traced or not.
-func (f *urlFilter) ShouldTrace(url string) bool {
+// getTracingMode checks if the URL should be traced or not. It returns TRACE_UNKNOWN
+// if the url is not found.
+func (f *urlFilters) getTracingMode(url string) tracingMode {
 	if len(f.filters) == 0 {
-		return true
+		return TRACE_UNKNOWN
 	}
 
-	trace, err := f.cache.GetURLTrace(url)
+	trace, err := f.cache.getURLTrace(url)
 	if err == nil {
 		return trace
 	}
 
-	trace = f.shouldTrace(url)
-	f.cache.SetURLTrace(url, trace)
+	trace = f.lookupTracingMode(url)
+	f.cache.setURLTrace(url, trace)
 
 	return trace
 }
 
-func (f *urlFilter) shouldTrace(url string) bool {
+func (f *urlFilters) lookupTracingMode(url string) tracingMode {
 	for _, filter := range f.filters {
-		if filter.Match(url) {
-			return false
+		if filter.match(url) {
+			return filter.tracingMode()
 		}
 	}
-	return true
+	return TRACE_UNKNOWN
 }

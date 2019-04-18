@@ -47,6 +47,7 @@ type sampleSource int
 const (
 	TRACE_DISABLED tracingMode = iota // disable tracing, will neither start nor continue traces
 	TRACE_ENABLED                     // perform sampling every inbound request for tracing
+	TRACE_UNKNOWN                     // for cache purpose only
 )
 
 // setting types
@@ -99,6 +100,10 @@ func newTracingMode(mode config.TracingMode) tracingMode {
 	default:
 	}
 	return TRACE_ENABLED
+}
+
+func (tm tracingMode) isUnknown() bool {
+	return tm == TRACE_UNKNOWN
 }
 
 func (tm tracingMode) toFlags() settingFlag {
