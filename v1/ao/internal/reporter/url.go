@@ -12,11 +12,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-var globalURLFilter *urlFilters
+var urls *urlFilters
 
 func init() {
-	globalURLFilter = newURLFilter()
-	globalURLFilter.loadConfig(config.GetTransactionFiltering())
+	urls = newURLFilters()
+	urls.loadConfig(config.GetTransactionFiltering())
 }
 
 // urlCache is a cache to store the disabled url patterns
@@ -28,7 +28,7 @@ const (
 
 // setURLTrace sets a url and its trace decision into the cache
 func (c *urlCache) setURLTrace(url string, trace tracingMode) {
-	_ = c.Set([]byte(url), []byte(string(trace)), cacheExpireSeconds)
+	_ = c.Set([]byte(url), []byte(trace.ToString()), cacheExpireSeconds)
 }
 
 // getURLTrace gets the trace decision of a URL
@@ -38,7 +38,7 @@ func (c *urlCache) getURLTrace(url string) (tracingMode, error) {
 		return TRACE_UNKNOWN, err
 	}
 
-	return newTracingMode(config.TracingMode(traceStr)), nil
+	return newTracingMode(config.TracingMode(string(traceStr))), nil
 }
 
 // urlFilter defines a URL filter
@@ -104,7 +104,7 @@ type urlFilters struct {
 	filters []urlFilter
 }
 
-func newURLFilter() *urlFilters {
+func newURLFilters() *urlFilters {
 	return &urlFilters{
 		cache: &urlCache{freecache.NewCache(1024 * 1024)},
 	}
@@ -132,7 +132,7 @@ func (f *urlFilters) loadConfig(filters []config.TransactionFilter) {
 // getTracingMode checks if the URL should be traced or not. It returns TRACE_UNKNOWN
 // if the url is not found.
 func (f *urlFilters) getTracingMode(url string) tracingMode {
-	if len(f.filters) == 0 {
+	if len(f.filters) == 0 || url == "" {
 		return TRACE_UNKNOWN
 	}
 

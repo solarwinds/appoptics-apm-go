@@ -91,7 +91,7 @@ func NewTrace(spanName string) Trace {
 // NewTraceWithOptions creates a new trace with the provided options
 func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 	kvs := addKVsFromOpts(opts)
-	return NewTraceFromID(spanName, "", func() KVMap {
+	return NewTraceFromIDForURL(spanName, "", opts.URL, func() KVMap {
 		return fromKVs(kvs...)
 	})
 }
@@ -100,11 +100,18 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
+	return NewTraceFromIDForURL(spanName, mdStr, "", cb)
+}
+
+// NewTraceFromIDForURL creates a new Trace for the provided URL to report to AppOptics,
+// provided an incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
+// If callback is provided & trace is sampled, cb will be called for entry event KVs
+func NewTraceFromIDForURL(spanName, mdStr string, url string, cb func() KVMap) Trace {
 	if Disabled() || Closed() {
 		return NewNullTrace()
 	}
 
-	ctx, ok := reporter.NewContext(spanName, mdStr, true, func() map[string]interface{} {
+	ctx, ok := reporter.NewContextForURL(spanName, mdStr, true, url, func() map[string]interface{} {
 		if cb != nil {
 			return cb()
 		}

@@ -140,6 +140,8 @@ const (
 	EnabledTracingMode TracingMode = "enabled"
 	// DisabledTracingMode means tracing is disabled
 	DisabledTracingMode TracingMode = "disabled"
+
+	UnknownTracingMode TracingMode = "unknown"
 )
 
 // TransactionFilter defines the transaction filtering based on a filter type.

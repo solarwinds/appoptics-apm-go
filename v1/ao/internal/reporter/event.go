@@ -116,6 +116,17 @@ func (tm tracingMode) toFlags() settingFlag {
 	return FLAG_OK
 }
 
+func (tm tracingMode) ToString() string {
+	switch tm {
+	case TRACE_ENABLED:
+		return string(config.EnabledTracingMode)
+	case TRACE_DISABLED:
+		return string(config.DisabledTracingMode)
+	default:
+		return string(config.UnknownTracingMode)
+	}
+}
+
 func oboeEventInit(evt *event, md *oboeMetadata) error {
 	if evt == nil || md == nil {
 		return errors.New("oboeEventInit got nil args")

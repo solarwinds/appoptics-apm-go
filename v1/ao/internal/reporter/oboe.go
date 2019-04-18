@@ -182,7 +182,7 @@ func (b *tokenBucket) update(now time.Time) {
 	}
 }
 
-func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
+func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sampleSource) {
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {
 			if !r.UseSettings {
@@ -201,10 +201,16 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	doRateLimiting := false
 
 	sampleRate := setting.value
+	flags := setting.flags
+
+	urlTracingMode := urls.getTracingMode(url)
+	if !urlTracingMode.isUnknown() {
+		flags = urlTracingMode.toFlags()
+	}
 
 	if !traced {
 		// A new request
-		if setting.flags&FLAG_SAMPLE_START != 0 {
+		if flags&FLAG_SAMPLE_START != 0 {
 			retval = shouldSample(sampleRate)
 			if retval {
 				doRateLimiting = true
@@ -212,9 +218,9 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 		}
 	} else {
 		// A traced request
-		if setting.flags&FLAG_SAMPLE_THROUGH_ALWAYS != 0 {
+		if flags&FLAG_SAMPLE_THROUGH_ALWAYS != 0 {
 			retval = true
-		} else if setting.flags&FLAG_SAMPLE_THROUGH != 0 {
+		} else if flags&FLAG_SAMPLE_THROUGH != 0 {
 			retval = shouldSample(sampleRate)
 		}
 	}

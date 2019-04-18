@@ -125,6 +125,8 @@ type SpanOptions struct {
 	// `debug.Stack()` internally to gather the stack trace. Please consider
 	// the impact on performance/memory footprint carefully.
 	WithBackTrace bool
+	// URL is used to do the URL-based transaction filtering.
+	URL string
 }
 
 // SpanOpt defines the function type that changes the SpanOptions

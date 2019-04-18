@@ -157,9 +157,13 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	return nil
 }
 
+func shouldTraceRequestWithURL(layer string, traced bool, url string) (bool, int, sampleSource) {
+	return oboeSampleRequest(layer, traced, url)
+}
+
 // Determines if request should be traced, based on sample rate settings.
 func shouldTraceRequest(layer string, traced bool) (bool, int, sampleSource) {
-	return oboeSampleRequest(layer, traced)
+	return shouldTraceRequestWithURL(layer, traced, "")
 }
 
 func argsToMap(capacity, ratePerSec float64, metricsFlushInterval, maxTransactions int) map[string][]byte {
