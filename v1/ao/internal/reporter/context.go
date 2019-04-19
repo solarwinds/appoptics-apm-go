@@ -343,6 +343,13 @@ func NewContextForURL(layer, mdStr string, reportEntry bool, url string, cb func
 			traced = true
 			addCtxEdge = true
 		} else {
+			setting, has := getSetting(layer)
+			if !has {
+				return ctx, false
+			}
+
+			_, flags, _ := mergeURLSetting(setting, url)
+			ctx.SetEnabled(flags.Enabled())
 			return ctx, true
 		}
 	}

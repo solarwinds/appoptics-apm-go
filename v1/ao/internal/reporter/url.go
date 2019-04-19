@@ -16,7 +16,12 @@ var urls *urlFilters
 
 func init() {
 	urls = newURLFilters()
-	urls.loadConfig(config.GetTransactionFiltering())
+	urls.LoadConfig()
+}
+
+// ReloadURLsConfig is used for testing purpose only. It's not thread-safe.
+func ReloadURLsConfig() {
+	urls.LoadConfig()
 }
 
 // urlCache is a cache to store the disabled url patterns
@@ -110,7 +115,14 @@ func newURLFilters() *urlFilters {
 	}
 }
 
+// LoadConfig reads transaction filtering settings from the global configuration
+func (f *urlFilters) LoadConfig() {
+	f.loadConfig(config.GetTransactionFiltering())
+}
+
 func (f *urlFilters) loadConfig(filters []config.TransactionFilter) {
+	f.filters = nil
+
 	for _, filter := range filters {
 		if filter.Tracing == config.EnabledTracingMode {
 			continue

@@ -54,7 +54,7 @@ const (
 	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
 	envAppOpticsEventsBatchSize     = "APPOPTICS_EVENTS_BATCHSIZE"
 	envAppOpticsDisabled            = "APPOPTICS_DISABLED"
-	envAppOpticsConfigFile          = "APPOPTICS_CONFIG_FILE"
+	EnvAppOpticsConfigFile          = "APPOPTICS_CONFIG_FILE"
 )
 
 // Errors
@@ -581,7 +581,7 @@ func getValPtr(val reflect.Value) reflect.Value {
 
 // getConfigPath returns the absolute path of the config file.
 func (c *Config) getConfigPath() string {
-	path, ok := os.LookupEnv(envAppOpticsConfigFile)
+	path, ok := os.LookupEnv(EnvAppOpticsConfigFile)
 	if ok {
 		if abs, err := filepath.Abs(path); err == nil {
 			return abs
