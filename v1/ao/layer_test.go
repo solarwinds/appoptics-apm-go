@@ -249,4 +249,86 @@ func TestTransactionFiltering(t *testing.T) {
 	r.Close(0)
 	assert.Equal(t, 0, len(r.EventBufs))
 	assert.Equal(t, 0, len(r.SpanMessages))
+
+	// service level trace mode is disabled
+	yamlConfig = config.Config{
+		Sampling: &config.SamplingConfig{TracingMode: "disabled"},
+	}
+	out, err = yaml.Marshal(yamlConfig)
+	assert.Nil(t, err)
+	err = ioutil.WriteFile("/tmp/appoptics-config.yaml", out, 0644)
+	_ = os.Setenv(config.EnvAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
+	_ = config.Load()
+	reporter.ReloadURLsConfig()
+
+	// 8.no transaction settings
+	r = reporter.SetTestReporter()
+	tr = NewTrace(layerName)
+	tr.End()
+	r.Close(0)
+	assert.Equal(t, 0, len(r.EventBufs))
+	assert.Equal(t, 0, len(r.SpanMessages))
+
+	// service level trace mode is disabled
+	yamlConfig = config.Config{
+		Sampling: &config.SamplingConfig{TracingMode: "disabled", SampleRate: 1000000},
+		TransactionFiltering: []config.TransactionFilter{
+			{"url", `test\d{1}`, nil, "enabled"},
+			{"url", "", []string{".jpg"}, "enabled"},
+		},
+	}
+	out, err = yaml.Marshal(yamlConfig)
+	assert.Nil(t, err)
+	err = ioutil.WriteFile("/tmp/appoptics-config.yaml", out, 0644)
+	_ = os.Setenv(config.EnvAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
+	_ = config.Load()
+	reporter.ReloadURLsConfig()
+
+	// 9.“enabled” transaction settings not matched
+	r = reporter.SetTestReporter()
+	tr = NewTraceWithOptions(layerName, SpanOptions{URL: "/eric"})
+	tr.End()
+	r.Close(0)
+	assert.Equal(t, 0, len(r.EventBufs))
+	assert.Equal(t, 0, len(r.SpanMessages))
+
+	// 10.“enabled” transaction settings matching
+	r = reporter.SetTestReporter()
+	tr = NewTraceWithOptions(layerName, SpanOptions{URL: "/test1"})
+	tr.End()
+	r.Close(2)
+	assert.Equal(t, 2, len(r.EventBufs))
+	assert.Equal(t, 1, len(r.SpanMessages))
+
+	// 11.incoming sampling xtrace + “enabled” transaction settings not matched
+	r = reporter.SetTestReporter()
+	tr = NewTraceFromIDForURL(layerName, samplingID, "/eric", nil)
+	tr.End()
+	r.Close(0)
+	assert.Equal(t, 0, len(r.EventBufs))
+	assert.Equal(t, 0, len(r.SpanMessages))
+
+	// 12.incoming sampling xtrace + “enabled” transaction settings matched
+	r = reporter.SetTestReporter()
+	tr = NewTraceFromIDForURL(layerName, samplingID, "/test2", nil)
+	tr.End()
+	r.Close(2)
+	assert.Equal(t, 2, len(r.EventBufs))
+	assert.Equal(t, 1, len(r.SpanMessages))
+
+	// 13.incoming non-sampling xtrace + “enabled” transaction settings not matched
+	r = reporter.SetTestReporter()
+	tr = NewTraceFromIDForURL(layerName, nonSamplingID, "/eric", nil)
+	tr.End()
+	r.Close(0)
+	assert.Equal(t, 0, len(r.EventBufs))
+	assert.Equal(t, 0, len(r.SpanMessages))
+
+	// 14.incoming non-sampling xtrace + “enabled” transaction settings matched
+	r = reporter.SetTestReporter()
+	tr = NewTraceFromIDForURL(layerName, nonSamplingID, "/test3", nil)
+	tr.End()
+	r.Close(0)
+	assert.Equal(t, 0, len(r.EventBufs))
+	assert.Equal(t, 1, len(r.SpanMessages))
 }
