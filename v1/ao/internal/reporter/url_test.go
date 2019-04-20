@@ -36,7 +36,7 @@ func TestUrlFilter(t *testing.T) {
 	filter := newURLFilters()
 	filter.loadConfig([]config.TransactionFilter{
 		{Type: "url", RegEx: `user\d{3}`, Tracing: config.DisabledTracingMode},
-		{Type: "url", Extensions: []string{".png", ".jpg"}, Tracing: config.DisabledTracingMode},
+		{Type: "url", Extensions: []string{"png", "jpg"}, Tracing: config.DisabledTracingMode},
 	})
 
 	assert.Equal(t, TRACE_DISABLED, filter.getTracingMode("user123"))

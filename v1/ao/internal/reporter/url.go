@@ -5,6 +5,7 @@ package reporter
 import (
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
@@ -16,14 +17,14 @@ var urls *urlFilters
 
 func init() {
 	urls = newURLFilters()
-	urls.LoadConfig()
+	urls.LoadConfig(config.GetTransactionFiltering())
 }
 
 // ReloadURLsConfig reloads the configuration and build the transaction filtering
 // filters and cache.
 // This function is used for testing purpose only. It's not thread-safe.
-func ReloadURLsConfig() {
-	urls.LoadConfig()
+func ReloadURLsConfig(filters []config.TransactionFilter) {
+	urls.LoadConfig(filters)
 	urls.cache.Clear()
 }
 
@@ -97,7 +98,7 @@ func newExtensionFilter(extensions []string, mode tracingMode) *extensionFilter 
 
 // match checks if the url matches the filter
 func (f *extensionFilter) match(url string) bool {
-	ext := filepath.Ext(url)
+	ext := strings.TrimLeft(filepath.Ext(url), ".")
 	_, ok := f.Exts[ext]
 	return ok
 }
@@ -119,8 +120,8 @@ func newURLFilters() *urlFilters {
 }
 
 // LoadConfig reads transaction filtering settings from the global configuration
-func (f *urlFilters) LoadConfig() {
-	f.loadConfig(config.GetTransactionFiltering())
+func (f *urlFilters) LoadConfig(filters []config.TransactionFilter) {
+	f.loadConfig(filters)
 }
 
 func (f *urlFilters) loadConfig(filters []config.TransactionFilter) {

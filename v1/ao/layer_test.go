@@ -3,13 +3,11 @@ package ao
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
-	"github.com/ghodss/yaml"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -175,7 +173,7 @@ func TestMergeKVs(t *testing.T) {
 	}
 }
 
-func TestTransactionFiltering(t *testing.T) {
+func TestWithTransactionFiltering(t *testing.T) {
 	const layerName = "transaction_filtering"
 	samplingID := "2BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2198D447EA220301"
 	nonSamplingID := "2BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2198D447EA220300"
@@ -189,18 +187,10 @@ func TestTransactionFiltering(t *testing.T) {
 	assert.Equal(t, 1, len(r.SpanMessages))
 
 	// Reload config with transaction filtering settings
-	yamlConfig := config.Config{
-		TransactionFiltering: []config.TransactionFilter{
-			{"url", `test\d{1}`, nil, "disabled"},
-			{"url", "", []string{".jpg"}, "disabled"},
-		},
-	}
-	out, err := yaml.Marshal(yamlConfig)
-	assert.Nil(t, err)
-	err = ioutil.WriteFile("/tmp/appoptics-config.yaml", out, 0644)
-	_ = os.Setenv(config.EnvAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
-	_ = config.Load()
-	reporter.ReloadURLsConfig()
+	reporter.ReloadURLsConfig([]config.TransactionFilter{
+		{"url", `test\d{1}`, nil, "disabled"},
+		{"url", "", []string{"jpg"}, "disabled"},
+	})
 
 	// 2. “disabled” transaction settings not matched
 	r = reporter.SetTestReporter()
@@ -210,9 +200,17 @@ func TestTransactionFiltering(t *testing.T) {
 	assert.Equal(t, 2, len(r.EventBufs))
 	assert.Equal(t, 1, len(r.SpanMessages))
 
-	// 3. “disabled” transaction settings matched
+	// 3.1 “disabled” transaction settings matched
 	r = reporter.SetTestReporter()
 	tr = NewTraceWithOptions(layerName, SpanOptions{URL: "/test1"})
+	tr.End()
+	r.Close(0)
+	assert.Equal(t, 0, len(r.EventBufs))
+	assert.Equal(t, 0, len(r.SpanMessages))
+
+	// 3.2 “disabled” transaction settings matched
+	r = reporter.SetTestReporter()
+	tr = NewTraceWithOptions(layerName, SpanOptions{URL: "/eric.jpg"})
 	tr.End()
 	r.Close(0)
 	assert.Equal(t, 0, len(r.EventBufs))
@@ -251,15 +249,9 @@ func TestTransactionFiltering(t *testing.T) {
 	assert.Equal(t, 0, len(r.SpanMessages))
 
 	// service level trace mode is disabled
-	yamlConfig = config.Config{
-		Sampling: &config.SamplingConfig{TracingMode: "disabled"},
-	}
-	out, err = yaml.Marshal(yamlConfig)
-	assert.Nil(t, err)
-	err = ioutil.WriteFile("/tmp/appoptics-config.yaml", out, 0644)
-	_ = os.Setenv(config.EnvAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
-	_ = config.Load()
-	reporter.ReloadURLsConfig()
+	reporter.ReloadURLsConfig([]config.TransactionFilter{})
+	os.Setenv("APPOPTICS_TRACING_MODE", "disabled")
+	config.Load()
 
 	// 8.no transaction settings
 	r = reporter.SetTestReporter()
@@ -270,19 +262,10 @@ func TestTransactionFiltering(t *testing.T) {
 	assert.Equal(t, 0, len(r.SpanMessages))
 
 	// service level trace mode is disabled
-	yamlConfig = config.Config{
-		Sampling: &config.SamplingConfig{TracingMode: "disabled", SampleRate: 1000000},
-		TransactionFiltering: []config.TransactionFilter{
-			{"url", `test\d{1}`, nil, "enabled"},
-			{"url", "", []string{".jpg"}, "enabled"},
-		},
-	}
-	out, err = yaml.Marshal(yamlConfig)
-	assert.Nil(t, err)
-	err = ioutil.WriteFile("/tmp/appoptics-config.yaml", out, 0644)
-	_ = os.Setenv(config.EnvAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
-	_ = config.Load()
-	reporter.ReloadURLsConfig()
+	reporter.ReloadURLsConfig([]config.TransactionFilter{
+		{"url", `test\d{1}`, nil, "enabled"},
+		{"url", "", []string{"jpg"}, "enabled"},
+	})
 
 	// 9.“enabled” transaction settings not matched
 	r = reporter.SetTestReporter()
@@ -331,4 +314,9 @@ func TestTransactionFiltering(t *testing.T) {
 	r.Close(0)
 	assert.Equal(t, 0, len(r.EventBufs))
 	assert.Equal(t, 1, len(r.SpanMessages))
+
+	// reset configurations
+	os.Unsetenv("APPOPTICS_TRACING_MODE")
+	config.Load()
+	reporter.ReloadURLsConfig([]config.TransactionFilter{})
 }
