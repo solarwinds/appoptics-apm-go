@@ -105,7 +105,7 @@ type Config struct {
 	// The transaction filtering config
 	TransactionFiltering []TransactionFilter `yaml:"TransactionFiltering,omitempty"`
 
-	Disabled bool `yaml:"DisabledTracingMode,omitempty" env:"APPOPTICS_DISABLED"`
+	Disabled bool `yaml:"Disabled,omitempty" env:"APPOPTICS_DISABLED"`
 
 	// The default log level. It should follow the level defined in log.DefaultLevel
 	DebugLevel string `yaml:"DebugLevel,omitempty" env:"APPOPTICS_DEBUG_LEVEL" default:"warn"`
