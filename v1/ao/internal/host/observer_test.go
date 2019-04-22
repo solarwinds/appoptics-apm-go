@@ -168,11 +168,12 @@ func TestGetHerokuDynoId(t *testing.T) {
 }
 
 func TestInitDyno(t *testing.T) {
+	var dynoID string
 	os.Setenv(envDyno, "test-dyno")
-	initDyno(&dyno)
-	assert.Equal(t, "test-dyno", dyno)
+	initDyno(&dynoID)
+	assert.Equal(t, "test-dyno", dynoID)
 
 	os.Unsetenv(envDyno)
-	initDyno(&dyno)
-	assert.Equal(t, "", dyno)
+	initDyno(&dynoID)
+	assert.Equal(t, "", dynoID)
 }
