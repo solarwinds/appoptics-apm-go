@@ -320,6 +320,7 @@ These environment variables may be set:
 |APPOPTICS_PREPEND_DOMAIN|No|false|Prepend the domain name to the transaction name. Possible values: true, false|
 |APPOPTICS_DISABLED|No|false|Disable the agent. Possible values: true, false|
 
+For the up-to-date configuration items and descriptions, including YAML config file support in the upcoming version, please refer to our knowledge base website: https://docs.appoptics.com/kb/apm_tracing/go/configure/
 
 ## Help and examples
 
