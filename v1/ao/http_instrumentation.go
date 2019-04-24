@@ -146,7 +146,7 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 	}
 
 	// start trace, passing in metadata header
-	t := NewTraceFromID(spanName, r.Header.Get(HTTPHeaderName), func() KVMap {
+	t := NewTraceFromIDForURL(spanName, r.Header.Get(HTTPHeaderName), r.URL.EscapedPath(), func() KVMap {
 		kvs := KVMap{
 			keyMethod:      r.Method,
 			keyHTTPHost:    r.Host,

@@ -26,7 +26,10 @@ type oboeSettingsCfg struct {
 }
 type oboeSettings struct {
 	timestamp time.Time
-	flags     settingFlag
+	// the flags which may be modified through merging local settings.
+	flags settingFlag
+	// the original flags retrieved from the remote collector.
+	originalFlags settingFlag
 	// The sample rate. It could be the original value got from remote server
 	// or a new value after negotiating with local config
 	value int
@@ -38,7 +41,7 @@ type oboeSettings struct {
 }
 
 func (s *oboeSettings) hasOverrideFlag() bool {
-	return s.flags&FLAG_OVERRIDE != 0
+	return s.originalFlags&FLAG_OVERRIDE != 0
 }
 
 func newOboeSettings() *oboeSettings {
@@ -182,11 +185,11 @@ func (b *tokenBucket) update(now time.Time) {
 	}
 }
 
-func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
+func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sampleSource, bool) {
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {
 			if !r.UseSettings {
-				return r.ShouldTrace, 0, SAMPLE_SOURCE_NONE // trace tests
+				return r.ShouldTrace, 0, SAMPLE_SOURCE_NONE, true // trace tests
 			}
 		}
 	}
@@ -194,17 +197,17 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		return false, 0, SAMPLE_SOURCE_NONE
+		return false, 0, SAMPLE_SOURCE_NONE, false
 	}
 
 	retval := false
 	doRateLimiting := false
 
-	sampleRate := setting.value
+	sampleRate, flags, source := mergeURLSetting(setting, url)
 
 	if !traced {
 		// A new request
-		if setting.flags&FLAG_SAMPLE_START != 0 {
+		if flags&FLAG_SAMPLE_START != 0 {
 			retval = shouldSample(sampleRate)
 			if retval {
 				doRateLimiting = true
@@ -212,16 +215,16 @@ func oboeSampleRequest(layer string, traced bool) (bool, int, sampleSource) {
 		}
 	} else {
 		// A traced request
-		if setting.flags&FLAG_SAMPLE_THROUGH_ALWAYS != 0 {
+		if flags&FLAG_SAMPLE_THROUGH_ALWAYS != 0 {
 			retval = true
-		} else if setting.flags&FLAG_SAMPLE_THROUGH != 0 {
+		} else if flags&FLAG_SAMPLE_THROUGH != 0 {
 			retval = shouldSample(sampleRate)
 		}
 	}
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
-	return retval, sampleRate, setting.source
+	return retval, sampleRate, source, flags.Enabled()
 }
 
 func bytesToFloat64(b []byte) (float64, error) {
@@ -287,6 +290,28 @@ func mergeLocalSetting(remote *oboeSettings) *oboeSettings {
 	return remote
 }
 
+// mergeURLSetting merges the service level setting (merged from remote and local
+// settings) and the per-URL sampling flags, if any.
+func mergeURLSetting(setting *oboeSettings, url string) (int, settingFlag, sampleSource) {
+	if url == "" {
+		return setting.value, setting.flags, setting.source
+	}
+
+	urlTracingMode := urls.getTracingMode(url)
+	if urlTracingMode.isUnknown() {
+		return setting.value, setting.flags, setting.source
+	}
+
+	flags := urlTracingMode.toFlags()
+	source := SAMPLE_SOURCE_FILE
+
+	if setting.hasOverrideFlag() {
+		flags &= setting.originalFlags
+	}
+
+	return setting.value, flags, source
+}
+
 func adjustSampleRate(rate int64) int {
 	if rate < 0 {
 		log.Debugf("Invalid sample rate: %d", rate)
@@ -306,6 +331,7 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	ns.timestamp = time.Now()
 	ns.source = settingType(sType).toSampleSource()
 	ns.flags = flagStringToBin(string(flags))
+	ns.originalFlags = ns.flags
 	ns.value = adjustSampleRate(value)
 	ns.ttl = ttl
 	ns.layer = layer

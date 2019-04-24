@@ -49,5 +49,8 @@ var ReporterOpts = conf.GetReporter
 // DebugLevel is a wrapper to the method of the global config
 var DebugLevel = conf.GetDebugLevel
 
+// GetTransactionFiltering is a wrapper to the method of the global config
+var GetTransactionFiltering = conf.GetTransactionFiltering
+
 // Load reads the customized configurations
 var Load = conf.Load

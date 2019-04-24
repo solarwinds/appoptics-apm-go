@@ -49,6 +49,8 @@ type oboeContext struct {
 
 type transactionContext struct {
 	name string
+	// if the trace/transaction is enabled (defined by per-URL transaction filtering)
+	enabled bool
 	sync.RWMutex
 }
 
@@ -258,6 +260,8 @@ type Context interface {
 	Copy() Context
 	IsSampled() bool
 	SetSampled(trace bool)
+	SetEnabled(enabled bool)
+	GetEnabled() bool
 	SetTransactionName(name string)
 	GetTransactionName() string
 	MetadataString() string
@@ -284,6 +288,8 @@ func (e *nullContext) ReportEventMap(label Label, layer string, keys map[string]
 func (e *nullContext) Copy() Context                                         { return &nullContext{} }
 func (e *nullContext) IsSampled() bool                                       { return false }
 func (e *nullContext) SetSampled(trace bool)                                 {}
+func (e *nullContext) SetEnabled(enabled bool)                               {}
+func (e *nullContext) GetEnabled() bool                                      { return true }
 func (e *nullContext) SetTransactionName(name string)                        {}
 func (e *nullContext) GetTransactionName() string                            { return "" }
 func (e *nullContext) MetadataString() string                                { return "" }
@@ -297,7 +303,7 @@ func NewNullContext() Context { return &nullContext{} }
 
 // newContext allocates a context with random metadata (for a new trace).
 func newContext(sampled bool) Context {
-	ctx := &oboeContext{txCtx: &transactionContext{}}
+	ctx := &oboeContext{txCtx: &transactionContext{enabled: true}}
 	ctx.metadata.Init()
 	if err := ctx.metadata.SetRandom(); err != nil {
 		log.Infof("AppOptics rand.Read error: %v", err)
@@ -308,7 +314,7 @@ func newContext(sampled bool) Context {
 }
 
 func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
-	ctx := &oboeContext{txCtx: &transactionContext{}}
+	ctx := &oboeContext{txCtx: &transactionContext{enabled: true}}
 	ctx.metadata.Init()
 	err := ctx.metadata.FromString(mdstr)
 	return ctx, err
@@ -317,6 +323,13 @@ func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
 // NewContext starts a trace, possibly continuing one, if mdStr is provided. Setting reportEntry will
 // report an entry event before this function returns, calling cb if provided for additional KV pairs.
 func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]interface{}) (ctx Context, ok bool) {
+	return NewContextForURL(layer, mdStr, reportEntry, "", cb)
+}
+
+// NewContextForURL starts a trace for the provided URL, possibly continuing one, if mdStr is provided.
+// Setting reportEntry will report an entry event before this function returns, calling cb if provided
+// for additional KV pairs.
+func NewContextForURL(layer, mdStr string, reportEntry bool, url string, cb func() map[string]interface{}) (ctx Context, ok bool) {
 	traced := false
 	addCtxEdge := false
 
@@ -330,6 +343,13 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 			traced = true
 			addCtxEdge = true
 		} else {
+			setting, has := getSetting(layer)
+			if !has {
+				return ctx, false
+			}
+
+			_, flags, _ := mergeURLSetting(setting, url)
+			ctx.SetEnabled(flags.Enabled())
 			return ctx, true
 		}
 	}
@@ -338,7 +358,8 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 		ctx = newContext(true)
 	}
 
-	if ok, rate, source := shouldTraceRequest(layer, traced); ok {
+	ok, rate, source, enabled := shouldTraceRequestWithURL(layer, traced, url)
+	if ok {
 		if reportEntry {
 			var kvs map[string]interface{}
 			if cb != nil {
@@ -360,6 +381,7 @@ func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]inte
 	}
 
 	ctx.SetSampled(false)
+	ctx.SetEnabled(enabled)
 	return ctx, true
 }
 
@@ -379,6 +401,14 @@ func (ctx *oboeContext) SetSampled(trace bool) {
 	} else {
 		ctx.metadata.flags ^= XTR_FLAGS_SAMPLED // clear sampled bit
 	}
+}
+
+func (ctx *oboeContext) SetEnabled(enabled bool) {
+	ctx.txCtx.enabled = enabled
+}
+
+func (ctx *oboeContext) GetEnabled() bool {
+	return ctx.txCtx.enabled
 }
 
 func (ctx *oboeContext) SetTransactionName(name string) {

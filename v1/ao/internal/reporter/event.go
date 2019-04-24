@@ -47,6 +47,7 @@ type sampleSource int
 const (
 	TRACE_DISABLED tracingMode = iota // disable tracing, will neither start nor continue traces
 	TRACE_ENABLED                     // perform sampling every inbound request for tracing
+	TRACE_UNKNOWN                     // for cache purpose only
 )
 
 // setting types
@@ -77,6 +78,11 @@ const (
 	maxSamplingRate = config.MaxSampleRate
 )
 
+// Enabled returns if the trace is enabled or not.
+func (f settingFlag) Enabled() bool {
+	return f&(FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS) != 0
+}
+
 func (st settingType) toSampleSource() sampleSource {
 	var source sampleSource
 	switch st {
@@ -91,14 +97,19 @@ func (st settingType) toSampleSource() sampleSource {
 }
 
 // newTracingMode creates a tracing mode object from a string
-func newTracingMode(mode string) tracingMode {
+func newTracingMode(mode config.TracingMode) tracingMode {
 	switch mode {
-	case "disabled":
+	case config.DisabledTracingMode:
 		return TRACE_DISABLED
-	case "enabled":
+	case config.EnabledTracingMode:
+		return TRACE_ENABLED
 	default:
 	}
-	return TRACE_ENABLED
+	return TRACE_UNKNOWN
+}
+
+func (tm tracingMode) isUnknown() bool {
+	return tm == TRACE_UNKNOWN
 }
 
 func (tm tracingMode) toFlags() settingFlag {
@@ -109,6 +120,17 @@ func (tm tracingMode) toFlags() settingFlag {
 	default:
 	}
 	return FLAG_OK
+}
+
+func (tm tracingMode) ToString() string {
+	switch tm {
+	case TRACE_ENABLED:
+		return string(config.EnabledTracingMode)
+	case TRACE_DISABLED:
+		return string(config.DisabledTracingMode)
+	default:
+		return string(config.UnknownTracingMode)
+	}
 }
 
 func oboeEventInit(evt *event, md *oboeMetadata) error {

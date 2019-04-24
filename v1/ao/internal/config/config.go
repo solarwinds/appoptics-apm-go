@@ -54,7 +54,7 @@ const (
 	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
 	envAppOpticsEventsBatchSize     = "APPOPTICS_EVENTS_BATCHSIZE"
 	envAppOpticsDisabled            = "APPOPTICS_DISABLED"
-	envAppOpticsConfigFile          = "APPOPTICS_CONFIG_FILE"
+	EnvAppOpticsConfigFile          = "APPOPTICS_CONFIG_FILE"
 )
 
 // Errors
@@ -102,6 +102,9 @@ type Config struct {
 	// The reporter options
 	ReporterProperties *ReporterOptions `yaml:"ReporterProperties,omitempty"`
 
+	// The transaction filtering config
+	TransactionFiltering []TransactionFilter `yaml:"TransactionFiltering,omitempty"`
+
 	Disabled bool `yaml:"Disabled,omitempty" env:"APPOPTICS_DISABLED"`
 
 	// The default log level. It should follow the level defined in log.DefaultLevel
@@ -111,7 +114,7 @@ type Config struct {
 // SamplingConfig defines the configuration options for the sampling decision
 type SamplingConfig struct {
 	// The tracing mode
-	TracingMode string `yaml:"TracingMode,omitempty" env:"APPOPTICS_TRACING_MODE" default:"enabled"`
+	TracingMode TracingMode `yaml:"TracingMode,omitempty" env:"APPOPTICS_TRACING_MODE" default:"enabled"`
 	// If the tracing mode is configured explicitly
 	tracingModeConfigured bool `yaml:"-"`
 
@@ -121,6 +124,71 @@ type SamplingConfig struct {
 	sampleRateConfigured bool `yaml:"-"`
 }
 
+// FilterType defines the type of the transaction filter
+type FilterType string
+
+const (
+	// URL based filter
+	URL FilterType = "url"
+)
+
+// TracingMode defines the tracing mode which is either `enabled` or `disabled`
+type TracingMode string
+
+const (
+	// EnabledTracingMode means tracing is enabled
+	EnabledTracingMode TracingMode = "enabled"
+	// DisabledTracingMode means tracing is disabled
+	DisabledTracingMode TracingMode = "disabled"
+
+	UnknownTracingMode TracingMode = "unknown"
+)
+
+// TransactionFilter defines the transaction filtering based on a filter type.
+type TransactionFilter struct {
+	Type       FilterType  `yaml:"Type"`
+	RegEx      string      `yaml:"RegEx,omitempty"`
+	Extensions []string    `yaml:"Extensions,omitempty"`
+	Tracing    TracingMode `yaml:"Tracing"`
+}
+
+// TransactionFilter unmarshal errors
+var (
+	ErrTFInvalidType     = errors.New("invalid Type")
+	ErrTFInvalidTracing  = errors.New("invalid Tracing")
+	ErrTFInvalidRegExExt = errors.New("must set either RegEx or Extensions, but not both")
+)
+
+// UnmarshalYAML is the customized unmarshal method for TransactionFilter
+func (f *TransactionFilter) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	initStruct(f)
+	var aux = struct {
+		Type       FilterType  `yaml:"Type"`
+		RegEx      string      `yaml:"RegEx,omitempty"`
+		Extensions []string    `yaml:"Extensions,omitempty"`
+		Tracing    TracingMode `yaml:"Tracing"`
+	}{}
+
+	if err := unmarshal(&aux); err != nil {
+		return errors.Wrap(err, "failed to unmarshal TransactionFilter")
+	}
+	if aux.Type != URL {
+		return ErrTFInvalidType
+	}
+	if aux.Tracing != EnabledTracingMode && aux.Tracing != DisabledTracingMode {
+		return ErrTFInvalidTracing
+	}
+	if (aux.RegEx == "") == (aux.Extensions == nil) {
+		return ErrTFInvalidRegExExt
+	}
+
+	f.Type = aux.Type
+	f.RegEx = aux.RegEx
+	f.Extensions = aux.Extensions
+	f.Tracing = aux.Tracing
+	return nil
+}
+
 // Configured returns if either the tracing mode or the sampling rate has been configured
 func (s *SamplingConfig) Configured() bool {
 	return s.tracingModeConfigured || s.sampleRateConfigured
@@ -128,9 +196,10 @@ func (s *SamplingConfig) Configured() bool {
 
 // UnmarshalYAML is the customized unmarshal method for SamplingConfig
 func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	initStruct(s)
 	var aux = struct {
-		TracingMode string `yaml:"TracingMode"`
-		SampleRate  int    `yaml:"SampleRate"`
+		TracingMode TracingMode `yaml:"TracingMode"`
+		SampleRate  int         `yaml:"SampleRate"`
 	}{
 		TracingMode: "Invalid",
 		SampleRate:  -1,
@@ -150,7 +219,7 @@ func (s *SamplingConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 
 // ResetTracingMode resets the tracing mode to its default value and clear the flag.
 func (s *SamplingConfig) ResetTracingMode() {
-	s.TracingMode = getFieldDefaultValue(s, "TracingMode")
+	s.TracingMode = TracingMode(getFieldDefaultValue(s, "TracingMode"))
 	s.tracingModeConfigured = false
 }
 
@@ -162,7 +231,7 @@ func (s *SamplingConfig) ResetSampleRate() {
 
 func (s *SamplingConfig) validate() {
 	if ok := IsValidTracingMode(s.TracingMode); !ok {
-		log.Warning(InvalidEnv("TracingMode", s.TracingMode))
+		log.Warning(InvalidEnv("TracingMode", string(s.TracingMode)))
 		s.ResetTracingMode()
 	}
 	if ok := IsValidSampleRate(s.SampleRate); !ok {
@@ -174,8 +243,8 @@ func (s *SamplingConfig) validate() {
 // SetTracingMode assigns the tracing mode and set the corresponding flag.
 // Note: Do not change the method name as it (`Set`+Field name) is used in method
 // `loadEnvsInternal` to assign the values loaded from env variables dynamically.
-func (s *SamplingConfig) SetTracingMode(mode string) {
-	s.TracingMode = ToTracingMode(mode)
+func (s *SamplingConfig) SetTracingMode(mode TracingMode) {
+	s.TracingMode = NormalizeTracingMode(mode)
 	s.tracingModeConfigured = true
 }
 
@@ -373,8 +442,11 @@ func getDelta(base, changed interface{}, keyPrefix string) *Delta {
 			subDelta := getDelta(baseField, changedField, prefix)
 			delta.add(subDelta.items()...)
 		} else {
-			if fieldChanged.CanSet() && // only collect the exported fields
-				fieldBase.Interface() != fieldChanged.Interface() {
+			if !fieldChanged.CanSet() { // only collect the exported fields
+				continue
+			}
+
+			if !reflect.DeepEqual(fieldBase.Interface(), fieldChanged.Interface()) {
 				keyName := typeFieldChanged.Name
 				if keyPrefix != "" {
 					keyName = fmt.Sprintf("%s.%s", keyPrefix, typeFieldChanged.Name)
@@ -382,8 +454,8 @@ func getDelta(base, changed interface{}, keyPrefix string) *Delta {
 				kv := DeltaItem{
 					key:        keyName,
 					env:        typeFieldChanged.Tag.Get("env"),
-					value:      fmt.Sprintf("%v", fieldChanged.Interface()),
-					defaultVal: fmt.Sprintf("%v", fieldBase.Interface()),
+					value:      fmt.Sprintf("%+v", fieldChanged.Interface()),
+					defaultVal: fmt.Sprintf("%+v", fieldBase.Interface()),
 				}
 				delta.add(kv)
 			}
@@ -509,7 +581,7 @@ func getValPtr(val reflect.Value) reflect.Value {
 
 // getConfigPath returns the absolute path of the config file.
 func (c *Config) getConfigPath() string {
-	path, ok := os.LookupEnv(envAppOpticsConfigFile)
+	path, ok := os.LookupEnv(EnvAppOpticsConfigFile)
 	if ok {
 		if abs, err := filepath.Abs(path); err == nil {
 			return abs
@@ -636,7 +708,7 @@ func (c *Config) GetCollectorUDP() string {
 }
 
 // GetTracingMode returns the local tracing mode
-func (c *Config) GetTracingMode() string {
+func (c *Config) GetTracingMode() TracingMode {
 	c.RLock()
 	defer c.RUnlock()
 	return c.Sampling.TracingMode
@@ -704,4 +776,11 @@ func (c *Config) GetDebugLevel() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.DebugLevel
+}
+
+// GetTransactionFiltering returns the transaction filtering config
+func (c *Config) GetTransactionFiltering() []TransactionFilter {
+	c.RLock()
+	defer c.RUnlock()
+	return c.TransactionFiltering
 }

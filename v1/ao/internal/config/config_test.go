@@ -3,6 +3,7 @@
 package config
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -40,7 +41,7 @@ func TestLoadConfig(t *testing.T) {
 	c.Load()
 	assert.Equal(t, "test.abc:8080", c.GetCollector())
 	assert.Equal(t, false, c.Disabled)
-	assert.Equal(t, "enabled", c.GetTracingMode())
+	assert.Equal(t, "enabled", string(c.GetTracingMode()))
 
 	c = NewConfig(
 		WithCollector("hello.world"),
@@ -69,21 +70,21 @@ func TestConfig_HasLocalSamplingConfig(t *testing.T) {
 	_ = os.Setenv(envAppOpticsTracingMode, "disabled")
 	Load()
 	assert.True(t, SamplingConfigured())
-	assert.Equal(t, "disabled", GetTracingMode())
+	assert.Equal(t, "disabled", string(GetTracingMode()))
 	assert.Equal(t, ToInteger(getFieldDefaultValue(&SamplingConfig{}, "SampleRate")), GetSampleRate())
 
 	// No local sampling config
 	_ = os.Unsetenv(envAppOpticsTracingMode)
 	Load()
 	assert.False(t, SamplingConfigured())
-	assert.Equal(t, getFieldDefaultValue(&SamplingConfig{}, "TracingMode"), GetTracingMode())
+	assert.Equal(t, getFieldDefaultValue(&SamplingConfig{}, "TracingMode"), string(GetTracingMode()))
 	assert.Equal(t, ToInteger(getFieldDefaultValue(&SamplingConfig{}, "SampleRate")), GetSampleRate())
 
 	// Set sample rate to 10000
 	_ = os.Setenv(envAppOpticsSampleRate, "10000")
 	Load()
 	assert.True(t, SamplingConfigured())
-	assert.Equal(t, getFieldDefaultValue(&SamplingConfig{}, "TracingMode"), GetTracingMode())
+	assert.Equal(t, getFieldDefaultValue(&SamplingConfig{}, "TracingMode"), string(GetTracingMode()))
 	assert.Equal(t, 10000, GetSampleRate())
 }
 
@@ -249,6 +250,10 @@ func TestYamlConfig(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
+		TransactionFiltering: []TransactionFilter{
+			{"url", `\s+\d+\s+`, nil, "disabled"},
+			{"url", "", []string{".jpg"}, "disabled"},
+		},
 		Disabled:   true,
 		DebugLevel: "info",
 	}
@@ -261,7 +266,7 @@ func TestYamlConfig(t *testing.T) {
 
 	// Test with config file
 	ClearEnvs()
-	os.Setenv(envAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
+	os.Setenv(EnvAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
 
 	c := NewConfig()
 	assert.Equal(t, yamlConfig, *c)
@@ -316,6 +321,10 @@ func TestYamlConfig(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
+		TransactionFiltering: []TransactionFilter{
+			{"url", `\s+\d+\s+`, nil, "disabled"},
+			{"url", "", []string{".jpg"}, "disabled"},
+		},
 		Disabled:   true,
 		DebugLevel: "info",
 	}
@@ -334,7 +343,7 @@ func TestSamplingConfigValidate(t *testing.T) {
 		sampleRateConfigured:  true,
 	}
 	s.validate()
-	assert.Equal(t, "enabled", s.TracingMode)
+	assert.Equal(t, EnabledTracingMode, s.TracingMode)
 	assert.Equal(t, false, s.tracingModeConfigured)
 	assert.Equal(t, 1000000, s.SampleRate)
 	assert.Equal(t, false, s.sampleRateConfigured)
@@ -443,4 +452,31 @@ func TestConfigDefaultValues(t *testing.T) {
 
 	// check the default sample rate
 	assert.Equal(t, MaxSampleRate, c.Sampling.SampleRate)
+}
+
+func TestTransactionFilter_UnmarshalYAML(t *testing.T) {
+	var testCases = []struct {
+		filter TransactionFilter
+		err    error
+	}{
+		{TransactionFilter{"invalid", `\s+\d+\s+`, nil, "disabled"}, ErrTFInvalidType},
+		{TransactionFilter{"url", `\s+\d+\s+`, nil, "enabled"}, nil},
+		{TransactionFilter{"url", `\s+\d+\s+`, nil, "disabled"}, nil},
+		{TransactionFilter{"url", "", []string{".jpg"}, "disabled"}, nil},
+		{TransactionFilter{"url", `\s+\d+\s+`, []string{".jpg"}, "disabled"}, ErrTFInvalidRegExExt},
+		{TransactionFilter{"url", `\s+\d+\s+`, nil, "disabled"}, nil},
+		{TransactionFilter{"url", `\s+\d+\s+`, nil, "invalid"}, ErrTFInvalidTracing},
+	}
+
+	for idx, testCase := range testCases {
+		bytes, err := yaml.Marshal(testCase.filter)
+		assert.Nil(t, err, fmt.Sprintf("Case #%d", idx))
+
+		var filter TransactionFilter
+		err = yaml.Unmarshal(bytes, &filter)
+		assert.Equal(t, testCase.err, err, fmt.Sprintf("Case #%d", idx))
+		if err == nil {
+			assert.Equal(t, testCase.filter, filter, fmt.Sprintf("Case #%d", idx))
+		}
+	}
 }

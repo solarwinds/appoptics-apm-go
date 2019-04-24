@@ -79,7 +79,7 @@ func tracingContext(ctx context.Context, serverName string, methodName string, s
 		}
 	}
 
-	t := ao.NewTraceFromID(serverName, xtID, func() ao.KVMap {
+	t := ao.NewTraceFromIDForURL(serverName, xtID, methodName, func() ao.KVMap {
 		return ao.KVMap{
 			"Method":     "POST",
 			"Controller": serverName,

@@ -95,6 +95,13 @@ func stringToValue(s string, typ reflect.Type) reflect.Value {
 		if err != nil {
 			log.Warningf("Ignore invalid bool value: %s", errors.Wrap(err, s))
 		}
+	case reflect.Slice:
+		if s == "" {
+			return reflect.Zero(typ)
+		} else {
+			panic(fmt.Sprintf("Slice with non-empty value is not supported"))
+		}
+
 	default:
 		panic(fmt.Sprintf("Unsupported kind: %v, val: %s", kind, s))
 	}

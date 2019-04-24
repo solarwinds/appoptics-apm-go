@@ -108,7 +108,7 @@ func testLayerCount(count int64) interface{} {
 
 func callShouldTraceRequest(total int, isTraced bool) (traced int) {
 	for i := 0; i < total; i++ {
-		if ok, _, _ := shouldTraceRequest(testLayer, isTraced); ok {
+		if ok, _, _, _ := shouldTraceRequest(testLayer, isTraced); ok {
 			traced++
 		}
 	}
@@ -158,7 +158,7 @@ func TestSampleNoValidSettings(t *testing.T) {
 func TestSampleRateBoundaries(t *testing.T) {
 	r := SetTestReporter()
 
-	_, rate, _ := shouldTraceRequest(testLayer, false)
+	_, rate, _, _ := shouldTraceRequest(testLayer, false)
 	assert.Equal(t, 1000000, rate)
 
 	// check that max value doesn't go above 1000000
@@ -166,14 +166,14 @@ func TestSampleRateBoundaries(t *testing.T) {
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000001, 120, argsToMap(1000000, 1000000, -1, -1))
 
-	_, rate, _ = shouldTraceRequest(testLayer, false)
+	_, rate, _, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, 1000000, rate)
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		0, 120, argsToMap(1000000, 1000000, -1, -1))
 
-	_, rate, _ = shouldTraceRequest(testLayer, false)
+	_, rate, _, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, 0, rate)
 
 	// check that min value doesn't go below 0
@@ -181,7 +181,7 @@ func TestSampleRateBoundaries(t *testing.T) {
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		-1, 120, argsToMap(1000000, 1000000, -1, -1))
 
-	_, rate, _ = shouldTraceRequest(testLayer, false)
+	_, rate, _, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, 0, rate)
 
 	r.Close(0)
@@ -190,25 +190,25 @@ func TestSampleRateBoundaries(t *testing.T) {
 func TestSampleSource(t *testing.T) {
 	r := SetTestReporter()
 
-	_, _, source := shouldTraceRequest(testLayer, false)
+	_, _, source, _ := shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 
 	resetSettings()
-	_, _, source = shouldTraceRequest(testLayer, false)
+	_, _, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_NONE, source)
 
 	// we're currently only looking up default settings, so this should return NONE sample source
 	updateSetting(int32(TYPE_LAYER), testLayer,
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
-	_, _, source = shouldTraceRequest(testLayer, false)
+	_, _, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_NONE, source)
 
 	// as soon as we add the default settings back, we get a valid sample source
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
-	_, _, source = shouldTraceRequest(testLayer, false)
+	_, _, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 
 	r.Close(0)
@@ -221,10 +221,10 @@ func TestSampleFlags(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte(""),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
-	ok, _, _ := shouldTraceRequest(testLayer, false)
+	ok, _, _, _ := shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
 	assert.EqualValues(t, 0, c.through)
-	ok, _, _ = shouldTraceRequest(testLayer, true)
+	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.False(t, ok)
 	assert.EqualValues(t, 1, c.through)
 
@@ -234,12 +234,20 @@ func TestSampleFlags(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
-	ok, _, _ = shouldTraceRequest(testLayer, false)
+	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.True(t, ok)
 	assert.EqualValues(t, 0, c.through)
-	ok, _, _ = shouldTraceRequest(testLayer, true)
+	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.False(t, ok)
 	assert.EqualValues(t, 1, c.through)
+
+	// Transaction filtering
+	urls.loadConfig([]config.TransactionFilter{
+		{Type: "url", RegEx: `user\d{3}`, Tracing: config.DisabledTracingMode},
+		{Type: "url", Extensions: []string{".png", ".jpg"}, Tracing: config.DisabledTracingMode},
+	})
+	ok, _, _, _ = shouldTraceRequestWithURL(testLayer, false, "http://test.com/user123")
+	assert.False(t, ok)
 
 	resetSettings()
 	c = globalSettingsCfg
@@ -247,10 +255,10 @@ func TestSampleFlags(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
-	ok, _, _ = shouldTraceRequest(testLayer, false)
+	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
 	assert.EqualValues(t, 0, c.through)
-	ok, _, _ = shouldTraceRequest(testLayer, true)
+	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.True(t, ok)
 	assert.EqualValues(t, 1, c.through)
 
@@ -260,10 +268,10 @@ func TestSampleFlags(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_THROUGH"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
-	ok, _, _ = shouldTraceRequest(testLayer, false)
+	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
 	assert.EqualValues(t, 0, c.through)
-	ok, _, _ = shouldTraceRequest(testLayer, true)
+	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.True(t, ok)
 	assert.EqualValues(t, 1, c.through)
 
@@ -417,7 +425,7 @@ func TestCheckSettingsTimeout(t *testing.T) {
 func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// No remote setting
 	resetSettings()
-	trace, rate, source := shouldTraceRequest(testLayer, false)
+	trace, rate, source, _ := shouldTraceRequest(testLayer, false)
 	assert.False(t, trace)
 	assert.Equal(t, source, SAMPLE_SOURCE_NONE)
 	assert.Equal(t, rate, 0)
@@ -430,7 +438,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
-	trace, rate, source = shouldTraceRequest(testLayer, false)
+	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
 	assert.Equal(t, 10000, rate)
 
@@ -441,7 +449,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000, 120, argsToMap(1000000, 1000000, -1, -1))
-	trace, rate, source = shouldTraceRequest(testLayer, false)
+	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 	assert.Equal(t, 1000, rate)
 
@@ -452,7 +460,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
-	trace, rate, source = shouldTraceRequest(testLayer, false)
+	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
 	assert.Equal(t, 10000, rate)
 	// Remote setting doesn't have the override flag && local config has higher rate
@@ -462,7 +470,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000, 120, argsToMap(1000000, 1000000, -1, -1))
-	trace, rate, source = shouldTraceRequest(testLayer, false)
+	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
 	assert.Equal(t, 10000, rate)
 	// Remote setting has the override flag && no local config
@@ -472,7 +480,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		10000, 120, argsToMap(1000000, 1000000, -1, -1))
-	trace, rate, source = shouldTraceRequest(testLayer, false)
+	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 	assert.Equal(t, 10000, rate)
 	// Remote setting doesn't have the override flag && no local config
@@ -482,7 +490,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		10000, 120, argsToMap(1000000, 1000000, -1, -1))
-	trace, rate, source = shouldTraceRequest(testLayer, false)
+	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 	assert.Equal(t, 10000, rate)
 	// Remote setting has the override flag && local tracing mode = DISABLED
@@ -492,7 +500,7 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
-	trace, rate, source = shouldTraceRequest(testLayer, false)
+	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
 	assert.Equal(t, 10000, rate)
 }
