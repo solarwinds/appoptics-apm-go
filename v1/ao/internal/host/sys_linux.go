@@ -38,17 +38,13 @@ func initDistro() (distro string) {
 	}
 	// amazon linux
 	distro = utils.GetStrByKeyword(AMAZON, "")
-
-	ds := strings.Split(distro, ":")
-	distro = ds[len(ds)-1]
 	if distro != "" {
-		distro = "Amzn Linux " + distro
 		return distro
 	}
 	// ubuntu
 	distro = utils.GetStrByKeyword(UBUNTU, "DISTRIB_DESCRIPTION")
 	if distro != "" {
-		ds = strings.Split(distro, "=")
+		ds := strings.Split(distro, "=")
 		distro = ds[len(ds)-1]
 		if distro != "" {
 			distro = strings.Trim(distro, "\"")

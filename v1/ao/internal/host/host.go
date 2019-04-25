@@ -16,7 +16,7 @@ import (
 
 const (
 	REDHAT    = "/etc/redhat-release"
-	AMAZON    = "/etc/release-cpe"
+	AMAZON    = "/etc/system-release"
 	UBUNTU    = "/etc/lsb-release"
 	DEBIAN    = "/etc/debian_version"
 	SUSE      = "/etc/SuSE-release"
