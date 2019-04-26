@@ -54,7 +54,15 @@ func initDistro() (distro string) {
 		return distro
 	}
 
-	pathes := []string{DEBIAN, SUSE, SLACKWARE, GENTOO, OTHER}
+	// SLES or opensuse
+	distro = utils.GetStrByKeyword(SUSE, "PRETTY_NAME")
+	if distro != "" {
+		distro = strings.TrimLeft(distro, "PRETTY_NAME=")
+		distro = strings.Trim(distro, "\"")
+		return distro
+	}
+
+	pathes := []string{DEBIAN, SUSE_OLD, SLACKWARE, GENTOO, OTHER}
 	if path, line := utils.GetStrByKeywordFiles(pathes, ""); path != "" && line != "" {
 		distro = line
 		if path == DEBIAN {
