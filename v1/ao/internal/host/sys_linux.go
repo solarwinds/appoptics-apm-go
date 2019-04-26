@@ -38,17 +38,13 @@ func initDistro() (distro string) {
 	}
 	// amazon linux
 	distro = utils.GetStrByKeyword(AMAZON, "")
-
-	ds := strings.Split(distro, ":")
-	distro = ds[len(ds)-1]
 	if distro != "" {
-		distro = "Amzn Linux " + distro
 		return distro
 	}
 	// ubuntu
 	distro = utils.GetStrByKeyword(UBUNTU, "DISTRIB_DESCRIPTION")
 	if distro != "" {
-		ds = strings.Split(distro, "=")
+		ds := strings.Split(distro, "=")
 		distro = ds[len(ds)-1]
 		if distro != "" {
 			distro = strings.Trim(distro, "\"")
@@ -61,8 +57,11 @@ func initDistro() (distro string) {
 	pathes := []string{DEBIAN, SUSE, SLACKWARE, GENTOO, OTHER}
 	if path, line := utils.GetStrByKeywordFiles(pathes, ""); path != "" && line != "" {
 		distro = line
-		if path == "Debian" {
+		if path == DEBIAN {
 			distro = "Debian " + distro
+		}
+		if idx := strings.Index(distro, "Alpine"); idx != -1 {
+			distro = distro[idx:]
 		}
 	} else {
 		distro = "Unknown"
