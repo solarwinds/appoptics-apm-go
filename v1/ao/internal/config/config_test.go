@@ -250,7 +250,7 @@ func TestYamlConfig(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		TransactionFiltering: []TransactionFilter{
+		TransactionSettings: []TransactionFilter{
 			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
@@ -321,7 +321,7 @@ func TestYamlConfig(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		TransactionFiltering: []TransactionFilter{
+		TransactionSettings: []TransactionFilter{
 			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},

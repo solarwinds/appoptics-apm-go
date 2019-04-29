@@ -103,7 +103,7 @@ type Config struct {
 	ReporterProperties *ReporterOptions `yaml:"ReporterProperties,omitempty"`
 
 	// The transaction filtering config
-	TransactionFiltering []TransactionFilter `yaml:"TransactionFiltering,omitempty"`
+	TransactionSettings []TransactionFilter `yaml:"TransactionSettings,omitempty"`
 
 	Disabled bool `yaml:"Disabled,omitempty" env:"APPOPTICS_DISABLED"`
 
@@ -782,5 +782,5 @@ func (c *Config) GetDebugLevel() string {
 func (c *Config) GetTransactionFiltering() []TransactionFilter {
 	c.RLock()
 	defer c.RUnlock()
-	return c.TransactionFiltering
+	return c.TransactionSettings
 }
