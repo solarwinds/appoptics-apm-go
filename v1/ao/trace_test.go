@@ -5,6 +5,7 @@ package ao_test
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,11 @@ func TestTraceMetadata(t *testing.T) {
 
 	tr := ao.NewTrace("test")
 	md := tr.ExitMetadata()
+
+	// verify loggable trace ID
+	assert.True(t, strings.HasSuffix(tr.LoggableTraceID(), "-1"))
+	assert.Equal(t, 42, len(tr.LoggableTraceID()))
+
 	tr.End("Edge", "872453", // bad Edge KV, should be ignored
 		"NotReported") // odd-length arg, should be ignored
 
@@ -40,6 +46,11 @@ func TestNoTraceMetadata(t *testing.T) {
 
 	// if trace is not sampled, metadata should be empty
 	tr := ao.NewTrace("test")
+
+	// verify loggable trace ID
+	assert.True(t, strings.HasSuffix(tr.LoggableTraceID(), "-0"))
+	assert.Equal(t, 42, len(tr.LoggableTraceID()))
+
 	md := tr.ExitMetadata()
 	tr.EndCallback(func() ao.KVMap { return ao.KVMap{"Not": "reported"} })
 
@@ -285,6 +296,8 @@ func TestTraceFromMetadata(t *testing.T) {
 	// emulate incoming request with X-Trace header
 	incomingID := "2BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2198D447EA220301"
 	tr := ao.NewTraceFromID("test", incomingID, nil)
+	// verify loggable trace ID
+	assert.Equal(t, "F4CAA9299299E3D38A58A9821BD34F6268E576CF-1", tr.LoggableTraceID())
 	tr.EndCallback(func() ao.KVMap { return ao.KVMap{"Extra": "Arg"} })
 
 	r.Close(2)
@@ -317,6 +330,10 @@ func TestNoTraceFromBadMetadata(t *testing.T) {
 	// emulate incoming request with invalid X-Trace header
 	incomingID := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2A2203"
 	tr := ao.NewTraceFromID("test", incomingID, nil)
+	// verify loggable trace ID
+	assert.True(t, strings.HasSuffix(tr.LoggableTraceID(), "-0"))
+	assert.Equal(t, 42, len(tr.LoggableTraceID()))
+
 	md := tr.ExitMetadata()
 	tr.End("Edge", "823723875") // should not report
 	assert.NotEqual(t, "", md)

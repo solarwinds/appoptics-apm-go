@@ -57,6 +57,9 @@ type Trace interface {
 
 	// SetStartTime sets the start time of a span.
 	SetStartTime(start time.Time)
+
+	// LoggableTraceID returns the trace ID for log injection.
+	LoggableTraceID() string
 }
 
 // KVMap is a map of additional key-value pairs to report along with the event data provided
@@ -312,6 +315,20 @@ func (t *aoTrace) prependDomainToTxnName() {
 	}
 }
 
+// LoggableTraceID returns the loggable trace ID for log injection.
+func (t *aoTrace) LoggableTraceID() string {
+	sampledFlag := "-0"
+	if t.IsSampled() {
+		sampledFlag = "-1"
+	}
+
+	mdStr := t.MetadataString()
+	if len(mdStr) < 60 { // 1 byte of header, 20 bytes of taskID, 8 bytes of opID and 1 byte of flags
+		return mdStr + sampledFlag // the best I can do
+	}
+	return mdStr[2:42] + sampledFlag
+}
+
 // A nullTrace is not tracing.
 type nullTrace struct{ nullSpan }
 
@@ -322,6 +339,7 @@ func (t *nullTrace) SetMethod(method string)      {}
 func (t *nullTrace) SetPath(path string)          {}
 func (t *nullTrace) SetHost(host string)          {}
 func (t *nullTrace) SetStatus(status int)         {}
+func (t *nullTrace) LoggableTraceID() string      { return "" }
 func (t *nullTrace) recordMetrics()               {}
 
 // NewNullTrace returns a trace that is not sampled.
