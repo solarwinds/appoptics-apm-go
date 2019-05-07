@@ -12,6 +12,11 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
 
+const (
+	// LoggableTraceID is used as the key for log injection.
+	LoggableTraceID = "ao.traceId"
+)
+
 // Trace represents the root span of a distributed trace for this request that reports
 // events to AppOptics. The Trace interface extends the Span interface with additional
 // methods that can be used to help categorize a service's inbound requests on the
