@@ -11,6 +11,7 @@ import (
 
 func TestIsValidServiceKey(t *testing.T) {
 	valid1 := "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
+	valid2 := "ae38-315f611658_5d64d82eW-c2455aa3NPec61e02fee25d2D86f74ace9e4fea189217:Go"
 
 	invalid1 := ""
 	invalid2 := "abc:Go"
@@ -28,6 +29,7 @@ Go0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
 	keyPairs := map[string]bool{
 		valid1:   true,
+		valid2:   true,
 		invalid1: false,
 		invalid2: false,
 		invalid3: false,

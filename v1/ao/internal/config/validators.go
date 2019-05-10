@@ -21,8 +21,7 @@ func MissingEnv(env string) string {
 }
 
 const (
-	// A basic check. The collector will check it anyways so don't be too strict here.
-	validServiceKeyPattern = `^[a-zA-Z0-9-_]{64,71}:.{1,255}$`
+	validServiceKeyPattern = `^([a-zA-Z0-9]{64}|[a-zA-Z0-9-_]{71}):.{1,255}$`
 
 	serviceKeyPartsCnt  = 2
 	serviceKeyDelimiter = ":"
