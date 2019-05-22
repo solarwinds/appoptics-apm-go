@@ -129,7 +129,7 @@ func NewTraceFromIDForURL(spanName, mdStr string, url string, cb func() KVMap) T
 		return NewNullTrace()
 	}
 	t := &aoTrace{
-		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
+		layerSpan: layerSpan{span: span{spanID: spanIDFromContext(ctx), aoCtx: ctx, labeler: spanLabeler{spanName}}},
 	}
 	t.SetStartTime(time.Now())
 	return t
@@ -215,10 +215,11 @@ func (t *aoTrace) reportExit() {
 		for _, edge := range t.childEdges { // add Edge KV for each joined child
 			t.endArgs = append(t.endArgs, keyEdge, edge)
 		}
+		args := append([]interface{}{keySpanID, t.spanID}, t.endArgs)
 		if t.exitEvent != nil { // use exit event, if one was provided
-			t.exitEvent.ReportContext(t.aoCtx, true, t.endArgs...)
+			t.exitEvent.ReportContext(t.aoCtx, true, args...)
 		} else {
-			t.aoCtx.ReportEvent(reporter.LabelExit, t.layerName(), t.endArgs...)
+			t.aoCtx.ReportEvent(reporter.LabelExit, t.layerName(), args...)
 		}
 
 		t.childEdges = nil // clear child edge list
