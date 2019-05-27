@@ -15,12 +15,8 @@ install:
   - go get golang.org/x/tools/cmd/cover
   - go get github.com/mattn/goveralls
   - go get github.com/wadey/gocovmerge
-  - go get golang.org/x/net/context github.com/stretchr/testify/assert gopkg.in/mgo.v2/bson
-  - go get github.com/opentracing/opentracing-go
-  - go get google.golang.org/grpc
-  - go get github.com/uluyol/hdrhist
-  - go get gopkg.in/yaml.v2
-  - go get github.com/coocood/freecache
+  - go get -t -v ./...
+
 
 script:
   - cd $GOPATH/src/github.com/appoptics/appoptics-apm-go/v1
