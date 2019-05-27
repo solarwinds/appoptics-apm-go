@@ -3,10 +3,12 @@ package main
 import (
 	"bufio"
 	"net"
+	"net/http"
+
+	"context"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	"github.com/gin-gonic/gin"
-	"context"
 )
 
 const (
@@ -46,4 +48,7 @@ func (w *ginResponseWriter) WriteHeaderNow() {
 	if !w.WroteHeader {
 		w.WriteHeader(w.StatusCode)
 	}
+}
+func (w *ginResponseWriter) Pusher() http.Pusher {
+	return w.ginWriter.Pusher()
 }
