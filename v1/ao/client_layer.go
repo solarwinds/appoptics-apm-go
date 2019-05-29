@@ -3,13 +3,18 @@
 
 package ao
 
-import "context"
+import (
+	"context"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
+)
 
 // BeginQuerySpan returns a Span that reports metadata used by AppOptics to filter
 // query latency heatmaps and charts by span name, query statement, DB host and table.
 // Parameter "flavor" specifies the flavor of the query statement, such as "mysql", "postgresql", or "mongodb".
 // Call or defer the returned Span's End() to time the query's client-side latency.
 func BeginQuerySpan(ctx context.Context, spanName, query, flavor, remoteHost string, args ...interface{}) Span {
+	query = reporter.SQLSanitize(query)
 	qsKVs := []interface{}{"Spec", "query", "Query", query, "Flavor", flavor, "RemoteHost", remoteHost}
 	kvs := mergeKVs(qsKVs, args)
 	l, _ := BeginSpan(ctx, spanName, kvs...)

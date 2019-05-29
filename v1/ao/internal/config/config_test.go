@@ -139,8 +139,9 @@ func TestConfigInit(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		Disabled:   false,
-		DebugLevel: "warn",
+		SQLSanitize: 1,
+		Disabled:    false,
+		DebugLevel:  "warn",
 	}
 	assert.Equal(t, *c, defaultC)
 }
@@ -179,6 +180,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_EVENTS_FLUSH_INTERVAL=4",
 		"APPOPTICS_EVENTS_BATCHSIZE=4000",
 		"APPOPTICS_DISABLED=true",
+		"APPOPTICS_SQL_SANITIZE=0",
 	}
 	SetEnvs(envs)
 
@@ -211,8 +213,9 @@ func TestEnvsLoading(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		Disabled:   true,
-		DebugLevel: "warn",
+		SQLSanitize: 0,
+		Disabled:    true,
+		DebugLevel:  "warn",
 	}
 
 	c := NewConfig()
@@ -254,8 +257,9 @@ func TestYamlConfig(t *testing.T) {
 			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
-		Disabled:   true,
-		DebugLevel: "info",
+		SQLSanitize: 2,
+		Disabled:    true,
+		DebugLevel:  "info",
 	}
 
 	out, err := yaml.Marshal(yamlConfig)
@@ -287,6 +291,7 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_EVENTS_FLUSH_INTERVAL=4",
 		"APPOPTICS_EVENTS_BATCHSIZE=4000",
 		"APPOPTICS_DISABLED=true",
+		"APPOPTICS_SQL_SANITIZE=3",
 	}
 	ClearEnvs()
 	SetEnvs(envs)
@@ -325,8 +330,9 @@ func TestYamlConfig(t *testing.T) {
 			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
-		Disabled:   true,
-		DebugLevel: "info",
+		SQLSanitize: 3,
+		Disabled:    true,
+		DebugLevel:  "info",
 	}
 
 	c = NewConfig()
