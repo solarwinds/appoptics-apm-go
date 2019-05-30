@@ -14,7 +14,7 @@ import (
 // Parameter "flavor" specifies the flavor of the query statement, such as "mysql", "postgresql", or "mongodb".
 // Call or defer the returned Span's End() to time the query's client-side latency.
 func BeginQuerySpan(ctx context.Context, spanName, query, flavor, remoteHost string, args ...interface{}) Span {
-	query = reporter.SQLSanitize(query)
+	query = reporter.SQLSanitize(query, flavor)
 	qsKVs := []interface{}{"Spec", "query", "Query", query, "Flavor", flavor, "RemoteHost", remoteHost}
 	kvs := mergeKVs(qsKVs, args)
 	l, _ := BeginSpan(ctx, spanName, kvs...)
