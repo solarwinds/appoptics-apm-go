@@ -84,8 +84,6 @@ var SQLOperatorChars = map[rune]bool{
 type SQLSanitizer struct {
 	// database types
 	dbType string
-	// if sanitization is enabled
-	enabled bool
 	// the quotes surrounding literals
 	literalQuotes map[rune]rune
 	// the quotes surrounding identifiers, e.g., column names
@@ -97,26 +95,33 @@ type SQLSanitizer struct {
 var sanitizers map[string]*SQLSanitizer
 
 func init() {
-	sanitizers = make(map[string]*SQLSanitizer)
-	for _, t := range []string{PostgreSQL, Oracle, MySQL, Sybase, SQLServer, Default} {
-		sanitizers[t] = NewSQLSanitizer(t)
+	sanitizers = initSanitizersMap()
+}
+
+func initSanitizersMap() map[string]*SQLSanitizer {
+	sanitizeFlag := config.GetSQLSanitize()
+	if sanitizeFlag == Disabled {
+		return nil
 	}
+
+	ss := make(map[string]*SQLSanitizer)
+	for _, t := range []string{PostgreSQL, Oracle, MySQL, Sybase, SQLServer, Default} {
+		ss[t] = NewSQLSanitizer(t)
+	}
+	return ss
 }
 
 // NewSQLSanitizer returns the pointer of a new SQLSanitizer.
 func NewSQLSanitizer(dbType string) *SQLSanitizer {
 	sanitizer := SQLSanitizer{
 		dbType:           strings.ToLower(dbType),
-		enabled:          true,
 		literalQuotes:    make(map[rune]rune),
 		identifierQuotes: make(map[rune]rune),
 	}
 
 	sanitizeFlag := config.GetSQLSanitize()
-	if sanitizeFlag == Disabled {
-		sanitizer.enabled = false
-		return &sanitizer
-	}
+
+	sanitizer.literalQuotes['\''] = '\''
 
 	if sanitizeFlag == EnabledDropDoubleQuoted {
 		sanitizer.literalQuotes['"'] = '"'
@@ -249,9 +254,16 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 
 // SQLSanitize checks the sanitizer of the database type and does the sanitization
 // accordingly. It uses the default sanitizer if the type is not found.
-func SQLSanitize(sql string, dbType string) string {
-	if sanitizer, ok := sanitizers[dbType]; ok {
-		return sanitizer.Sanitize(sql)
+func SQLSanitize(dbType string, sql string) string {
+	return sqlSanitizeInternal(sanitizers, dbType, sql)
+}
+
+func sqlSanitizeInternal(ss map[string]*SQLSanitizer, dbType string, sql string) string {
+	if ss == nil {
+		return sql
 	}
-	return sanitizers[Default].Sanitize(sql)
+	if s, ok := ss[dbType]; ok {
+		return s.Sanitize(sql)
+	}
+	return ss[Default].Sanitize(sql)
 }
