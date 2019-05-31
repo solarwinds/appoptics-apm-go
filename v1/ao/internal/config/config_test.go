@@ -139,7 +139,7 @@ func TestConfigInit(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		SQLSanitize: 1,
+		SQLSanitize: 0,
 		Disabled:    false,
 		DebugLevel:  "warn",
 	}

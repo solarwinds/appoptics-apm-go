@@ -10,10 +10,10 @@ import (
 
 // The SQL sanitization mode
 const (
-	// Disabled - disable SQL sanitizing.
+	// Disabled - disable SQL sanitizing (the default).
 	Disabled = iota
 	// EnabledAuto - enable SQL sanitizing and attempt to automatically determine
-	// which quoting form to use (the default).
+	// which quoting form to use.
 	EnabledAuto
 	// EnabledDropDoubleQuoted - enable SQL sanitizing and force dropping double
 	// quoted characters.
