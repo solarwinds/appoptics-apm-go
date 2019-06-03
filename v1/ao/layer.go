@@ -351,7 +351,7 @@ type span struct {
 	labeler
 	aoCtx         reporter.Context
 	parent        Span
-	childEdges    []reporter.Context // for reporting in exit event
+	childEdges    []string // for reporting in exit event
 	childProfiles []Profile
 	endArgs       []interface{}
 	ended         bool // has exit event been reported?
@@ -400,7 +400,7 @@ func (s *span) aoContext() reporter.Context { return s.aoCtx }
 func (s *span) addChildEdge(ctx reporter.Context) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.childEdges = append(s.childEdges, ctx)
+	s.childEdges = append(s.childEdges, ctx.MetadataString())
 }
 func (s *span) addProfile(p Profile) {
 	s.lock.Lock()
