@@ -165,6 +165,20 @@ func TestSQLSanitize(t *testing.T) {
 			 SELECT * FROM tmp WHERE name = ?`,
 		},
 		{
+			EnabledKeepDoubleQuoted,
+			PostgreSQL,
+			`WITH tmp AS (SELECT * FROM \"Employees\" WHERE team = 'IT') 
+			 SELECT * FROM tmp WHERE name = 'Tom'`,
+			`WITH tmp AS (SELECT * FROM \"Employees\" WHERE team = ?) 
+			 SELECT * FROM tmp WHERE name = ?`,
+		},
+		{
+			EnabledKeepDoubleQuoted,
+			MySQL,
+			"WITH tmp AS (SELECT * FROM `Employees` WHERE team = 'IT') SELECT * FROM tmp WHERE name = 'Tom'",
+			"WITH tmp AS (SELECT * FROM `Employees` WHERE team = ?) SELECT * FROM tmp WHERE name = ?",
+		},
+		{
 			EnabledDropDoubleQuoted,
 			Default,
 			`WITH tmp AS (SELECT * FROM employees WHERE team = "IT") 
@@ -186,4 +200,37 @@ func TestSQLSanitize(t *testing.T) {
 		assert.Equal(t, c.sanitizedSQL, sqlSanitizeInternal(ss, c.dbType, c.sql),
 			fmt.Sprintf("Test case: %+v", c))
 	}
+}
+
+func BenchmarkSQLSanitizeShort(b *testing.B) {
+	sql := `WITH tmp AS (SELECT * FROM employees WHERE team = "IT") 
+			 SELECT * FROM tmp WHERE name = 'Tom' 
+			 LEFT JOIN tickets 
+			 WHERE eid = id AND last_update BETWEEN '01/01/2019' AND '05/30/2019'`
+
+	_ = os.Setenv("APPOPTICS_SQL_SANITIZE", "1")
+	if err := config.Load(); err != nil {
+		b.FailNow()
+	}
+	ss := initSanitizersMap()
+
+	for n := 0; n < b.N; n++ {
+		sqlSanitizeInternal(ss, Default, sql)
+	}
+	_ = os.Unsetenv("APPOPTICS_SQL_SANITIZE")
+}
+
+func BenchmarkSQLSanitizeLong(b *testing.B) {
+	sql := "SELECT name FROM employees WHERE age = 37 AND firstName = 'Eric'"
+
+	_ = os.Setenv("APPOPTICS_SQL_SANITIZE", "1")
+	if err := config.Load(); err != nil {
+		b.FailNow()
+	}
+	ss := initSanitizersMap()
+
+	for n := 0; n < b.N; n++ {
+		sqlSanitizeInternal(ss, Default, sql)
+	}
+	_ = os.Unsetenv("APPOPTICS_SQL_SANITIZE")
 }

@@ -57,6 +57,8 @@ const (
 	ReplacementChar = '?'
 	// EscapeChar is the SQL escape character
 	EscapeChar = '\\'
+	// MaxSQLLen defines the maximum length
+	MaxSQLLen = 2048
 )
 
 // SQLOperatorChars defines the list of SQL operators
@@ -255,7 +257,14 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 // SQLSanitize checks the sanitizer of the database type and does the sanitization
 // accordingly. It uses the default sanitizer if the type is not found.
 func SQLSanitize(dbType string, sql string) string {
-	return sqlSanitizeInternal(sanitizers, dbType, sql)
+	return truncate(sqlSanitizeInternal(sanitizers, dbType, sql), MaxSQLLen)
+}
+
+func truncate(sql string, maxLen int) string {
+	if len(sql) <= maxLen {
+		return sql
+	}
+	return sql[:maxLen]
 }
 
 func sqlSanitizeInternal(ss map[string]*SQLSanitizer, dbType string, sql string) string {
