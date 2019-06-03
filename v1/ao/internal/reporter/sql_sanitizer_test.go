@@ -211,7 +211,7 @@ func TestSQLSanitize(t *testing.T) {
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_8,
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_9,
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_10,
-             very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_11,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_11,
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_12,
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_13,
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_14,
@@ -232,7 +232,7 @@ func TestSQLSanitize(t *testing.T) {
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_8,
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_9,
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_10,
-             very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_11,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_11,
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_12,
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_13,
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_14,
@@ -240,7 +240,7 @@ func TestSQLSanitize(t *testing.T) {
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_16,
 			 FROM tmp WHERE name = ? 
 			 LEFT JOIN tickets 
-			 WHER...`,
+			 WHERE eid = i...`,
 		},
 	}
 
