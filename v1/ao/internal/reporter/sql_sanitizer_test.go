@@ -190,6 +190,58 @@ func TestSQLSanitize(t *testing.T) {
 			 LEFT JOIN tickets 
 			 WHERE eid = id AND last_update BETWEEN ? AND ?`,
 		},
+		{ // unicode support
+			EnabledDropDoubleQuoted,
+			Default,
+			`select ssn from accounts where name = '中文'`,
+			`select ssn from accounts where name = ?`,
+		},
+		{ // Truncate long SQL statement
+			EnabledDropDoubleQuoted,
+			Default,
+			`WITH tmp AS (SELECT * FROM employees WHERE team = "IT") 
+			 SELECT
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_1,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_2,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_3,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_4,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_5,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_6,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_7,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_8,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_9,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_10,
+             very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_11,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_12,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_13,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_14,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_15,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_16,
+			 FROM tmp WHERE name = 'Tom' 
+			 LEFT JOIN tickets 
+			 WHERE eid = id AND last_update BETWEEN '01/01/2019' AND '05/30/2019'`,
+			`WITH tmp AS (SELECT * FROM employees WHERE team = ?) 
+			 SELECT
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_1,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_2,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_3,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_4,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_5,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_6,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_7,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_8,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_9,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_10,
+             very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_11,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_12,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_13,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_14,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_15,
+			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_16,
+			 FROM tmp WHERE name = ? 
+			 LEFT JOIN tickets 
+			 WHER...`,
+		},
 	}
 
 	for _, c := range cases {
@@ -197,7 +249,7 @@ func TestSQLSanitize(t *testing.T) {
 		assert.Nil(t, config.Load())
 		ss := initSanitizersMap()
 
-		assert.Equal(t, c.sanitizedSQL, sqlSanitizeInternal(ss, c.dbType, c.sql),
+		assert.Equal(t, c.sanitizedSQL, sqlSanitize(ss, c.dbType, c.sql),
 			fmt.Sprintf("Test case: %+v", c))
 	}
 }
@@ -215,7 +267,7 @@ func BenchmarkSQLSanitizeShort(b *testing.B) {
 	ss := initSanitizersMap()
 
 	for n := 0; n < b.N; n++ {
-		sqlSanitizeInternal(ss, Default, sql)
+		sqlSanitize(ss, Default, sql)
 	}
 	_ = os.Unsetenv("APPOPTICS_SQL_SANITIZE")
 }
@@ -230,7 +282,7 @@ func BenchmarkSQLSanitizeLong(b *testing.B) {
 	ss := initSanitizersMap()
 
 	for n := 0; n < b.N; n++ {
-		sqlSanitizeInternal(ss, Default, sql)
+		sqlSanitize(ss, Default, sql)
 	}
 	_ = os.Unsetenv("APPOPTICS_SQL_SANITIZE")
 }

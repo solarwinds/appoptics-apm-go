@@ -15,11 +15,11 @@ const (
 	// EnabledAuto - enable SQL sanitizing and attempt to automatically determine
 	// which quoting form to use.
 	EnabledAuto
-	// EnabledDropDoubleQuoted - enable SQL sanitizing and force dropping double
-	// quoted characters.
+	// EnabledDropDoubleQuoted - enable SQL sanitizing and force dropping double-
+	// quoted runes.
 	EnabledDropDoubleQuoted
-	// EnabledKeepDoubleQuoted enable SQL sanitizing and force retaining double
-	// quoted character.
+	// EnabledKeepDoubleQuoted enable SQL sanitizing and force retaining double-
+	// quoted runes.
 	EnabledKeepDoubleQuoted
 )
 
@@ -53,16 +53,18 @@ const (
 )
 
 const (
-	// ReplacementChar is the char to replace the removed literals
-	ReplacementChar = '?'
-	// EscapeChar is the SQL escape character
-	EscapeChar = '\\'
-	// MaxSQLLen defines the maximum length
+	// ReplacementRune is the rune to replace the removed literals
+	ReplacementRune = '?'
+	// EscapeRune is the SQL escape rune
+	EscapeRune = '\\'
+	// MaxSQLLen defines the maximum number of runes after truncation.
 	MaxSQLLen = 2048
+	// Ellipsis is appended to the truncated SQL statement
+	Ellipsis = "..."
 )
 
-// SQLOperatorChars defines the list of SQL operators
-var SQLOperatorChars = map[rune]bool{
+// SQLOperatorRunes defines the list of SQL operators
+var SQLOperatorRunes = map[rune]bool{
 	'.': true,
 	';': true,
 	'(': true,
@@ -146,7 +148,8 @@ func NewSQLSanitizer(dbType string) *SQLSanitizer {
 	return &sanitizer
 }
 
-// Sanitize does the SQL sanitization by removing literals from the statement
+// Sanitize does the SQL sanitization by removing literals from the statement, it
+// also truncates the statement after sanitization if it's longer than MaxSQLLen.
 func (s *SQLSanitizer) Sanitize(sql string) string {
 	var buffer bytes.Buffer
 
@@ -155,27 +158,40 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 
 	var closingQuoteChar rune
 
-	for _, currChar := range sql {
+	runeCnt := 0 // should not exceed MaxSQLLen
+	WriteRuneAndInc := func(r rune) {
+		buffer.WriteRune(r)
+		runeCnt++
+	}
+
+	maxRuneCnt := MaxSQLLen - 3 // len("...")
+
+	for _, currRune := range sql {
+		if runeCnt >= maxRuneCnt {
+			buffer.WriteString(Ellipsis)
+			break
+		}
+
 		if currState != prevState {
 			prevState = currState
 		}
 
 		switch currState {
 		case StringStart:
-			buffer.WriteRune(ReplacementChar)
+			WriteRuneAndInc(ReplacementRune)
 
-			if currChar == closingQuoteChar {
+			if currRune == closingQuoteChar {
 				currState = StringEnd
-			} else if currChar == EscapeChar {
+			} else if currRune == EscapeRune {
 				currState = StringEscape
 			} else {
 				currState = StringBody
 			}
 
 		case StringBody:
-			if currChar == closingQuoteChar {
+			if currRune == closingQuoteChar {
 				currState = StringEnd
-			} else if currChar == EscapeChar {
+			} else if currRune == EscapeRune {
 				currState = StringEscape
 			}
 
@@ -183,23 +199,23 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 			currState = StringBody
 
 		case StringEnd:
-			if currChar == closingQuoteChar {
+			if currRune == closingQuoteChar {
 				currState = StringBody
 			} else {
-				buffer.WriteRune(currChar)
+				WriteRuneAndInc(currRune)
 				currState = Copy
 			}
 
 		case CopyEscape:
-			buffer.WriteRune(currChar)
+			WriteRuneAndInc(currRune)
 			currState = Copy
 
 		case Number:
-			if !unicode.IsDigit(currChar) {
-				if currChar == '.' || currChar == 'E' {
+			if !unicode.IsDigit(currRune) {
+				if currRune == '.' || currRune == 'E' {
 					currState = NumericExtension
 				} else {
-					buffer.WriteRune(currChar)
+					WriteRuneAndInc(currRune)
 					currState = Copy
 				}
 			}
@@ -208,45 +224,45 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 			currState = Number
 
 		case Identifier:
-			buffer.WriteRune(currChar)
-			if c, ok := s.literalQuotes[currChar]; ok {
+			WriteRuneAndInc(currRune)
+			if c, ok := s.literalQuotes[currRune]; ok {
 				closingQuoteChar = c
 				currState = StringStart
-			} else if unicode.IsSpace(currChar) || SQLOperatorChars[currChar] {
+			} else if unicode.IsSpace(currRune) || SQLOperatorRunes[currRune] {
 				currState = Copy
 			}
 
 		case QuotedIdentifier:
-			buffer.WriteRune(currChar)
-			if currChar == closingQuoteChar {
+			WriteRuneAndInc(currRune)
+			if currRune == closingQuoteChar {
 				currState = Copy
-			} else if currChar == EscapeChar {
+			} else if currRune == EscapeRune {
 				currState = QuotedIdentifierEscape
 			}
 
 		case QuotedIdentifierEscape:
-			buffer.WriteRune(currChar)
+			WriteRuneAndInc(currRune)
 			currState = QuotedIdentifier
 
 		default:
-			if lq, ok := s.literalQuotes[currChar]; ok {
+			if lq, ok := s.literalQuotes[currRune]; ok {
 				closingQuoteChar = lq
 				currState = StringStart
-			} else if iq, has := s.identifierQuotes[currChar]; has {
-				buffer.WriteRune(currChar)
+			} else if iq, has := s.identifierQuotes[currRune]; has {
+				WriteRuneAndInc(currRune)
 				closingQuoteChar = iq
 				currState = QuotedIdentifier
-			} else if currChar == EscapeChar {
-				buffer.WriteRune(currChar)
+			} else if currRune == EscapeRune {
+				WriteRuneAndInc(currRune)
 				currState = CopyEscape
-			} else if unicode.IsLetter(currChar) || currChar == '_' {
-				buffer.WriteRune(currChar)
+			} else if unicode.IsLetter(currRune) || currRune == '_' {
+				WriteRuneAndInc(currRune)
 				currState = Identifier
-			} else if unicode.IsDigit(currChar) {
-				buffer.WriteRune(ReplacementChar)
+			} else if unicode.IsDigit(currRune) {
+				WriteRuneAndInc(ReplacementRune)
 				currState = Number
 			} else {
-				buffer.WriteRune(currChar)
+				WriteRuneAndInc(currRune)
 			}
 		}
 	}
@@ -257,17 +273,10 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 // SQLSanitize checks the sanitizer of the database type and does the sanitization
 // accordingly. It uses the default sanitizer if the type is not found.
 func SQLSanitize(dbType string, sql string) string {
-	return truncate(sqlSanitizeInternal(sanitizers, dbType, sql), MaxSQLLen)
+	return sqlSanitize(sanitizers, dbType, sql)
 }
 
-func truncate(sql string, maxLen int) string {
-	if len(sql) <= maxLen {
-		return sql
-	}
-	return sql[:maxLen]
-}
-
-func sqlSanitizeInternal(ss map[string]*SQLSanitizer, dbType string, sql string) string {
+func sqlSanitize(ss map[string]*SQLSanitizer, dbType string, sql string) string {
 	if ss == nil {
 		return sql
 	}
