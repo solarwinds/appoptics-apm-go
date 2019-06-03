@@ -30,7 +30,7 @@ const (
 	MySQL      = "mysql"
 	Sybase     = "sybase"
 	SQLServer  = "sqlserver"
-	Default    = "default"
+	DefaultDB  = "default"
 )
 
 // FSMState defines the states of a FSM
@@ -38,18 +38,18 @@ type FSMState int
 
 // The states for the SQL sanitization FSM
 const (
-	Uninitialized = iota
-	Copy
-	CopyEscape
-	StringStart
-	StringBody
-	StringEscape
-	StringEnd
-	Number
-	NumericExtension
-	Identifier
-	QuotedIdentifier
-	QuotedIdentifierEscape
+	FSMUninitialized = iota
+	FSMCopy
+	FSMCopyEscape
+	FSMStringStart
+	FSMStringBody
+	FSMStringEscape
+	FSMStringEnd
+	FSMNumber
+	FSMNumericExtension
+	FSMIdentifier
+	FSMQuotedIdentifier
+	FSMQuotedIdentifierEscape
 )
 
 const (
@@ -109,21 +109,19 @@ func initSanitizersMap() map[string]*SQLSanitizer {
 	}
 
 	ss := make(map[string]*SQLSanitizer)
-	for _, t := range []string{PostgreSQL, Oracle, MySQL, Sybase, SQLServer, Default} {
-		ss[t] = NewSQLSanitizer(t)
+	for _, t := range []string{PostgreSQL, Oracle, MySQL, Sybase, SQLServer, DefaultDB} {
+		ss[t] = NewSQLSanitizer(t, sanitizeFlag)
 	}
 	return ss
 }
 
 // NewSQLSanitizer returns the pointer of a new SQLSanitizer.
-func NewSQLSanitizer(dbType string) *SQLSanitizer {
+func NewSQLSanitizer(dbType string, sanitizeFlag int) *SQLSanitizer {
 	sanitizer := SQLSanitizer{
 		dbType:           strings.ToLower(dbType),
 		literalQuotes:    make(map[rune]rune),
 		identifierQuotes: make(map[rune]rune),
 	}
-
-	sanitizeFlag := config.GetSQLSanitize()
 
 	sanitizer.literalQuotes['\''] = '\''
 
@@ -153,18 +151,18 @@ func NewSQLSanitizer(dbType string) *SQLSanitizer {
 func (s *SQLSanitizer) Sanitize(sql string) string {
 	var buffer bytes.Buffer
 
-	currState := Copy
-	prevState := Uninitialized
+	currState := FSMCopy
+	prevState := FSMUninitialized
 
-	var closingQuoteChar rune
+	var closingQuote rune
 
-	runeCnt := 0 // should not exceed MaxSQLLen
+	runeCnt := 0                // should not exceed MaxSQLLen
+	maxRuneCnt := MaxSQLLen - 3 // len("...")
+
 	WriteRuneAndInc := func(r rune) {
 		buffer.WriteRune(r)
 		runeCnt++
 	}
-
-	maxRuneCnt := MaxSQLLen - 3 // len("...")
 
 	for _, currRune := range sql {
 		if runeCnt >= maxRuneCnt {
@@ -177,90 +175,90 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 		}
 
 		switch currState {
-		case StringStart:
+		case FSMStringStart:
 			WriteRuneAndInc(ReplacementRune)
 
-			if currRune == closingQuoteChar {
-				currState = StringEnd
+			if currRune == closingQuote {
+				currState = FSMStringEnd
 			} else if currRune == EscapeRune {
-				currState = StringEscape
+				currState = FSMStringEscape
 			} else {
-				currState = StringBody
+				currState = FSMStringBody
 			}
 
-		case StringBody:
-			if currRune == closingQuoteChar {
-				currState = StringEnd
+		case FSMStringBody:
+			if currRune == closingQuote {
+				currState = FSMStringEnd
 			} else if currRune == EscapeRune {
-				currState = StringEscape
+				currState = FSMStringEscape
 			}
 
-		case StringEscape:
-			currState = StringBody
+		case FSMStringEscape:
+			currState = FSMStringBody
 
-		case StringEnd:
-			if currRune == closingQuoteChar {
-				currState = StringBody
+		case FSMStringEnd:
+			if currRune == closingQuote {
+				currState = FSMStringBody
 			} else {
 				WriteRuneAndInc(currRune)
-				currState = Copy
+				currState = FSMCopy
 			}
 
-		case CopyEscape:
+		case FSMCopyEscape:
 			WriteRuneAndInc(currRune)
-			currState = Copy
+			currState = FSMCopy
 
-		case Number:
+		case FSMNumber:
 			if !unicode.IsDigit(currRune) {
 				if currRune == '.' || currRune == 'E' {
-					currState = NumericExtension
+					currState = FSMNumericExtension
 				} else {
 					WriteRuneAndInc(currRune)
-					currState = Copy
+					currState = FSMCopy
 				}
 			}
 
-		case NumericExtension:
-			currState = Number
+		case FSMNumericExtension:
+			currState = FSMNumber
 
-		case Identifier:
+		case FSMIdentifier:
 			WriteRuneAndInc(currRune)
 			if c, ok := s.literalQuotes[currRune]; ok {
-				closingQuoteChar = c
-				currState = StringStart
+				closingQuote = c
+				currState = FSMStringStart
 			} else if unicode.IsSpace(currRune) || SQLOperatorRunes[currRune] {
-				currState = Copy
+				currState = FSMCopy
 			}
 
-		case QuotedIdentifier:
+		case FSMQuotedIdentifier:
 			WriteRuneAndInc(currRune)
-			if currRune == closingQuoteChar {
-				currState = Copy
+			if currRune == closingQuote {
+				currState = FSMCopy
 			} else if currRune == EscapeRune {
-				currState = QuotedIdentifierEscape
+				currState = FSMQuotedIdentifierEscape
 			}
 
-		case QuotedIdentifierEscape:
+		case FSMQuotedIdentifierEscape:
 			WriteRuneAndInc(currRune)
-			currState = QuotedIdentifier
+			currState = FSMQuotedIdentifier
 
 		default:
 			if lq, ok := s.literalQuotes[currRune]; ok {
-				closingQuoteChar = lq
-				currState = StringStart
+				closingQuote = lq
+				currState = FSMStringStart
 			} else if iq, has := s.identifierQuotes[currRune]; has {
 				WriteRuneAndInc(currRune)
-				closingQuoteChar = iq
-				currState = QuotedIdentifier
+				closingQuote = iq
+				currState = FSMQuotedIdentifier
 			} else if currRune == EscapeRune {
 				WriteRuneAndInc(currRune)
-				currState = CopyEscape
+				currState = FSMCopyEscape
 			} else if unicode.IsLetter(currRune) || currRune == '_' {
 				WriteRuneAndInc(currRune)
-				currState = Identifier
+				currState = FSMIdentifier
 			} else if unicode.IsDigit(currRune) {
 				WriteRuneAndInc(ReplacementRune)
-				currState = Number
+				currState = FSMNumber
 			} else {
 				WriteRuneAndInc(currRune)
 			}
@@ -283,5 +281,5 @@ func sqlSanitize(ss map[string]*SQLSanitizer, dbType string, sql string) string 
 	if s, ok := ss[dbType]; ok {
 		return s.Sanitize(sql)
 	}
-	return ss[Default].Sanitize(sql)
+	return ss[DefaultDB].Sanitize(sql)
 }

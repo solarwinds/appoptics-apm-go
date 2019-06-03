@@ -53,86 +53,86 @@ func TestSQLSanitize(t *testing.T) {
 		},
 		{
 			Disabled,
-			Default,
+			DefaultDB,
 			"SELECT name FROM employees WHERE age = 37 AND firstName = 'Eric'",
 			"SELECT name FROM employees WHERE age = 37 AND firstName = 'Eric'",
 		},
 		// EnabledAuto
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			"select * from schema.tbl where name = '';",
 			"select * from schema.tbl where name = ?;",
 		},
 		{
 			EnabledDropDoubleQuoted,
-			Default,
+			DefaultDB,
 			"select * from tbl where name = 'private';",
 			"select * from tbl where name = ?;",
 		},
 		{
 			EnabledKeepDoubleQuoted,
-			Default,
+			DefaultDB,
 			"select * from tbl where name = 'private' order by age;",
 			"select * from tbl where name = ? order by age;",
 		},
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			"select ssn from accounts where password = \"mypass\" group by dept order by age;",
 			"select ssn from accounts where password = ? group by dept order by age;",
 		},
 		{
 			EnabledDropDoubleQuoted,
-			Default,
+			DefaultDB,
 			"select ssn from accounts where password = \"mypass\";",
 			"select ssn from accounts where password = ?;",
 		},
 		{
 			EnabledKeepDoubleQuoted,
-			Default,
+			DefaultDB,
 			"select ssn from accounts where password = \"mypass\";",
 			"select ssn from accounts where password = \"mypass\";",
 		},
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			"select ssn from accounts where name = 'Chris O''Corner'",
 			"select ssn from accounts where name = ?",
 		},
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			"SELECT name FROM employees WHERE age = 37 AND firstName = 'Eric'",
 			"SELECT name FROM employees WHERE age = ? AND firstName = ?",
 		},
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			"SELECT name FROM employees WHERE name IN ('Eric', 'Tom')",
 			"SELECT name FROM employees WHERE name IN (?, ?)",
 		},
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			"SELECT TOP 10 FROM employees WHERE age > 28",
 			"SELECT TOP ? FROM employees WHERE age > ?",
 		},
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			"UPDATE Customers SET zip='V3B 6Z6', phone='000-000-0000'",
 			"UPDATE Customers SET zip=?, phone=?",
 		},
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			"SELECT id FROM employees WHERE date BETWEEN '01/01/2019' AND '05/30/2019'",
 			"SELECT id FROM employees WHERE date BETWEEN ? AND ?",
 		},
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			`SELECT name FROM employees 
 			 WHERE EXISTS (
 				SELECT eid FROM orders WHERE employees.id = orders.eid AND price > 1000
@@ -144,13 +144,13 @@ func TestSQLSanitize(t *testing.T) {
 		},
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			"SELECT COUNT(id), team FROM employees GROUP BY team HAVING MIN(age) > 30",
 			"SELECT COUNT(id), team FROM employees GROUP BY team HAVING MIN(age) > ?",
 		},
 		{
 			EnabledAuto,
-			Default,
+			DefaultDB,
 			`WITH tmp AS (SELECT * FROM employees WHERE team = 'IT') 
 			 SELECT * FROM tmp WHERE name = 'Tom'`,
 			`WITH tmp AS (SELECT * FROM employees WHERE team = ?) 
@@ -180,7 +180,7 @@ func TestSQLSanitize(t *testing.T) {
 		},
 		{
 			EnabledDropDoubleQuoted,
-			Default,
+			DefaultDB,
 			`WITH tmp AS (SELECT * FROM employees WHERE team = "IT") 
 			 SELECT * FROM tmp WHERE name = 'Tom' 
 			 LEFT JOIN tickets 
@@ -192,13 +192,13 @@ func TestSQLSanitize(t *testing.T) {
 		},
 		{ // unicode support
 			EnabledDropDoubleQuoted,
-			Default,
+			DefaultDB,
 			`select ssn from accounts where name = '中文'`,
 			`select ssn from accounts where name = ?`,
 		},
 		{ // Truncate long SQL statement
 			EnabledDropDoubleQuoted,
-			Default,
+			DefaultDB,
 			`WITH tmp AS (SELECT * FROM employees WHERE team = "IT") 
 			 SELECT
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_1,
@@ -267,7 +267,7 @@ func BenchmarkSQLSanitizeShort(b *testing.B) {
 	ss := initSanitizersMap()
 
 	for n := 0; n < b.N; n++ {
-		sqlSanitize(ss, Default, sql)
+		sqlSanitize(ss, DefaultDB, sql)
 	}
 	_ = os.Unsetenv("APPOPTICS_SQL_SANITIZE")
 }
@@ -282,7 +282,7 @@ func BenchmarkSQLSanitizeLong(b *testing.B) {
 	ss := initSanitizersMap()
 
 	for n := 0; n < b.N; n++ {
-		sqlSanitize(ss, Default, sql)
+		sqlSanitize(ss, DefaultDB, sql)
 	}
 	_ = os.Unsetenv("APPOPTICS_SQL_SANITIZE")
 }
