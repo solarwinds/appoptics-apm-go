@@ -1,0 +1,35 @@
+# Collector: yaml.test.com
+ServiceKey: your_service_key:your_service_name
+# TrustedPath: /yaml-collector.crt
+# CollectorUDP: yamludp.test.com
+# ReporterType: udp
+# Sampling:
+#   TracingMode: disabled
+#   SampleRate: 100
+# PrependDomain: true
+# HostAlias: yaml-alias
+# SkipVerify: true
+# Precision: 6
+# SQLSanitize: 2
+# ReporterProperties:
+#   EventFlushInterval: 6
+#   EventFlushBatchSize: 6000
+#   MetricFlushInterval: 30
+#   GetSettingsInterval: 30
+#   SettingsTimeoutInterval: 10
+#   PingInterval: 20
+#   RetryDelayInitial: 500
+#   RetryDelayMax: 60
+#   RedirectMax: 20
+#   RetryLogThreshold: 10
+#   MaxRetries: 20
+# TransactionSettings:
+# - Type: url
+#   RegEx: \s+\d+\s+
+#   Tracing: disabled
+# - Type: url
+#   Extensions:
+#   - .jpg
+#   Tracing: disabled
+# Disabled: true
+# DebugLevel: info
