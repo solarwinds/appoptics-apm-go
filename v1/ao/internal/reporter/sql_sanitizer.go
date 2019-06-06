@@ -1,9 +1,9 @@
 package reporter
 
 import (
-	"bytes"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 )
@@ -38,7 +38,7 @@ type FSMState int
 
 // The states for the SQL sanitization FSM
 const (
-	FSMUninitialized = iota
+	FSMUninitialized FSMState = iota
 	FSMCopy
 	FSMCopyEscape
 	FSMStringStart
@@ -60,7 +60,7 @@ const (
 	// MaxSQLLen defines the maximum number of runes after truncation.
 	MaxSQLLen = 2048
 	// Ellipsis is appended to the truncated SQL statement
-	Ellipsis = "..."
+	Ellipsis = '…'
 )
 
 // SQLOperatorRunes defines the list of SQL operators
@@ -149,24 +149,51 @@ func NewSQLSanitizer(dbType string, sanitizeFlag int) *SQLSanitizer {
 // Sanitize does the SQL sanitization by removing literals from the statement, it
 // also truncates the statement after sanitization if it's longer than MaxSQLLen.
 func (s *SQLSanitizer) Sanitize(sql string) string {
-	var buffer bytes.Buffer
 
 	currState := FSMCopy
 	prevState := FSMUninitialized
 
 	var closingQuote rune
 
-	runeCnt := 0                // should not exceed MaxSQLLen
-	maxRuneCnt := MaxSQLLen - 3 // len("...")
+	// A very simple stack implementation solely for the sanitizer. It doesn't
+	// enforce enough boundary checks and is not concurrent-safe.
+	buffer := make([]rune, utf8.RuneCountInString(sql))
+	runeCnt := 0                // should not exceed MaxSQLLen-1
+	maxRuneCnt := MaxSQLLen - 1 // len("…")
 
-	WriteRuneAndInc := func(r rune) {
-		buffer.WriteRune(r)
-		runeCnt++
+	StackPush := func(r rune) {
+		if runeCnt < len(buffer) {
+			buffer[runeCnt] = r
+			runeCnt++
+		}
+	}
+
+	StackPop := func() {
+		if runeCnt > 0 {
+			runeCnt--
+		}
+	}
+
+	// depth = 1 means to peek the top element
+	StackPeek := func(depth int) rune {
+		if runeCnt < depth {
+			// too deep
+			return 0
+		}
+		return buffer[runeCnt-depth]
+	}
+
+	StackCopy := func() []rune {
+		return buffer[:runeCnt]
+	}
+
+	StackSize := func() int {
+		return runeCnt
 	}
 
 	for _, currRune := range sql {
-		if runeCnt >= maxRuneCnt {
-			buffer.WriteString(Ellipsis)
+		if StackSize() >= maxRuneCnt {
+			StackPush(Ellipsis)
 			break
 		}
 
@@ -176,7 +203,7 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 
 		switch currState {
 		case FSMStringStart:
-			WriteRuneAndInc(ReplacementRune)
+			StackPush(ReplacementRune)
 
 			if currRune == closingQuote {
 				currState = FSMStringEnd
@@ -200,12 +227,12 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 			if currRune == closingQuote {
 				currState = FSMStringBody
 			} else {
-				WriteRuneAndInc(currRune)
+				StackPush(currRune)
 				currState = FSMCopy
 			}
 
 		case FSMCopyEscape:
-			WriteRuneAndInc(currRune)
+			StackPush(currRune)
 			currState = FSMCopy
 
 		case FSMNumber:
@@ -213,7 +240,7 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 				if currRune == '.' || currRune == 'E' {
 					currState = FSMNumericExtension
 				} else {
-					WriteRuneAndInc(currRune)
+					StackPush(currRune)
 					currState = FSMCopy
 				}
 			}
@@ -222,16 +249,25 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 			currState = FSMNumber
 
 		case FSMIdentifier:
-			WriteRuneAndInc(currRune)
 			if c, ok := s.literalQuotes[currRune]; ok {
+				// PostgreSQL has literals like X'FEFF' or U&'\0441'
+				if StackPeek(1) == 'X' {
+					StackPop()
+				} else if StackPeek(1) == '&' && StackPeek(2) == 'U' {
+					StackPop()
+					StackPop()
+				}
 				closingQuote = c
 				currState = FSMStringStart
-			} else if unicode.IsSpace(currRune) || SQLOperatorRunes[currRune] {
-				currState = FSMCopy
+			} else {
+				StackPush(currRune)
+				if unicode.IsSpace(currRune) || SQLOperatorRunes[currRune] {
+					currState = FSMCopy
+				}
 			}
 
 		case FSMQuotedIdentifier:
-			WriteRuneAndInc(currRune)
+			StackPush(currRune)
 			if currRune == closingQuote {
 				currState = FSMCopy
 			} else if currRune == EscapeRune {
@@ -239,7 +275,7 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 			}
 
 		case FSMQuotedIdentifierEscape:
-			WriteRuneAndInc(currRune)
+			StackPush(currRune)
 			currState = FSMQuotedIdentifier
 
 		default:
@@ -247,25 +283,25 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 				closingQuote = lq
 				currState = FSMStringStart
 			} else if iq, has := s.identifierQuotes[currRune]; has {
-				WriteRuneAndInc(currRune)
+				StackPush(currRune)
 				closingQuote = iq
 				currState = FSMQuotedIdentifier
 			} else if currRune == EscapeRune {
-				WriteRuneAndInc(currRune)
+				StackPush(currRune)
 				currState = FSMCopyEscape
 			} else if unicode.IsLetter(currRune) || currRune == '_' {
-				WriteRuneAndInc(currRune)
+				StackPush(currRune)
 				currState = FSMIdentifier
 			} else if unicode.IsDigit(currRune) {
-				WriteRuneAndInc(ReplacementRune)
+				StackPush(ReplacementRune)
 				currState = FSMNumber
 			} else {
-				WriteRuneAndInc(currRune)
+				StackPush(currRune)
 			}
 		}
 	}
 
-	return buffer.String()
+	return string(StackCopy())
 }
 
 // SQLSanitize checks the sanitizer of the database type and does the sanitization

@@ -240,7 +240,138 @@ func TestSQLSanitize(t *testing.T) {
 			 very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long_column_16,
 			 FROM tmp WHERE name = ? 
 			 LEFT JOIN tickets 
-			 WHERE eid = i...`,
+			 WHERE eid = id …`,
+		},
+		{ // prepared statements: placeholders + literals
+			EnabledAuto,
+			DefaultDB,
+			"SELECT name FROM employees WHERE age = ? AND firstName = 'Eric'",
+			"SELECT name FROM employees WHERE age = ? AND firstName = ?",
+		},
+		{ // back quotes for table/column names
+			EnabledAuto,
+			MySQL,
+			"select `a` from `b`.`c` where `d` = `e` limit 10,100",
+			"select `a` from `b`.`c` where `d` = `e` limit ?,?",
+		},
+		{ // double quotes for both column names and single quote for values
+			EnabledAuto,
+			PostgreSQL,
+			`select "a" from "b.c" where "d" = 'e' limit 10,100`,
+			`select "a" from "b.c" where "d" = ? limit ?,?`,
+		},
+		{ // back/single/double quotes mixed
+			EnabledDropDoubleQuoted,
+			DefaultDB,
+			"select `a` from `b`.`c` where `d` = 'e' and `f` = \"g\" limit 10,100",
+			"select `a` from `b`.`c` where `d` = ? and `f` = ? limit ?,?",
+		},
+		{ // single/double quotes mixed
+			EnabledAuto,
+			PostgreSQL,
+			`select "a" from "b.c" where "d" = 'e' and "f" = 5 limit 10,100`,
+			`select "a" from "b.c" where "d" = ? and "f" = ? limit ?,?`,
+		},
+		{ // back quotes for column names and values
+			EnabledAuto,
+			DefaultDB,
+			"select `a2a` from `b2b`.`c2c` where `d2d` = `e2e` limit 10,100",
+			"select `a2a` from `b2b`.`c2c` where `d2d` = `e2e` limit ?,?",
+		},
+		{ // double quotes for column names and values
+			EnabledAuto,
+			SQLServer,
+			`select [col2] from [tbl] where [tbl].[col1] = 'val'`,
+			`select [col2] from [tbl] where [tbl].[col1] = ?`,
+		},
+		{ // table names with numbers should not be replaced with ?
+			EnabledAuto,
+			DefaultDB,
+			`select table_123.col from table_123 where id = 123;`,
+			`select table_123.col from table_123 where id = ?;`,
+		},
+		{ // Double-quoted strings with embedded single quotes
+			EnabledAuto,
+			MySQL,
+			`select ssn from accounts where password = "\\'";`,
+			`select ssn from accounts where password = ?;`,
+		},
+		{ // Double-quoted strings with escaped embedded double quotes
+			EnabledAuto,
+			PostgreSQL,
+			`select ssn from accounts where password = \"\\\"abc\\\"\";`,
+			`select ssn from accounts where password = \"\\\"abc\\\"\";`,
+		},
+		{ // Double-quoted strings with twinned embedded double quotes
+			EnabledAuto,
+			MySQL,
+			`select ssn from accounts where password = "\"\"abc\"\"";`,
+			`select ssn from accounts where password = ?;`,
+		},
+		{ // Single-back-quoted identifiers (ie. MySQL style)
+			EnabledAuto,
+			MySQL,
+			"select `ssn -1` from `account's` where password = 'mypass';",
+			"select `ssn -1` from `account's` where password = ?;",
+		},
+		{ // Unicode
+			EnabledAuto,
+			MySQL,
+			`select col from tbl where name = '\xE2\x98\x83 unicode'`,
+			`select col from tbl where name = ?`,
+		},
+		{ // Binary string
+			EnabledAuto,
+			MySQL,
+			`select col from tbl where name = X'FEFF' and age = 37`,
+			`select col from tbl where name = ? and age = ?`,
+		},
+		{ // Russian word "slon" (elephant) in Cyrillic Unicode letters:
+			// From: http://www.postgresql.org/docs/9.0/static/sql-syntax-lexical.html
+			EnabledAuto,
+			PostgreSQL,
+			`select col from tbl where name = U&'\0441\043B\043E\043D'`,
+			`select col from tbl where name = ?`,
+		},
+		{ // Time and date
+			EnabledAuto,
+			MySQL,
+			`select col from tbl where birth = 2013-01-26 11:03:30`,
+			`select col from tbl where birth = ?-?-? ?:?:?`,
+		},
+		{ // Type declaration parameters
+			EnabledAuto,
+			MySQL,
+			`CREATE TABLE tbl (col1 VARCHAR(1000, 50), col2 CHAR(123, col3 DEC(16,2), col4 MONEY(10, 2))`,
+			`CREATE TABLE tbl (col1 VARCHAR(?, ?), col2 CHAR(?, col3 DEC(?,?), col4 MONEY(?, ?))`,
+		},
+		{ // No spaces around operator
+			EnabledAuto,
+			MySQL,
+			`UPDATE extent_descriptor SET sample_rate=0.02, sample_source=NULL 
+			 WHERE layer='worker' AND host='etl1.tlys.us' AND app_id=39`,
+			`UPDATE extent_descriptor SET sample_rate=?, sample_source=NULL 
+			 WHERE layer=? AND host=? AND app_id=?`,
+		},
+		{ // No spaces around parentheses
+			EnabledAuto,
+			MySQL,
+			`INSERT INTO d_trace_stats (trace_id, trace_size, event_max_size, 
+			 benchmark_queue, benchmark_since_added)VALUES(130580, 130536, 1314, NULL, NULL)`,
+			`INSERT INTO d_trace_stats (trace_id, trace_size, event_max_size, 
+			 benchmark_queue, benchmark_since_added)VALUES(?, ?, ?, NULL, NULL)`,
+		},
+		{ // invalid SQL statement #1
+			EnabledAuto,
+			DefaultDB,
+			"",
+			"",
+		},
+		{ // invalid SQL statement #2
+			EnabledAuto,
+			DefaultDB,
+			"SELECT",
+			"SELECT",
 		},
 	}
 
