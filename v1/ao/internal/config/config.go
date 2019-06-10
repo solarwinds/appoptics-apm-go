@@ -99,6 +99,9 @@ type Config struct {
 	// The precision of the histogram
 	Precision int `yaml:"Precision,omitempty" env:"APPOPTICS_HISTOGRAM_PRECISION" default:"2"`
 
+	// The SQL sanitization level
+	SQLSanitize int `yaml:"SQLSanitize,omitempty" env:"APPOPTICS_SQL_SANITIZE" default:"0"`
+
 	// The reporter options
 	ReporterProperties *ReporterOptions `yaml:"ReporterProperties,omitempty"`
 
@@ -783,4 +786,18 @@ func (c *Config) GetTransactionFiltering() []TransactionFilter {
 	c.RLock()
 	defer c.RUnlock()
 	return c.TransactionSettings
+}
+
+// GetSQLSanitize returns the SQL sanitization level.
+//
+// The meaning of each level:
+// 0 - disable SQL sanitizing (the default).
+// 1 - enable SQL sanitizing and attempt to automatically determine which
+// quoting form to use.
+// 2 - enable SQL sanitizing and force dropping double quoted characters.
+// 4 - enable SQL sanitizing and force retaining double quoted character.
+func (c *Config) GetSQLSanitize() int {
+	c.RLock()
+	defer c.RUnlock()
+	return c.SQLSanitize
 }
