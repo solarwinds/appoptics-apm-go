@@ -2,17 +2,11 @@
 # **This is an example configuration file. Uncomment the lines that need to be enabled.**
 #
 #
-# Collector: collector.appoptics.com:443  # - env var: APPOPTICS_COLLECTOR
 ServiceKey: your_service_key:your_service_name  # - env var: APPOPTICS_SERVICE_KEY
-# TrustedPath: /collector.crt  # - env var: APPOPTICS_TRUSTEDPATH
-# CollectorUDP: no-such-url.appoptics.com  # - env var: APPOPTICS_COLLECTOR_UDP
-# ReporterType: ssl  # - env var: APPOPTICS_REPORTER
 # Sampling:
-#   TracingMode: disabled  # - env var: APPOPTICS_TRACING_MODE
-#   SampleRate: 100  # - env var: APPOPTICS_SAMPLE_RATE
+#   TracingMode: enabled  # - env var: APPOPTICS_TRACING_MODE
 # PrependDomain: true  # - env var: APPOPTICS_PREPEND_DOMAIN
 # HostAlias: my-alias  # - env var: APPOPTICS_HOSTNAME_ALIAS
-# SkipVerify: true  # - env var: APPOPTICS_INSECURE_SKIP_VERIFY
 # SQLSanitize: 2  # - env var: APPOPTICS_SQL_SANITIZE
 # TransactionSettings:
 # - Type: url
@@ -22,5 +16,5 @@ ServiceKey: your_service_key:your_service_name  # - env var: APPOPTICS_SERVICE_K
 #   Extensions:
 #   - .jpg
 #   Tracing: disabled
-# Disabled: true  # - env var: APPOPTICS_DISABLED
-# DebugLevel: info  # - env var: APPOPTICS_DEBUG_LEVEL
+# Disabled: false  # - env var: APPOPTICS_DISABLED
+# DebugLevel: warn  # - env var: APPOPTICS_DEBUG_LEVEL
