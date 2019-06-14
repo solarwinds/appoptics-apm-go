@@ -143,6 +143,11 @@ func NewSQLSanitizer(dbType string, sanitizeFlag int) *SQLSanitizer {
 		sanitizer.identifierQuotes['['] = ']'
 	}
 
+	// For double-dollar quoted literals: $tag$literal$tag$
+	if dbType == PostgreSQL {
+		sanitizer.literalQuotes['$'] = '$'
+	}
+
 	return &sanitizer
 }
 
@@ -203,6 +208,15 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 
 		switch currState {
 		case FSMStringStart:
+			// Handle PostgreSQL's double-dollar quoted literal
+			if s.dbType == PostgreSQL && closingQuote == '$' {
+				if currRune == '$' {
+					currState = FSMStringBody
+					StackPush(ReplacementRune)
+				}
+				break // break out of switch
+			}
+
 			StackPush(ReplacementRune)
 
 			if currRune == closingQuote {
@@ -224,6 +238,15 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 			currState = FSMStringBody
 
 		case FSMStringEnd:
+			// Handle PostgreSQL's double-dollar quoted literal
+			if s.dbType == PostgreSQL && closingQuote == '$' {
+				if currRune == '$' {
+					// The real end of closing quote
+					currState = FSMCopy
+				}
+				break // break out of switch
+			}
+
 			if currRune == closingQuote {
 				currState = FSMStringBody
 			} else {
@@ -251,9 +274,11 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 		case FSMIdentifier:
 			if c, ok := s.literalQuotes[currRune]; ok {
 				// PostgreSQL has literals like X'FEFF' or U&'\0441'
-				if StackPeek(1) == 'X' {
+				top1 := unicode.ToUpper(StackPeek(1))
+				top2 := unicode.ToUpper(StackPeek(2))
+				if top1 == 'X' || top1 == 'B' || top1 == 'U' || top1 == 'N' {
 					StackPop()
-				} else if StackPeek(1) == '&' && StackPeek(2) == 'U' {
+				} else if top1 == '&' && top2 == 'U' {
 					StackPop()
 					StackPop()
 				}

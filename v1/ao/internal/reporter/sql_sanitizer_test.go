@@ -373,6 +373,36 @@ func TestSQLSanitize(t *testing.T) {
 			"SELECT",
 			"SELECT",
 		},
+		{ // PostgreSQL's special literal formats
+			EnabledAuto,
+			PostgreSQL,
+			`SELECT * FROM employees WHERE name = B'0101'`,
+			`SELECT * FROM employees WHERE name = ?`,
+		},
+		{ // PostgreSQL's double-dollar quoted literal with optional tag
+			EnabledAuto,
+			PostgreSQL,
+			`SELECT * FROM employees WHERE name = $tag$Eric$tag$`,
+			`SELECT * FROM employees WHERE name = ?`,
+		},
+		{ // PostgreSQL's double-dollar quoted literal
+			EnabledAuto,
+			PostgreSQL,
+			`SELECT * FROM employees WHERE name = $$Eric$$`,
+			`SELECT * FROM employees WHERE name = ?`,
+		},
+		{ // Oracle's special treatment when literal replacement is turned on
+			EnabledAuto,
+			Oracle,
+			`SELECT * FROM employees WHERE name = U'500 Oracle Parkway'`,
+			`SELECT * FROM employees WHERE name = ?`,
+		},
+		{ // Oracle's N function
+			EnabledAuto,
+			Oracle,
+			`SELECT * FROM employees WHERE name = N'500 Oracle Parkway'`,
+			`SELECT * FROM employees WHERE name = ?`,
+		},
 	}
 
 	for _, c := range cases {
