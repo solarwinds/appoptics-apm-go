@@ -196,7 +196,11 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 		return runeCnt
 	}
 
-	for _, currRune := range sql {
+	// For PostgreSQL's dollar-quoted literal only.
+	// see https://www.postgresql.org/docs/9.0/sql-syntax-lexical.html
+	tag := []rune{'$'}
+
+	for i, currRune := range sql {
 		if StackSize() >= maxRuneCnt {
 			StackPush(Ellipsis)
 			break
@@ -214,6 +218,10 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 					currState = FSMStringBody
 					StackPush(ReplacementRune)
 				}
+				// Record the tag: '$tag$'. It will be used to compare with the
+				// literal when a '$' is seen to identify the end of string.
+				tag = append(tag, currRune)
+
 				break // break out of switch
 			}
 
@@ -229,8 +237,23 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 
 		case FSMStringBody:
 			if currRune == closingQuote {
-				currState = FSMStringEnd
+				if s.dbType == PostgreSQL &&
+					closingQuote == '$' &&
+					strings.Compare(string(tag), string([]rune(sql)[i:i+len(tag)])) != 0 {
+					// Do nothing - It's only a '$' inside a string, rather than
+					// the literal end. The nested dollar-quoted string is not handled
+					// specially as they are all replaced with the placeholder.
+				} else {
+					currState = FSMStringEnd
+					if s.dbType == PostgreSQL && closingQuote == '$' {
+						tag = []rune{'$'} // reset the tag
+					}
+				}
 			} else if currRune == EscapeRune {
+				// The escape rune, e.g., a '\', should not be escaped inside a
+				// dollar-quoted string of PostgreSQL. However, it doesn't have
+				// to be handle specially either as the entire string body will
+				// be removed (replaced with the placeholder) anyways.
 				currState = FSMStringEscape
 			}
 

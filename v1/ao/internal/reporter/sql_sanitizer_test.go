@@ -385,10 +385,28 @@ func TestSQLSanitize(t *testing.T) {
 			`SELECT * FROM employees WHERE name = $tag$Eric$tag$`,
 			`SELECT * FROM employees WHERE name = ?`,
 		},
+		{ // PostgreSQL's double-dollar quoted literal with optional tag and dollar in string
+			EnabledAuto,
+			PostgreSQL,
+			`SELECT * FROM employees WHERE name = $tag$Eric spends $99 '$tag$`,
+			`SELECT * FROM employees WHERE name = ?`,
+		},
+		{ // PostgreSQL's double-dollar quoted literal
+			EnabledAuto,
+			PostgreSQL,
+			`SELECT * FROM employees WHERE name = $tag$Eric spends $99 '$tag$ AND gender = $tag$male$tag$`,
+			`SELECT * FROM employees WHERE name = ? AND gender = ?`,
+		},
 		{ // PostgreSQL's double-dollar quoted literal
 			EnabledAuto,
 			PostgreSQL,
 			`SELECT * FROM employees WHERE name = $$Eric$$`,
+			`SELECT * FROM employees WHERE name = ?`,
+		},
+		{ // PostgreSQL's double-dollar quoted literal with escape rune
+			EnabledAuto,
+			PostgreSQL,
+			`SELECT * FROM employees WHERE name = $$Eric$$$`,
 			`SELECT * FROM employees WHERE name = ?`,
 		},
 		{ // Oracle's special treatment when literal replacement is turned on
