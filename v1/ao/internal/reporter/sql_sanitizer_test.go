@@ -394,7 +394,7 @@ func TestSQLSanitize(t *testing.T) {
 		{ // PostgreSQL's double-dollar quoted literal
 			EnabledAuto,
 			PostgreSQL,
-			`SELECT * FROM employees WHERE name = $tag$Eric spends $99 '$tag$ AND gender = $tag$male$tag$`,
+			`SELECT * FROM employees WHERE name = $tag\$Eric spends $99 '\$tag\$ AND gender = $tag$male$tag$`,
 			`SELECT * FROM employees WHERE name = ? AND gender = ?`,
 		},
 		{ // PostgreSQL's double-dollar quoted literal

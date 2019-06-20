@@ -239,6 +239,7 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 			if currRune == closingQuote {
 				if s.dbType == PostgreSQL &&
 					closingQuote == '$' &&
+					i+len(tag) <= utf8.RuneCountInString(sql) && // slice bounds check
 					strings.Compare(string(tag), string([]rune(sql)[i:i+len(tag)])) != 0 {
 					// Do nothing - It's only a '$' inside a string, rather than
 					// the literal end. The nested dollar-quoted string is not handled
@@ -249,7 +250,7 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 						tag = []rune{'$'} // reset the tag
 					}
 				}
-			} else if currRune == EscapeRune {
+			} else if currRune == EscapeRune && closingQuote != '$' {
 				// The escape rune, e.g., a '\', should not be escaped inside a
 				// dollar-quoted string of PostgreSQL. However, it doesn't have
 				// to be handle specially either as the entire string body will
