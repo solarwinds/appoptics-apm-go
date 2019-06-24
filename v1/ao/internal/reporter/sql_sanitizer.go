@@ -143,6 +143,11 @@ func NewSQLSanitizer(dbType string, sanitizeFlag int) *SQLSanitizer {
 		sanitizer.identifierQuotes['['] = ']'
 	}
 
+	// For double-dollar quoted literals: $tag$literal$tag$
+	if dbType == PostgreSQL {
+		sanitizer.literalQuotes['$'] = '$'
+	}
+
 	return &sanitizer
 }
 
@@ -191,7 +196,11 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 		return runeCnt
 	}
 
-	for _, currRune := range sql {
+	// For PostgreSQL's dollar-quoted literal only.
+	// see https://www.postgresql.org/docs/9.0/sql-syntax-lexical.html
+	tag := []rune{'$'}
+
+	for i, currRune := range sql {
 		if StackSize() >= maxRuneCnt {
 			StackPush(Ellipsis)
 			break
@@ -203,6 +212,19 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 
 		switch currState {
 		case FSMStringStart:
+			// Handle PostgreSQL's double-dollar quoted literal
+			if s.dbType == PostgreSQL && closingQuote == '$' {
+				if currRune == '$' {
+					currState = FSMStringBody
+					StackPush(ReplacementRune)
+				}
+				// Record the tag: '$tag$'. It will be used to compare with the
+				// literal when a '$' is seen to identify the end of string.
+				tag = append(tag, currRune)
+
+				break // break out of switch
+			}
+
 			StackPush(ReplacementRune)
 
 			if currRune == closingQuote {
@@ -215,8 +237,24 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 
 		case FSMStringBody:
 			if currRune == closingQuote {
-				currState = FSMStringEnd
-			} else if currRune == EscapeRune {
+				if s.dbType == PostgreSQL &&
+					closingQuote == '$' &&
+					i+len(tag) <= utf8.RuneCountInString(sql) && // slice bounds check
+					strings.Compare(string(tag), string([]rune(sql)[i:i+len(tag)])) != 0 {
+					// Do nothing - It's only a '$' inside a string, rather than
+					// the literal end. The nested dollar-quoted string is not handled
+					// specially as they are all replaced with the placeholder.
+				} else {
+					currState = FSMStringEnd
+					if s.dbType == PostgreSQL && closingQuote == '$' {
+						tag = []rune{'$'} // reset the tag
+					}
+				}
+			} else if currRune == EscapeRune && closingQuote != '$' {
+				// The escape rune, e.g., a '\', should not be escaped inside a
+				// dollar-quoted string of PostgreSQL. However, it doesn't have
+				// to be handle specially either as the entire string body will
+				// be removed (replaced with the placeholder) anyways.
 				currState = FSMStringEscape
 			}
 
@@ -224,6 +262,15 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 			currState = FSMStringBody
 
 		case FSMStringEnd:
+			// Handle PostgreSQL's double-dollar quoted literal
+			if s.dbType == PostgreSQL && closingQuote == '$' {
+				if currRune == '$' {
+					// The real end of closing quote
+					currState = FSMCopy
+				}
+				break // break out of switch
+			}
+
 			if currRune == closingQuote {
 				currState = FSMStringBody
 			} else {
@@ -251,9 +298,11 @@ func (s *SQLSanitizer) Sanitize(sql string) string {
 		case FSMIdentifier:
 			if c, ok := s.literalQuotes[currRune]; ok {
 				// PostgreSQL has literals like X'FEFF' or U&'\0441'
-				if StackPeek(1) == 'X' {
+				top1 := unicode.ToUpper(StackPeek(1))
+				top2 := unicode.ToUpper(StackPeek(2))
+				if top1 == 'X' || top1 == 'B' || top1 == 'U' || top1 == 'N' {
 					StackPop()
-				} else if StackPeek(1) == '&' && StackPeek(2) == 'U' {
+				} else if top1 == '&' && top2 == 'U' {
 					StackPop()
 					StackPop()
 				}
