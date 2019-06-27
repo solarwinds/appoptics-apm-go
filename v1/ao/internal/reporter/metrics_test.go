@@ -13,15 +13,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/hdrhist"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/mgo.v2/bson"
+	mbson "gopkg.in/mgo.v2/bson"
 )
 
-func bsonToMap(bbuf *bsonBuffer) map[string]interface{} {
+func bsonToMap(bbuf *bson.Buffer) map[string]interface{} {
 	m := make(map[string]interface{})
-	bson.Unmarshal(bbuf.GetBuf(), m)
+	mbson.Unmarshal(bbuf.GetBuf(), m)
 	return m
 }
 
@@ -40,9 +41,9 @@ func round(val float64, roundOn float64, places int) (newVal float64) {
 }
 
 func TestAppendIPAddresses(t *testing.T) {
-	bbuf := NewBsonBuffer()
+	bbuf := bson.NewBuffer()
 	appendIPAddresses(bbuf)
-	bsonBufferFinish(bbuf)
+	bbuf.Finish()
 	m := bsonToMap(bbuf)
 
 	ifaces, _ := host.FilteredIfaces()
@@ -70,9 +71,9 @@ func TestAppendIPAddresses(t *testing.T) {
 }
 
 func TestAppendMACAddresses(t *testing.T) {
-	bbuf := NewBsonBuffer()
+	bbuf := bson.NewBuffer()
 	appendMACAddresses(bbuf, host.CurrentID().MAC())
-	bsonBufferFinish(bbuf)
+	bbuf.Finish()
 	m := bsonToMap(bbuf)
 
 	ifaces, _ := host.FilteredIfaces()
@@ -103,13 +104,13 @@ func TestAppendMACAddresses(t *testing.T) {
 
 func TestAddMetricsValue(t *testing.T) {
 	index := 0
-	bbuf := NewBsonBuffer()
+	bbuf := bson.NewBuffer()
 	addMetricsValue(bbuf, &index, "name1", int(111))
 	addMetricsValue(bbuf, &index, "name2", int64(222))
 	addMetricsValue(bbuf, &index, "name3", float32(333.33))
 	addMetricsValue(bbuf, &index, "name4", float64(444.44))
 	addMetricsValue(bbuf, &index, "name5", "hello")
-	bsonBufferFinish(bbuf)
+	bbuf.Finish()
 	m := bsonToMap(bbuf)
 
 	assert.NotZero(t, m["0"])
@@ -279,10 +280,10 @@ func TestAddMeasurementToBSON(t *testing.T) {
 	}
 
 	index := 0
-	bbuf := NewBsonBuffer()
+	bbuf := bson.NewBuffer()
 	addMeasurementToBSON(bbuf, &index, measurement1)
 	addMeasurementToBSON(bbuf, &index, measurement2)
-	bsonBufferFinish(bbuf)
+	bbuf.Finish()
 	m := bsonToMap(bbuf)
 
 	assert.NotZero(t, m["0"])
@@ -339,10 +340,10 @@ func TestAddHistogramToBSON(t *testing.T) {
 	h2.hist.Record(39023)
 
 	index := 0
-	bbuf := NewBsonBuffer()
+	bbuf := bson.NewBuffer()
 	addHistogramToBSON(bbuf, &index, h1)
 	addHistogramToBSON(bbuf, &index, h2)
-	bsonBufferFinish(bbuf)
+	bbuf.Finish()
 	m := bsonToMap(bbuf)
 
 	assert.NotZero(t, m["0"])
@@ -364,9 +365,7 @@ func TestAddHistogramToBSON(t *testing.T) {
 }
 
 func TestGenerateMetricsMessage(t *testing.T) {
-	bbuf := &bsonBuffer{
-		buf: generateMetricsMessage(15, &eventQueueStats{}),
-	}
+	bbuf := bson.WithBuf(generateMetricsMessage(15, &eventQueueStats{}))
 	m := bsonToMap(bbuf)
 
 	_, ok := m["Hostname"]
@@ -436,8 +435,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 			break
 		}
 	}
-	bbuf.buf = generateMetricsMessage(15, &eventQueueStats{})
-	m = bsonToMap(bbuf)
+	m = bsonToMap(bson.WithBuf(generateMetricsMessage(15, &eventQueueStats{})))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))

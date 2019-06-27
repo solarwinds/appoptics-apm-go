@@ -4,6 +4,8 @@
 
 package reporter
 
-func appendUname(bbuf *bsonBuffer) {}
+import "github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 
-func addHostMetrics(bbuf *bsonBuffer, index *int) {}
+func appendUname(bbuf *bson.Buffer) {}
+
+func addHostMetrics(bbuf *bson.Buffer, index *int) {}

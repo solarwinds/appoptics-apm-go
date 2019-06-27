@@ -9,14 +9,15 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestAppendUname(t *testing.T) {
-	bbuf := NewBsonBuffer()
+	bbuf := bson.NewBuffer()
 	appendUname(bbuf)
-	bsonBufferFinish(bbuf)
+	bbuf.Finish()
 	m := bsonToMap(bbuf)
 
 	var sysname, release string

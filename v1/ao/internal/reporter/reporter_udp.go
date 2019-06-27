@@ -6,6 +6,7 @@ import (
 	"context"
 	"net"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/pkg/errors"
@@ -82,14 +83,14 @@ func (r *udpReporter) reportStatus(ctx *oboeContext, e *event) error {
 
 func (r *udpReporter) reportSpan(span SpanMessage) error {
 	s := span.(*HTTPSpanMessage)
-	bbuf := NewBsonBuffer()
-	bsonAppendString(bbuf, "transaction", s.Transaction)
-	bsonAppendString(bbuf, "url", s.Path)
-	bsonAppendInt(bbuf, "status", s.Status)
-	bsonAppendString(bbuf, "method", s.Method)
-	bsonAppendBool(bbuf, "hasError", s.HasError)
-	bsonAppendInt64(bbuf, "duration", s.Duration.Nanoseconds())
-	bsonBufferFinish(bbuf)
-	_, err := r.conn.Write(bbuf.buf)
+	bbuf := bson.NewBuffer()
+	bbuf.AppendString("transaction", s.Transaction)
+	bbuf.AppendString("url", s.Path)
+	bbuf.AppendInt("status", s.Status)
+	bbuf.AppendString("method", s.Method)
+	bbuf.AppendBool("hasError", s.HasError)
+	bbuf.AppendInt64("duration", s.Duration.Nanoseconds())
+	bbuf.Finish()
+	_, err := r.conn.Write(bbuf.GetBuf())
 	return err
 }

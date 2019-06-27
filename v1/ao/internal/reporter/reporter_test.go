@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"gopkg.in/mgo.v2/bson"
+	mbson "gopkg.in/mgo.v2/bson"
 )
 
 const (
@@ -283,10 +283,10 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, server.status[0].Encoding, pb.EncodingType_BSON)
 	require.Len(t, server.status[0].Messages, 1)
 
-	dec1, dec2 := bson.M{}, bson.M{}
-	err = bson.Unmarshal(server.events[0].Messages[0], &dec1)
+	dec1, dec2 := mbson.M{}, mbson.M{}
+	err = mbson.Unmarshal(server.events[0].Messages[0], &dec1)
 	require.NoError(t, err)
-	err = bson.Unmarshal(server.status[0].Messages[0], &dec2)
+	err = mbson.Unmarshal(server.status[0].Messages[0], &dec2)
 	require.NoError(t, err)
 
 	assert.Equal(t, dec1["Layer"], "layer1")

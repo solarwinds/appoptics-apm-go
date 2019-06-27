@@ -153,7 +153,7 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	// Update the context's op_id to that of the event
 	ctx.metadata.ids.setOpID(e.metadata.ids.opID)
 
-	bsonBufferFinish(&e.bbuf)
+	e.bbuf.Finish()
 	return nil
 }
 

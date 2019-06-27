@@ -10,13 +10,14 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 )
 
 type event struct {
 	metadata oboeMetadata
-	bbuf     bsonBuffer
+	bbuf     *bson.Buffer
 }
 
 // Label is a required event attribute.
@@ -151,17 +152,17 @@ func oboeEventInit(evt *event, md *oboeMetadata) error {
 	evt.metadata.flags = md.flags
 
 	// Buffer initialization
-	bsonBufferInit(&evt.bbuf)
+	evt.bbuf = bson.NewBuffer()
 
 	// Copy header to buffer
-	bsonAppendString(&evt.bbuf, "_V", eventHeader)
+	evt.bbuf.AppendString("_V", eventHeader)
 
 	// Pack metadata
 	mdStr, err := evt.metadata.ToString()
 	if err != nil {
 		return err
 	}
-	bsonAppendString(&evt.bbuf, "X-Trace", mdStr)
+	evt.bbuf.AppendString("X-Trace", mdStr)
 	return nil
 }
 
@@ -182,31 +183,35 @@ func (e *event) addLabelLayer(label Label, layer string) {
 }
 
 // Adds string key/value to event. BSON strings are assumed to be Unicode.
-func (e *event) AddString(key, value string) { bsonAppendString(&e.bbuf, key, value) }
+func (e *event) AddString(key, value string) { e.bbuf.AppendString(key, value) }
 
 // Adds a binary buffer as a key/value to this event. This uses a binary-safe BSON buffer type.
-func (e *event) AddBinary(key string, value []byte) { bsonAppendBinary(&e.bbuf, key, value) }
+func (e *event) AddBinary(key string, value []byte) { e.bbuf.AppendBinary(key, value) }
 
 // Adds int key/value to event
-func (e *event) AddInt(key string, value int) { bsonAppendInt(&e.bbuf, key, value) }
+func (e *event) AddInt(key string, value int) { e.bbuf.AppendInt(key, value) }
 
 // Adds int64 key/value to event
-func (e *event) AddInt64(key string, value int64) { bsonAppendInt64(&e.bbuf, key, value) }
+func (e *event) AddInt64(key string, value int64) { e.bbuf.AppendInt64(key, value) }
 
 // Adds int32 key/value to event
-func (e *event) AddInt32(key string, value int32) { bsonAppendInt32(&e.bbuf, key, value) }
+func (e *event) AddInt32(key string, value int32) { e.bbuf.AppendInt32(key, value) }
 
 // Adds float32 key/value to event
-func (e *event) AddFloat32(key string, value float32) { bsonAppendFloat64(&e.bbuf, key, float64(value)) }
+func (e *event) AddFloat32(key string, value float32) {
+	e.bbuf.AppendFloat64(key, float64(value))
+}
 
 // Adds float64 key/value to event
-func (e *event) AddFloat64(key string, value float64) { bsonAppendFloat64(&e.bbuf, key, value) }
+func (e *event) AddFloat64(key string, value float64) { e.bbuf.AppendFloat64(key, value) }
 
 // Adds float key/value to event
-func (e *event) AddBool(key string, value bool) { bsonAppendBool(&e.bbuf, key, value) }
+func (e *event) AddBool(key string, value bool) { e.bbuf.AppendBool(key, value) }
 
 // Adds edge (reference to previous event) to event
-func (e *event) AddEdge(ctx *oboeContext) { bsonAppendString(&e.bbuf, EdgeKey, ctx.metadata.opString()) }
+func (e *event) AddEdge(ctx *oboeContext) {
+	e.bbuf.AppendString(EdgeKey, ctx.metadata.opString())
+}
 
 func (e *event) AddEdgeFromMetadataString(mdstr string) {
 	var md oboeMetadata
@@ -214,7 +219,7 @@ func (e *event) AddEdgeFromMetadataString(mdstr string) {
 	err := md.FromString(mdstr)
 	// only add Edge if metadata references same trace as ours
 	if err == nil && bytes.Equal(e.metadata.ids.taskID, md.ids.taskID) {
-		bsonAppendString(&e.bbuf, EdgeKey, md.opString())
+		e.bbuf.AppendString(EdgeKey, md.opString())
 	}
 }
 

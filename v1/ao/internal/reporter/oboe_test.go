@@ -11,7 +11,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
-	"gopkg.in/mgo.v2/bson"
+	mbson "gopkg.in/mgo.v2/bson"
 
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/stretchr/testify/assert"
@@ -103,7 +103,7 @@ func TestTokenBucketTime(t *testing.T) {
 }
 
 func testLayerCount(count int64) interface{} {
-	return bson.D{bson.DocElem{Name: testLayer, Value: count}}
+	return mbson.D{mbson.DocElem{Name: testLayer, Value: count}}
 }
 
 func callShouldTraceRequest(total int, isTraced bool) (traced int) {

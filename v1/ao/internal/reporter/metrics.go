@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/hdrhist"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
@@ -224,15 +225,15 @@ func init() {
 //
 // return				metrics message in BSON format
 func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStats) []byte {
-	bbuf := NewBsonBuffer()
+	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)
-	bsonAppendInt64(bbuf, "Timestamp_u", int64(time.Now().UnixNano()/1000))
-	bsonAppendInt(bbuf, "MetricsFlushInterval", metricsFlushInterval)
+	bbuf.AppendInt64("Timestamp_u", int64(time.Now().UnixNano()/1000))
+	bbuf.AppendInt("MetricsFlushInterval", metricsFlushInterval)
 
 	// measurements
 	// ==========================================
-	start := bsonAppendStartArray(bbuf, "measurements")
+	start := bbuf.AppendStartArray("measurements")
 	index := 0
 
 	// request counters
@@ -280,12 +281,12 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	metricsHTTPMeasurements.measurements = make(map[string]*Measurement) // clear measurements
 	metricsHTTPMeasurements.lock.Unlock()
 
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 	// ==========================================
 
 	// histograms
 	// ==========================================
-	start = bsonAppendStartArray(bbuf, "histograms")
+	start = bbuf.AppendStartArray("histograms")
 	index = 0
 
 	metricsHTTPHistograms.lock.Lock()
@@ -296,58 +297,58 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	metricsHTTPHistograms.histograms = make(map[string]*histogram) // clear histograms
 
 	metricsHTTPHistograms.lock.Unlock()
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 	// ==========================================
 
 	if mTransMap.Overflow() {
-		bsonAppendBool(bbuf, "TransactionNameOverflow", true)
+		bbuf.AppendBool("TransactionNameOverflow", true)
 	}
 	// The transaction map is reset in every metrics cycle.
 	mTransMap.Reset()
 
-	bsonBufferFinish(bbuf)
-	return bbuf.buf
+	bbuf.Finish()
+	return bbuf.GetBuf()
 }
 
 // append host ID to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
-func appendHostId(bbuf *bsonBuffer) {
+func appendHostId(bbuf *bson.Buffer) {
 	if host.ConfiguredHostname() != "" {
-		bsonAppendString(bbuf, "ConfiguredHostname", host.ConfiguredHostname())
+		bbuf.AppendString("ConfiguredHostname", host.ConfiguredHostname())
 	}
 	appendUname(bbuf)
-	bsonAppendString(bbuf, "Distro", host.Distro())
+	bbuf.AppendString("Distro", host.Distro())
 	appendIPAddresses(bbuf)
 }
 
 // gets and appends IP addresses to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
-func appendIPAddresses(bbuf *bsonBuffer) {
+func appendIPAddresses(bbuf *bson.Buffer) {
 	addrs := host.IPAddresses()
 	if addrs == nil {
 		return
 	}
 
-	start := bsonAppendStartArray(bbuf, "IPAddresses")
+	start := bbuf.AppendStartArray("IPAddresses")
 	for i, address := range addrs {
-		bsonAppendString(bbuf, strconv.Itoa(i), address)
+		bbuf.AppendString(strconv.Itoa(i), address)
 	}
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 }
 
 // gets and appends MAC addresses to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
-func appendMACAddresses(bbuf *bsonBuffer, macs []string) {
-	start := bsonAppendStartArray(bbuf, "MACAddresses")
+func appendMACAddresses(bbuf *bson.Buffer, macs []string) {
+	start := bbuf.AppendStartArray("MACAddresses")
 	for _, mac := range macs {
 		if mac == "" {
 			continue
 		}
 		i := 0
-		bsonAppendString(bbuf, strconv.Itoa(i), mac)
+		bbuf.AppendString(strconv.Itoa(i), mac)
 		i++
 	}
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 }
 
 // appends a metric to a BSON buffer, the form will be:
@@ -359,31 +360,31 @@ func appendMACAddresses(bbuf *bsonBuffer, macs []string) {
 // index	a running integer (0,1,2,...) which is needed for BSON arrays
 // name		key name
 // value	value (type: int, int64, float32, float64)
-func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{}) {
-	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
+func addMetricsValue(bbuf *bson.Buffer, index *int, name string, value interface{}) {
+	start := bbuf.AppendStartObject(strconv.Itoa(*index))
 	defer func() {
 		if err := recover(); err != nil {
 			log.Errorf("%v", err)
 		}
 	}()
 
-	bsonAppendString(bbuf, "name", name)
+	bbuf.AppendString("name", name)
 	switch value.(type) {
 	case int:
-		bsonAppendInt(bbuf, "value", value.(int))
+		bbuf.AppendInt("value", value.(int))
 	case int64:
-		bsonAppendInt64(bbuf, "value", value.(int64))
+		bbuf.AppendInt64("value", value.(int64))
 	case float32:
 		v32 := value.(float32)
 		v64 := float64(v32)
-		bsonAppendFloat64(bbuf, "value", v64)
+		bbuf.AppendFloat64("value", v64)
 	case float64:
-		bsonAppendFloat64(bbuf, "value", value.(float64))
+		bbuf.AppendFloat64("value", value.(float64))
 	default:
-		bsonAppendString(bbuf, "value", "unknown")
+		bbuf.AppendString("value", "unknown")
 	}
 
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 	*index += 1
 }
 
@@ -543,17 +544,17 @@ func recordHistogram(hi *histograms, name string, duration time.Duration) {
 // bbuf		the BSON buffer to append the metric to
 // index	a running integer (0,1,2,...) which is needed for BSON arrays
 // m		measurement to be added
-func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
-	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
+func addMeasurementToBSON(bbuf *bson.Buffer, index *int, m *Measurement) {
+	start := bbuf.AppendStartObject(strconv.Itoa(*index))
 
-	bsonAppendString(bbuf, "name", m.Name)
-	bsonAppendInt(bbuf, "count", m.Count)
+	bbuf.AppendString("name", m.Name)
+	bbuf.AppendInt("count", m.Count)
 	if m.ReportSum {
-		bsonAppendFloat64(bbuf, "sum", m.Sum)
+		bbuf.AppendFloat64("sum", m.Sum)
 	}
 
 	if len(m.Tags) > 0 {
-		start := bsonAppendStartObject(bbuf, "tags")
+		start := bbuf.AppendStartObject("tags")
 		for k, v := range m.Tags {
 			if len(k) > metricsTagNameLengthMax {
 				k = k[0:metricsTagNameLengthMax]
@@ -561,12 +562,12 @@ func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
 			if len(v) > metricsTagValueLengthMax {
 				v = v[0:metricsTagValueLengthMax]
 			}
-			bsonAppendString(bbuf, k, v)
+			bbuf.AppendString(k, v)
 		}
-		bsonAppendFinishObject(bbuf, start)
+		bbuf.AppendFinishObject(start)
 	}
 
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 	*index += 1
 }
 
@@ -574,7 +575,7 @@ func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
 // bbuf		the BSON buffer to append the metric to
 // index	a running integer (0,1,2,...) which is needed for BSON arrays
 // h		histogram to be added
-func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
+func addHistogramToBSON(bbuf *bson.Buffer, index *int, h *histogram) {
 	// get 64-base encoded representation of the histogram
 	data, err := hdrhist.EncodeCompressed(h.hist)
 	if err != nil {
@@ -582,14 +583,14 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 		return
 	}
 
-	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
+	start := bbuf.AppendStartObject(strconv.Itoa(*index))
 
-	bsonAppendString(bbuf, "name", "TransactionResponseTime")
-	bsonAppendString(bbuf, "value", string(data))
+	bbuf.AppendString("name", "TransactionResponseTime")
+	bbuf.AppendString("value", string(data))
 
 	// append tags
 	if len(h.tags) > 0 {
-		start := bsonAppendStartObject(bbuf, "tags")
+		start := bbuf.AppendStartObject("tags")
 		for k, v := range h.tags {
 			if len(k) > metricsTagNameLengthMax {
 				k = k[0:metricsTagNameLengthMax]
@@ -597,12 +598,12 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 			if len(v) > metricsTagValueLengthMax {
 				v = v[0:metricsTagValueLengthMax]
 			}
-			bsonAppendString(bbuf, k, v)
+			bbuf.AppendString(k, v)
 		}
-		bsonAppendFinishObject(bbuf, start)
+		bbuf.AppendFinishObject(start)
 	}
 
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 	*index += 1
 }
 
