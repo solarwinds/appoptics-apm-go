@@ -23,6 +23,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -176,11 +177,11 @@ func TestHTTPSpan(t *testing.T) {
 
 	require.Len(t, r.SpanMessages, 5)
 
-	m, ok := r.SpanMessages[1].(*reporter.HTTPSpanMessage)
+	m, ok := r.SpanMessages[1].(*metrics.HTTPSpanMessage)
 	assert.True(t, ok)
 	nullDuration := m.Duration
 
-	m, ok = r.SpanMessages[2].(*reporter.HTTPSpanMessage)
+	m, ok = r.SpanMessages[2].(*metrics.HTTPSpanMessage)
 	assert.True(t, ok)
 	assert.Equal(t, "ao_test.handlerDelay200", m.Transaction)
 	assert.Equal(t, "/hello", m.Path)
@@ -191,11 +192,11 @@ func TestHTTPSpan(t *testing.T) {
 		m.Duration.Seconds(), (10 * time.Millisecond).Seconds(),
 		fmt.Sprintf("%v, %v", nullDuration, m.Duration))
 
-	m, ok = r.SpanMessages[3].(*reporter.HTTPSpanMessage)
+	m, ok = r.SpanMessages[3].(*metrics.HTTPSpanMessage)
 	assert.True(t, ok)
 	assert.InDelta(t, (456*time.Millisecond + nullDuration).Seconds(), m.Duration.Seconds(), (10 * time.Millisecond).Seconds())
 
-	m, ok = r.SpanMessages[4].(*reporter.HTTPSpanMessage)
+	m, ok = r.SpanMessages[4].(*metrics.HTTPSpanMessage)
 	assert.True(t, ok)
 	assert.Equal(t, "ao_test.handlerDelay503", m.Transaction)
 	assert.Equal(t, 503, m.Status)

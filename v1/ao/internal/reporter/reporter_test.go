@@ -19,6 +19,7 @@ import (
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/mocks"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
@@ -81,8 +82,8 @@ func TestReportEvent(t *testing.T) {
 
 func TestReportMetric(t *testing.T) {
 	r := SetTestReporter()
-	spanMsg := &HTTPSpanMessage{
-		BaseSpanMessage: BaseSpanMessage{
+	spanMsg := &metrics.HTTPSpanMessage{
+		BaseSpanMessage: metrics.BaseSpanMessage{
 			Duration: time.Second,
 			HasError: false,
 		},
@@ -95,7 +96,7 @@ func TestReportMetric(t *testing.T) {
 	assert.NoError(t, err)
 	r.Close(1)
 	assert.Len(t, r.SpanMessages, 1)
-	sp, ok := r.SpanMessages[0].(*HTTPSpanMessage)
+	sp, ok := r.SpanMessages[0].(*metrics.HTTPSpanMessage)
 	require.True(t, ok)
 	require.NotNil(t, sp)
 	assert.True(t, reflect.DeepEqual(spanMsg, sp))
@@ -438,7 +439,7 @@ func TestInvokeRPC(t *testing.T) {
 		connection:         nil,
 		address:            "test-addr",
 		certificate:        []byte(grpcCertDefault),
-		queueStats:         &eventQueueStats{},
+		queueStats:         &metrics.EventQueueStats{},
 		insecureSkipVerify: true,
 		backoff: func(retries int, wait func(d time.Duration)) error {
 			if retries > grpcMaxRetries {

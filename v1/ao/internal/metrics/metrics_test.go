@@ -1,6 +1,6 @@
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
-package reporter
+package metrics
 
 import (
 	"bytes"
@@ -71,6 +71,8 @@ func TestAppendIPAddresses(t *testing.T) {
 }
 
 func TestAppendMACAddresses(t *testing.T) {
+	host.Start()
+
 	bbuf := bson.NewBuffer()
 	appendMACAddresses(bbuf, host.CurrentID().MAC())
 	bbuf.Finish()
@@ -365,7 +367,7 @@ func TestAddHistogramToBSON(t *testing.T) {
 }
 
 func TestGenerateMetricsMessage(t *testing.T) {
-	bbuf := bson.WithBuf(generateMetricsMessage(15, &eventQueueStats{}))
+	bbuf := bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{}, RateCounts{}))
 	m := bsonToMap(bbuf)
 
 	_, ok := m["Hostname"]
@@ -431,13 +433,13 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	assert.Nil(t, m["TransactionNameOverflow"])
 
 	for i := 0; i <= metricsTransactionsMaxDefault; i++ {
-		if !mTransMap.IsWithinLimit("Transaction-" + strconv.Itoa(i)) {
+		if !GlobalTransMap.IsWithinLimit("Transaction-" + strconv.Itoa(i)) {
 			break
 		}
 	}
-	m = bsonToMap(bson.WithBuf(generateMetricsMessage(15, &eventQueueStats{})))
+	m = bsonToMap(bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{}, RateCounts{})))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))
-	mTransMap.Reset()
+	GlobalTransMap.Reset()
 }

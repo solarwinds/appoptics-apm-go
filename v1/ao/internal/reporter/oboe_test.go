@@ -78,14 +78,14 @@ func TestTokenBucket(t *testing.T) {
 		time.Sleep(sleepInterval / time.Duration(consumers))
 	}
 	wg.Wait()
-	t.Logf("TB iters %d allowed %v dropped %v limited %v", iters, allowed, dropped, c.limited)
-	t.Logf("%+v", c.rateCounts)
-	assert.True(t, (allowed == 20 && dropped == 480 && c.limited == 230 && c.traced == 20) ||
-		(allowed == 19 && dropped == 481 && c.limited == 231 && c.traced == 19) ||
-		(allowed == 18 && dropped == 482 && c.limited == 232 && c.traced == 18))
-	assert.Equal(t, int64(500), c.requested)
-	assert.Equal(t, int64(250), c.sampled)
-	assert.Equal(t, int64(500), c.through)
+	t.Logf("TB iters %d allowed %v dropped %v limited %v", iters, allowed, dropped, c.Limited())
+	t.Logf("%+v", c.RateCounts)
+	assert.True(t, (allowed == 20 && dropped == 480 && c.Limited() == 230 && c.Traced() == 20) ||
+		(allowed == 19 && dropped == 481 && c.Limited() == 231 && c.Traced() == 19) ||
+		(allowed == 18 && dropped == 482 && c.Limited() == 232 && c.Traced() == 18))
+	assert.Equal(t, int64(500), c.Requested())
+	assert.Equal(t, int64(250), c.Sampled())
+	assert.Equal(t, int64(500), c.Through())
 }
 
 func TestTokenBucketTime(t *testing.T) {
@@ -130,11 +130,11 @@ func TestSamplingRate(t *testing.T) {
 	assert.InDelta(t, 2.5, float64(traced)*100/float64(total), 0.2)
 
 	c := globalSettingsCfg
-	assert.EqualValues(t, c.requested, total)
-	assert.EqualValues(t, c.through, 0)
-	assert.EqualValues(t, c.traced, traced)
-	assert.EqualValues(t, c.sampled, traced)
-	assert.EqualValues(t, c.limited, 0)
+	assert.EqualValues(t, c.Requested(), total)
+	assert.EqualValues(t, c.Through(), 0)
+	assert.EqualValues(t, c.Traced(), traced)
+	assert.EqualValues(t, c.Sampled(), traced)
+	assert.EqualValues(t, c.Limited(), 0)
 
 	r.Close(0)
 	// XXX assert bufs
@@ -223,10 +223,10 @@ func TestSampleFlags(t *testing.T) {
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
 	ok, _, _, _ := shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
-	assert.EqualValues(t, 0, c.through)
+	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.False(t, ok)
-	assert.EqualValues(t, 1, c.through)
+	assert.EqualValues(t, 1, c.Through())
 
 	resetSettings()
 	c = globalSettingsCfg
@@ -236,10 +236,10 @@ func TestSampleFlags(t *testing.T) {
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
 	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.True(t, ok)
-	assert.EqualValues(t, 0, c.through)
+	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.False(t, ok)
-	assert.EqualValues(t, 1, c.through)
+	assert.EqualValues(t, 1, c.Through())
 
 	// Transaction filtering
 	urls.loadConfig([]config.TransactionFilter{
@@ -257,10 +257,10 @@ func TestSampleFlags(t *testing.T) {
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
 	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
-	assert.EqualValues(t, 0, c.through)
+	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.True(t, ok)
-	assert.EqualValues(t, 1, c.through)
+	assert.EqualValues(t, 1, c.Through())
 
 	resetSettings()
 	c = globalSettingsCfg
@@ -270,10 +270,10 @@ func TestSampleFlags(t *testing.T) {
 		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
 	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
-	assert.EqualValues(t, 0, c.through)
+	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.True(t, ok)
-	assert.EqualValues(t, 1, c.through)
+	assert.EqualValues(t, 1, c.Through())
 
 	r.Close(0)
 }
@@ -284,9 +284,9 @@ func TestSampleTokenBucket(t *testing.T) {
 
 	traced := callShouldTraceRequest(1, false)
 	assert.EqualValues(t, 1, traced)
-	assert.EqualValues(t, 1, c.traced)
-	assert.EqualValues(t, 1, c.requested)
-	assert.EqualValues(t, 0, c.limited)
+	assert.EqualValues(t, 1, c.Traced())
+	assert.EqualValues(t, 1, c.Requested())
+	assert.EqualValues(t, 0, c.Limited())
 
 	resetSettings()
 	c = globalSettingsCfg
@@ -296,9 +296,9 @@ func TestSampleTokenBucket(t *testing.T) {
 		1000000, 120, argsToMap(0, 0, -1, -1))
 	traced = callShouldTraceRequest(1, false)
 	assert.EqualValues(t, 0, traced)
-	assert.EqualValues(t, 0, c.traced)
-	assert.EqualValues(t, 1, c.requested)
-	assert.EqualValues(t, 1, c.limited)
+	assert.EqualValues(t, 0, c.Traced())
+	assert.EqualValues(t, 1, c.Requested())
+	assert.EqualValues(t, 1, c.Limited())
 
 	resetSettings()
 	c = globalSettingsCfg
@@ -308,18 +308,18 @@ func TestSampleTokenBucket(t *testing.T) {
 		1000000, 120, argsToMap(16, 8, -1, -1))
 	traced = callShouldTraceRequest(50, false)
 	assert.EqualValues(t, 16, traced)
-	assert.EqualValues(t, 16, c.traced)
-	assert.EqualValues(t, 50, c.requested)
-	assert.EqualValues(t, 34, c.limited)
-	flushRateCounts()
+	assert.EqualValues(t, 16, c.Traced())
+	assert.EqualValues(t, 50, c.Requested())
+	assert.EqualValues(t, 34, c.Limited())
+	globalSettingsCfg.FlushRateCounts()
 
 	time.Sleep(1 * time.Second)
 
 	traced = callShouldTraceRequest(50, false)
 	assert.EqualValues(t, 8, traced)
-	assert.EqualValues(t, 8, c.traced)
-	assert.EqualValues(t, 50, c.requested)
-	assert.EqualValues(t, 42, c.limited)
+	assert.EqualValues(t, 8, c.Traced())
+	assert.EqualValues(t, 50, c.Requested())
+	assert.EqualValues(t, 42, c.Limited())
 
 	r.Close(0)
 }

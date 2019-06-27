@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/credentials"
@@ -92,7 +93,7 @@ type grpcConnection struct {
 	pingTicker     *time.Timer                    // timer for keep alive pings in seconds
 	pingTickerLock sync.Mutex                     // lock to ensure sequential access of pingTicker
 	lock           sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
-	queueStats     *eventQueueStats               // queue stats (reset on each metrics report cycle)
+	queueStats     *metrics.EventQueueStats       // queue stats (reset on each metrics report cycle)
 	// for testing only: if true, skip verifying TLS cert hostname
 	insecureSkipVerify bool
 	// atomicActive indicates if the underlying connection is active. It should
@@ -147,7 +148,7 @@ func newGrpcConnection(name string, target string, opts ...GrpcConnOpt) (*grpcCo
 		connection:         nil,
 		address:            target,
 		certificate:        []byte(grpcCertDefault),
-		queueStats:         &eventQueueStats{},
+		queueStats:         &metrics.EventQueueStats{},
 		insecureSkipVerify: false,
 		backoff:            DefaultBackoff,
 		Dialer:             &DefaultDialer{},
@@ -186,9 +187,9 @@ type grpcReporter struct {
 
 	serviceKey string // service key
 
-	eventMessages  chan []byte      // channel for event messages (sent from agent)
-	spanMessages   chan SpanMessage // channel for span messages (sent from agent)
-	statusMessages chan []byte      // channel for status messages (sent from agent)
+	eventMessages  chan []byte              // channel for event messages (sent from agent)
+	spanMessages   chan metrics.SpanMessage // channel for span messages (sent from agent)
+	statusMessages chan []byte              // channel for status messages (sent from agent)
 
 	// The reporter is considered ready if there is a valid default setting for sampling.
 	// It should be accessed atomically.
@@ -282,7 +283,7 @@ func newGRPCReporter() reporter {
 		serviceKey: serviceKey,
 
 		eventMessages:  make(chan []byte, 10000),
-		spanMessages:   make(chan SpanMessage, 10000),
+		spanMessages:   make(chan metrics.SpanMessage, 10000),
 		statusMessages: make(chan []byte, 100),
 
 		cond: sync.NewCond(&sync.Mutex{}),
@@ -635,10 +636,10 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 
 	select {
 	case r.eventMessages <- (*e).bbuf.GetBuf():
-		atomic.AddInt64(&r.eventConnection.queueStats.totalEvents, int64(1))
+		r.eventConnection.queueStats.TotalEventsAdd(int64(1))
 		return nil
 	default:
-		atomic.AddInt64(&r.eventConnection.queueStats.numOverflowed, int64(1))
+		r.eventConnection.queueStats.NumOverflowedAdd(int64(1))
 		return errors.New("event message queue is full")
 	}
 }
@@ -772,7 +773,8 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 
 	i := int(atomic.LoadInt32(&r.collectMetricInterval))
 	// generate a new metrics message
-	message := generateMetricsMessage(i, r.eventConnection.queueStats)
+	message := metrics.GenerateMetricsMessage(i, r.eventConnection.queueStats.CopyAndReset(),
+		globalSettingsCfg.FlushRateCounts())
 	r.sendMetrics(message)
 }
 
@@ -836,8 +838,8 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 		o.SetEventFlushInterval(int64(ei))
 
 		// update MaxTransactions
-		mt := parseInt32(s.Arguments, kvMaxTransactions, mTransMap.Cap())
-		mTransMap.SetCap(mt)
+		mt := parseInt32(s.Arguments, kvMaxTransactions, metrics.GlobalTransMap.Cap())
+		metrics.GlobalTransMap.SetCap(mt)
 	}
 
 	if !r.isReady() && hasDefaultSetting() {
@@ -933,7 +935,7 @@ func (r *grpcReporter) statusSender() {
 // span		span message to be put on the channel
 //
 // returns	error if channel is full
-func (r *grpcReporter) reportSpan(span SpanMessage) error {
+func (r *grpcReporter) reportSpan(span metrics.SpanMessage) error {
 	if r.Closed() {
 		return ErrReporterIsClosed
 	}
@@ -952,7 +954,7 @@ func (r *grpcReporter) spanMessageAggregator() {
 	for {
 		select {
 		case span := <-r.spanMessages:
-			span.process()
+			span.Process()
 		case <-r.done:
 			return
 		}
@@ -1021,7 +1023,7 @@ var (
 // When an error is returned, it usually means a fatal error and the reporter
 // may be shutdown.
 func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
-	c.queueStats.setQueueLargest(m.MessageLen())
+	c.queueStats.SetQueueLargest(m.MessageLen())
 
 	// counter for redirects so we know when the limit has been reached
 	redirects := 0
@@ -1084,15 +1086,15 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			// server responded, check the result code and perform actions accordingly
 			switch result, _ := m.ResultCode(); result {
 			case collector.ResultCode_OK:
-				atomic.AddInt64(&c.queueStats.numSent, m.MessageLen())
+				c.queueStats.NumSentAdd(m.MessageLen())
 				return nil
 
 			case collector.ResultCode_TRY_LATER:
 				log.Info(m.CallSummary())
-				atomic.AddInt64(&c.queueStats.numFailed, m.MessageLen())
+				c.queueStats.NumFailedAdd(m.MessageLen())
 			case collector.ResultCode_LIMIT_EXCEEDED:
 				log.Info(m.CallSummary())
-				atomic.AddInt64(&c.queueStats.numFailed, m.MessageLen())
+				c.queueStats.NumFailedAdd(m.MessageLen())
 			case collector.ResultCode_INVALID_API_KEY:
 				log.Error(m.CallSummary())
 				return errInvalidServiceKey

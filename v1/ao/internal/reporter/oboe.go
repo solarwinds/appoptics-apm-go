@@ -9,11 +9,11 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/pkg/errors"
 )
@@ -22,7 +22,7 @@ import (
 type oboeSettingsCfg struct {
 	settings map[oboeSettingKey]*oboeSettings
 	lock     sync.RWMutex
-	rateCounts
+	metrics.RateCounts
 }
 type oboeSettings struct {
 	timestamp time.Time
@@ -133,33 +133,22 @@ func sendInitMessage() {
 
 func (b *tokenBucket) count(sampled, hasMetadata, rateLimit bool) bool {
 	c := globalSettingsCfg
-	atomic.AddInt64(&c.requested, 1)
+	c.RequestedInc()
 	if hasMetadata {
-		atomic.AddInt64(&c.through, 1)
+		c.ThroughInc()
 	}
 	if !sampled {
 		return sampled
 	}
-	atomic.AddInt64(&c.sampled, 1)
+	c.SampledInc()
 	if rateLimit {
 		if ok := b.consume(1); !ok {
-			atomic.AddInt64(&c.limited, 1)
+			c.LimitedInc()
 			return false
 		}
 	}
-	atomic.AddInt64(&c.traced, 1)
+	c.TracedInc()
 	return sampled
-}
-
-func flushRateCounts() *rateCounts {
-	c := globalSettingsCfg
-	return &rateCounts{
-		requested: atomic.SwapInt64(&c.requested, 0),
-		sampled:   atomic.SwapInt64(&c.sampled, 0),
-		limited:   atomic.SwapInt64(&c.limited, 0),
-		traced:    atomic.SwapInt64(&c.traced, 0),
-		through:   atomic.SwapInt64(&c.through, 0),
-	}
 }
 
 func (b *tokenBucket) consume(size float64) bool {
@@ -357,7 +346,7 @@ func resetSettings() {
 	globalSettingsCfg.lock.Lock()
 	defer globalSettingsCfg.lock.Unlock()
 
-	flushRateCounts()
+	globalSettingsCfg.FlushRateCounts()
 	globalSettingsCfg.settings = make(map[oboeSettingKey]*oboeSettings)
 	globalTokenBucket.reset()
 }

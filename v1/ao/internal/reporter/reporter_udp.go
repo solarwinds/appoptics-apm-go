@@ -9,6 +9,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	"github.com/pkg/errors"
 )
 
@@ -81,8 +82,8 @@ func (r *udpReporter) reportStatus(ctx *oboeContext, e *event) error {
 	return r.report(ctx, e)
 }
 
-func (r *udpReporter) reportSpan(span SpanMessage) error {
-	s := span.(*HTTPSpanMessage)
+func (r *udpReporter) reportSpan(span metrics.SpanMessage) error {
+	s := span.(*metrics.HTTPSpanMessage)
 	bbuf := bson.NewBuffer()
 	bbuf.AppendString("transaction", s.Transaction)
 	bbuf.AppendString("url", s.Path)
