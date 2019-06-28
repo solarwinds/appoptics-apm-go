@@ -185,6 +185,7 @@ func TestGetTransactionFromURL(t *testing.T) {
 
 func TestTransMap(t *testing.T) {
 	m := NewTransMap(3)
+	assert.EqualValues(t, 3, m.Cap())
 	assert.True(t, m.IsWithinLimit("t1"))
 	assert.True(t, m.IsWithinLimit("t2"))
 	assert.True(t, m.IsWithinLimit("t3"))
@@ -192,7 +193,9 @@ func TestTransMap(t *testing.T) {
 	assert.True(t, m.IsWithinLimit("t2"))
 	assert.True(t, m.Overflow())
 
+	m.SetCap(4)
 	m.Reset()
+	assert.EqualValues(t, 4, m.Cap())
 	assert.False(t, m.Overflow())
 }
 
@@ -442,4 +445,52 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))
 	GlobalTransMap.Reset()
+}
+
+func TestEventQueueStats(t *testing.T) {
+	es := EventQueueStats{}
+	es.NumSentAdd(1)
+	assert.EqualValues(t, 1, es.numSent)
+
+	es.NumOverflowedAdd(1)
+	assert.EqualValues(t, 1, es.numOverflowed)
+
+	es.NumFailedAdd(1)
+	assert.EqualValues(t, 1, es.numFailed)
+
+	es.TotalEventsAdd(1)
+	assert.EqualValues(t, 1, es.totalEvents)
+
+	es.SetQueueLargest(10)
+	assert.EqualValues(t, 10, es.queueLargest)
+
+	original := es
+	swapped := es.CopyAndReset()
+	assert.Equal(t, EventQueueStats{}, es)
+	assert.Equal(t, original, swapped)
+}
+
+func TestRateCounts(t *testing.T) {
+	rc := RateCounts{}
+
+	rc.RequestedInc()
+	assert.EqualValues(t, 1, rc.Requested())
+
+	rc.SampledInc()
+	assert.EqualValues(t, 1, rc.Sampled())
+
+	rc.LimitedInc()
+	assert.EqualValues(t, 1, rc.Limited())
+
+	rc.TracedInc()
+	assert.EqualValues(t, 1, rc.Traced())
+
+	rc.ThroughInc()
+	assert.EqualValues(t, 1, rc.Through())
+
+	original := rc
+	cp := rc.FlushRateCounts()
+
+	assert.Equal(t, original, cp)
+	assert.Equal(t, RateCounts{}, rc)
 }

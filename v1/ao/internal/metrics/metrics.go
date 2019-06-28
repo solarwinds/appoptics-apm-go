@@ -111,10 +111,6 @@ func (s *EventQueueStats) TotalEventsAdd(n int64) {
 	atomic.AddInt64(&s.totalEvents, n)
 }
 
-func (s *EventQueueStats) QueueLargestAdd(n int64) {
-	atomic.AddInt64(&s.queueLargest, n)
-}
-
 // RateCounts is the rate counts reported by trace sampler
 type RateCounts struct{ requested, sampled, limited, traced, through int64 }
 
