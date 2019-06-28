@@ -42,7 +42,7 @@ script:
   - pushd contrib/aogrpc
   - go test -v -race -covermode=atomic -coverprofile=cov.out
   - popd
-  - gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
+  - gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/metrics/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
 
 after_success:
   - if [[ $TRAVIS_GO_VERSION == 1.9* ]]; then bash <(curl -s https://codecov.io/bash); fi
