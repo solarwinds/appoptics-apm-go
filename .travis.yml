@@ -26,6 +26,9 @@ script:
   - pushd internal/reporter/
   - go test -v -race -covermode=atomic -coverprofile=cov.out
   - popd
+  - pushd internal/metrics/
+  - go test -v -race -covermode=atomic -coverprofile=cov.out
+  - popd
   - pushd internal/log/
   - go test -v -race -covermode=atomic -coverprofile=cov.out
   - popd
