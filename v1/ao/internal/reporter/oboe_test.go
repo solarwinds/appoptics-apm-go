@@ -91,15 +91,20 @@ func TestTokenBucket(t *testing.T) {
 func TestTokenBucketTime(t *testing.T) {
 	b := newTokenBucket(5, 2)
 	b.consume(1)
-	assert.EqualValues(t, 1, b.available) // 1 available
-	b.last = b.last.Add(time.Second)      // simulate time going backwards
+	assert.EqualValues(t, 1, b.avail()) // 1 available
+	b.last = b.last.Add(time.Second)    // simulate time going backwards
 	b.update(time.Now())
-	assert.EqualValues(t, 1, b.available) // no new tokens added
-	assert.True(t, b.consume(1))          // consume available token
-	assert.False(t, b.consume(1))         // out of tokens
+	assert.EqualValues(t, 1, b.avail()) // no new tokens added
+	assert.True(t, b.consume(1))        // consume available token
+	assert.False(t, b.consume(1))       // out of tokens
 	assert.True(t, time.Now().After(b.last))
 	time.Sleep(200 * time.Millisecond)
 	assert.True(t, b.consume(1)) // another token available
+
+	b = newTokenBucket(5, 5)
+	assert.EqualValues(t, 5, b.avail())
+	b.setRateCap(5, 3)
+	assert.EqualValues(t, 3, b.available)
 }
 
 func testLayerCount(count int64) interface{} {
@@ -509,4 +514,38 @@ func TestAdjustSampleRate(t *testing.T) {
 	assert.Equal(t, maxSamplingRate, adjustSampleRate(maxSamplingRate+1))
 	assert.Equal(t, 0, adjustSampleRate(-1))
 	assert.Equal(t, maxSamplingRate-1, adjustSampleRate(maxSamplingRate-1))
+}
+
+func TestBytesToFloat64(t *testing.T) {
+	ret, err := bytesToFloat64([]byte{1, 1, 1, 1})
+	assert.EqualValues(t, -1, ret)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "invalid length")
+}
+
+func TestBytesToInt32(t *testing.T) {
+	ret, err := bytesToInt32([]byte{1, 1, 1})
+	assert.EqualValues(t, -1, ret)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "invalid length")
+}
+
+func TestParseInt32(t *testing.T) {
+	args := map[string][]byte{
+		"key": {0, 1, 0, 0},
+	}
+	assert.EqualValues(t, -100, parseInt32(args, "invalidKey", -100))
+	assert.EqualValues(t, 256, parseInt32(args, "key", -100))
+
+	args = map[string][]byte{
+		"key": {255, 255, 255, 255},
+	}
+	assert.EqualValues(t, -100, parseInt32(args, "key", -100))
+}
+
+func TestParseFloat64(t *testing.T) {
+	args := map[string][]byte{
+		"key": {0, 1, 0, 0},
+	}
+	assert.EqualValues(t, 1.01, parseFloat64(args, "key", 1.01))
 }
