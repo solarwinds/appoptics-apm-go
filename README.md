@@ -46,11 +46,14 @@ To get tracing, you'll need a [(free) AppOptics account](http://www.appoptics.co
 The in-app install flow will wait for some data to come in from your service before continuing. You can either instrument your application (read on), or 
 check out the [demo](#demo) app below to get a quick start!
 
+### Minimum Supported Go Version
+
+* [Go >= 1.10](https://golang.org/dl/)
+
 ### Installing
 
 Install the following to get started:
 
-* [Go >= 1.9](https://golang.org/dl/)
 * This package: go get github.com/appoptics/appoptics-apm-go/v1/ao
 
 Note that the service key needs to be configured for a successful setup. See [Configuration](#configuration) 

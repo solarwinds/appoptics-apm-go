@@ -1,4 +1,4 @@
-FROM golang:1.9
+FROM golang:1.12
 
 # Based on https://hub.docker.com/_/golang/
 WORKDIR /go/src/app
