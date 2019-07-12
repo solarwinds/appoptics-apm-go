@@ -576,6 +576,5 @@ func TestCollectMetricsNextInterval(t *testing.T) {
 	r := &grpcReporter{collectMetricInterval: 10}
 	next := r.collectMetricsNextInterval()
 	// very weak check
-	assert.True(t, next <= 10)
-	assert.True(t, next >= 0)
+	assert.True(t, next <= time.Second*10, next)
 }
