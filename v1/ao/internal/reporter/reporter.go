@@ -14,6 +14,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 )
 
 // defines what methods a reporter should offer (internal to reporter package)
@@ -23,7 +24,7 @@ type reporter interface {
 	// called when a status (e.g. __Init message) should be reported
 	reportStatus(ctx *oboeContext, e *event) error
 	// called when a Span message should be reported
-	reportSpan(span SpanMessage) error
+	reportSpan(span metrics.SpanMessage) error
 	// Shutdown closes the reporter.
 	Shutdown(ctx context.Context) error
 	// ShutdownNow closes the reporter immediately
@@ -56,7 +57,7 @@ type nullReporter struct{}
 func newNullReporter() *nullReporter                                  { return &nullReporter{} }
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
-func (r *nullReporter) reportSpan(span SpanMessage) error             { return nil }
+func (r *nullReporter) reportSpan(span metrics.SpanMessage) error     { return nil }
 func (r *nullReporter) Shutdown(ctx context.Context) error            { return nil }
 func (r *nullReporter) ShutdownNow() error                            { return nil }
 func (r *nullReporter) Closed() bool                                  { return true }
@@ -120,7 +121,7 @@ func Closed() bool {
 // span	span message to be put on the channel
 //
 // returns	error if channel is full
-func ReportSpan(span SpanMessage) error {
+func ReportSpan(span metrics.SpanMessage) error {
 	return globalReporter.reportSpan(span)
 }
 
@@ -153,7 +154,7 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	// Update the context's op_id to that of the event
 	ctx.metadata.ids.setOpID(e.metadata.ids.opID)
 
-	bsonBufferFinish(&e.bbuf)
+	e.bbuf.Finish()
 	return nil
 }
 

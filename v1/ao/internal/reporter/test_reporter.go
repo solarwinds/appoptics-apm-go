@@ -9,12 +9,14 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 )
 
 // TestReporter appends reported events to Bufs if ShouldTrace is true.
 type TestReporter struct {
 	EventBufs             [][]byte
-	SpanMessages          []SpanMessage
+	SpanMessages          []metrics.SpanMessage
 	ShouldTrace           bool
 	ShouldError           bool
 	UseSettings           bool
@@ -25,7 +27,7 @@ type TestReporter struct {
 	done                  chan int
 	wg                    sync.WaitGroup
 	eventChan             chan []byte
-	spanMsgChan           chan SpanMessage
+	spanMsgChan           chan metrics.SpanMessage
 	Timeout               time.Duration
 }
 
@@ -77,7 +79,7 @@ func SetTestReporter(options ...TestReporterOption) *TestReporter {
 		Timeout:     defaultTestReporterTimeout,
 		done:        make(chan int),
 		eventChan:   make(chan []byte),
-		spanMsgChan: make(chan SpanMessage),
+		spanMsgChan: make(chan metrics.SpanMessage),
 	}
 	for _, option := range options {
 		option(r)
@@ -192,7 +194,7 @@ func (r *TestReporter) reportStatus(ctx *oboeContext, e *event) error {
 	return r.report(ctx, e)
 }
 
-func (r *TestReporter) reportSpan(span SpanMessage) error {
+func (r *TestReporter) reportSpan(span metrics.SpanMessage) error {
 	r.spanMsgChan <- span
 	return nil
 }

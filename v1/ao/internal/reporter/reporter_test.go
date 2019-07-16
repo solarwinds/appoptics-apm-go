@@ -19,6 +19,7 @@ import (
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/mocks"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
@@ -28,7 +29,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"gopkg.in/mgo.v2/bson"
+	mbson "gopkg.in/mgo.v2/bson"
 )
 
 const (
@@ -81,8 +82,8 @@ func TestReportEvent(t *testing.T) {
 
 func TestReportMetric(t *testing.T) {
 	r := SetTestReporter()
-	spanMsg := &HTTPSpanMessage{
-		BaseSpanMessage: BaseSpanMessage{
+	spanMsg := &metrics.HTTPSpanMessage{
+		BaseSpanMessage: metrics.BaseSpanMessage{
 			Duration: time.Second,
 			HasError: false,
 		},
@@ -95,7 +96,7 @@ func TestReportMetric(t *testing.T) {
 	assert.NoError(t, err)
 	r.Close(1)
 	assert.Len(t, r.SpanMessages, 1)
-	sp, ok := r.SpanMessages[0].(*HTTPSpanMessage)
+	sp, ok := r.SpanMessages[0].(*metrics.HTTPSpanMessage)
 	require.True(t, ok)
 	require.NotNil(t, sp)
 	assert.True(t, reflect.DeepEqual(spanMsg, sp))
@@ -283,10 +284,10 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, server.status[0].Encoding, pb.EncodingType_BSON)
 	require.Len(t, server.status[0].Messages, 1)
 
-	dec1, dec2 := bson.M{}, bson.M{}
-	err = bson.Unmarshal(server.events[0].Messages[0], &dec1)
+	dec1, dec2 := mbson.M{}, mbson.M{}
+	err = mbson.Unmarshal(server.events[0].Messages[0], &dec1)
 	require.NoError(t, err)
-	err = bson.Unmarshal(server.status[0].Messages[0], &dec2)
+	err = mbson.Unmarshal(server.status[0].Messages[0], &dec2)
 	require.NoError(t, err)
 
 	assert.Equal(t, dec1["Layer"], "layer1")
@@ -438,7 +439,7 @@ func TestInvokeRPC(t *testing.T) {
 		connection:         nil,
 		address:            "test-addr",
 		certificate:        []byte(grpcCertDefault),
-		queueStats:         &eventQueueStats{},
+		queueStats:         &metrics.EventQueueStats{},
 		insecureSkipVerify: true,
 		backoff: func(retries int, wait func(d time.Duration)) error {
 			if retries > grpcMaxRetries {

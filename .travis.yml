@@ -20,9 +20,12 @@ install:
 script:
   - cd $GOPATH/src/github.com/appoptics/appoptics-apm-go/v1
   - pushd ao
-  - go build -v github.com/appoptics/appoptics-apm-go/v1/ao github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter github.com/appoptics/appoptics-apm-go/v1/ao/internal/log github.com/appoptics/appoptics-apm-go/v1/ao/internal/config github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
-  - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config,github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
+  - go build -v github.com/appoptics/appoptics-apm-go/v1/ao github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter github.com/appoptics/appoptics-apm-go/v1/ao/internal/log github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics github.com/appoptics/appoptics-apm-go/v1/ao/internal/config github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
+  - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson,github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config,github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
   - pushd internal/reporter/
+  - go test -v -race -covermode=atomic -coverprofile=cov.out
+  - popd
+  - pushd internal/metrics/
   - go test -v -race -covermode=atomic -coverprofile=cov.out
   - popd
   - pushd internal/log/
@@ -35,13 +38,13 @@ script:
   - go test -v -race -covermode=atomic -coverprofile=cov.out
   - popd
   - pushd opentracing
-  - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config,github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
+  - go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson,github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config,github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
   - popd
   - popd
   - pushd contrib/aogrpc
   - go test -v -race -covermode=atomic -coverprofile=cov.out
   - popd
-  - gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
+  - gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/metrics/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
 
 after_success:
   - if [[ $TRAVIS_GO_VERSION == 1.9* ]]; then bash <(curl -s https://codecov.io/bash); fi

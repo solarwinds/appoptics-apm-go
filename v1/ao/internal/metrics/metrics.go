@@ -1,6 +1,6 @@
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
-package reporter
+package metrics
 
 import (
 	"os"
@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/hdrhist"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
@@ -37,8 +38,7 @@ const (
 
 // SpanMessage defines a span message
 type SpanMessage interface {
-	// called for message processing
-	process()
+	Process()
 }
 
 // BaseSpanMessage is the base span message with properties found in all types of span messages
@@ -85,9 +85,9 @@ type histograms struct {
 	lock       sync.Mutex // protect access to this collection
 }
 
-// counters of the event queue stats
+// EventQueueStats is the counters of the event queue stats
 // All the fields are supposed to be accessed through atomic operations
-type eventQueueStats struct {
+type EventQueueStats struct {
 	numSent       int64 // number of messages that were successfully sent
 	numOverflowed int64 // number of messages that overflowed the queue
 	numFailed     int64 // number of messages that failed to send
@@ -95,8 +95,74 @@ type eventQueueStats struct {
 	queueLargest  int64 // maximum number of messages that were in the queue at one time
 }
 
-// rate counts reported by trace sampler
-type rateCounts struct{ requested, sampled, limited, traced, through int64 }
+func (s *EventQueueStats) NumSentAdd(n int64) {
+	atomic.AddInt64(&s.numSent, n)
+}
+
+func (s *EventQueueStats) NumOverflowedAdd(n int64) {
+	atomic.AddInt64(&s.numOverflowed, n)
+}
+
+func (s *EventQueueStats) NumFailedAdd(n int64) {
+	atomic.AddInt64(&s.numFailed, n)
+}
+
+func (s *EventQueueStats) TotalEventsAdd(n int64) {
+	atomic.AddInt64(&s.totalEvents, n)
+}
+
+// RateCounts is the rate counts reported by trace sampler
+type RateCounts struct{ requested, sampled, limited, traced, through int64 }
+
+func (c *RateCounts) FlushRateCounts() RateCounts {
+	return RateCounts{
+		requested: atomic.SwapInt64(&c.requested, 0),
+		sampled:   atomic.SwapInt64(&c.sampled, 0),
+		limited:   atomic.SwapInt64(&c.limited, 0),
+		traced:    atomic.SwapInt64(&c.traced, 0),
+		through:   atomic.SwapInt64(&c.through, 0),
+	}
+}
+
+func (c *RateCounts) RequestedInc() {
+	atomic.AddInt64(&c.requested, 1)
+}
+
+func (c *RateCounts) Requested() int64 {
+	return atomic.LoadInt64(&c.requested)
+}
+
+func (c *RateCounts) SampledInc() {
+	atomic.AddInt64(&c.sampled, 1)
+}
+
+func (c *RateCounts) Sampled() int64 {
+	return atomic.LoadInt64(&c.sampled)
+}
+
+func (c *RateCounts) LimitedInc() {
+	atomic.AddInt64(&c.limited, 1)
+}
+
+func (c *RateCounts) Limited() int64 {
+	return atomic.LoadInt64(&c.limited)
+}
+
+func (c *RateCounts) TracedInc() {
+	atomic.AddInt64(&c.traced, 1)
+}
+
+func (c *RateCounts) Traced() int64 {
+	return atomic.LoadInt64(&c.traced)
+}
+
+func (c *RateCounts) ThroughInc() {
+	atomic.AddInt64(&c.through, 1)
+}
+
+func (c *RateCounts) Through() int64 {
+	return atomic.LoadInt64(&c.through)
+}
 
 // TransMap records the received transaction names in a metrics report cycle. It will refuse
 // new transaction names if reaching the capacity.
@@ -147,7 +213,7 @@ func (t *TransMap) Cap() int32 {
 	return t.currCap
 }
 
-// ResetTransMap resets the transaction map to a initialized state. The new capacity got from the
+// Reset resets the transaction map to a initialized state. The new capacity got from the
 // server will be used in next metrics reporting cycle after reset.
 func (t *TransMap) Reset() {
 	t.mutex.Lock()
@@ -185,9 +251,9 @@ func (t *TransMap) Overflow() bool {
 	return t.overflow
 }
 
-// mTransMap is the list of currently stored unique HTTP transaction names
+// GlobalTransMap is the list of currently stored unique HTTP transaction names
 // (flushed on each metrics report cycle)
-var mTransMap = NewTransMap(metricsTransactionsMaxDefault)
+var GlobalTransMap = NewTransMap(metricsTransactionsMaxDefault)
 
 // collection of currently stored measurements (flushed on each metrics report cycle)
 var metricsHTTPMeasurements = &measurements{
@@ -219,37 +285,35 @@ func init() {
 	}
 }
 
-// generates a metrics message in BSON format with all the currently available values
+// GenerateMetricsMessage generates a metrics message in BSON format with all the currently available values
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
-func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStats) []byte {
-	bbuf := NewBsonBuffer()
+func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rc RateCounts) []byte {
+	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)
-	bsonAppendInt64(bbuf, "Timestamp_u", int64(time.Now().UnixNano()/1000))
-	bsonAppendInt(bbuf, "MetricsFlushInterval", metricsFlushInterval)
+	bbuf.AppendInt64("Timestamp_u", int64(time.Now().UnixNano()/1000))
+	bbuf.AppendInt("MetricsFlushInterval", metricsFlushInterval)
 
 	// measurements
 	// ==========================================
-	start := bsonAppendStartArray(bbuf, "measurements")
+	start := bbuf.AppendStartArray("measurements")
 	index := 0
 
 	// request counters
-	rc := flushRateCounts()
-	addMetricsValue(bbuf, &index, "RequestCount", rc.requested)
-	addMetricsValue(bbuf, &index, "TraceCount", rc.traced)
-	addMetricsValue(bbuf, &index, "TokenBucketExhaustionCount", rc.limited)
-	addMetricsValue(bbuf, &index, "SampleCount", rc.sampled)
-	addMetricsValue(bbuf, &index, "ThroughTraceCount", rc.through)
+	addMetricsValue(bbuf, &index, "RequestCount", rc.Requested())
+	addMetricsValue(bbuf, &index, "TraceCount", rc.Traced())
+	addMetricsValue(bbuf, &index, "TokenBucketExhaustionCount", rc.Limited())
+	addMetricsValue(bbuf, &index, "SampleCount", rc.Sampled())
+	addMetricsValue(bbuf, &index, "ThroughTraceCount", rc.Through())
 
 	// Queue states
-	q := queueStats.copyAndReset()
-	addMetricsValue(bbuf, &index, "NumSent", q.numSent)
-	addMetricsValue(bbuf, &index, "NumOverflowed", q.numOverflowed)
-	addMetricsValue(bbuf, &index, "NumFailed", q.numFailed)
-	addMetricsValue(bbuf, &index, "TotalEvents", q.totalEvents)
-	addMetricsValue(bbuf, &index, "QueueLargest", q.queueLargest)
+	addMetricsValue(bbuf, &index, "NumSent", qs.numSent)
+	addMetricsValue(bbuf, &index, "NumOverflowed", qs.numOverflowed)
+	addMetricsValue(bbuf, &index, "NumFailed", qs.numFailed)
+	addMetricsValue(bbuf, &index, "TotalEvents", qs.totalEvents)
+	addMetricsValue(bbuf, &index, "QueueLargest", qs.queueLargest)
 
 	addHostMetrics(bbuf, &index)
 
@@ -280,12 +344,12 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	metricsHTTPMeasurements.measurements = make(map[string]*Measurement) // clear measurements
 	metricsHTTPMeasurements.lock.Unlock()
 
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 	// ==========================================
 
 	// histograms
 	// ==========================================
-	start = bsonAppendStartArray(bbuf, "histograms")
+	start = bbuf.AppendStartArray("histograms")
 	index = 0
 
 	metricsHTTPHistograms.lock.Lock()
@@ -296,58 +360,58 @@ func generateMetricsMessage(metricsFlushInterval int, queueStats *eventQueueStat
 	metricsHTTPHistograms.histograms = make(map[string]*histogram) // clear histograms
 
 	metricsHTTPHistograms.lock.Unlock()
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 	// ==========================================
 
-	if mTransMap.Overflow() {
-		bsonAppendBool(bbuf, "TransactionNameOverflow", true)
+	if GlobalTransMap.Overflow() {
+		bbuf.AppendBool("TransactionNameOverflow", true)
 	}
 	// The transaction map is reset in every metrics cycle.
-	mTransMap.Reset()
+	GlobalTransMap.Reset()
 
-	bsonBufferFinish(bbuf)
-	return bbuf.buf
+	bbuf.Finish()
+	return bbuf.GetBuf()
 }
 
 // append host ID to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
-func appendHostId(bbuf *bsonBuffer) {
+func appendHostId(bbuf *bson.Buffer) {
 	if host.ConfiguredHostname() != "" {
-		bsonAppendString(bbuf, "ConfiguredHostname", host.ConfiguredHostname())
+		bbuf.AppendString("ConfiguredHostname", host.ConfiguredHostname())
 	}
 	appendUname(bbuf)
-	bsonAppendString(bbuf, "Distro", host.Distro())
+	bbuf.AppendString("Distro", host.Distro())
 	appendIPAddresses(bbuf)
 }
 
 // gets and appends IP addresses to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
-func appendIPAddresses(bbuf *bsonBuffer) {
+func appendIPAddresses(bbuf *bson.Buffer) {
 	addrs := host.IPAddresses()
 	if addrs == nil {
 		return
 	}
 
-	start := bsonAppendStartArray(bbuf, "IPAddresses")
+	start := bbuf.AppendStartArray("IPAddresses")
 	for i, address := range addrs {
-		bsonAppendString(bbuf, strconv.Itoa(i), address)
+		bbuf.AppendString(strconv.Itoa(i), address)
 	}
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 }
 
 // gets and appends MAC addresses to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
-func appendMACAddresses(bbuf *bsonBuffer, macs []string) {
-	start := bsonAppendStartArray(bbuf, "MACAddresses")
+func appendMACAddresses(bbuf *bson.Buffer, macs []string) {
+	start := bbuf.AppendStartArray("MACAddresses")
 	for _, mac := range macs {
 		if mac == "" {
 			continue
 		}
 		i := 0
-		bsonAppendString(bbuf, strconv.Itoa(i), mac)
+		bbuf.AppendString(strconv.Itoa(i), mac)
 		i++
 	}
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 }
 
 // appends a metric to a BSON buffer, the form will be:
@@ -359,31 +423,31 @@ func appendMACAddresses(bbuf *bsonBuffer, macs []string) {
 // index	a running integer (0,1,2,...) which is needed for BSON arrays
 // name		key name
 // value	value (type: int, int64, float32, float64)
-func addMetricsValue(bbuf *bsonBuffer, index *int, name string, value interface{}) {
-	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
+func addMetricsValue(bbuf *bson.Buffer, index *int, name string, value interface{}) {
+	start := bbuf.AppendStartObject(strconv.Itoa(*index))
 	defer func() {
 		if err := recover(); err != nil {
 			log.Errorf("%v", err)
 		}
 	}()
 
-	bsonAppendString(bbuf, "name", name)
+	bbuf.AppendString("name", name)
 	switch value.(type) {
 	case int:
-		bsonAppendInt(bbuf, "value", value.(int))
+		bbuf.AppendInt("value", value.(int))
 	case int64:
-		bsonAppendInt64(bbuf, "value", value.(int64))
+		bbuf.AppendInt64("value", value.(int64))
 	case float32:
 		v32 := value.(float32)
 		v64 := float64(v32)
-		bsonAppendFloat64(bbuf, "value", v64)
+		bbuf.AppendFloat64("value", v64)
 	case float64:
-		bsonAppendFloat64(bbuf, "value", value.(float64))
+		bbuf.AppendFloat64("value", value.(float64))
 	default:
-		bsonAppendString(bbuf, "value", "unknown")
+		bbuf.AppendString("value", "unknown")
 	}
 
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 	*index += 1
 }
 
@@ -402,15 +466,15 @@ func GetTransactionFromPath(path string) string {
 	return strings.Join(p[0:lp], "/")
 }
 
-// processes an HttpSpanMessage
-func (s *HTTPSpanMessage) process() {
+// Process processes an HttpSpanMessage
+func (s *HTTPSpanMessage) Process() {
 	// always add to overall histogram
 	recordHistogram(metricsHTTPHistograms, "", s.Duration)
 
 	if s.Transaction != UnknownTransactionName {
 		// only record the transaction-specific histogram and measurements if we are still within the limit
 		// otherwise report it as an 'other' measurement
-		if mTransMap.IsWithinLimit(s.Transaction) {
+		if GlobalTransMap.IsWithinLimit(s.Transaction) {
 			recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
 			s.processMeasurements(s.Transaction)
 		} else {
@@ -543,17 +607,17 @@ func recordHistogram(hi *histograms, name string, duration time.Duration) {
 // bbuf		the BSON buffer to append the metric to
 // index	a running integer (0,1,2,...) which is needed for BSON arrays
 // m		measurement to be added
-func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
-	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
+func addMeasurementToBSON(bbuf *bson.Buffer, index *int, m *Measurement) {
+	start := bbuf.AppendStartObject(strconv.Itoa(*index))
 
-	bsonAppendString(bbuf, "name", m.Name)
-	bsonAppendInt(bbuf, "count", m.Count)
+	bbuf.AppendString("name", m.Name)
+	bbuf.AppendInt("count", m.Count)
 	if m.ReportSum {
-		bsonAppendFloat64(bbuf, "sum", m.Sum)
+		bbuf.AppendFloat64("sum", m.Sum)
 	}
 
 	if len(m.Tags) > 0 {
-		start := bsonAppendStartObject(bbuf, "tags")
+		start := bbuf.AppendStartObject("tags")
 		for k, v := range m.Tags {
 			if len(k) > metricsTagNameLengthMax {
 				k = k[0:metricsTagNameLengthMax]
@@ -561,12 +625,12 @@ func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
 			if len(v) > metricsTagValueLengthMax {
 				v = v[0:metricsTagValueLengthMax]
 			}
-			bsonAppendString(bbuf, k, v)
+			bbuf.AppendString(k, v)
 		}
-		bsonAppendFinishObject(bbuf, start)
+		bbuf.AppendFinishObject(start)
 	}
 
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 	*index += 1
 }
 
@@ -574,7 +638,7 @@ func addMeasurementToBSON(bbuf *bsonBuffer, index *int, m *Measurement) {
 // bbuf		the BSON buffer to append the metric to
 // index	a running integer (0,1,2,...) which is needed for BSON arrays
 // h		histogram to be added
-func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
+func addHistogramToBSON(bbuf *bson.Buffer, index *int, h *histogram) {
 	// get 64-base encoded representation of the histogram
 	data, err := hdrhist.EncodeCompressed(h.hist)
 	if err != nil {
@@ -582,14 +646,14 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 		return
 	}
 
-	start := bsonAppendStartObject(bbuf, strconv.Itoa(*index))
+	start := bbuf.AppendStartObject(strconv.Itoa(*index))
 
-	bsonAppendString(bbuf, "name", "TransactionResponseTime")
-	bsonAppendString(bbuf, "value", string(data))
+	bbuf.AppendString("name", "TransactionResponseTime")
+	bbuf.AppendString("value", string(data))
 
 	// append tags
 	if len(h.tags) > 0 {
-		start := bsonAppendStartObject(bbuf, "tags")
+		start := bbuf.AppendStartObject("tags")
 		for k, v := range h.tags {
 			if len(k) > metricsTagNameLengthMax {
 				k = k[0:metricsTagNameLengthMax]
@@ -597,16 +661,16 @@ func addHistogramToBSON(bbuf *bsonBuffer, index *int, h *histogram) {
 			if len(v) > metricsTagValueLengthMax {
 				v = v[0:metricsTagValueLengthMax]
 			}
-			bsonAppendString(bbuf, k, v)
+			bbuf.AppendString(k, v)
 		}
-		bsonAppendFinishObject(bbuf, start)
+		bbuf.AppendFinishObject(start)
 	}
 
-	bsonAppendFinishObject(bbuf, start)
+	bbuf.AppendFinishObject(start)
 	*index += 1
 }
 
-func (s *eventQueueStats) setQueueLargest(count int64) {
+func (s *EventQueueStats) SetQueueLargest(count int64) {
 	newVal := count
 
 	for {
@@ -620,9 +684,9 @@ func (s *eventQueueStats) setQueueLargest(count int64) {
 	}
 }
 
-// copyAndReset returns a copy of its current values and reset itself.
-func (s *eventQueueStats) copyAndReset() eventQueueStats {
-	c := eventQueueStats{}
+// CopyAndReset returns a copy of its current values and reset itself.
+func (s *EventQueueStats) CopyAndReset() EventQueueStats {
+	c := EventQueueStats{}
 
 	c.numSent = atomic.SwapInt64(&s.numSent, 0)
 	c.numFailed = atomic.SwapInt64(&s.numFailed, 0)

@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
 
@@ -75,7 +76,7 @@ type Trace interface {
 type KVMap map[string]interface{}
 
 type traceHTTPSpan struct {
-	span       reporter.HTTPSpanMessage
+	span       metrics.HTTPSpanMessage
 	start      time.Time
 	controller string
 	action     string
@@ -296,11 +297,11 @@ func (t *aoTrace) finalizeTxnName(controller string, action string) {
 	} else if controller != "" && action != "" {
 		t.httpSpan.span.Transaction = controller + "." + action
 	} else if t.httpSpan.span.Path != "" {
-		t.httpSpan.span.Transaction = reporter.GetTransactionFromPath(t.httpSpan.span.Path)
+		t.httpSpan.span.Transaction = metrics.GetTransactionFromPath(t.httpSpan.span.Path)
 	}
 
 	if t.httpSpan.span.Transaction == "" {
-		t.httpSpan.span.Transaction = reporter.UnknownTransactionName
+		t.httpSpan.span.Transaction = metrics.UnknownTransactionName
 	}
 	t.prependDomainToTxnName()
 }
@@ -308,7 +309,7 @@ func (t *aoTrace) finalizeTxnName(controller string, action string) {
 // prependDomainToTxnName prepends the domain to the transaction name if APPOPTICS_PREPEND_DOMAIN = true
 func (t *aoTrace) prependDomainToTxnName() {
 	if !config.GetPrependDomain() ||
-		t.httpSpan.span.Transaction == reporter.UnknownTransactionName ||
+		t.httpSpan.span.Transaction == metrics.UnknownTransactionName ||
 		t.httpSpan.span.Host == "" {
 		return
 	}

@@ -2,7 +2,7 @@
 
 // Copyright (C) 2017 Librato, Inc. All rights reserved.
 
-package reporter
+package metrics
 
 import (
 	"os"
@@ -10,22 +10,23 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 )
 
 // gets and appends UnameSysName/UnameVersion to a BSON buffer
 // bbuf	the BSON buffer to append the KVs to
-func appendUname(bbuf *bsonBuffer) {
+func appendUname(bbuf *bson.Buffer) {
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err == nil {
 		sysname := utils.Byte2String(uname.Sysname[:])
 		release := utils.Byte2String(uname.Release[:])
-		bsonAppendString(bbuf, "UnameSysName", strings.TrimRight(sysname, "\x00"))
-		bsonAppendString(bbuf, "UnameVersion", strings.TrimRight(release, "\x00"))
+		bbuf.AppendString("UnameSysName", strings.TrimRight(sysname, "\x00"))
+		bbuf.AppendString("UnameVersion", strings.TrimRight(release, "\x00"))
 	}
 }
 
-func addHostMetrics(bbuf *bsonBuffer, index *int) {
+func addHostMetrics(bbuf *bson.Buffer, index *int) {
 	// system load of last minute
 	if s := utils.GetStrByKeyword("/proc/loadavg", ""); s != "" {
 		load, err := strconv.ParseFloat(strings.Fields(s)[0], 64)
