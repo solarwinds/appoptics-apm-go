@@ -322,6 +322,7 @@ These environment variables may be set:
 |APPOPTICS_INSECURE_SKIP_VERIFY|No|false|Skip verification of the collector endpoint. Possible values: true, false|
 |APPOPTICS_PREPEND_DOMAIN|No|false|Prepend the domain name to the transaction name. Possible values: true, false|
 |APPOPTICS_DISABLED|No|false|Disable the agent. Possible values: true, false|
+|APPOPTICS_EC2_METADATA_TIMEOUT|No|1000|EC2 metadata retrieval timeout value in milliseconds. Setting to 0 effectively disables fetching from the metadata URL (not waiting), should only be used if not running on EC2 / Openstack and need to minimize agent start up time. Possible values: [0, 3000]|
 
 For the up-to-date configuration items and descriptions, including YAML config file support in the upcoming version, please refer to our knowledge base website: https://docs.appoptics.com/kb/apm_tracing/go/configure/
 

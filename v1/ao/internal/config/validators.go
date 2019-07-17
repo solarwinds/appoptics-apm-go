@@ -91,6 +91,11 @@ func IsValidReporterType(t string) bool {
 	return t == "ssl" || t == "udp"
 }
 
+// IsValidEc2MetadataTimeout checks if the timeout is within the designated range
+func IsValidEc2MetadataTimeout(t int) bool {
+	return t > 0 && t <= 3000
+}
+
 // IsValidTracingMode checks if the mode is valid
 func IsValidTracingMode(m TracingMode) bool {
 	return m == EnabledTracingMode || m == DisabledTracingMode

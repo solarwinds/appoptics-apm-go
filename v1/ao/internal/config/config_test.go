@@ -139,9 +139,10 @@ func TestConfigInit(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		SQLSanitize: 0,
-		Disabled:    false,
-		DebugLevel:  "warn",
+		SQLSanitize:        0,
+		Disabled:           false,
+		Ec2MetadataTimeout: 1000,
+		DebugLevel:         "warn",
 	}
 	assert.Equal(t, *c, defaultC)
 }
@@ -181,6 +182,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_EVENTS_BATCHSIZE=4000",
 		"APPOPTICS_DISABLED=true",
 		"APPOPTICS_SQL_SANITIZE=0",
+		"APPOPTICS_EC2_METADATA_TIMEOUT=2000",
 	}
 	SetEnvs(envs)
 
@@ -213,9 +215,10 @@ func TestEnvsLoading(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		SQLSanitize: 0,
-		Disabled:    true,
-		DebugLevel:  "warn",
+		SQLSanitize:        0,
+		Disabled:           true,
+		Ec2MetadataTimeout: 2000,
+		DebugLevel:         "warn",
 	}
 
 	c := NewConfig()
@@ -257,9 +260,10 @@ func TestYamlConfig(t *testing.T) {
 			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
-		SQLSanitize: 2,
-		Disabled:    true,
-		DebugLevel:  "info",
+		SQLSanitize:        2,
+		Disabled:           true,
+		Ec2MetadataTimeout: 1500,
+		DebugLevel:         "info",
 	}
 
 	out, err := yaml.Marshal(yamlConfig)
@@ -330,9 +334,10 @@ func TestYamlConfig(t *testing.T) {
 			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
-		SQLSanitize: 3,
-		Disabled:    true,
-		DebugLevel:  "info",
+		SQLSanitize:        3,
+		Disabled:           true,
+		Ec2MetadataTimeout: 1500,
+		DebugLevel:         "info",
 	}
 
 	c = NewConfig()
@@ -427,8 +432,9 @@ func TestInvalidConfig(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		Disabled:   true,
-		DebugLevel: "info",
+		Disabled:           true,
+		Ec2MetadataTimeout: 5000,
+		DebugLevel:         "info",
 	}
 
 	assert.Nil(t, invalid.validate())
@@ -438,6 +444,9 @@ func TestInvalidConfig(t *testing.T) {
 
 	assert.Equal(t, "ssl", invalid.ReporterType)
 	assert.Contains(t, buf.String(), "invalid env, discarded - ReporterType:", buf.String())
+
+	assert.Equal(t, 1000, invalid.Ec2MetadataTimeout)
+	assert.Contains(t, buf.String(), "invalid env, discarded - Ec2MetadataTimeout:", buf.String())
 
 	assert.Equal(t, "alias", invalid.HostAlias)
 }

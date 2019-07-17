@@ -46,6 +46,9 @@ var GetDisabled = conf.GetDisabled
 // ReporterOpts is a wrapper to the method of the global config
 var ReporterOpts = conf.GetReporter
 
+// GetEc2MetadataTimeout is a wrapper to the method of the global config
+var GetEc2MetadataTimeout = conf.GetEc2MetadataTimeout
+
 // DebugLevel is a wrapper to the method of the global config
 var DebugLevel = conf.GetDebugLevel
 
