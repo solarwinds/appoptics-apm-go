@@ -93,7 +93,7 @@ func IsValidReporterType(t string) bool {
 
 // IsValidEc2MetadataTimeout checks if the timeout is within the designated range
 func IsValidEc2MetadataTimeout(t int) bool {
-	return t > 0 && t <= 3000
+	return t >= 0 && t <= 3000
 }
 
 // IsValidTracingMode checks if the mode is valid
