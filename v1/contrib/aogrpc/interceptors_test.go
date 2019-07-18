@@ -52,5 +52,14 @@ func TestGetTopFramePkg(t *testing.T) {
 	} else {
 		assert.Equal(t, "error", getErrClass(e))
 	}
+}
 
+func TestActionFromMethod(t *testing.T) {
+	assert.EqualValues(t, "b", actionFromMethod("a/b"))
+	assert.EqualValues(t, "c", actionFromMethod("a/b/c"))
+	assert.EqualValues(t, "abc", actionFromMethod("abc"))
+	assert.EqualValues(t, "", actionFromMethod(""))
+	assert.EqualValues(t, "abc", actionFromMethod("/abc"))
+	assert.EqualValues(t, "", actionFromMethod("abc/"))
+	assert.EqualValues(t, "", actionFromMethod("/abc/"))
 }

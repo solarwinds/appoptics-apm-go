@@ -494,3 +494,20 @@ func TestRateCounts(t *testing.T) {
 	assert.Equal(t, original, cp)
 	assert.Equal(t, RateCounts{}, rc)
 }
+
+func TestHTTPSpanMessageProcess(t *testing.T) {
+	s := HTTPSpanMessage{
+		BaseSpanMessage: BaseSpanMessage{Duration: time.Second, HasError: false},
+		Transaction:     "transaction",
+		Path:            "path",
+		Status:          200,
+		Host:            "host",
+		Method:          "GET",
+	}
+
+	s.Process()
+	m, ok := metricsHTTPMeasurements.measurements["TransactionResponseTime&true&TransactionName:transaction&"]
+	assert.True(t, ok)
+	assert.NotNil(t, m)
+	assert.EqualValues(t, "TransactionResponseTime", m.Name)
+}

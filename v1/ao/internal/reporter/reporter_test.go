@@ -571,3 +571,10 @@ func TestInitReporter(t *testing.T) {
 	initReporter()
 	require.IsType(t, &grpcReporter{}, globalReporter)
 }
+
+func TestCollectMetricsNextInterval(t *testing.T) {
+	r := &grpcReporter{collectMetricInterval: 10}
+	next := r.collectMetricsNextInterval()
+	// very weak check
+	assert.True(t, next <= time.Second*10, next)
+}
