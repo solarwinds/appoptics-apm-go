@@ -110,6 +110,9 @@ type Config struct {
 
 	Disabled bool `yaml:"Disabled,omitempty" env:"APPOPTICS_DISABLED"`
 
+	// EC2 metadata retrieval timeout in milliseconds
+	Ec2MetadataTimeout int `yaml:"Ec2MetadataTimeout,omitempty" env:"APPOPTICS_EC2_METADATA_TIMEOUT" default:"1000"`
+
 	// The default log level. It should follow the level defined in log.DefaultLevel
 	DebugLevel string `yaml:"DebugLevel,omitempty" env:"APPOPTICS_DEBUG_LEVEL" default:"warn"`
 }
@@ -322,6 +325,12 @@ func (c *Config) validate() error {
 	if ok := IsValidFile(c.TrustedPath); !ok {
 		log.Warning(InvalidEnv("TrustedPath", c.TrustedPath))
 		c.TrustedPath = getFieldDefaultValue(c, "TrustedPath")
+	}
+
+	if ok := IsValidEc2MetadataTimeout(c.Ec2MetadataTimeout); !ok {
+		log.Warning(InvalidEnv("Ec2MetadataTimeout", strconv.Itoa(c.Ec2MetadataTimeout)))
+		t, _ := strconv.Atoi(getFieldDefaultValue(c, "Ec2MetadataTimeout"))
+		c.Ec2MetadataTimeout = t
 	}
 
 	c.ReporterType = strings.ToLower(strings.TrimSpace(c.ReporterType))
@@ -771,6 +780,13 @@ func (c *Config) GetReporter() *ReporterOptions {
 	c.RLock()
 	defer c.RUnlock()
 	return c.ReporterProperties
+}
+
+// GetEc2MetadataTimeout returns the EC2 metadata retrieval timeout in milliseconds
+func (c *Config) GetEc2MetadataTimeout() int {
+	c.RLock()
+	defer c.RUnlock()
+	return c.Ec2MetadataTimeout
 }
 
 // GetDebugLevel returns the global logging level. Note that it may return an

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 )
@@ -146,9 +147,14 @@ func getPid() int {
 // getAWSMeta fetches the metadata from a specific AWS URL and cache it into
 // a provided variable.
 func getAWSMeta(url string) (meta string) {
+	timeout := config.GetEc2MetadataTimeout()
+	if timeout == 0 {
+		log.Warning("EC2 metadata retrieval disabled.")
+		return
+	}
 	// Fetch it from the specified URL if the cache is uninitialized or no
 	// cache at all.
-	client := http.Client{Timeout: time.Second}
+	client := http.Client{Timeout: time.Millisecond * time.Duration(timeout)}
 	resp, err := client.Get(url)
 	if err != nil {
 		log.Debugf("Failed to get AWS metadata from %s", url)

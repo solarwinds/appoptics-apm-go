@@ -17,4 +17,5 @@ ServiceKey: your_service_key:your_service_name  # - env var: APPOPTICS_SERVICE_K
 #   - .jpg
 #   Tracing: disabled
 # Disabled: false  # - env var: APPOPTICS_DISABLED
+# Ec2MetadataTimeout: 1000 # - env var: APPOPTICS_EC2_METADATA_TIMEOUT
 # DebugLevel: warn  # - env var: APPOPTICS_DEBUG_LEVEL
