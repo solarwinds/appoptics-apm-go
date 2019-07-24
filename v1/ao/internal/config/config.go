@@ -115,6 +115,9 @@ type Config struct {
 
 	// The default log level. It should follow the level defined in log.DefaultLevel
 	DebugLevel string `yaml:"DebugLevel,omitempty" env:"APPOPTICS_DEBUG_LEVEL" default:"warn"`
+
+	// If trigger trace is enabled
+	TriggerTrace bool `yaml:"TriggerTrace,omitempty" env:"APPOPTICS_TRIGGER_TRACE"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
