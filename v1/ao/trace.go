@@ -99,10 +99,32 @@ func NewTrace(spanName string) Trace {
 
 // NewTraceWithOptions creates a new trace with the provided options
 func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
-	kvs := addKVsFromOpts(opts)
-	return NewTraceFromIDForURL(spanName, "", opts.URL, func() KVMap {
-		return fromKVs(kvs...)
+	if Disabled() || Closed() {
+		return NewNullTrace()
+	}
+
+	ctx, ok := reporter.NewContextForURL(spanName, opts.MdStr, true, opts.URL, opts.TriggerTrace, func() map[string]interface{} {
+		var kvs map[string]interface{}
+
+		if opts.CB != nil {
+			kvs = opts.CB()
+		} else {
+			kvs = make(map[string]interface{})
+		}
+		for k, v := range fromKVs(addKVsFromOpts(opts)...) {
+			kvs[k] = v
+		}
+
+		return kvs
 	})
+	if !ok {
+		return NewNullTrace()
+	}
+	t := &aoTrace{
+		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
+	}
+	t.SetStartTime(time.Now())
+	return t
 }
 
 // NewTraceFromID creates a new Trace for reporting to AppOptics, provided an
@@ -116,24 +138,12 @@ func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
 // provided an incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromIDForURL(spanName, mdStr string, url string, cb func() KVMap) Trace {
-	if Disabled() || Closed() {
-		return NewNullTrace()
-	}
-
-	ctx, ok := reporter.NewContextForURL(spanName, mdStr, true, url, func() map[string]interface{} {
-		if cb != nil {
-			return cb()
-		}
-		return nil
+	return NewTraceWithOptions(spanName, SpanOptions{
+		WithBackTrace: false,
+		MdStr:         mdStr,
+		URL:           url,
+		CB:            cb,
 	})
-	if !ok {
-		return NewNullTrace()
-	}
-	t := &aoTrace{
-		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
-	}
-	t.SetStartTime(time.Now())
-	return t
 }
 
 // SetTransactionName can be called inside a http handler to set the custom transaction name.

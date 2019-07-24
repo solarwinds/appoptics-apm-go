@@ -323,13 +323,13 @@ func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
 // NewContext starts a trace, possibly continuing one, if mdStr is provided. Setting reportEntry will
 // report an entry event before this function returns, calling cb if provided for additional KV pairs.
 func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]interface{}) (ctx Context, ok bool) {
-	return NewContextForURL(layer, mdStr, reportEntry, "", cb)
+	return NewContextForURL(layer, mdStr, reportEntry, "", false, cb)
 }
 
 // NewContextForURL starts a trace for the provided URL, possibly continuing one, if mdStr is provided.
 // Setting reportEntry will report an entry event before this function returns, calling cb if provided
 // for additional KV pairs.
-func NewContextForURL(layer, mdStr string, reportEntry bool, url string, cb func() map[string]interface{}) (ctx Context, ok bool) {
+func NewContextForURL(layer, mdStr string, reportEntry bool, url string, triggerTrace bool, cb func() map[string]interface{}) (ctx Context, ok bool) {
 	traced := false
 	addCtxEdge := false
 
@@ -358,7 +358,7 @@ func NewContextForURL(layer, mdStr string, reportEntry bool, url string, cb func
 		ctx = newContext(true)
 	}
 
-	ok, rate, source, enabled := shouldTraceRequestWithURL(layer, traced, url)
+	ok, rate, source, enabled := shouldTraceRequestWithURL(layer, traced, url, triggerTrace)
 	if ok {
 		if reportEntry {
 			var kvs map[string]interface{}

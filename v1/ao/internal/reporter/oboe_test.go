@@ -251,7 +251,7 @@ func TestSampleFlags(t *testing.T) {
 		{Type: "url", RegEx: `user\d{3}`, Tracing: config.DisabledTracingMode},
 		{Type: "url", Extensions: []string{".png", ".jpg"}, Tracing: config.DisabledTracingMode},
 	})
-	ok, _, _, _ = shouldTraceRequestWithURL(testLayer, false, "http://test.com/user123")
+	ok, _, _, _ = shouldTraceRequestWithURL(testLayer, false, "http://test.com/user123", false)
 	assert.False(t, ok)
 
 	resetSettings()

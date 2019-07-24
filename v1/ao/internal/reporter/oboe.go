@@ -180,7 +180,7 @@ func (b *tokenBucket) update(now time.Time) {
 	}
 }
 
-func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sampleSource, bool) {
+func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool) (bool, int, sampleSource, bool) {
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {
 			if !r.UseSettings {
@@ -193,6 +193,12 @@ func oboeSampleRequest(layer string, traced bool, url string) (bool, int, sample
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
 		return false, 0, SAMPLE_SOURCE_NONE, false
+	}
+
+	if setting.forceTrace && triggerTrace {
+		// TODO: handle trigger trace
+		retval := setting.triggerTraceBucket.count(true, false, true)
+		return retval, setting.value, setting.source, setting.flags.Enabled() // TODO: is the value/source correct?
 	}
 
 	retval := false

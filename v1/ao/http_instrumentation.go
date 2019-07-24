@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/textproto"
 	"reflect"
 	"runtime"
 	"runtime/debug"
@@ -137,6 +138,37 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 	return w
 }
 
+// CheckTriggerTraceHeader extracts the X-Trace-Options from the header
+func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]string) {
+	var forceTrace bool
+	var kvs map[string]string
+
+	xTraceOptsSlice, ok := header[textproto.CanonicalMIMEHeaderKey("X-Trace-Options")]
+	if !ok {
+		return false, kvs
+	}
+
+	kvs = make(map[string]string)
+
+	xTraceOpts := strings.Split(strings.Join(xTraceOptsSlice, ","), ";")
+	for _, opt := range xTraceOpts {
+		kvSlice := strings.SplitN(opt, "=", 1)
+		var k, v string
+		k = strings.TrimSpace(kvSlice[0])
+		if len(kvSlice) == 2 {
+			v = strings.TrimSpace(kvSlice[1])
+		}
+		if k == "pd_keys" {
+			k = "PDKeys"
+		}
+		kvs[k] = v
+	}
+	_, forceTrace = kvs["force_trace"]
+	delete(kvs, "force_trace")
+
+	return forceTrace, kvs
+}
+
 // traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
 func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, opts ...SpanOpt) Trace {
@@ -145,21 +177,32 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 		f(so)
 	}
 
+	triggerTrace, triggerTraceKVs := CheckTriggerTraceHeader(r.Header)
+
 	// start trace, passing in metadata header
-	t := NewTraceFromIDForURL(spanName, r.Header.Get(HTTPHeaderName), r.URL.EscapedPath(), func() KVMap {
-		kvs := KVMap{
-			keyMethod:      r.Method,
-			keyHTTPHost:    r.Host,
-			keyURL:         r.URL.EscapedPath(),
-			keyRemoteHost:  r.RemoteAddr,
-			keyQueryString: r.URL.RawQuery,
-		}
+	t := NewTraceWithOptions(spanName, SpanOptions{
+		MdStr:        r.Header.Get(HTTPHeaderName),
+		URL:          r.URL.EscapedPath(),
+		TriggerTrace: triggerTrace,
+		CB: func() KVMap {
+			kvs := KVMap{
+				keyMethod:      r.Method,
+				keyHTTPHost:    r.Host,
+				keyURL:         r.URL.EscapedPath(),
+				keyRemoteHost:  r.RemoteAddr,
+				keyQueryString: r.URL.RawQuery,
+			}
 
-		if so.WithBackTrace {
-			kvs[KeyBackTrace] = string(debug.Stack())
-		}
+			for k, v := range triggerTraceKVs {
+				kvs[k] = v
+			}
 
-		return kvs
+			if so.WithBackTrace {
+				kvs[KeyBackTrace] = string(debug.Stack())
+			}
+
+			return kvs
+		},
 	})
 
 	// set the start time and method for metrics collection

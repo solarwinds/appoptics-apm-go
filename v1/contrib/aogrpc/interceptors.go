@@ -79,15 +79,29 @@ func tracingContext(ctx context.Context, serverName string, methodName string, s
 		}
 	}
 
-	t := ao.NewTraceFromIDForURL(serverName, xtID, methodName, func() ao.KVMap {
-		return ao.KVMap{
-			"Method":     "POST",
-			"Controller": serverName,
-			"Action":     action,
-			"URL":        methodName,
-			"Status":     statusCode,
-		}
+	triggerTrace, triggerTraceKVs := ao.CheckTriggerTraceHeader(md)
+
+	t := ao.NewTraceWithOptions(serverName, ao.SpanOptions{
+		WithBackTrace: false,
+		MdStr:         xtID,
+		URL:           methodName,
+		TriggerTrace:  triggerTrace,
+		CB: func() ao.KVMap {
+			kvs := ao.KVMap{
+				"Method":     "POST",
+				"Controller": serverName,
+				"Action":     action,
+				"URL":        methodName,
+				"Status":     statusCode,
+			}
+
+			for k, v := range triggerTraceKVs {
+				kvs[k] = v
+			}
+			return kvs
+		},
 	})
+
 	t.SetMethod("POST")
 	t.SetTransactionName(serverName + "." + action)
 	t.SetStartTime(time.Now())
