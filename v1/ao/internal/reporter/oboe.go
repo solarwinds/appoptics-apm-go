@@ -34,10 +34,12 @@ type oboeSettings struct {
 	// or a new value after negotiating with local config
 	value int
 	// The sample source after negotiating with local config
-	source sampleSource
-	ttl    int64
-	layer  string
-	bucket *tokenBucket
+	source             sampleSource
+	ttl                int64
+	layer              string
+	bucket             *tokenBucket
+	forceTrace         bool
+	triggerTraceBucket *tokenBucket
 }
 
 func (s *oboeSettings) hasOverrideFlag() bool {
@@ -46,7 +48,8 @@ func (s *oboeSettings) hasOverrideFlag() bool {
 
 func newOboeSettings() *oboeSettings {
 	return &oboeSettings{
-		bucket: globalTokenBucket,
+		bucket:             globalTokenBucket,
+		triggerTraceBucket: triggerTraceTokenBucket,
 	}
 }
 
@@ -103,6 +106,9 @@ var globalSettingsCfg = &oboeSettingsCfg{
 // The rate and capacity will be initialized by the values fetched from the remote
 // server, therefore it's initialized with only the default values.
 var globalTokenBucket = &tokenBucket{}
+
+// The token bucket exclusively for trigger trace
+var triggerTraceTokenBucket = &tokenBucket{}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -276,6 +282,8 @@ func mergeLocalSetting(remote *oboeSettings) *oboeSettings {
 		remote.flags = newTracingMode(config.GetTracingMode()).toFlags()
 		remote.source = SAMPLE_SOURCE_FILE
 	}
+
+	remote.forceTrace = (remote.flags&FLAG_FORCE_TRACE != 0) && config.GetTriggerTrace()
 	return remote
 }
 
@@ -328,6 +336,10 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	rate := parseFloat64(args, kvBucketRate, 0)
 	capacity := parseFloat64(args, kvBucketCapacity, 0)
 	ns.bucket.setRateCap(rate, capacity)
+
+	tRate := parseFloat64(args, kvTriggerTraceBucketRate, 0)
+	tCapacity := parseFloat64(args, kvTriggerTraceBucketCapacity, 0)
+	ns.triggerTraceBucket.setRateCap(tRate, tCapacity)
 
 	merged := mergeLocalSetting(ns)
 
@@ -423,6 +435,8 @@ func flagStringToBin(flagString string) settingFlag {
 				flags |= FLAG_SAMPLE_THROUGH
 			case "SAMPLE_THROUGH_ALWAYS":
 				flags |= FLAG_SAMPLE_THROUGH_ALWAYS
+			case "FORCE_TRACE":
+				flags |= FLAG_FORCE_TRACE
 			}
 		}
 	}

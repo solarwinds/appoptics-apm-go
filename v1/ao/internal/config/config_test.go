@@ -143,7 +143,7 @@ func TestConfigInit(t *testing.T) {
 		Disabled:           false,
 		Ec2MetadataTimeout: 1000,
 		DebugLevel:         "warn",
-		TriggerTrace:       false,
+		TriggerTrace:       true,
 	}
 	assert.Equal(t, *c, defaultC)
 }
@@ -184,7 +184,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_DISABLED=true",
 		"APPOPTICS_SQL_SANITIZE=0",
 		"APPOPTICS_EC2_METADATA_TIMEOUT=2000",
-		"APPOPTICS_TRIGGER_TRACE=true",
+		"APPOPTICS_TRIGGER_TRACE=false",
 	}
 	SetEnvs(envs)
 
@@ -221,7 +221,7 @@ func TestEnvsLoading(t *testing.T) {
 		Disabled:           true,
 		Ec2MetadataTimeout: 2000,
 		DebugLevel:         "warn",
-		TriggerTrace:       true,
+		TriggerTrace:       false,
 	}
 
 	c := NewConfig()
@@ -267,7 +267,7 @@ func TestYamlConfig(t *testing.T) {
 		Disabled:           true,
 		Ec2MetadataTimeout: 1500,
 		DebugLevel:         "info",
-		TriggerTrace:       true,
+		TriggerTrace:       false,
 	}
 
 	out, err := yaml.Marshal(yamlConfig)
@@ -342,7 +342,7 @@ func TestYamlConfig(t *testing.T) {
 		Disabled:           true,
 		Ec2MetadataTimeout: 1500,
 		DebugLevel:         "info",
-		TriggerTrace:       true,
+		TriggerTrace:       false,
 	}
 
 	c = NewConfig()

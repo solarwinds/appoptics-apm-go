@@ -37,11 +37,13 @@ type reporter interface {
 
 // KVs from getSettingsResult arguments
 const (
-	kvBucketCapacity       = "BucketCapacity"
-	kvBucketRate           = "BucketRate"
-	kvMetricsFlushInterval = "MetricsFlushInterval"
-	kvEventsFlushInterval  = "EventsFlushInterval"
-	kvMaxTransactions      = "MaxTransactions"
+	kvBucketCapacity             = "BucketCapacity"
+	kvBucketRate                 = "BucketRate"
+	kvTriggerTraceBucketCapacity = "TriggerTraceBucketCapacity" // TODO: verify kv name
+	kvTriggerTraceBucketRate     = "TriggerTraceBucketRate"     // TODO: verify kv name
+	kvMetricsFlushInterval       = "MetricsFlushInterval"
+	kvEventsFlushInterval        = "EventsFlushInterval"
+	kvMaxTransactions            = "MaxTransactions"
 )
 
 // currently used reporter

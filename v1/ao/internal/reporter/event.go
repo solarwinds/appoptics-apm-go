@@ -65,6 +65,7 @@ const (
 	FLAG_SAMPLE_START          settingFlag = 0x4
 	FLAG_SAMPLE_THROUGH        settingFlag = 0x8
 	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 0x10
+	FLAG_FORCE_TRACE           settingFlag = 0x20
 )
 
 // source of the sample value

@@ -1,2 +1,2 @@
 test:
-	go test -v -race -timeout 3m ./... && echo "All tests passed."
+	go test -race -timeout 3m -short ./... && echo "All tests passed."

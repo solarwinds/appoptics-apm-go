@@ -52,8 +52,8 @@ var GetEc2MetadataTimeout = conf.GetEc2MetadataTimeout
 // DebugLevel is a wrapper to the method of the global config
 var DebugLevel = conf.GetDebugLevel
 
-// DebugLevel is a wrapper to the method of the global config
-var TriggerTrace = conf.TriggerTrace
+// GetTriggerTrace is a wrapper to the method of the global config
+var GetTriggerTrace = conf.GetTriggerTrace
 
 // GetTransactionFiltering is a wrapper to the method of the global config
 var GetTransactionFiltering = conf.GetTransactionFiltering
