@@ -364,7 +364,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 				if opts.TriggerTrace {
 					SetHeaders("force_trace=settings-not-available")
 				}
-				return ctx, false, headers // TODO: return true to attach headers here?
+				return ctx, false, headers
 			}
 
 			_, flags, _ := mergeURLSetting(setting, opts.URL)

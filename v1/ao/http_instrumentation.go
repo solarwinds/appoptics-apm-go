@@ -145,13 +145,14 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 }
 
 // CheckTriggerTraceHeader extracts the X-Trace-Options from the header
-func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]string) {
+func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]string, []string) {
 	var forceTrace bool
 	var kvs map[string]string
+	var ignoredKeys []string
 
 	xTraceOptsSlice, ok := header[textproto.CanonicalMIMEHeaderKey("X-Trace-Options")]
 	if !ok {
-		return false, kvs
+		return false, kvs, ignoredKeys
 	}
 
 	kvs = make(map[string]string)
@@ -167,12 +168,20 @@ func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]strin
 		if k == "pd_keys" {
 			k = "PDKeys"
 		}
+		if !strings.HasPrefix(strings.ToLower(k), "custom_") {
+			ignoredKeys = append(ignoredKeys, k)
+			continue
+		}
 		kvs[k] = v
 	}
-	_, forceTrace = kvs["force_trace"]
+	val, forceTrace := kvs["force_trace"]
+	if val != "" {
+		forceTrace = false
+		ignoredKeys = append(ignoredKeys, "force_trace")
+	}
 	delete(kvs, "force_trace")
 
-	return forceTrace, kvs
+	return forceTrace, kvs, ignoredKeys
 }
 
 // traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
@@ -183,7 +192,7 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 		f(so)
 	}
 
-	triggerTrace, triggerTraceKVs := CheckTriggerTraceHeader(r.Header)
+	triggerTrace, triggerTraceKVs, ignoredKeys := CheckTriggerTraceHeader(r.Header)
 
 	// start trace, passing in metadata header
 	t := NewTraceWithOptions(spanName, SpanOptions{
@@ -226,6 +235,17 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 	// Clear the start time if it is not a new context
 	if !isNewContext {
 		t.SetStartTime(time.Time{})
+	}
+
+	if len(ignoredKeys) != 0 {
+		headers := t.HTTPRspHeaders()
+		xTraceOptsRsp, ok := headers["X-Trace-Options-Response"]
+		ignored := strings.Join(ignoredKeys, ",")
+		if ok {
+			xTraceOptsRsp = xTraceOptsRsp + ";" + ignored
+		}
+		headers["X-Trace-Options-Response"] = xTraceOptsRsp
+		t.SetHTTPRspHeaders(headers)
 	}
 	// update incoming metadata in request headers for any downstream readers
 	r.Header.Set(HTTPHeaderName, t.MetadataString())

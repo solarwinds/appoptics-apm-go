@@ -69,6 +69,9 @@ type Trace interface {
 
 	// HTTPRspHeaders returns the headers for HTTP response
 	HTTPRspHeaders() map[string]string
+
+	// SetHTTPRspHeaders attach the headers to a trace
+	SetHTTPRspHeaders(map[string]string)
 }
 
 // KVMap is a map of additional key-value pairs to report along with the event data provided
@@ -138,7 +141,7 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 		httpRspHeaders: make(map[string]string),
 	}
 	t.SetStartTime(time.Now())
-	t.setHTTPRspHeaders(headers)
+	t.SetHTTPRspHeaders(headers)
 	return t
 }
 
@@ -367,7 +370,7 @@ func (t *aoTrace) HTTPRspHeaders() map[string]string {
 	return t.httpRspHeaders
 }
 
-func (t *aoTrace) setHTTPRspHeaders(headers map[string]string) {
+func (t *aoTrace) SetHTTPRspHeaders(headers map[string]string) {
 	if t.httpRspHeaders == nil {
 		return
 	}
@@ -382,16 +385,17 @@ type nullTrace struct {
 	headers map[string]string
 }
 
-func (t *nullTrace) EndCallback(f func() KVMap)        {}
-func (t *nullTrace) ExitMetadata() string              { return "" }
-func (t *nullTrace) SetStartTime(start time.Time)      {}
-func (t *nullTrace) SetMethod(method string)           {}
-func (t *nullTrace) SetPath(path string)               {}
-func (t *nullTrace) SetHost(host string)               {}
-func (t *nullTrace) SetStatus(status int)              {}
-func (t *nullTrace) LoggableTraceID() string           { return "" }
-func (t *nullTrace) recordMetrics()                    {}
-func (t *nullTrace) HTTPRspHeaders() map[string]string { return t.headers }
+func (t *nullTrace) EndCallback(f func() KVMap)                  {}
+func (t *nullTrace) ExitMetadata() string                        { return "" }
+func (t *nullTrace) SetStartTime(start time.Time)                {}
+func (t *nullTrace) SetMethod(method string)                     {}
+func (t *nullTrace) SetPath(path string)                         {}
+func (t *nullTrace) SetHost(host string)                         {}
+func (t *nullTrace) SetStatus(status int)                        {}
+func (t *nullTrace) LoggableTraceID() string                     { return "" }
+func (t *nullTrace) recordMetrics()                              {}
+func (t *nullTrace) HTTPRspHeaders() map[string]string           { return t.headers }
+func (t *nullTrace) SetHTTPRspHeaders(headers map[string]string) { t.headers = headers }
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }

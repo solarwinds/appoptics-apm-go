@@ -79,7 +79,8 @@ func tracingContext(ctx context.Context, serverName string, methodName string, s
 		}
 	}
 
-	triggerTrace, triggerTraceKVs := ao.CheckTriggerTraceHeader(md)
+	// TODO: attach headers to HTTP response
+	triggerTrace, triggerTraceKVs, _ := ao.CheckTriggerTraceHeader(md)
 
 	t := ao.NewTraceWithOptions(serverName, ao.SpanOptions{
 		ContextOptions: ao.ContextOptions{

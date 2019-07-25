@@ -200,7 +200,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool)
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, "settings-not-available"}
+		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, "force_trace=settings-not-available"}
 	}
 
 	retval := false
@@ -208,18 +208,18 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool)
 
 	sampleRate, flags, source := mergeURLSetting(setting, url)
 
-	if triggerTrace {
-		rsp := "ok"
+	if triggerTrace && !traced {
+		rsp := "force_trace=ok"
 
 		if setting.forceTrace && flags.Enabled() {
 			ret := setting.triggerTraceBucket.count(true, false, true)
 			if !ret {
-				rsp = "rate-exceeded"
+				rsp = "force_trace=rate-exceeded"
 			}
 			return SampleDecision{ret, setting.value, setting.source, setting.flags.Enabled(), rsp} // TODO: is the value/source correct?
 		} else {
 			if !flags.Enabled() {
-				rsp = "trace-mode-disabled"
+				rsp = "force_trace=trace-mode-disabled"
 			}
 			return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, rsp} // TODO: check ret value
 		}
@@ -243,9 +243,10 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool)
 	}
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
+
 	rsp := "ok"
-	if !retval {
-		rsp = "rate-exceeded" // TODO: ?? undetermined
+	if triggerTrace {
+		rsp = "force_trace=ignored"
 	}
 	return SampleDecision{retval, sampleRate, source, flags.Enabled(), rsp}
 }
