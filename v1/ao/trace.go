@@ -66,6 +66,9 @@ type Trace interface {
 
 	// LoggableTraceID returns the trace ID for log injection.
 	LoggableTraceID() string
+
+	// HTTPRspHeaders returns the headers for HTTP response
+	HTTPRspHeaders() map[string]string
 }
 
 // KVMap is a map of additional key-value pairs to report along with the event data provided
@@ -73,7 +76,10 @@ type Trace interface {
 // provide details about program activity and distinguish between different types of spans.
 // Please visit https://docs.appoptics.com/kb/apm_tracing/custom_instrumentation/ for
 // details on the key names that AppOptics looks for.
-type KVMap map[string]interface{}
+type KVMap = reporter.KVMap
+
+// ContextOptions is an alias of the reporter's ContextOptions
+type ContextOptions = reporter.ContextOptions
 
 type traceHTTPSpan struct {
 	span       metrics.HTTPSpanMessage
@@ -84,8 +90,9 @@ type traceHTTPSpan struct {
 
 type aoTrace struct {
 	layerSpan
-	exitEvent reporter.Event
-	httpSpan  traceHTTPSpan
+	exitEvent      reporter.Event
+	httpSpan       traceHTTPSpan
+	httpRspHeaders map[string]string
 }
 
 func (t *aoTrace) aoContext() reporter.Context { return t.aoCtx }
@@ -100,10 +107,16 @@ func NewTrace(spanName string) Trace {
 // NewTraceWithOptions creates a new trace with the provided options
 func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 	if Disabled() || Closed() {
-		return NewNullTrace()
+		if opts.TriggerTrace && Disabled() {
+			return NewNullTraceWithHeaders(map[string]string{
+				"X-Trace-Options-Response": "force_trace=trace-mode-disabled",
+			})
+		} else {
+			return NewNullTrace()
+		}
 	}
 
-	ctx, ok := reporter.NewContextForURL(spanName, opts.MdStr, true, opts.URL, opts.TriggerTrace, func() map[string]interface{} {
+	ctx, ok, headers := reporter.NewContext(spanName, true, opts.ContextOptions, func() KVMap {
 		var kvs map[string]interface{}
 
 		if opts.CB != nil {
@@ -121,9 +134,11 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 		return NewNullTrace()
 	}
 	t := &aoTrace{
-		layerSpan: layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
+		layerSpan:      layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
+		httpRspHeaders: make(map[string]string),
 	}
 	t.SetStartTime(time.Now())
+	t.setHTTPRspHeaders(headers)
 	return t
 }
 
@@ -139,10 +154,12 @@ func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromIDForURL(spanName, mdStr string, url string, cb func() KVMap) Trace {
 	return NewTraceWithOptions(spanName, SpanOptions{
-		WithBackTrace: false,
-		MdStr:         mdStr,
-		URL:           url,
-		CB:            cb,
+		false,
+		ContextOptions{
+			MdStr: mdStr,
+			URL:   url,
+			CB:    cb,
+		},
 	})
 }
 
@@ -345,18 +362,39 @@ func (t *aoTrace) LoggableTraceID() string {
 	return mdStr[2:42] + sampledFlag
 }
 
-// A nullTrace is not tracing.
-type nullTrace struct{ nullSpan }
+// HTTPRspHeaders returns the headers which will be attached to the HTTP response
+func (t *aoTrace) HTTPRspHeaders() map[string]string {
+	return t.httpRspHeaders
+}
 
-func (t *nullTrace) EndCallback(f func() KVMap)   {}
-func (t *nullTrace) ExitMetadata() string         { return "" }
-func (t *nullTrace) SetStartTime(start time.Time) {}
-func (t *nullTrace) SetMethod(method string)      {}
-func (t *nullTrace) SetPath(path string)          {}
-func (t *nullTrace) SetHost(host string)          {}
-func (t *nullTrace) SetStatus(status int)         {}
-func (t *nullTrace) LoggableTraceID() string      { return "" }
-func (t *nullTrace) recordMetrics()               {}
+func (t *aoTrace) setHTTPRspHeaders(headers map[string]string) {
+	if t.httpRspHeaders == nil {
+		return
+	}
+	for k, v := range headers {
+		t.httpRspHeaders[k] = v
+	}
+}
+
+// A nullTrace is not tracing.
+type nullTrace struct {
+	nullSpan
+	headers map[string]string
+}
+
+func (t *nullTrace) EndCallback(f func() KVMap)        {}
+func (t *nullTrace) ExitMetadata() string              { return "" }
+func (t *nullTrace) SetStartTime(start time.Time)      {}
+func (t *nullTrace) SetMethod(method string)           {}
+func (t *nullTrace) SetPath(path string)               {}
+func (t *nullTrace) SetHost(host string)               {}
+func (t *nullTrace) SetStatus(status int)              {}
+func (t *nullTrace) LoggableTraceID() string           { return "" }
+func (t *nullTrace) recordMetrics()                    {}
+func (t *nullTrace) HTTPRspHeaders() map[string]string { return t.headers }
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }
+
+// NewNullTraceWithHeaders returns a null trace with the provided headers
+func NewNullTraceWithHeaders(headers map[string]string) Trace { return &nullTrace{headers: headers} }

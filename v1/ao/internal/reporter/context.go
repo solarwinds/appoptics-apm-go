@@ -54,6 +54,20 @@ type transactionContext struct {
 	sync.RWMutex
 }
 
+type KVMap map[string]interface{}
+
+// ContextOptions defines the options of creating a context
+type ContextOptions struct {
+	MdStr string
+	// URL is used to do the URL-based transaction filtering.
+	URL string
+
+	XTraceOptions bool
+	TriggerTrace  bool
+
+	CB func() KVMap
+}
+
 // ValidMetadata checks if a metadata string is valid.
 func ValidMetadata(mdstr string) bool {
 	md := &oboeMetadata{}
@@ -320,22 +334,24 @@ func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
 	return ctx, err
 }
 
-// NewContext starts a trace, possibly continuing one, if mdStr is provided. Setting reportEntry will
-// report an entry event before this function returns, calling cb if provided for additional KV pairs.
-func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]interface{}) (ctx Context, ok bool) {
-	return NewContextForURL(layer, mdStr, reportEntry, "", false, cb)
-}
-
-// NewContextForURL starts a trace for the provided URL, possibly continuing one, if mdStr is provided.
-// Setting reportEntry will report an entry event before this function returns, calling cb if provided
-// for additional KV pairs.
-func NewContextForURL(layer, mdStr string, reportEntry bool, url string, triggerTrace bool, cb func() map[string]interface{}) (ctx Context, ok bool) {
+// NewContext starts a trace for the provided URL, possibly continuing one, if
+// mdStr is provided. Setting reportEntry will report an entry event before this
+// function returns, calling cb if provided for additional KV pairs.
+func NewContext(layer string, reportEntry bool, opts ContextOptions,
+	cb func() KVMap) (ctx Context, ok bool, headers map[string]string) {
 	traced := false
 	addCtxEdge := false
 
-	if mdStr != "" {
+	var SetHeaders = func(v string) {
+		if headers == nil {
+			headers = make(map[string]string)
+		}
+		headers["X-Trace-Options-Response"] = v
+	}
+
+	if opts.MdStr != "" {
 		var err error
-		if ctx, err = newContextFromMetadataString(mdStr); err != nil {
+		if ctx, err = newContextFromMetadataString(opts.MdStr); err != nil {
 			log.Debug("passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
 			log.Debug("passed in x-trace has wrong version, ignoring")
@@ -345,12 +361,22 @@ func NewContextForURL(layer, mdStr string, reportEntry bool, url string, trigger
 		} else {
 			setting, has := getSetting(layer)
 			if !has {
-				return ctx, false
+				if opts.TriggerTrace {
+					SetHeaders("force_trace=settings-not-available")
+				}
+				return ctx, false, headers // TODO: return true to attach headers here?
 			}
 
-			_, flags, _ := mergeURLSetting(setting, url)
+			_, flags, _ := mergeURLSetting(setting, opts.URL)
 			ctx.SetEnabled(flags.Enabled())
-			return ctx, true
+			if opts.XTraceOptions {
+				if opts.TriggerTrace {
+					SetHeaders("force_trace=ignored")
+				} else {
+					SetHeaders("ok")
+				}
+			}
+			return ctx, true, headers
 		}
 	}
 
@@ -358,8 +384,8 @@ func NewContextForURL(layer, mdStr string, reportEntry bool, url string, trigger
 		ctx = newContext(true)
 	}
 
-	ok, rate, source, enabled := shouldTraceRequestWithURL(layer, traced, url, triggerTrace)
-	if ok {
+	decision := shouldTraceRequestWithURL(layer, traced, opts.URL, opts.TriggerTrace)
+	if decision.trace {
 		if reportEntry {
 			var kvs map[string]interface{}
 			if cb != nil {
@@ -368,21 +394,27 @@ func NewContextForURL(layer, mdStr string, reportEntry bool, url string, trigger
 			if len(kvs) == 0 {
 				kvs = make(map[string]interface{})
 			}
-			kvs["SampleRate"] = rate
-			kvs["SampleSource"] = source
+			kvs["SampleRate"] = decision.rate
+			kvs["SampleSource"] = decision.source
 			if _, ok = ctx.(*oboeContext); !ok {
-				return &nullContext{}, false
+				return &nullContext{}, false, headers
 			}
 			if err := ctx.(*oboeContext).reportEventMap(LabelEntry, layer, addCtxEdge, kvs); err != nil {
-				return &nullContext{}, false
+				return &nullContext{}, false, headers
 			}
 		}
-		return ctx, true
+		if opts.TriggerTrace {
+			SetHeaders(decision.xTraceOptsRsp)
+		}
+		return ctx, true, headers
 	}
 
 	ctx.SetSampled(false)
-	ctx.SetEnabled(enabled)
-	return ctx, true
+	ctx.SetEnabled(decision.enabled)
+	if opts.TriggerTrace {
+		SetHeaders(decision.xTraceOptsRsp)
+	}
+	return ctx, true, headers
 }
 
 func (ctx *oboeContext) Copy() Context {

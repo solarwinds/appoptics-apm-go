@@ -14,6 +14,8 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
 
 // HTTPHeaderName is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
@@ -88,6 +90,10 @@ func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *htt
 	r = r.WithContext(NewContext(r.Context(), t))
 
 	wrapper := newResponseWriter(w, t) // wrap writer with response-observing writer
+	for k, v := range t.HTTPRspHeaders() {
+		wrapper.Header().Set(k, v)
+	}
+
 	return t, wrapper, r
 }
 
@@ -181,28 +187,30 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 
 	// start trace, passing in metadata header
 	t := NewTraceWithOptions(spanName, SpanOptions{
-		MdStr:        r.Header.Get(HTTPHeaderName),
-		URL:          r.URL.EscapedPath(),
-		TriggerTrace: triggerTrace,
-		CB: func() KVMap {
-			kvs := KVMap{
-				keyMethod:      r.Method,
-				keyHTTPHost:    r.Host,
-				keyURL:         r.URL.EscapedPath(),
-				keyRemoteHost:  r.RemoteAddr,
-				keyQueryString: r.URL.RawQuery,
-			}
+		false,
+		reporter.ContextOptions{
+			MdStr:        r.Header.Get(HTTPHeaderName),
+			URL:          r.URL.EscapedPath(),
+			TriggerTrace: triggerTrace,
+			CB: func() KVMap {
+				kvs := KVMap{
+					keyMethod:      r.Method,
+					keyHTTPHost:    r.Host,
+					keyURL:         r.URL.EscapedPath(),
+					keyRemoteHost:  r.RemoteAddr,
+					keyQueryString: r.URL.RawQuery,
+				}
 
-			for k, v := range triggerTraceKVs {
-				kvs[k] = v
-			}
+				for k, v := range triggerTraceKVs {
+					kvs[k] = v
+				}
 
-			if so.WithBackTrace {
-				kvs[KeyBackTrace] = string(debug.Stack())
-			}
+				if so.WithBackTrace {
+					kvs[KeyBackTrace] = string(debug.Stack())
+				}
 
-			return kvs
-		},
+				return kvs
+			}},
 	})
 
 	// set the start time and method for metrics collection

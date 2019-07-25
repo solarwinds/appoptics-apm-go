@@ -126,13 +126,7 @@ type SpanOptions struct {
 	// the impact on performance/memory footprint carefully.
 	WithBackTrace bool
 
-	MdStr string
-	// URL is used to do the URL-based transaction filtering.
-	URL string
-
-	TriggerTrace bool
-
-	CB func() KVMap
+	ContextOptions
 }
 
 // SpanOpt defines the function type that changes the SpanOptions

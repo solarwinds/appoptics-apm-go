@@ -180,11 +180,19 @@ func (b *tokenBucket) update(now time.Time) {
 	}
 }
 
-func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool) (bool, int, sampleSource, bool) {
+type SampleDecision struct {
+	trace         bool
+	rate          int
+	source        sampleSource
+	enabled       bool
+	xTraceOptsRsp string
+}
+
+func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool) SampleDecision {
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {
 			if !r.UseSettings {
-				return r.ShouldTrace, 0, SAMPLE_SOURCE_NONE, true // trace tests
+				return SampleDecision{r.ShouldTrace, 0, SAMPLE_SOURCE_NONE, true, ""} // trace tests
 			}
 		}
 	}
@@ -192,19 +200,30 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool)
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		return false, 0, SAMPLE_SOURCE_NONE, false
-	}
-
-	if setting.forceTrace && triggerTrace {
-		// TODO: handle trigger trace
-		retval := setting.triggerTraceBucket.count(true, false, true)
-		return retval, setting.value, setting.source, setting.flags.Enabled() // TODO: is the value/source correct?
+		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, "settings-not-available"}
 	}
 
 	retval := false
 	doRateLimiting := false
 
 	sampleRate, flags, source := mergeURLSetting(setting, url)
+
+	if triggerTrace {
+		rsp := "ok"
+
+		if setting.forceTrace && flags.Enabled() {
+			ret := setting.triggerTraceBucket.count(true, false, true)
+			if !ret {
+				rsp = "rate-exceeded"
+			}
+			return SampleDecision{ret, setting.value, setting.source, setting.flags.Enabled(), rsp} // TODO: is the value/source correct?
+		} else {
+			if !flags.Enabled() {
+				rsp = "trace-mode-disabled"
+			}
+			return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, rsp} // TODO: check ret value
+		}
+	}
 
 	if !traced {
 		// A new request
@@ -224,8 +243,11 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool)
 	}
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
-
-	return retval, sampleRate, source, flags.Enabled()
+	rsp := "ok"
+	if !retval {
+		rsp = "rate-exceeded" // TODO: ?? undetermined
+	}
+	return SampleDecision{retval, sampleRate, source, flags.Enabled(), rsp}
 }
 
 func bytesToFloat64(b []byte) (float64, error) {
