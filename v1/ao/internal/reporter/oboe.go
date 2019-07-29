@@ -38,7 +38,6 @@ type oboeSettings struct {
 	ttl                int64
 	layer              string
 	bucket             *tokenBucket
-	forceTrace         bool
 	triggerTraceBucket *tokenBucket
 }
 
@@ -211,15 +210,17 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool)
 	if triggerTrace && !traced {
 		rsp := "trigger_trace=ok"
 
-		if setting.forceTrace && flags.Enabled() {
+		if flags.TriggerTraceEnabled() {
 			ret := setting.triggerTraceBucket.count(true, false, true)
 			if !ret {
 				rsp = "trigger_trace=rate-exceeded"
 			}
-			return SampleDecision{ret, setting.value, setting.source, setting.flags.Enabled(), rsp} // TODO: is the value/source correct?
+			return SampleDecision{ret, setting.value, setting.source, true, rsp} // TODO: is the value/source correct?
 		} else {
 			if !flags.Enabled() {
-				rsp = "trigger_trace=trace-mode-disabled"
+				rsp = "trigger_trace=tracing-disabled"
+			} else {
+				rsp = "trigger_trace=disabled"
 			}
 			return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, rsp} // TODO: check ret value
 		}
@@ -312,7 +313,9 @@ func mergeLocalSetting(remote *oboeSettings) *oboeSettings {
 		remote.source = SAMPLE_SOURCE_FILE
 	}
 
-	remote.forceTrace = (remote.flags&FLAG_FORCE_TRACE != 0) && config.GetTriggerTrace()
+	if !config.GetTriggerTrace() {
+		remote.flags = remote.flags &^ (1 << FlagForceTraceOffset)
+	}
 	return remote
 }
 

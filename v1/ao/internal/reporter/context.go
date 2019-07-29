@@ -31,6 +31,9 @@ const (
 	XTR_FLAGS_SAMPLED = 0x1
 )
 
+const HTTPHeaderXTraceOptions = "X-Trace-Options"
+const HTTPHeaderXTraceOptionsResponse = "X-Trace-Options-Response"
+
 // orchestras tune to the oboe.
 type oboeIDs struct{ taskID, opID []byte }
 
@@ -346,7 +349,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		if headers == nil {
 			headers = make(map[string]string)
 		}
-		headers["X-Trace-Options-Response"] = v
+		headers[HTTPHeaderXTraceOptionsResponse] = v
 	}
 
 	if opts.MdStr != "" {

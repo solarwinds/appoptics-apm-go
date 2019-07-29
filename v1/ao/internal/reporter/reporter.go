@@ -186,7 +186,7 @@ func argsToMap(capacity, ratePerSec, tCap, tRate float64, metricsFlushInterval, 
 		args[kvBucketRate] = bytes
 	}
 	if tCap > -1 {
-		bits := math.Float64bits(capacity)
+		bits := math.Float64bits(tCap)
 		bytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(bytes, bits)
 		args[kvTriggerTraceBucketCapacity] = bytes

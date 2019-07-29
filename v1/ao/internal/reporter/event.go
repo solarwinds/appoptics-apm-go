@@ -57,15 +57,25 @@ const (
 	TYPE_LAYER                      // layer specific settings
 )
 
+// setting flags offset
+const (
+	FlagInvalidOffset = iota
+	FlagOverrideOffset
+	FlagSampleStartOffset
+	FlagSampleThroughOffset
+	FlagSampleThroughAlwaysOffset
+	FlagForceTraceOffset
+)
+
 // setting flags
 const (
 	FLAG_OK                    settingFlag = 0x0
-	FLAG_INVALID               settingFlag = 0x1
-	FLAG_OVERRIDE              settingFlag = 0x2
-	FLAG_SAMPLE_START          settingFlag = 0x4
-	FLAG_SAMPLE_THROUGH        settingFlag = 0x8
-	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 0x10
-	FLAG_FORCE_TRACE           settingFlag = 0x20
+	FLAG_INVALID               settingFlag = 1 << FlagInvalidOffset
+	FLAG_OVERRIDE              settingFlag = 1 << FlagOverrideOffset
+	FLAG_SAMPLE_START          settingFlag = 1 << FlagSampleStartOffset
+	FLAG_SAMPLE_THROUGH        settingFlag = 1 << FlagSampleThroughOffset
+	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 1 << FlagSampleThroughAlwaysOffset
+	FLAG_FORCE_TRACE           settingFlag = 1 << FlagForceTraceOffset
 )
 
 // source of the sample value
@@ -83,6 +93,11 @@ const (
 // Enabled returns if the trace is enabled or not.
 func (f settingFlag) Enabled() bool {
 	return f&(FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS) != 0
+}
+
+// TriggerTraceEnabled returns if the trigger trace is enabled
+func (f settingFlag) TriggerTraceEnabled() bool {
+	return f&FLAG_FORCE_TRACE != 0
 }
 
 func (st settingType) toSampleSource() sampleSource {
@@ -117,7 +132,7 @@ func (tm tracingMode) isUnknown() bool {
 func (tm tracingMode) toFlags() settingFlag {
 	switch tm {
 	case TRACE_ENABLED:
-		return FLAG_SAMPLE_START | FLAG_SAMPLE_THROUGH_ALWAYS
+		return FLAG_SAMPLE_START | FLAG_SAMPLE_THROUGH_ALWAYS | FLAG_FORCE_TRACE
 	case TRACE_DISABLED:
 	default:
 	}

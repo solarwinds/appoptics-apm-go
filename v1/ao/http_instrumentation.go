@@ -19,10 +19,14 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
 
-// HTTPHeaderName is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
-// the distributed tracing context across HTTP requests.
-const HTTPHeaderName = "X-Trace"
-const httpHandlerSpanName = "http.HandlerFunc"
+const (
+	// HTTPHeaderName is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
+	// the distributed tracing context across HTTP requests.
+	HTTPHeaderName                  = "X-Trace"
+	HTTPHeaderXTraceOptions         = reporter.HTTPHeaderXTraceOptions
+	HTTPHeaderXTraceOptionsResponse = reporter.HTTPHeaderXTraceOptionsResponse
+	httpHandlerSpanName             = "http.HandlerFunc"
+)
 
 // key used for HTTP span to indicate a new context
 var httpSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.HTTPSpan")
@@ -151,7 +155,7 @@ func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]strin
 	var kvs map[string]string
 	var ignoredKeys []string
 
-	xTraceOptsSlice, ok := header[textproto.CanonicalMIMEHeaderKey("X-Trace-Options")]
+	xTraceOptsSlice, ok := header[textproto.CanonicalMIMEHeaderKey(HTTPHeaderXTraceOptions)]
 	if !ok {
 		return false, kvs, ignoredKeys
 	}
@@ -166,14 +170,15 @@ func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]strin
 		if len(kvSlice) == 2 {
 			v = strings.TrimSpace(kvSlice[1])
 		}
-		if k == "pd_keys" {
-			k = "PDKeys"
-		}
+
 		if !(strings.HasPrefix(strings.ToLower(k), "custom_") ||
-			k == "PDKeys" ||
+			k == "pd_keys" ||
 			k == "trigger_trace") {
 			ignoredKeys = append(ignoredKeys, k)
 			continue
+		}
+		if k == "pd_keys" {
+			k = "PDKeys"
 		}
 		kvs[k] = v
 	}
@@ -202,9 +207,10 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 	t := NewTraceWithOptions(spanName, SpanOptions{
 		false,
 		reporter.ContextOptions{
-			MdStr:        r.Header.Get(HTTPHeaderName),
-			URL:          r.URL.EscapedPath(),
-			TriggerTrace: triggerTrace,
+			MdStr:         r.Header.Get(HTTPHeaderName),
+			URL:           r.URL.EscapedPath(),
+			XTraceOptions: r.Header.Get(HTTPHeaderXTraceOptions) != "",
+			TriggerTrace:  triggerTrace,
 			CB: func() KVMap {
 				kvs := KVMap{
 					keyMethod:      r.Method,
@@ -243,13 +249,14 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 
 	if len(ignoredKeys) != 0 {
 		headers := t.HTTPRspHeaders()
-		xTraceOptsRsp, ok := headers["X-Trace-Options-Response"]
-		ignored := strings.Join(ignoredKeys, ",")
-		if ok {
-			xTraceOptsRsp = xTraceOptsRsp + ";ignored=" + ignored
+		xTraceOptsRsp, ok := headers[HTTPHeaderXTraceOptionsResponse]
+		ignored := "ignored=" + strings.Join(ignoredKeys, ",")
+		if ok && xTraceOptsRsp != "" {
+			xTraceOptsRsp = xTraceOptsRsp + ";" + ignored
+		} else {
+			xTraceOptsRsp = ignored
 		}
-		strings.TrimLeft(xTraceOptsRsp, ";")
-		headers["X-Trace-Options-Response"] = xTraceOptsRsp
+		headers[HTTPHeaderXTraceOptionsResponse] = xTraceOptsRsp
 		t.SetHTTPRspHeaders(headers)
 	}
 	// update incoming metadata in request headers for any downstream readers

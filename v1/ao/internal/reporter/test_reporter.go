@@ -227,7 +227,7 @@ func (r *TestReporter) addTriggerTraceOnly() {
 
 func (r *TestReporter) addLimitedTriggerTrace() {
 	updateSetting(int32(TYPE_DEFAULT), "",
-		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS,FORCE_TRACE"),
 		1000000, 120, argsToMap(1000000, 1000000, 1, 1, -1, -1))
 }
 
