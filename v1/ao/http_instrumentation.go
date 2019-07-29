@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
 
@@ -159,7 +160,7 @@ func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]strin
 
 	xTraceOpts := strings.Split(strings.Join(xTraceOptsSlice, ","), ";")
 	for _, opt := range xTraceOpts {
-		kvSlice := strings.SplitN(opt, "=", 1)
+		kvSlice := strings.SplitN(opt, "=", 2)
 		var k, v string
 		k = strings.TrimSpace(kvSlice[0])
 		if len(kvSlice) == 2 {
@@ -168,18 +169,21 @@ func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]strin
 		if k == "pd_keys" {
 			k = "PDKeys"
 		}
-		if !strings.HasPrefix(strings.ToLower(k), "custom_") {
+		if !(strings.HasPrefix(strings.ToLower(k), "custom_") ||
+			k == "PDKeys" ||
+			k == "trigger_trace") {
 			ignoredKeys = append(ignoredKeys, k)
 			continue
 		}
 		kvs[k] = v
 	}
-	val, forceTrace := kvs["force_trace"]
+	val, forceTrace := kvs["trigger_trace"]
 	if val != "" {
+		log.Debug("trigger_trace should not contain any value.")
 		forceTrace = false
-		ignoredKeys = append(ignoredKeys, "force_trace")
+		ignoredKeys = append(ignoredKeys, "trigger_trace")
 	}
-	delete(kvs, "force_trace")
+	delete(kvs, "trigger_trace")
 
 	return forceTrace, kvs, ignoredKeys
 }
@@ -242,8 +246,9 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 		xTraceOptsRsp, ok := headers["X-Trace-Options-Response"]
 		ignored := strings.Join(ignoredKeys, ",")
 		if ok {
-			xTraceOptsRsp = xTraceOptsRsp + ";" + ignored
+			xTraceOptsRsp = xTraceOptsRsp + ";ignored=" + ignored
 		}
+		strings.TrimLeft(xTraceOptsRsp, ";")
 		headers["X-Trace-Options-Response"] = xTraceOptsRsp
 		t.SetHTTPRspHeaders(headers)
 	}

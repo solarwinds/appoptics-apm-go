@@ -362,7 +362,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			setting, has := getSetting(layer)
 			if !has {
 				if opts.TriggerTrace {
-					SetHeaders("force_trace=settings-not-available")
+					SetHeaders("trigger_trace=settings-not-available")
 				}
 				return ctx, false, headers
 			}
@@ -371,7 +371,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			ctx.SetEnabled(flags.Enabled())
 			if opts.XTraceOptions {
 				if opts.TriggerTrace {
-					SetHeaders("force_trace=ignored")
+					SetHeaders("trigger_trace=ignored")
 				} else {
 					SetHeaders("ok")
 				}

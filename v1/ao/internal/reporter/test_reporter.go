@@ -15,20 +15,20 @@ import (
 
 // TestReporter appends reported events to Bufs if ShouldTrace is true.
 type TestReporter struct {
-	EventBufs             [][]byte
-	SpanMessages          []metrics.SpanMessage
-	ShouldTrace           bool
-	ShouldError           bool
-	UseSettings           bool
-	DisableDefaultSetting bool
-	CaptureMetrics        bool
-	ErrorEvents           map[int]bool // whether to drop an event
-	eventCount            int64
-	done                  chan int
-	wg                    sync.WaitGroup
-	eventChan             chan []byte
-	spanMsgChan           chan metrics.SpanMessage
-	Timeout               time.Duration
+	EventBufs      [][]byte
+	SpanMessages   []metrics.SpanMessage
+	ShouldTrace    bool
+	ShouldError    bool
+	UseSettings    bool
+	SettingType    int
+	CaptureMetrics bool
+	ErrorEvents    map[int]bool // whether to drop an event
+	eventCount     int64
+	done           chan int
+	wg             sync.WaitGroup
+	eventChan      chan []byte
+	spanMsgChan    chan metrics.SpanMessage
+	Timeout        time.Duration
 }
 
 const defaultTestReporterTimeout = 2 * time.Second
@@ -41,7 +41,13 @@ type TestReporterOption func(*TestReporter)
 
 // TestReporterDisableDefaultSetting disables the default 100% test sampling rate and leaves settings state empty.
 func TestReporterDisableDefaultSetting(val bool) TestReporterOption {
-	return func(r *TestReporter) { r.DisableDefaultSetting = val }
+	return func(r *TestReporter) {
+		if val {
+			r.SettingType = NoSettingST
+		} else {
+			r.SettingType = DefaultST
+		}
+	}
 }
 
 // TestReporterTimeout sets a timeout for the TestReporter to wait before shutting down its writer.
@@ -49,10 +55,14 @@ func TestReporterTimeout(timeout time.Duration) TestReporterOption {
 	return func(r *TestReporter) { r.Timeout = timeout }
 }
 
+func TestReporterSettingType(tp int) TestReporterOption {
+	return func(r *TestReporter) { r.SettingType = tp }
+}
+
 // TestReporterDisableTracing turns off settings lookup and ensures oboeSampleRequest returns false.
 func TestReporterDisableTracing() TestReporterOption {
 	return func(r *TestReporter) {
-		r.DisableDefaultSetting = true
+		r.SettingType = NoSettingST
 		r.ShouldTrace = false
 		r.UseSettings = false
 	}
@@ -96,10 +106,7 @@ func SetTestReporter(options ...TestReporterOption) *TestReporter {
 	// start with clean slate
 	resetSettings()
 
-	// set default setting with 100% sampling rate
-	if !r.DisableDefaultSetting {
-		r.addDefaultSetting()
-	}
+	r.updateSetting()
 
 	return r
 }
@@ -202,6 +209,50 @@ func (r *TestReporter) reportSpan(span metrics.SpanMessage) error {
 func (r *TestReporter) addDefaultSetting() {
 	// add default setting with 100% sampling
 	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS,FORCE_TRACE"),
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, -1, -1))
+}
+
+func (r *TestReporter) addNoTriggerTrace() {
+	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 0, 0, -1, -1))
+}
+
+func (r *TestReporter) addTriggerTraceOnly() {
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("FORCE_TRACE"),
+		0, 120, argsToMap(0, 0, 1000000, 1000000, -1, -1))
+}
+
+func (r *TestReporter) addLimitedTriggerTrace() {
+	updateSetting(int32(TYPE_DEFAULT), "",
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120, argsToMap(1000000, 1000000, 1, 1, -1, -1))
+}
+
+// Setting types
+const (
+	DefaultST = iota
+	NoTriggerTraceST
+	TriggerTraceOnlyST
+	LimitedTriggerTraceST
+	NoSettingST
+)
+
+func (r *TestReporter) updateSetting() {
+	switch r.SettingType {
+	case DefaultST:
+		r.addDefaultSetting()
+	case NoTriggerTraceST:
+		r.addNoTriggerTrace()
+	case TriggerTraceOnlyST:
+		r.addTriggerTraceOnly()
+	case LimitedTriggerTraceST:
+		r.addLimitedTriggerTrace()
+	case NoSettingST:
+		// Nothing to do
+	default:
+		panic("No such setting type.")
+	}
 }
