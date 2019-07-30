@@ -406,7 +406,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 				return &nullContext{}, false, headers
 			}
 		}
-		if opts.TriggerTrace {
+		if opts.XTraceOptions {
 			SetHeaders(decision.xTraceOptsRsp)
 		}
 		return ctx, true, headers
@@ -414,7 +414,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 
 	ctx.SetSampled(false)
 	ctx.SetEnabled(decision.enabled)
-	if opts.TriggerTrace {
+	if opts.XTraceOptions {
 		SetHeaders(decision.xTraceOptsRsp)
 	}
 	return ctx, true, headers

@@ -12,11 +12,13 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -150,14 +152,15 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 }
 
 // CheckTriggerTraceHeader extracts the X-Trace-Options from the header
-func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]string, []string) {
+func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]string, []string, string) {
 	var forceTrace bool
 	var kvs map[string]string
 	var ignoredKeys []string
+	var ts string
 
 	xTraceOptsSlice, ok := header[textproto.CanonicalMIMEHeaderKey(HTTPHeaderXTraceOptions)]
 	if !ok {
-		return false, kvs, ignoredKeys
+		return false, kvs, ignoredKeys, ts
 	}
 
 	kvs = make(map[string]string)
@@ -166,21 +169,32 @@ func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]strin
 	for _, opt := range xTraceOpts {
 		kvSlice := strings.SplitN(opt, "=", 2)
 		var k, v string
-		k = strings.TrimSpace(kvSlice[0])
+		k = kvSlice[0] // no trim space per the spec
 		if len(kvSlice) == 2 {
-			v = strings.TrimSpace(kvSlice[1])
+			v = kvSlice[1] // no trim space per the spec
 		}
 
 		if !(strings.HasPrefix(strings.ToLower(k), "custom_") ||
 			k == "pd_keys" ||
-			k == "trigger_trace") {
+			k == "trigger_trace" ||
+			k == "ts") {
 			ignoredKeys = append(ignoredKeys, k)
 			continue
 		}
+
 		if k == "pd_keys" {
 			k = "PDKeys"
 		}
-		kvs[k] = v
+
+		if k == "ts" {
+			var err error
+			ts, err = TsNotTooEarly(v)
+			if err != nil {
+				log.Debugf("Error parsing ts: %s", err.Error())
+			}
+		} else {
+			kvs[k] = v
+		}
 	}
 	val, forceTrace := kvs["trigger_trace"]
 	if val != "" {
@@ -190,7 +204,21 @@ func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]strin
 	}
 	delete(kvs, "trigger_trace")
 
-	return forceTrace, kvs, ignoredKeys
+	return forceTrace, kvs, ignoredKeys, ts
+}
+
+// TsNotTooEarly checks if the provided timestamp is within 5 minutes from now
+func TsNotTooEarly(tsStr string) (string, error) {
+	ts, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		return "", errors.Wrap(err, "TsNotTooEarly")
+	}
+
+	t := time.Unix(ts, 0)
+	if t.Before(time.Now().Add(time.Minute * -5)) {
+		return "", fmt.Errorf("timestamp too early: %s", tsStr)
+	}
+	return strconv.FormatInt(ts, 10), nil
 }
 
 // traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
@@ -201,7 +229,7 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 		f(so)
 	}
 
-	triggerTrace, triggerTraceKVs, ignoredKeys := CheckTriggerTraceHeader(r.Header)
+	triggerTrace, triggerTraceKVs, ignoredKeys, _ := CheckTriggerTraceHeader(r.Header)
 
 	// start trace, passing in metadata header
 	t := NewTraceWithOptions(spanName, SpanOptions{

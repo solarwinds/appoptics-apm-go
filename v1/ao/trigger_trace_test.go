@@ -142,6 +142,26 @@ func TestTriggerTraceEnabledTracingModeDisabled(t *testing.T) {
 	_ = config.Load()
 }
 
+func TestTriggerTraceWithURLFiltering(t *testing.T) {
+	reporter.ReloadURLsConfig([]config.TransactionFilter{
+		{"url", `hello`, nil, "disabled"},
+	})
+
+	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
+	hd := map[string]string{
+		"X-Trace-Options": "trigger_trace;pd_keys=lo:se,check-id:123",
+	}
+
+	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
+	r.Close(0)
+
+	rHeader := rr.Header()
+	assert.EqualValues(t, "trigger_trace=tracing-disabled", rHeader.Get("X-Trace-Options-Response"))
+	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
+
+	reporter.ReloadURLsConfig(nil)
+}
+
 func TestNoTriggerTrace(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
@@ -155,12 +175,13 @@ func TestNoTriggerTrace(t *testing.T) {
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
 			assert.Equal(t, "value1", n.Map["custom_key1"])
+			assert.Equal(t, "lo:se,check-id:123", n.Map["PDKeys"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
 	})
 	rHeader := rr.Header()
-	assert.Empty(t, rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=not-requested", rHeader.Get("X-Trace-Options-Response"))
 	assert.NotEmpty(t, rHeader.Get("X-Trace"))
 }
 
@@ -181,7 +202,7 @@ func TestNoTriggerTraceInvalidFlag(t *testing.T) {
 		}},
 	})
 	rHeader := rr.Header()
-	assert.EqualValues(t, "ignored=tigger_trace,trigger_trace", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=not-requested;ignored=tigger_trace,trigger_trace", rHeader.Get("X-Trace-Options-Response"))
 	assert.NotEmpty(t, rHeader.Get("X-Trace"))
 }
 
@@ -218,4 +239,50 @@ func TestTriggerTraceXTraceBothValid(t *testing.T) {
 	rHeader := rr.Header()
 	assert.EqualValues(t, "trigger_trace=ignored", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
+}
+
+func TestNoTriggerTraceXTrace(t *testing.T) {
+	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
+	hd := map[string]string{
+		"X-Trace-Options": "custom_key1=value1",
+		"X-Trace":         "2B987445277543FF9C151D0CDE6D29B6E21603D5DB2C5EFEA7749039AF01",
+	}
+
+	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
+	r.Close(2)
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+		// entry event should have no edges
+		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{{"Edge", "2C5EFEA7749039AF"}}, Callback: func(n g.Node) {
+			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+			assert.Equal(t, "value1", n.Map["custom_key1"])
+		}},
+		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
+		}},
+	})
+
+	rHeader := rr.Header()
+	assert.EqualValues(t, "trigger-trace=not-requested", rHeader.Get("X-Trace-Options-Response"))
+	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
+}
+
+func TestTriggerTraceInvalidXTrace(t *testing.T) {
+	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
+	hd := map[string]string{
+		"X-Trace-Options": "trigger_trace;pd_keys=lo:se,check-id:123",
+		"X-Trace":         "invalid-value",
+	}
+
+	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
+	r.Close(2)
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+		// entry event should have no edges
+		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
+			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+		}},
+		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
+		}},
+	})
+	rHeader := rr.Header()
+	assert.EqualValues(t, "trigger_trace=ok", rHeader.Get("X-Trace-Options-Response"))
+	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 }

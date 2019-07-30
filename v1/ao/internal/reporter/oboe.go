@@ -245,7 +245,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool)
 
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
-	rsp := "ok"
+	rsp := "trigger-trace=not-requested"
 	if triggerTrace {
 		rsp = "trigger_trace=ignored"
 	}
