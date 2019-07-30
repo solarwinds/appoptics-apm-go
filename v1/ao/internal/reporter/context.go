@@ -32,6 +32,7 @@ const (
 )
 
 const HTTPHeaderXTraceOptions = "X-Trace-Options"
+const HTTPHeaderXTraceOptionsSignature = "X-Trace-Options-Signature"
 const HTTPHeaderXTraceOptionsResponse = "X-Trace-Options-Response"
 
 // orchestras tune to the oboe.
@@ -66,7 +67,7 @@ type ContextOptions struct {
 	URL string
 
 	XTraceOptions bool
-	TriggerTrace  bool
+	TriggerTrace  TriggerTraceMode
 
 	CB func() KVMap
 }
@@ -364,7 +365,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		} else {
 			setting, has := getSetting(layer)
 			if !has {
-				if opts.TriggerTrace {
+				if opts.TriggerTrace.Enabled() {
 					SetHeaders("trigger_trace=settings-not-available")
 				}
 				return ctx, false, headers
@@ -373,7 +374,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			_, flags, _ := mergeURLSetting(setting, opts.URL)
 			ctx.SetEnabled(flags.Enabled())
 			if opts.XTraceOptions {
-				if opts.TriggerTrace {
+				if opts.TriggerTrace.Enabled() {
 					SetHeaders("trigger_trace=ignored")
 				} else {
 					SetHeaders("ok")

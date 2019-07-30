@@ -24,10 +24,11 @@ import (
 const (
 	// HTTPHeaderName is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
 	// the distributed tracing context across HTTP requests.
-	HTTPHeaderName                  = "X-Trace"
-	HTTPHeaderXTraceOptions         = reporter.HTTPHeaderXTraceOptions
-	HTTPHeaderXTraceOptionsResponse = reporter.HTTPHeaderXTraceOptionsResponse
-	httpHandlerSpanName             = "http.HandlerFunc"
+	HTTPHeaderName                   = "X-Trace"
+	HTTPHeaderXTraceOptions          = reporter.HTTPHeaderXTraceOptions
+	HTTPHeaderXTraceOptionsSignature = reporter.HTTPHeaderXTraceOptionsSignature
+	HTTPHeaderXTraceOptionsResponse  = reporter.HTTPHeaderXTraceOptionsResponse
+	httpHandlerSpanName              = "http.HandlerFunc"
 )
 
 // key used for HTTP span to indicate a new context
@@ -152,7 +153,8 @@ func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter 
 }
 
 // CheckTriggerTraceHeader extracts the X-Trace-Options from the header
-func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]string, []string, string) {
+func CheckTriggerTraceHeader(header map[string][]string) (reporter.TriggerTraceMode, map[string]string, []string) {
+	var triggerTraceMode reporter.TriggerTraceMode
 	var forceTrace bool
 	var kvs map[string]string
 	var ignoredKeys []string
@@ -160,7 +162,7 @@ func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]strin
 
 	xTraceOptsSlice, ok := header[textproto.CanonicalMIMEHeaderKey(HTTPHeaderXTraceOptions)]
 	if !ok {
-		return false, kvs, ignoredKeys, ts
+		return triggerTraceMode, kvs, ignoredKeys
 	}
 
 	kvs = make(map[string]string)
@@ -187,11 +189,7 @@ func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]strin
 		}
 
 		if k == "ts" {
-			var err error
-			ts, err = TsNotTooEarly(v)
-			if err != nil {
-				log.Debugf("Error parsing ts: %s", err.Error())
-			}
+			ts = v
 		} else {
 			kvs[k] = v
 		}
@@ -204,7 +202,38 @@ func CheckTriggerTraceHeader(header map[string][]string) (bool, map[string]strin
 	}
 	delete(kvs, "trigger_trace")
 
-	return forceTrace, kvs, ignoredKeys, ts
+	sigSlice := header[textproto.CanonicalMIMEHeaderKey(HTTPHeaderXTraceOptionsSignature)]
+	signature := ""
+	if len(sigSlice) == 1 {
+		signature = sigSlice[0]
+	}
+
+	if forceTrace {
+		if signature != "" {
+			if validateXTraceOptionsSignature(signature, ts) {
+				triggerTraceMode = reporter.ModeRelaxedTriggerTrace
+			} else {
+				triggerTraceMode = reporter.ModeNoTriggerTrace
+			}
+		} else {
+			triggerTraceMode = reporter.ModeStrictTriggerTrace
+		}
+	} else {
+		triggerTraceMode = reporter.ModeNoTriggerTrace
+	}
+	return triggerTraceMode, kvs, ignoredKeys
+}
+
+func validateXTraceOptionsSignature(signature string, ts string) bool {
+	var err error
+	ts, err = TsNotTooEarly(ts)
+	if err != nil {
+		log.Debugf("Error parsing ts: %s", err.Error())
+		return false
+	}
+
+	// TODO: validate the signature/ts
+	return true
 }
 
 // TsNotTooEarly checks if the provided timestamp is within 5 minutes from now
@@ -229,7 +258,7 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 		f(so)
 	}
 
-	triggerTrace, triggerTraceKVs, ignoredKeys, _ := CheckTriggerTraceHeader(r.Header)
+	triggerTrace, triggerTraceKVs, ignoredKeys := CheckTriggerTraceHeader(r.Header)
 
 	// start trace, passing in metadata header
 	t := NewTraceWithOptions(spanName, SpanOptions{

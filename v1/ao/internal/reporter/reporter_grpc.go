@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	grpcReporterVersion = "golang-v2"
+	grpcReporterVersion = "2"
 
 	// default certificate used to verify the collector endpoint,
 	// can be overridden via APPOPTICS_TRUSTEDPATH

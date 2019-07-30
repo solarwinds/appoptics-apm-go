@@ -34,11 +34,13 @@ type oboeSettings struct {
 	// or a new value after negotiating with local config
 	value int
 	// The sample source after negotiating with local config
-	source             sampleSource
-	ttl                int64
-	layer              string
-	bucket             *tokenBucket
-	triggerTraceBucket *tokenBucket
+	source                    sampleSource
+	ttl                       int64
+	layer                     string
+	triggerToken              []byte
+	bucket                    *tokenBucket
+	triggerTraceRelaxedBucket *tokenBucket
+	triggerTraceStrictBucket  *tokenBucket
 }
 
 func (s *oboeSettings) hasOverrideFlag() bool {
@@ -47,8 +49,9 @@ func (s *oboeSettings) hasOverrideFlag() bool {
 
 func newOboeSettings() *oboeSettings {
 	return &oboeSettings{
-		bucket:             globalTokenBucket,
-		triggerTraceBucket: triggerTraceTokenBucket,
+		bucket: globalTokenBucket,
+		triggerTraceRelaxedBucket: triggerTraceRelaxedBucket,
+		triggerTraceStrictBucket:  triggerTraceStrictBucket,
 	}
 }
 
@@ -106,8 +109,11 @@ var globalSettingsCfg = &oboeSettingsCfg{
 // server, therefore it's initialized with only the default values.
 var globalTokenBucket = &tokenBucket{}
 
-// The token bucket exclusively for trigger trace
-var triggerTraceTokenBucket = &tokenBucket{}
+// The token bucket exclusively for trigger trace from authenticated clients
+var triggerTraceRelaxedBucket = &tokenBucket{}
+
+// The token bucket exclusively for trigger trace from unauthenticated clients
+var triggerTraceStrictBucket = &tokenBucket{}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -187,7 +193,38 @@ type SampleDecision struct {
 	xTraceOptsRsp string
 }
 
-func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool) SampleDecision {
+type TriggerTraceMode int
+
+const (
+	// ModeXTraceOptionsNotPresent means there is no X-Trace-Options header detected,
+	// which indicates that it's a trace for regular sampling
+	ModeXTraceOptionsNotPresent TriggerTraceMode = iota
+
+	// ModeNoTriggerTrace means X-Trace-Options is detected but no valid trigger-trace
+	// flag found
+	ModeNoTriggerTrace
+
+	// ModeRelaxedTriggerTrace means X-Trace-Options-Signature is present and valid.
+	// The trace will be sampled/limited by the relaxed token bucket.
+	ModeRelaxedTriggerTrace
+
+	// ModeStrictTriggerTrace means no X-Trace-Options-Signature is present. The trace
+	// will be limited by the strict token bucket.
+	ModeStrictTriggerTrace
+)
+
+func (tm TriggerTraceMode) Enabled() bool {
+	switch tm {
+	case ModeXTraceOptionsNotPresent, ModeNoTriggerTrace:
+		return false
+	case ModeRelaxedTriggerTrace, ModeStrictTriggerTrace:
+		return true
+	default:
+		panic(fmt.Sprintf("Unhandled trigger trace mode: %x", tm))
+	}
+}
+
+func oboeSampleRequest(layer string, traced bool, url string, triggerTrace TriggerTraceMode) SampleDecision {
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {
 			if !r.UseSettings {
@@ -207,11 +244,15 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool)
 
 	sampleRate, flags, source := mergeURLSetting(setting, url)
 
-	if triggerTrace && !traced {
+	if triggerTrace.Enabled() && !traced {
 		rsp := "trigger_trace=ok"
 
-		if flags.TriggerTraceEnabled() {
-			ret := setting.triggerTraceBucket.count(true, false, true)
+		if flags.TriggerTraceEnabled() { // TODO: should return (no fallback sampling) for relaxed trace with bad signature
+			bucket := setting.triggerTraceRelaxedBucket
+			if triggerTrace == ModeStrictTriggerTrace {
+				bucket = setting.triggerTraceStrictBucket
+			}
+			ret := bucket.count(true, false, true)
 			if !ret {
 				rsp = "trigger_trace=rate-exceeded"
 			}
@@ -246,7 +287,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace bool)
 	retval = setting.bucket.count(retval, traced, doRateLimiting)
 
 	rsp := "trigger-trace=not-requested"
-	if triggerTrace {
+	if triggerTrace.Enabled() {
 		rsp = "trigger_trace=ignored"
 	}
 	return SampleDecision{retval, sampleRate, source, flags.Enabled(), rsp}
@@ -365,13 +406,19 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	ns.ttl = ttl
 	ns.layer = layer
 
+	ns.triggerToken = args[kvTriggerToken]
+
 	rate := parseFloat64(args, kvBucketRate, 0)
 	capacity := parseFloat64(args, kvBucketCapacity, 0)
 	ns.bucket.setRateCap(rate, capacity)
 
-	tRate := parseFloat64(args, kvTriggerTraceBucketRate, 0)
-	tCapacity := parseFloat64(args, kvTriggerTraceBucketCapacity, 0)
-	ns.triggerTraceBucket.setRateCap(tRate, tCapacity)
+	tRelaxedRate := parseFloat64(args, kvTriggerTraceRelaxedBucketRate, 0)
+	tRelaxedCapacity := parseFloat64(args, kvTriggerTraceRelaxedBucketCapacity, 0)
+	ns.triggerTraceRelaxedBucket.setRateCap(tRelaxedRate, tRelaxedCapacity)
+
+	tStrictRate := parseFloat64(args, kvTriggerTraceStrictBucketRate, 0)
+	tStrictCapacity := parseFloat64(args, kvTriggerTraceStrictBucketCapacity, 0)
+	ns.triggerTraceStrictBucket.setRateCap(tStrictRate, tStrictCapacity)
 
 	merged := mergeLocalSetting(ns)
 

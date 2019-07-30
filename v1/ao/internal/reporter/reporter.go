@@ -37,13 +37,16 @@ type reporter interface {
 
 // KVs from getSettingsResult arguments
 const (
-	kvBucketCapacity             = "BucketCapacity"
-	kvBucketRate                 = "BucketRate"
-	kvTriggerTraceBucketCapacity = "TriggerTraceBucketCapacity" // TODO: verify kv name
-	kvTriggerTraceBucketRate     = "TriggerTraceBucketRate"     // TODO: verify kv name
-	kvMetricsFlushInterval       = "MetricsFlushInterval"
-	kvEventsFlushInterval        = "EventsFlushInterval"
-	kvMaxTransactions            = "MaxTransactions"
+	kvTriggerToken                      = "TriggerToken"
+	kvBucketCapacity                    = "BucketCapacity"
+	kvBucketRate                        = "BucketRate"
+	kvTriggerTraceRelaxedBucketCapacity = "TriggerRelaxedBucketCapacity"
+	kvTriggerTraceRelaxedBucketRate     = "TriggerRelaxedBucketRate"
+	kvTriggerTraceStrictBucketCapacity  = "TriggerStrictBucketCapacity"
+	kvTriggerTraceStrictBucketRate      = "TriggerStrictBucketRate"
+	kvMetricsFlushInterval              = "MetricsFlushInterval"
+	kvEventsFlushInterval               = "EventsFlushInterval"
+	kvMaxTransactions                   = "MaxTransactions"
 )
 
 // currently used reporter
@@ -160,17 +163,18 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	return nil
 }
 
-func shouldTraceRequestWithURL(layer string, traced bool, url string, triggerTrace bool) SampleDecision {
+func shouldTraceRequestWithURL(layer string, traced bool, url string, triggerTrace TriggerTraceMode) SampleDecision {
 	return oboeSampleRequest(layer, traced, url, triggerTrace)
 }
 
 // Determines if request should be traced, based on sample rate settings.
 func shouldTraceRequest(layer string, traced bool) (bool, int, sampleSource, bool) {
-	d := shouldTraceRequestWithURL(layer, traced, "", false)
+	d := shouldTraceRequestWithURL(layer, traced, "", ModeXTraceOptionsNotPresent)
 	return d.trace, d.rate, d.source, d.enabled
 }
 
-func argsToMap(capacity, ratePerSec, tCap, tRate float64, metricsFlushInterval, maxTransactions int) map[string][]byte {
+func argsToMap(capacity, ratePerSec, tRCap, tRRate, tSCap, tSRate float64,
+	metricsFlushInterval, maxTransactions int) map[string][]byte {
 	args := make(map[string][]byte)
 
 	if capacity > -1 {
@@ -185,17 +189,29 @@ func argsToMap(capacity, ratePerSec, tCap, tRate float64, metricsFlushInterval, 
 		binary.LittleEndian.PutUint64(bytes, bits)
 		args[kvBucketRate] = bytes
 	}
-	if tCap > -1 {
-		bits := math.Float64bits(tCap)
+	if tRCap > -1 {
+		bits := math.Float64bits(tRCap)
 		bytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(bytes, bits)
-		args[kvTriggerTraceBucketCapacity] = bytes
+		args[kvTriggerTraceRelaxedBucketCapacity] = bytes
 	}
-	if tRate > -1 {
-		bits := math.Float64bits(tRate)
+	if tRRate > -1 {
+		bits := math.Float64bits(tRRate)
 		bytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(bytes, bits)
-		args[kvTriggerTraceBucketRate] = bytes
+		args[kvTriggerTraceRelaxedBucketRate] = bytes
+	}
+	if tSCap > -1 {
+		bits := math.Float64bits(tSCap)
+		bytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bytes, bits)
+		args[kvTriggerTraceStrictBucketCapacity] = bytes
+	}
+	if tSRate > -1 {
+		bits := math.Float64bits(tSRate)
+		bytes := make([]byte, 8)
+		binary.LittleEndian.PutUint64(bytes, bits)
+		args[kvTriggerTraceStrictBucketRate] = bytes
 	}
 	if metricsFlushInterval > -1 {
 		bytes := make([]byte, 4)
