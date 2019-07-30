@@ -112,7 +112,7 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 	if Disabled() || Closed() {
 		if opts.TriggerTrace.Enabled() && Disabled() {
 			return NewNullTraceWithHeaders(map[string]string{
-				HTTPHeaderXTraceOptionsResponse: "trigger_trace=trace-mode-disabled",
+				HTTPHeaderXTraceOptionsResponse: "trigger-trace=trace-mode-disabled",
 			})
 		} else {
 			return NewNullTrace()

@@ -176,15 +176,15 @@ func CheckTriggerTraceHeader(header map[string][]string) (reporter.TriggerTraceM
 			v = kvSlice[1] // no trim space per the spec
 		}
 
-		if !(strings.HasPrefix(strings.ToLower(k), "custom_") ||
-			k == "pd_keys" ||
-			k == "trigger_trace" ||
+		if !(strings.HasPrefix(strings.ToLower(k), "custom-") ||
+			k == "pd-keys" ||
+			k == "trigger-trace" ||
 			k == "ts") {
 			ignoredKeys = append(ignoredKeys, k)
 			continue
 		}
 
-		if k == "pd_keys" {
+		if k == "pd-keys" {
 			k = "PDKeys"
 		}
 
@@ -194,13 +194,13 @@ func CheckTriggerTraceHeader(header map[string][]string) (reporter.TriggerTraceM
 			kvs[k] = v
 		}
 	}
-	val, forceTrace := kvs["trigger_trace"]
+	val, forceTrace := kvs["trigger-trace"]
 	if val != "" {
-		log.Debug("trigger_trace should not contain any value.")
+		log.Debug("trigger-trace should not contain any value.")
 		forceTrace = false
-		ignoredKeys = append(ignoredKeys, "trigger_trace")
+		ignoredKeys = append(ignoredKeys, "trigger-trace")
 	}
-	delete(kvs, "trigger_trace")
+	delete(kvs, "trigger-trace")
 
 	sigSlice := header[textproto.CanonicalMIMEHeaderKey(HTTPHeaderXTraceOptionsSignature)]
 	signature := ""

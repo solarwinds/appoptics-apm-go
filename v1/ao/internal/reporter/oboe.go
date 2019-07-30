@@ -236,7 +236,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, "trigger_trace=settings-not-available"}
+		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, "trigger-trace=settings-not-available"}
 	}
 
 	retval := false
@@ -245,7 +245,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 	sampleRate, flags, source := mergeURLSetting(setting, url)
 
 	if triggerTrace.Enabled() && !traced {
-		rsp := "trigger_trace=ok"
+		rsp := "trigger-trace=ok"
 
 		if flags.TriggerTraceEnabled() { // TODO: should return (no fallback sampling) for relaxed trace with bad signature
 			bucket := setting.triggerTraceRelaxedBucket
@@ -254,14 +254,14 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 			}
 			ret := bucket.count(true, false, true)
 			if !ret {
-				rsp = "trigger_trace=rate-exceeded"
+				rsp = "trigger-trace=rate-exceeded"
 			}
 			return SampleDecision{ret, setting.value, setting.source, true, rsp} // TODO: is the value/source correct?
 		} else {
 			if !flags.Enabled() {
-				rsp = "trigger_trace=tracing-disabled"
+				rsp = "trigger-trace=tracing-disabled"
 			} else {
-				rsp = "trigger_trace=disabled"
+				rsp = "trigger-trace=disabled"
 			}
 			return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, rsp} // TODO: check ret value
 		}
@@ -288,7 +288,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 
 	rsp := "trigger-trace=not-requested"
 	if triggerTrace.Enabled() {
-		rsp = "trigger_trace=ignored"
+		rsp = "trigger-trace=ignored"
 	}
 	return SampleDecision{retval, sampleRate, source, flags.Enabled(), rsp}
 }

@@ -16,7 +16,7 @@ import (
 func TestTriggerTrace(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace;pd_keys=lo:se,check-id:123",
+		"X-Trace-Options": "trigger-trace;pd-keys=lo:se,check-id:123",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
@@ -30,7 +30,7 @@ func TestTriggerTrace(t *testing.T) {
 		}},
 	})
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger_trace=ok", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=ok", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 }
 
@@ -38,20 +38,20 @@ func TestTriggerTraceNoSetting(t *testing.T) {
 
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.NoSettingST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace;pd_keys=lo:se,check-id:123",
+		"X-Trace-Options": "trigger-trace;pd-keys=lo:se,check-id:123",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
 	r.Close(0)
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger_trace=settings-not-available", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=settings-not-available", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 }
 
 func TestTriggerTraceWithCustomKey(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.TriggerTraceOnlyST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace;custom_key1=value1",
+		"X-Trace-Options": "trigger-trace;custom-key1=value1",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
@@ -59,20 +59,20 @@ func TestTriggerTraceWithCustomKey(t *testing.T) {
 	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-			assert.Equal(t, "value1", n.Map["custom_key1"])
+			assert.Equal(t, "value1", n.Map["custom-key1"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
 	})
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger_trace=ok", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=ok", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 }
 
 func TestTriggerTraceRateLimited(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.LimitedTriggerTraceST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace;custom_key1=value1",
+		"X-Trace-Options": "trigger-trace;custom-key1=value1",
 	}
 
 	var rrs []*httptest.ResponseRecorder
@@ -91,9 +91,9 @@ func TestTriggerTraceRateLimited(t *testing.T) {
 
 	for _, rr := range rrs {
 		rsp := rr.Header().Get("X-Trace-Options-Response")
-		if rsp == "trigger_trace=ok" {
+		if rsp == "trigger-trace=ok" {
 			triggerTraced++
-		} else if rsp == "trigger_trace=rate-exceeded" {
+		} else if rsp == "trigger-trace=rate-exceeded" {
 			limited++
 		}
 	}
@@ -108,14 +108,14 @@ func TestTriggerTraceDisabled(t *testing.T) {
 
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace;pd_keys=lo:se,check-id:123",
+		"X-Trace-Options": "trigger-trace;pd-keys=lo:se,check-id:123",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
 	r.Close(0)
 
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger_trace=disabled", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=disabled", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 
 	_ = os.Unsetenv("APPOPTICS_TRIGGER_TRACE")
@@ -128,14 +128,14 @@ func TestTriggerTraceEnabledTracingModeDisabled(t *testing.T) {
 
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace;pd_keys=lo:se,check-id:123",
+		"X-Trace-Options": "trigger-trace;pd-keys=lo:se,check-id:123",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
 	r.Close(0)
 
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger_trace=tracing-disabled", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=tracing-disabled", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 
 	_ = os.Unsetenv("APPOPTICS_TRACING_MODE")
@@ -149,14 +149,14 @@ func TestTriggerTraceWithURLFiltering(t *testing.T) {
 
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace;pd_keys=lo:se,check-id:123",
+		"X-Trace-Options": "trigger-trace;pd-keys=lo:se,check-id:123",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
 	r.Close(0)
 
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger_trace=tracing-disabled", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=tracing-disabled", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 
 	reporter.ReloadURLsConfig(nil)
@@ -165,7 +165,7 @@ func TestTriggerTraceWithURLFiltering(t *testing.T) {
 func TestNoTriggerTrace(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "pd_keys=lo:se,check-id:123;custom_key1=value1",
+		"X-Trace-Options": "pd-keys=lo:se,check-id:123;custom-key1=value1",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
@@ -174,7 +174,7 @@ func TestNoTriggerTrace(t *testing.T) {
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
-			assert.Equal(t, "value1", n.Map["custom_key1"])
+			assert.Equal(t, "value1", n.Map["custom-key1"])
 			assert.Equal(t, "lo:se,check-id:123", n.Map["PDKeys"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
@@ -188,7 +188,7 @@ func TestNoTriggerTrace(t *testing.T) {
 func TestNoTriggerTraceInvalidFlag(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace=1;tigger_trace",
+		"X-Trace-Options": "trigger-trace=1;tigger_trace",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
@@ -202,14 +202,14 @@ func TestNoTriggerTraceInvalidFlag(t *testing.T) {
 		}},
 	})
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger-trace=not-requested;ignored=tigger_trace,trigger_trace", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=not-requested;ignored=tigger_trace,trigger-trace", rHeader.Get("X-Trace-Options-Response"))
 	assert.NotEmpty(t, rHeader.Get("X-Trace"))
 }
 
 func TestTriggerTraceInvalidFlag(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace;foo=bar;app_id=123",
+		"X-Trace-Options": "trigger-trace;foo=bar;app_id=123",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
@@ -223,28 +223,28 @@ func TestTriggerTraceInvalidFlag(t *testing.T) {
 		}},
 	})
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger_trace=ok;ignored=foo,app_id", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=ok;ignored=foo,app_id", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 }
 
 func TestTriggerTraceXTraceBothValid(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace",
+		"X-Trace-Options": "trigger-trace",
 		"X-Trace":         "2B987445277543FF9C151D0CDE6D29B6E21603D5DB2C5EFEA7749039AF00",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
 	r.Close(0)
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger_trace=ignored", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=ignored", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 }
 
 func TestNoTriggerTraceXTrace(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "custom_key1=value1",
+		"X-Trace-Options": "custom-key1=value1",
 		"X-Trace":         "2B987445277543FF9C151D0CDE6D29B6E21603D5DB2C5EFEA7749039AF01",
 	}
 
@@ -254,7 +254,7 @@ func TestNoTriggerTraceXTrace(t *testing.T) {
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{{"Edge", "2C5EFEA7749039AF"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
-			assert.Equal(t, "value1", n.Map["custom_key1"])
+			assert.Equal(t, "value1", n.Map["custom-key1"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
@@ -268,7 +268,7 @@ func TestNoTriggerTraceXTrace(t *testing.T) {
 func TestTriggerTraceInvalidXTrace(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger_trace;pd_keys=lo:se,check-id:123",
+		"X-Trace-Options": "trigger-trace;pd-keys=lo:se,check-id:123",
 		"X-Trace":         "invalid-value",
 	}
 
@@ -283,14 +283,14 @@ func TestTriggerTraceInvalidXTrace(t *testing.T) {
 		}},
 	})
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger_trace=ok", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=ok", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 }
 
 // func TestRelaxedTriggerTrace(t *testing.T) {
 // 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.RelaxedTriggerTraceOnlyST))
 // 	hd := map[string]string{
-// 		"X-Trace-Options":           fmt.Sprintf("trigger_trace;pd_keys=lo:se,check-id:123;ts=%d", time.Now().Unix()),
+// 		"X-Trace-Options":           fmt.Sprintf("trigger-trace;pd-keys=lo:se,check-id:123;ts=%d", time.Now().Unix()),
 // 		"X-Trace-Options-Signature": "", // TODO:
 // 	}
 //
@@ -305,14 +305,14 @@ func TestTriggerTraceInvalidXTrace(t *testing.T) {
 // 		}},
 // 	})
 // 	rHeader := rr.Header()
-// 	assert.EqualValues(t, "trigger_trace=ok", rHeader.Get("X-Trace-Options-Response"))
+// 	assert.EqualValues(t, "trigger-trace=ok", rHeader.Get("X-Trace-Options-Response"))
 // 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 // }
 
 // func TestRelaxedTriggerTraceTSTooEarly(t *testing.T) {
 // 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.RelaxedTriggerTraceOnlyST))
 // 	hd := map[string]string{
-// 		"X-Trace-Options":           fmt.Sprintf("trigger_trace;pd_keys=lo:se,check-id:123;ts=%d", time.Now().Unix()-60*6),
+// 		"X-Trace-Options":           fmt.Sprintf("trigger-trace;pd-keys=lo:se,check-id:123;ts=%d", time.Now().Unix()-60*6),
 // 		"X-Trace-Options-Signature": "", // TODO:
 // 	}
 //
@@ -327,14 +327,14 @@ func TestTriggerTraceInvalidXTrace(t *testing.T) {
 // 		}},
 // 	})
 // 	rHeader := rr.Header()
-// 	assert.EqualValues(t, "trigger_trace=not-requested", rHeader.Get("X-Trace-Options-Response"))
+// 	assert.EqualValues(t, "trigger-trace=not-requested", rHeader.Get("X-Trace-Options-Response"))
 // 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 // }
 //
 // func TestRelaxedTriggerTraceInvalidSignature(t *testing.T) {
 // 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.RelaxedTriggerTraceOnlyST))
 // 	hd := map[string]string{
-// 		"X-Trace-Options":           fmt.Sprintf("trigger_trace;pd_keys=lo:se,check-id:123;ts=%d", time.Now().Unix()),
+// 		"X-Trace-Options":           fmt.Sprintf("trigger-trace;pd-keys=lo:se,check-id:123;ts=%d", time.Now().Unix()),
 // 		"X-Trace-Options-Signature": "", // TODO: invalid signature
 // 	}
 //
@@ -349,6 +349,6 @@ func TestTriggerTraceInvalidXTrace(t *testing.T) {
 // 		}},
 // 	})
 // 	rHeader := rr.Header()
-// 	assert.EqualValues(t, "trigger_trace=not-requested", rHeader.Get("X-Trace-Options-Response"))
+// 	assert.EqualValues(t, "trigger-trace=not-requested", rHeader.Get("X-Trace-Options-Response"))
 // 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 // }
