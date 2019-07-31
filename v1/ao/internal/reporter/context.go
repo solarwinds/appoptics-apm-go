@@ -5,7 +5,7 @@ package reporter
 import (
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
+	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
 	"strconv"
@@ -343,9 +343,9 @@ func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
 	return ctx, err
 }
 
-func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]string, []string) {
+func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]string, []string, error) {
 	if opts == "" {
-		return ModeXTraceOptionsNotPresent, nil, nil
+		return ModeXTraceOptionsNotPresent, nil, nil, nil
 	}
 
 	mode := ModeNoTriggerTrace
@@ -362,7 +362,7 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 			v = kvSlice[1] // no trim space per the spec
 		}
 
-		if !(strings.HasPrefix(strings.ToLower(k), "custom-") ||
+		if !(strings.HasPrefix(k, "custom-") ||
 			k == "pd-keys" ||
 			k == "trigger-trace" ||
 			k == "ts") {
@@ -388,9 +388,11 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 	}
 	delete(kvs, "trigger-trace")
 
+	var authErr error
 	if forceTrace {
 		if sig != "" {
-			if validateXTraceOptionsSignature(sig, ts, opts) {
+			authErr = validateXTraceOptionsSignature(sig, ts, opts)
+			if authErr == nil {
 				mode = ModeRelaxedTriggerTrace
 			} else {
 				mode = ModeNoTriggerTrace
@@ -401,28 +403,29 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 	} else {
 		mode = ModeNoTriggerTrace
 	}
-	return mode, kvs, ignored
+	return mode, kvs, ignored, authErr
 }
 
-func validateXTraceOptionsSignature(signature, ts, data string) bool {
+func validateXTraceOptionsSignature(signature, ts, data string) error {
 	var err error
 	ts, err = tsNotTooEarly(ts)
 	if err != nil {
-		log.Debugf("Error parsing ts: %s", err.Error())
-		return false
+		return errors.New("bad-timestamp")
 	}
 
 	token, err := getTriggerTraceToken()
 	if err != nil {
-		log.Debugf("validateXTraceOptionsSignature: %s", err.Error())
-		return false
+		return errors.New("bad-token")
 	}
-	return HmacHash(token, []byte(data)) == signature
+
+	if HmacHash(token, []byte(data)) != signature {
+		return errors.New("bad-signature")
+	}
+	return nil
 }
 
 func HmacHash(token, data []byte) string {
-	// TODO: check the algorithm, do we use sha256?
-	h := hmac.New(sha256.New, []byte(token))
+	h := hmac.New(sha1.New, []byte(token))
 	h.Write(data)
 	sha := hex.EncodeToString(h.Sum(nil))
 	return sha
@@ -457,14 +460,20 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 	traced := false
 	addCtxEdge := false
 
+	tMode, tKVs, tIgnoredKeys, authErr := parseTriggerTraceFlag(opts.XTraceOptions, opts.XTraceOptionsSignature)
+
 	var SetHeaders = func(v string) {
 		if headers == nil {
 			headers = make(map[string]string)
 		}
+		v = "trigger-trace=" + v
+		if tMode == ModeRelaxedTriggerTrace {
+			v += ";auth=ok"
+		} else if authErr != nil {
+			v += ";auth=" + authErr.Error()
+		}
 		headers[HTTPHeaderXTraceOptionsResponse] = v
 	}
-
-	tMode, tKVs, tIgnoredKeys := parseTriggerTraceFlag(opts.XTraceOptions, opts.XTraceOptionsSignature)
 
 	defer func() {
 		if len(tIgnoredKeys) != 0 {
@@ -492,7 +501,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			setting, has := getSetting(layer)
 			if !has {
 				if tMode.Enabled() {
-					SetHeaders("trigger-trace=settings-not-available")
+					SetHeaders("settings-not-available")
 				}
 				return ctx, false, headers
 			}
@@ -501,7 +510,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			ctx.SetEnabled(flags.Enabled())
 			if opts.XTraceOptions != "" {
 				if tMode.Enabled() {
-					SetHeaders("trigger-trace=ignored")
+					SetHeaders("ignored")
 				} else {
 					SetHeaders("ok")
 				}

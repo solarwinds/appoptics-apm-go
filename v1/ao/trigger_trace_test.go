@@ -308,52 +308,52 @@ func TestRelaxedTriggerTrace(t *testing.T) {
 		}},
 	})
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger-trace=ok", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=ok;auth=ok", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 }
 
-// func TestRelaxedTriggerTraceTSTooEarly(t *testing.T) {
-// 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.RelaxedTriggerTraceOnlyST))
-// 	ts := time.Now().Unix() - 60*6
-// 	opts := fmt.Sprintf("trigger-trace;pd-keys=lo:se,check-id:123;ts=%d", ts)
-// 	hd := map[string]string{
-// 		"X-Trace-Options":           opts,
-// 		"X-Trace-Options-Signature": reporter.HmacHash([]byte(reporter.TestToken), []byte(opts)), // TODO:
-// 	}
-//
-// 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
-// 	r.Close(2)
-// 	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
-// 		// entry event should have no edges
-// 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-// 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
-// 		}},
-// 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
-// 		}},
-// 	})
-// 	rHeader := rr.Header()
-// 	assert.EqualValues(t, "trigger-trace=not-requested", rHeader.Get("X-Trace-Options-Response"))
-// 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
-// }
-//
-// func TestRelaxedTriggerTraceInvalidSignature(t *testing.T) {
-// 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.RelaxedTriggerTraceOnlyST))
-// 	hd := map[string]string{
-// 		"X-Trace-Options":           fmt.Sprintf("trigger-trace;pd-keys=lo:se,check-id:123;ts=%d", time.Now().Unix()),
-// 		"X-Trace-Options-Signature": "invalidSignature", // TODO: invalid signature
-// 	}
-//
-// 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
-// 	r.Close(2)
-// 	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
-// 		// entry event should have no edges
-// 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-// 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
-// 		}},
-// 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
-// 		}},
-// 	})
-// 	rHeader := rr.Header()
-// 	assert.EqualValues(t, "trigger-trace=not-requested", rHeader.Get("X-Trace-Options-Response"))
-// 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
-// }
+func TestRelaxedTriggerTraceTSTooEarly(t *testing.T) {
+	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
+	ts := time.Now().Unix() - 60*6
+	opts := fmt.Sprintf("trigger-trace;pd-keys=lo:se,check-id:123;ts=%d", ts)
+	hd := map[string]string{
+		"X-Trace-Options":           opts,
+		"X-Trace-Options-Signature": reporter.HmacHash([]byte(reporter.TestToken), []byte(opts)), // TODO:
+	}
+
+	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
+	r.Close(2)
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+		// entry event should have no edges
+		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
+			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+		}},
+		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
+		}},
+	})
+	rHeader := rr.Header()
+	assert.EqualValues(t, "trigger-trace=not-requested;auth=bad-timestamp", rHeader.Get("X-Trace-Options-Response"))
+	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
+}
+
+func TestRelaxedTriggerTraceInvalidSignature(t *testing.T) {
+	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
+	hd := map[string]string{
+		"X-Trace-Options":           fmt.Sprintf("trigger-trace;pd-keys=lo:se,check-id:123;ts=%d", time.Now().Unix()),
+		"X-Trace-Options-Signature": "invalidSignature",
+	}
+
+	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
+	r.Close(2)
+	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+		// entry event should have no edges
+		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
+			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+		}},
+		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
+		}},
+	})
+	rHeader := rr.Header()
+	assert.EqualValues(t, "trigger-trace=not-requested;auth=bad-signature", rHeader.Get("X-Trace-Options-Response"))
+	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
+}
