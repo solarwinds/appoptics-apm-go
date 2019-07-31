@@ -31,7 +31,10 @@ type TestReporter struct {
 	Timeout        time.Duration
 }
 
-const defaultTestReporterTimeout = 2 * time.Second
+const (
+	defaultTestReporterTimeout = 2 * time.Second
+	TestToken                  = "TOKEN"
+)
 
 var usingTestReporter = false
 var oldReporter reporter = &nullReporter{}
@@ -210,37 +213,37 @@ func (r *TestReporter) addDefaultSetting() {
 	// add default setting with 100% sampling
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS,FORCE_TRACE"),
-		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte(TestToken)))
 }
 
 func (r *TestReporter) addNoTriggerTrace() {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120, argsToMap(1000000, 1000000, 0, 0, 0, 0, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 0, 0, 0, 0, -1, -1, []byte(TestToken)))
 }
 
 func (r *TestReporter) addTriggerTraceOnly() {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("FORCE_TRACE"),
-		0, 120, argsToMap(0, 0, 1000000, 1000000, 1000000, 1000000, -1, -1))
+		0, 120, argsToMap(0, 0, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte(TestToken)))
 }
 
 func (r *TestReporter) addRelaxedTriggerTraceOnly() {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("FORCE_TRACE"),
-		0, 120, argsToMap(0, 0, 1000000, 1000000, 0, 0, -1, -1))
+		0, 120, argsToMap(0, 0, 1000000, 1000000, 0, 0, -1, -1, []byte(TestToken)))
 }
 
 func (r *TestReporter) addStrictTriggerTraceOnly() {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("FORCE_TRACE"),
-		0, 120, argsToMap(0, 0, 0, 0, 1000000, 1000000, -1, -1))
+		0, 120, argsToMap(0, 0, 0, 0, 1000000, 1000000, -1, -1, []byte(TestToken)))
 }
 
 func (r *TestReporter) addLimitedTriggerTrace() {
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS,FORCE_TRACE"),
-		1000000, 120, argsToMap(1000000, 1000000, 1, 1, 1, 1, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1, 1, 1, 1, -1, -1, []byte(TestToken)))
 }
 
 // Setting types

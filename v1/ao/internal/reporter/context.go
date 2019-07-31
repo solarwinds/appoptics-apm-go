@@ -3,13 +3,18 @@
 package reporter
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
-	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -66,8 +71,8 @@ type ContextOptions struct {
 	// URL is used to do the URL-based transaction filtering.
 	URL string
 
-	XTraceOptions bool
-	TriggerTrace  TriggerTraceMode
+	XTraceOptions          string
+	XTraceOptionsSignature string
 
 	CB func() KVMap
 }
@@ -338,6 +343,112 @@ func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
 	return ctx, err
 }
 
+func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]string, []string) {
+	if opts == "" {
+		return ModeXTraceOptionsNotPresent, nil, nil
+	}
+
+	mode := ModeNoTriggerTrace
+	kvs := make(map[string]string)
+	var ignored []string
+	var ts string
+
+	optsSlice := strings.Split(opts, ";")
+	for _, opt := range optsSlice {
+		kvSlice := strings.SplitN(opt, "=", 2)
+		var k, v string
+		k = kvSlice[0] // no trim space per the spec
+		if len(kvSlice) == 2 {
+			v = kvSlice[1] // no trim space per the spec
+		}
+
+		if !(strings.HasPrefix(strings.ToLower(k), "custom-") ||
+			k == "pd-keys" ||
+			k == "trigger-trace" ||
+			k == "ts") {
+			ignored = append(ignored, k)
+			continue
+		}
+
+		if k == "pd-keys" {
+			k = "PDKeys"
+		}
+
+		if k != "ts" {
+			kvs[k] = v
+		} else {
+			ts = v
+		}
+	}
+	val, forceTrace := kvs["trigger-trace"]
+	if val != "" {
+		log.Debug("trigger-trace should not contain any value.")
+		forceTrace = false
+		ignored = append(ignored, "trigger-trace")
+	}
+	delete(kvs, "trigger-trace")
+
+	if forceTrace {
+		if sig != "" {
+			if validateXTraceOptionsSignature(sig, ts, opts) {
+				mode = ModeRelaxedTriggerTrace
+			} else {
+				mode = ModeNoTriggerTrace
+			}
+		} else {
+			mode = ModeStrictTriggerTrace
+		}
+	} else {
+		mode = ModeNoTriggerTrace
+	}
+	return mode, kvs, ignored
+}
+
+func validateXTraceOptionsSignature(signature, ts, data string) bool {
+	var err error
+	ts, err = tsNotTooEarly(ts)
+	if err != nil {
+		log.Debugf("Error parsing ts: %s", err.Error())
+		return false
+	}
+
+	token, err := getTriggerTraceToken()
+	if err != nil {
+		log.Debugf("validateXTraceOptionsSignature: %s", err.Error())
+		return false
+	}
+	return HmacHash(token, []byte(data)) == signature
+}
+
+func HmacHash(token, data []byte) string {
+	// TODO: check the algorithm, do we use sha256?
+	h := hmac.New(sha256.New, []byte(token))
+	h.Write(data)
+	sha := hex.EncodeToString(h.Sum(nil))
+	return sha
+}
+
+func getTriggerTraceToken() ([]byte, error) {
+	setting, ok := getSetting("")
+	if !ok {
+		return nil, errors.New("failed to get settings")
+	}
+	return setting.triggerToken, nil
+}
+
+func tsNotTooEarly(tsStr string) (string, error) {
+	ts, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		return "", errors.Wrap(err, "TsNotTooEarly")
+	}
+
+	t := time.Unix(ts, 0)
+	if t.Before(time.Now().Add(time.Minute * -5)) {
+		return "", fmt.Errorf("timestamp too early: %s", tsStr)
+	}
+	return strconv.FormatInt(ts, 10), nil
+}
+
 // NewContext starts a trace for the provided URL, possibly continuing one, if
 // mdStr is provided. Setting reportEntry will report an entry event before this
 // function returns, calling cb if provided for additional KV pairs.
@@ -353,6 +464,21 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		headers[HTTPHeaderXTraceOptionsResponse] = v
 	}
 
+	tMode, tKVs, tIgnoredKeys := parseTriggerTraceFlag(opts.XTraceOptions, opts.XTraceOptionsSignature)
+
+	defer func() {
+		if len(tIgnoredKeys) != 0 {
+			xTraceOptsRsp, ok := headers[HTTPHeaderXTraceOptionsResponse]
+			ignored := "ignored=" + strings.Join(tIgnoredKeys, ",")
+			if ok && xTraceOptsRsp != "" {
+				xTraceOptsRsp = xTraceOptsRsp + ";" + ignored
+			} else {
+				xTraceOptsRsp = ignored
+			}
+			headers[HTTPHeaderXTraceOptionsResponse] = xTraceOptsRsp
+		}
+	}()
+
 	if opts.MdStr != "" {
 		var err error
 		if ctx, err = newContextFromMetadataString(opts.MdStr); err != nil {
@@ -365,7 +491,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		} else {
 			setting, has := getSetting(layer)
 			if !has {
-				if opts.TriggerTrace.Enabled() {
+				if tMode.Enabled() {
 					SetHeaders("trigger-trace=settings-not-available")
 				}
 				return ctx, false, headers
@@ -373,8 +499,8 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 
 			_, flags, _ := mergeURLSetting(setting, opts.URL)
 			ctx.SetEnabled(flags.Enabled())
-			if opts.XTraceOptions {
-				if opts.TriggerTrace.Enabled() {
+			if opts.XTraceOptions != "" {
+				if tMode.Enabled() {
 					SetHeaders("trigger-trace=ignored")
 				} else {
 					SetHeaders("ok")
@@ -388,7 +514,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		ctx = newContext(true)
 	}
 
-	decision := shouldTraceRequestWithURL(layer, traced, opts.URL, opts.TriggerTrace)
+	decision := shouldTraceRequestWithURL(layer, traced, opts.URL, tMode)
 	if decision.trace {
 		if reportEntry {
 			var kvs map[string]interface{}
@@ -398,6 +524,11 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			if len(kvs) == 0 {
 				kvs = make(map[string]interface{})
 			}
+
+			for k, v := range tKVs {
+				kvs[k] = v
+			}
+
 			kvs["SampleRate"] = decision.rate
 			kvs["SampleSource"] = decision.source
 			if _, ok = ctx.(*oboeContext); !ok {
@@ -407,7 +538,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 				return &nullContext{}, false, headers
 			}
 		}
-		if opts.XTraceOptions {
+		if opts.XTraceOptions != "" {
 			SetHeaders(decision.xTraceOptsRsp)
 		}
 		return ctx, true, headers
@@ -415,7 +546,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 
 	ctx.SetSampled(false)
 	ctx.SetEnabled(decision.enabled)
-	if opts.XTraceOptions {
+	if opts.XTraceOptions != "" {
 		SetHeaders(decision.xTraceOptsRsp)
 	}
 	return ctx, true, headers

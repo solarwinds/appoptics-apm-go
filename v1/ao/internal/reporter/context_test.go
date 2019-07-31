@@ -229,7 +229,7 @@ func TestNewContextForURL(t *testing.T) {
 
 	// test invalid metadata string
 	ctx, ok, _ := NewContext("testBadMDSpan", true, ContextOptions{
-		MdStr: "hello", URL: "", TriggerTrace: ModeXTraceOptionsNotPresent}, nil)
+		MdStr: "hello", URL: "", XTraceOptions: "", XTraceOptionsSignature: ""}, nil)
 
 	assert.True(t, ok) // bad metadata string should get ignored
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
@@ -237,7 +237,7 @@ func TestNewContextForURL(t *testing.T) {
 	oldMD := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2A2203"
 	// test old metadata string
 	ctx, ok, _ = NewContext("testOldMDSpan", true, ContextOptions{
-		MdStr: oldMD, URL: "", TriggerTrace: ModeXTraceOptionsNotPresent}, nil)
+		MdStr: oldMD, URL: "", XTraceOptions: "", XTraceOptionsSignature: ""}, nil)
 
 	assert.True(t, ok) // old metadata string should get ignore
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
@@ -255,7 +255,7 @@ func TestNewContextForURLTracingDisabled(t *testing.T) {
 
 	// create a valid context even if tracing is disabled
 	ctx, ok, _ := NewContext("testLayer", false, ContextOptions{
-		MdStr: "", URL: "", TriggerTrace: ModeXTraceOptionsNotPresent}, nil)
+		MdStr: "", URL: "", XTraceOptions: "", XTraceOptionsSignature: ""}, nil)
 
 	assert.True(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
@@ -288,7 +288,7 @@ func TestNullContext(t *testing.T) {
 	// shouldn't be able to create a trace if the entry event fails
 	r.ShouldError = true
 	ctxBad, ok, _ := NewContext("testBadEntry", true, ContextOptions{
-		MdStr: "", URL: "", TriggerTrace: ModeXTraceOptionsNotPresent}, nil)
+		MdStr: "", URL: "", XTraceOptions: "", XTraceOptionsSignature: ""}, nil)
 	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
 	assert.False(t, ctxBad.IsSampled())

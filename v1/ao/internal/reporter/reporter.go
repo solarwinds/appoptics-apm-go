@@ -174,7 +174,7 @@ func shouldTraceRequest(layer string, traced bool) (bool, int, sampleSource, boo
 }
 
 func argsToMap(capacity, ratePerSec, tRCap, tRRate, tSCap, tSRate float64,
-	metricsFlushInterval, maxTransactions int) map[string][]byte {
+	metricsFlushInterval, maxTransactions int, token []byte) map[string][]byte {
 	args := make(map[string][]byte)
 
 	if capacity > -1 {
@@ -223,6 +223,8 @@ func argsToMap(capacity, ratePerSec, tRCap, tRRate, tSCap, tSRate float64,
 		binary.LittleEndian.PutUint32(bytes, uint32(maxTransactions))
 		args[kvMaxTransactions] = bytes
 	}
+
+	args[kvTriggerToken] = token
 
 	return args
 }

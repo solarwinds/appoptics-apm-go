@@ -110,13 +110,7 @@ func NewTrace(spanName string) Trace {
 // NewTraceWithOptions creates a new trace with the provided options
 func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 	if Disabled() || Closed() {
-		if opts.TriggerTrace.Enabled() && Disabled() {
-			return NewNullTraceWithHeaders(map[string]string{
-				HTTPHeaderXTraceOptionsResponse: "trigger-trace=trace-mode-disabled",
-			})
-		} else {
-			return NewNullTrace()
-		}
+		return NewNullTrace()
 	}
 
 	ctx, ok, headers := reporter.NewContext(spanName, true, opts.ContextOptions, func() KVMap {
@@ -399,6 +393,3 @@ func (t *nullTrace) SetHTTPRspHeaders(headers map[string]string) { t.headers = h
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }
-
-// NewNullTraceWithHeaders returns a null trace with the provided headers
-func NewNullTraceWithHeaders(headers map[string]string) Trace { return &nullTrace{headers: headers} }

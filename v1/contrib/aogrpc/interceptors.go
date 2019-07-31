@@ -65,28 +65,36 @@ func getTopFramePkg(st StackTracer) (string, error) {
 	return fp.Base(fp.Dir(frames[1])), nil
 }
 
+func getFirstValFromMd(md metadata.MD, key string) string {
+	var v string
+	if xt, ok := md[key]; ok {
+		v = xt[0]
+	} else if xt, ok = md[strings.ToLower(key)]; ok {
+		v = xt[0]
+	}
+	return v
+}
+
 func tracingContext(ctx context.Context, serverName string, methodName string, statusCode *int) (context.Context, ao.Trace) {
 
 	action := actionFromMethod(methodName)
 
 	xtID := ""
+	opt := ""
+	signature := ""
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok {
-		if xt, ok := md[ao.HTTPHeaderName]; ok {
-			xtID = xt[0]
-		} else if xt, ok = md[strings.ToLower(ao.HTTPHeaderName)]; ok {
-			xtID = xt[0]
-		}
+		xtID = getFirstValFromMd(md, ao.HTTPHeaderName)
+		opt = getFirstValFromMd(md, ao.HTTPHeaderXTraceOptions)
+		signature = getFirstValFromMd(md, ao.HTTPHeaderXTraceOptionsSignature)
 	}
-
-	// TODO: attach headers to HTTP response
-	triggerTrace, triggerTraceKVs, _ := ao.CheckTriggerTraceHeader(md)
 
 	t := ao.NewTraceWithOptions(serverName, ao.SpanOptions{
 		ContextOptions: ao.ContextOptions{
-			MdStr:        xtID,
-			URL:          methodName,
-			TriggerTrace: triggerTrace,
+			MdStr:                  xtID,
+			URL:                    methodName,
+			XTraceOptions:          opt,
+			XTraceOptionsSignature: signature,
 			CB: func() ao.KVMap {
 				kvs := ao.KVMap{
 					"Method":     "POST",
@@ -96,9 +104,6 @@ func tracingContext(ctx context.Context, serverName string, methodName string, s
 					"Status":     statusCode,
 				}
 
-				for k, v := range triggerTraceKVs {
-					kvs[k] = v
-				}
 				return kvs
 			},
 		}})
