@@ -11,6 +11,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
+	"github.com/stretchr/testify/require"
 	mbson "gopkg.in/mgo.v2/bson"
 
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
@@ -50,7 +51,8 @@ func TestInitMessageUDP(t *testing.T) {
 
 func TestTokenBucket(t *testing.T) {
 	b := newTokenBucket(5, 2)
-	c := globalSettingsCfg
+	c := b
+
 	consumers := 5
 	iters := 100
 	sendRate := 30 // test request rate of 30 per second
@@ -134,7 +136,10 @@ func TestSamplingRate(t *testing.T) {
 	// make sure we're within 20% of our expected rate over 1,000,000 trials
 	assert.InDelta(t, 2.5, float64(traced)*100/float64(total), 0.2)
 
-	c := globalSettingsCfg
+	setting, ok := getSetting("")
+	assert.True(t, ok)
+	c := setting.bucket
+
 	assert.EqualValues(t, c.Requested(), total)
 	assert.EqualValues(t, c.Through(), 0)
 	assert.EqualValues(t, c.Traced(), traced)
@@ -221,26 +226,31 @@ func TestSampleSource(t *testing.T) {
 
 func TestSampleFlags(t *testing.T) {
 	r := SetTestReporter(TestReporterDisableDefaultSetting(true))
-	c := globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte(""),
 		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	ok, _, _, _ := shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
+
+	setting, ok := getSetting("")
+	require.True(t, ok)
+	c := setting.bucket
 	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.False(t, ok)
 	assert.EqualValues(t, 1, c.Through())
 
 	resetSettings()
-	c = globalSettingsCfg
-
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START"),
 		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.True(t, ok)
+
+	setting, ok = getSetting("")
+	require.True(t, ok)
+	c = setting.bucket
 	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.False(t, ok)
@@ -255,26 +265,32 @@ func TestSampleFlags(t *testing.T) {
 	assert.False(t, decision.trace)
 
 	resetSettings()
-	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
+
+	setting, ok = getSetting("")
+	require.True(t, ok)
+	c = setting.bucket
 	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.True(t, ok)
 	assert.EqualValues(t, 1, c.Through())
 
 	resetSettings()
-	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_THROUGH"),
 		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
+
+	setting, ok = getSetting("")
+	require.True(t, ok)
+	c = setting.bucket
 	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.True(t, ok)
@@ -285,7 +301,9 @@ func TestSampleFlags(t *testing.T) {
 
 func TestSampleTokenBucket(t *testing.T) {
 	r := SetTestReporter()
-	c := globalSettingsCfg
+	setting, ok := getSetting("")
+	require.True(t, ok)
+	c := setting.bucket
 
 	traced := callShouldTraceRequest(1, false)
 	assert.EqualValues(t, 1, traced)
@@ -294,29 +312,35 @@ func TestSampleTokenBucket(t *testing.T) {
 	assert.EqualValues(t, 0, c.Limited())
 
 	resetSettings()
-	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START"),
 		1000000, 120, argsToMap(0, 0, 0, 0, 0, 0, -1, -1, []byte("")))
 	traced = callShouldTraceRequest(1, false)
 	assert.EqualValues(t, 0, traced)
+
+	setting, ok = getSetting("")
+	require.True(t, ok)
+	c = setting.bucket
 	assert.EqualValues(t, 0, c.Traced())
 	assert.EqualValues(t, 1, c.Requested())
 	assert.EqualValues(t, 1, c.Limited())
 
 	resetSettings()
-	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		1000000, 120, argsToMap(16, 8, 16, 8, 16, 8, -1, -1, []byte("")))
 	traced = callShouldTraceRequest(50, false)
 	assert.EqualValues(t, 16, traced)
+
+	setting, ok = getSetting("")
+	require.True(t, ok)
+	c = setting.bucket
 	assert.EqualValues(t, 16, c.Traced())
 	assert.EqualValues(t, 50, c.Requested())
 	assert.EqualValues(t, 34, c.Limited())
-	globalSettingsCfg.FlushRateCounts()
+	FlushRateCounts()
 
 	time.Sleep(1 * time.Second)
 

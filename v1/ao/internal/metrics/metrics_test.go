@@ -370,7 +370,8 @@ func TestAddHistogramToBSON(t *testing.T) {
 }
 
 func TestGenerateMetricsMessage(t *testing.T) {
-	bbuf := bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{}, RateCounts{}))
+	bbuf := bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{},
+		map[string]RateCounts{"": {}}))
 	m := bsonToMap(bbuf)
 
 	_, ok := m["Hostname"]
@@ -440,7 +441,8 @@ func TestGenerateMetricsMessage(t *testing.T) {
 			break
 		}
 	}
-	m = bsonToMap(bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{}, RateCounts{})))
+	m = bsonToMap(bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{},
+		map[string]RateCounts{"": {}})))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))

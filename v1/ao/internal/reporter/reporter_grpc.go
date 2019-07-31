@@ -774,7 +774,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	i := int(atomic.LoadInt32(&r.collectMetricInterval))
 	// generate a new metrics message
 	message := metrics.GenerateMetricsMessage(i, r.eventConnection.queueStats.CopyAndReset(),
-		globalSettingsCfg.FlushRateCounts())
+		FlushRateCounts())
 	r.sendMetrics(message)
 }
 

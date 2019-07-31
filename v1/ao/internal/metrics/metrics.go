@@ -289,7 +289,7 @@ func init() {
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
-func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rc RateCounts) []byte {
+func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs map[string]RateCounts) []byte {
 	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)
@@ -302,11 +302,13 @@ func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rc Rat
 	index := 0
 
 	// request counters
-	addMetricsValue(bbuf, &index, "RequestCount", rc.Requested())
-	addMetricsValue(bbuf, &index, "TraceCount", rc.Traced())
-	addMetricsValue(bbuf, &index, "TokenBucketExhaustionCount", rc.Limited())
-	addMetricsValue(bbuf, &index, "SampleCount", rc.Sampled())
-	addMetricsValue(bbuf, &index, "ThroughTraceCount", rc.Through())
+	for prefix, rc := range rcs {
+		addMetricsValue(bbuf, &index, prefix+"RequestCount", rc.Requested())
+		addMetricsValue(bbuf, &index, prefix+"TraceCount", rc.Traced())
+		addMetricsValue(bbuf, &index, prefix+"TokenBucketExhaustionCount", rc.Limited())
+		addMetricsValue(bbuf, &index, prefix+"SampleCount", rc.Sampled())
+		addMetricsValue(bbuf, &index, prefix+"ThroughTraceCount", rc.Through())
+	}
 
 	// Queue states
 	addMetricsValue(bbuf, &index, "NumSent", qs.numSent)

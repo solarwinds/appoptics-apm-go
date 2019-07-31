@@ -22,8 +22,21 @@ import (
 type oboeSettingsCfg struct {
 	settings map[oboeSettingKey]*oboeSettings
 	lock     sync.RWMutex
-	metrics.RateCounts
 }
+
+func FlushRateCounts() map[string]metrics.RateCounts {
+	setting, ok := getSetting("")
+	if !ok {
+		return nil
+	}
+	rcs := make(map[string]metrics.RateCounts)
+	rcs[""] = setting.bucket.FlushRateCounts()
+	rcs["RelaxedTriggerTrace"] = setting.triggerTraceRelaxedBucket.FlushRateCounts()
+	rcs["StrictTriggerTrace"] = setting.triggerTraceStrictBucket.FlushRateCounts()
+
+	return rcs
+}
+
 type oboeSettings struct {
 	timestamp time.Time
 	// the flags which may be modified through merging local settings.
@@ -62,6 +75,7 @@ type tokenBucket struct {
 	available  float64
 	last       time.Time
 	lock       sync.Mutex
+	metrics.RateCounts
 }
 
 func (b *tokenBucket) reset() {
@@ -143,22 +157,21 @@ func sendInitMessage() {
 }
 
 func (b *tokenBucket) count(sampled, hasMetadata, rateLimit bool) bool {
-	c := globalSettingsCfg
-	c.RequestedInc()
+	b.RequestedInc()
 	if hasMetadata {
-		c.ThroughInc()
+		b.ThroughInc()
 	}
 	if !sampled {
 		return sampled
 	}
-	c.SampledInc()
+	b.SampledInc()
 	if rateLimit {
 		if ok := b.consume(1); !ok {
-			c.LimitedInc()
+			b.LimitedInc()
 			return false
 		}
 	}
-	c.TracedInc()
+	b.TracedInc()
 	return sampled
 }
 
@@ -434,10 +447,10 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 
 // Used for tests only
 func resetSettings() {
+	FlushRateCounts()
+
 	globalSettingsCfg.lock.Lock()
 	defer globalSettingsCfg.lock.Unlock()
-
-	globalSettingsCfg.FlushRateCounts()
 	globalSettingsCfg.settings = make(map[oboeSettingKey]*oboeSettings)
 	globalTokenBucket.reset()
 }
