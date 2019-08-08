@@ -26,6 +26,7 @@ func TestTriggerTrace(t *testing.T) {
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+			assert.Equal(t, true, n.Map["TriggeredTrace"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
@@ -61,6 +62,7 @@ func TestTriggerTraceWithCustomKey(t *testing.T) {
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "value1", n.Map["custom-key1"])
+			assert.Equal(t, true, n.Map["TriggeredTrace"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
@@ -177,6 +179,7 @@ func TestNoTriggerTrace(t *testing.T) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
 			assert.Equal(t, "value1", n.Map["custom-key1"])
 			assert.Equal(t, "lo:se,check-id:123", n.Map["PDKeys"])
+			assert.Nil(t, n.Map["TriggeredTrace"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
@@ -198,6 +201,7 @@ func TestNoTriggerTraceInvalidFlag(t *testing.T) {
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+			assert.Nil(t, n.Map["TriggeredTrace"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
@@ -219,6 +223,7 @@ func TestTriggerTraceInvalidFlag(t *testing.T) {
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+			assert.Equal(t, true, n.Map["TriggeredTrace"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
@@ -256,6 +261,7 @@ func TestNoTriggerTraceXTrace(t *testing.T) {
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{{"Edge", "2C5EFEA7749039AF"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
 			assert.Equal(t, "value1", n.Map["custom-key1"])
+			assert.Nil(t, n.Map["TriggeredTrace"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
@@ -279,6 +285,7 @@ func TestTriggerTraceInvalidXTrace(t *testing.T) {
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+			assert.Equal(t, true, n.Map["TriggeredTrace"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
@@ -303,6 +310,7 @@ func TestRelaxedTriggerTrace(t *testing.T) {
 		// entry event should have no edges
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
+			assert.Equal(t, true, n.Map["TriggeredTrace"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
@@ -312,13 +320,14 @@ func TestRelaxedTriggerTrace(t *testing.T) {
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 }
 
-func TestRelaxedTriggerTraceTSTooEarly(t *testing.T) {
+// TODO: fix
+func TestRelaxedTriggerTraceTSNotInScope(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	ts := time.Now().Unix() - 60*6
 	opts := fmt.Sprintf("trigger-trace;pd-keys=lo:se,check-id:123;ts=%d", ts)
 	hd := map[string]string{
 		"X-Trace-Options":           opts,
-		"X-Trace-Options-Signature": reporter.HmacHash([]byte(reporter.TestToken), []byte(opts)), // TODO:
+		"X-Trace-Options-Signature": reporter.HmacHash([]byte(reporter.TestToken), []byte(opts)),
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
@@ -336,6 +345,7 @@ func TestRelaxedTriggerTraceTSTooEarly(t *testing.T) {
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 }
 
+// TODO: fix
 func TestRelaxedTriggerTraceInvalidSignature(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{

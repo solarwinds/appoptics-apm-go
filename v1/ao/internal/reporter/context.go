@@ -408,7 +408,7 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 
 func validateXTraceOptionsSignature(signature, ts, data string) error {
 	var err error
-	ts, err = tsNotTooEarly(ts)
+	ts, err = tsInScope(ts)
 	if err != nil {
 		return errors.New("bad-timestamp")
 	}
@@ -425,7 +425,7 @@ func validateXTraceOptionsSignature(signature, ts, data string) error {
 }
 
 func HmacHash(token, data []byte) string {
-	h := hmac.New(sha1.New, []byte(token))
+	h := hmac.New(sha1.New, token)
 	h.Write(data)
 	sha := hex.EncodeToString(h.Sum(nil))
 	return sha
@@ -439,15 +439,16 @@ func getTriggerTraceToken() ([]byte, error) {
 	return setting.triggerToken, nil
 }
 
-func tsNotTooEarly(tsStr string) (string, error) {
+func tsInScope(tsStr string) (string, error) {
 	ts, err := strconv.ParseInt(tsStr, 10, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "TsNotTooEarly")
+		return "", errors.Wrap(err, "tsInScope")
 	}
 
 	t := time.Unix(ts, 0)
-	if t.Before(time.Now().Add(time.Minute * -5)) {
-		return "", fmt.Errorf("timestamp too early: %s", tsStr)
+	if t.Before(time.Now().Add(time.Minute*-5)) ||
+		t.After(time.Now().Add(time.Minute*5)) {
+		return "", fmt.Errorf("timestamp out of scope: %s", tsStr)
 	}
 	return strconv.FormatInt(ts, 10), nil
 }
@@ -540,6 +541,9 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 
 			kvs["SampleRate"] = decision.rate
 			kvs["SampleSource"] = decision.source
+			if tMode.Enabled() && !traced {
+				kvs["TriggeredTrace"] = true
+			}
 			if _, ok = ctx.(*oboeContext); !ok {
 				return &nullContext{}, false, headers
 			}
