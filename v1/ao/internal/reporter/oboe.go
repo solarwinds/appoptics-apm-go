@@ -209,12 +209,13 @@ type SampleDecision struct {
 type TriggerTraceMode int
 
 const (
-	// ModeXTraceOptionsNotPresent means there is no X-Trace-Options header detected,
-	// which indicates that it's a trace for regular sampling
-	ModeXTraceOptionsNotPresent TriggerTraceMode = iota
+	// ModeTriggerTraceNotPresent means there is no X-Trace-Options header detected,
+	// or the X-Trace-Options header is present but trigger_trace flag is not. This
+	// indicates that it's a trace for regular sampling.
+	ModeTriggerTraceNotPresent TriggerTraceMode = iota
 
 	// ModeNoTriggerTrace means X-Trace-Options is detected but no valid trigger-trace
-	// flag found
+	// flag found, or X-Trace-Options-Signature is present but the authentication is failed.
 	ModeNoTriggerTrace
 
 	// ModeRelaxedTriggerTrace means X-Trace-Options-Signature is present and valid.
@@ -228,7 +229,7 @@ const (
 
 func (tm TriggerTraceMode) Enabled() bool {
 	switch tm {
-	case ModeXTraceOptionsNotPresent, ModeNoTriggerTrace:
+	case ModeTriggerTraceNotPresent, ModeNoTriggerTrace:
 		return false
 	case ModeRelaxedTriggerTrace, ModeStrictTriggerTrace:
 		return true
@@ -278,6 +279,8 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 			}
 			return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, rsp} // TODO: check ret value
 		}
+	} else if triggerTrace == ModeNoTriggerTrace {
+		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, ""}
 	}
 
 	if !traced {
@@ -368,7 +371,7 @@ func mergeLocalSetting(remote *oboeSettings) *oboeSettings {
 	}
 
 	if !config.GetTriggerTrace() {
-		remote.flags = remote.flags &^ (1 << FlagForceTraceOffset)
+		remote.flags = remote.flags &^ (1 << FlagTriggerTraceOffset)
 	}
 	return remote
 }
@@ -419,7 +422,7 @@ func updateSetting(sType int32, layer string, flags []byte, value int64, ttl int
 	ns.ttl = ttl
 	ns.layer = layer
 
-	ns.triggerToken = args[kvTriggerToken]
+	ns.triggerToken = args[kvSignatureKey]
 
 	rate := parseFloat64(args, kvBucketRate, 0)
 	capacity := parseFloat64(args, kvBucketCapacity, 0)
@@ -527,8 +530,8 @@ func flagStringToBin(flagString string) settingFlag {
 				flags |= FLAG_SAMPLE_THROUGH
 			case "SAMPLE_THROUGH_ALWAYS":
 				flags |= FLAG_SAMPLE_THROUGH_ALWAYS
-			case "FORCE_TRACE":
-				flags |= FLAG_FORCE_TRACE
+			case "TRIGGER_TRACE":
+				flags |= FLAG_TRIGGER_TRACE
 			}
 		}
 	}

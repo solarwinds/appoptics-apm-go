@@ -345,7 +345,7 @@ func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
 
 func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]string, []string, error) {
 	if opts == "" {
-		return ModeXTraceOptionsNotPresent, nil, nil, nil
+		return ModeTriggerTraceNotPresent, nil, nil, nil
 	}
 
 	mode := ModeNoTriggerTrace
@@ -380,28 +380,33 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 			ts = v
 		}
 	}
-	val, forceTrace := kvs["trigger-trace"]
+	val, ok := kvs["trigger-trace"]
+	if !ok {
+		return ModeTriggerTraceNotPresent, kvs, ignored, nil
+	}
+
 	if val != "" {
 		log.Debug("trigger-trace should not contain any value.")
-		forceTrace = false
 		ignored = append(ignored, "trigger-trace")
+		return ModeTriggerTraceNotPresent, kvs, ignored, nil
 	}
 	delete(kvs, "trigger-trace")
 
 	var authErr error
-	if forceTrace {
-		if sig != "" {
-			authErr = validateXTraceOptionsSignature(sig, ts, opts)
-			if authErr == nil {
-				mode = ModeRelaxedTriggerTrace
-			} else {
-				mode = ModeNoTriggerTrace
-			}
+	if sig != "" {
+		authErr = validateXTraceOptionsSignature(sig, ts, opts)
+		if authErr == nil {
+			mode = ModeRelaxedTriggerTrace
 		} else {
-			mode = ModeStrictTriggerTrace
+			mode = ModeNoTriggerTrace
 		}
 	} else {
-		mode = ModeNoTriggerTrace
+		mode = ModeStrictTriggerTrace
+	}
+
+	if mode == ModeNoTriggerTrace {
+		kvs = nil
+		ignored = nil
 	}
 	return mode, kvs, ignored, authErr
 }
@@ -463,17 +468,20 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 
 	tMode, tKVs, tIgnoredKeys, authErr := parseTriggerTraceFlag(opts.XTraceOptions, opts.XTraceOptionsSignature)
 
-	var SetHeaders = func(v string) {
+	var SetHeaders = func(tt string) {
 		if headers == nil {
 			headers = make(map[string]string)
 		}
-		v = "trigger-trace=" + v
-		if tMode == ModeRelaxedTriggerTrace {
-			v += ";auth=ok"
-		} else if authErr != nil {
-			v += ";auth=" + authErr.Error()
+		var v []string
+		if tt != "" {
+			v = append(v, "trigger-trace="+tt)
 		}
-		headers[HTTPHeaderXTraceOptionsResponse] = v
+		if tMode == ModeRelaxedTriggerTrace {
+			v = append(v, "auth=ok")
+		} else if authErr != nil {
+			v = append(v, "auth="+authErr.Error())
+		}
+		headers[HTTPHeaderXTraceOptionsResponse] = strings.Join(v, ";")
 	}
 
 	defer func() {

@@ -64,7 +64,7 @@ const (
 	FlagSampleStartOffset
 	FlagSampleThroughOffset
 	FlagSampleThroughAlwaysOffset
-	FlagForceTraceOffset
+	FlagTriggerTraceOffset
 )
 
 // setting flags
@@ -75,7 +75,7 @@ const (
 	FLAG_SAMPLE_START          settingFlag = 1 << FlagSampleStartOffset
 	FLAG_SAMPLE_THROUGH        settingFlag = 1 << FlagSampleThroughOffset
 	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 1 << FlagSampleThroughAlwaysOffset
-	FLAG_FORCE_TRACE           settingFlag = 1 << FlagForceTraceOffset
+	FLAG_TRIGGER_TRACE         settingFlag = 1 << FlagTriggerTraceOffset
 )
 
 // source of the sample value
@@ -97,7 +97,7 @@ func (f settingFlag) Enabled() bool {
 
 // TriggerTraceEnabled returns if the trigger trace is enabled
 func (f settingFlag) TriggerTraceEnabled() bool {
-	return f&FLAG_FORCE_TRACE != 0
+	return f&FLAG_TRIGGER_TRACE != 0
 }
 
 func (st settingType) toSampleSource() sampleSource {
@@ -132,7 +132,7 @@ func (tm tracingMode) isUnknown() bool {
 func (tm tracingMode) toFlags() settingFlag {
 	switch tm {
 	case TRACE_ENABLED:
-		return FLAG_SAMPLE_START | FLAG_SAMPLE_THROUGH_ALWAYS | FLAG_FORCE_TRACE
+		return FLAG_SAMPLE_START | FLAG_SAMPLE_THROUGH_ALWAYS | FLAG_TRIGGER_TRACE
 	case TRACE_DISABLED:
 	default:
 	}

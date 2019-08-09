@@ -37,7 +37,7 @@ type reporter interface {
 
 // KVs from getSettingsResult arguments
 const (
-	kvTriggerToken                      = "TriggerToken"
+	kvSignatureKey                      = "SignatureKey"
 	kvBucketCapacity                    = "BucketCapacity"
 	kvBucketRate                        = "BucketRate"
 	kvTriggerTraceRelaxedBucketCapacity = "TriggerRelaxedBucketCapacity"
@@ -169,7 +169,7 @@ func shouldTraceRequestWithURL(layer string, traced bool, url string, triggerTra
 
 // Determines if request should be traced, based on sample rate settings.
 func shouldTraceRequest(layer string, traced bool) (bool, int, sampleSource, bool) {
-	d := shouldTraceRequestWithURL(layer, traced, "", ModeXTraceOptionsNotPresent)
+	d := shouldTraceRequestWithURL(layer, traced, "", ModeTriggerTraceNotPresent)
 	return d.trace, d.rate, d.source, d.enabled
 }
 
@@ -224,7 +224,7 @@ func argsToMap(capacity, ratePerSec, tRCap, tRRate, tSCap, tSRate float64,
 		args[kvMaxTransactions] = bytes
 	}
 
-	args[kvTriggerToken] = token
+	args[kvSignatureKey] = token
 
 	return args
 }

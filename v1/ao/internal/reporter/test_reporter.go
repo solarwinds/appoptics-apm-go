@@ -212,7 +212,7 @@ func (r *TestReporter) reportSpan(span metrics.SpanMessage) error {
 func (r *TestReporter) addDefaultSetting() {
 	// add default setting with 100% sampling
 	updateSetting(int32(TYPE_DEFAULT), "",
-		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS,FORCE_TRACE"),
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS,TRIGGER_TRACE"),
 		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte(TestToken)))
 }
 
@@ -224,25 +224,25 @@ func (r *TestReporter) addNoTriggerTrace() {
 
 func (r *TestReporter) addTriggerTraceOnly() {
 	updateSetting(int32(TYPE_DEFAULT), "",
-		[]byte("FORCE_TRACE"),
+		[]byte("TRIGGER_TRACE"),
 		0, 120, argsToMap(0, 0, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte(TestToken)))
 }
 
 func (r *TestReporter) addRelaxedTriggerTraceOnly() {
 	updateSetting(int32(TYPE_DEFAULT), "",
-		[]byte("FORCE_TRACE"),
+		[]byte("TRIGGER_TRACE"),
 		0, 120, argsToMap(0, 0, 1000000, 1000000, 0, 0, -1, -1, []byte(TestToken)))
 }
 
 func (r *TestReporter) addStrictTriggerTraceOnly() {
 	updateSetting(int32(TYPE_DEFAULT), "",
-		[]byte("FORCE_TRACE"),
+		[]byte("TRIGGER_TRACE"),
 		0, 120, argsToMap(0, 0, 0, 0, 1000000, 1000000, -1, -1, []byte(TestToken)))
 }
 
 func (r *TestReporter) addLimitedTriggerTrace() {
 	updateSetting(int32(TYPE_DEFAULT), "",
-		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS,FORCE_TRACE"),
+		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS,TRIGGER_TRACE"),
 		1000000, 120, argsToMap(1000000, 1000000, 1, 1, 1, 1, -1, -1, []byte(TestToken)))
 }
 

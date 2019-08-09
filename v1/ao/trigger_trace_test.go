@@ -36,7 +36,7 @@ func TestTriggerTrace(t *testing.T) {
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 }
 
-func TestTriggerTraceNoSetting(t *testing.T) {
+func TestUnsignedTriggerTraceNoSetting(t *testing.T) {
 
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.NoSettingST))
 	hd := map[string]string{
@@ -47,6 +47,23 @@ func TestTriggerTraceNoSetting(t *testing.T) {
 	r.Close(0)
 	rHeader := rr.Header()
 	assert.EqualValues(t, "trigger-trace=settings-not-available", rHeader.Get("X-Trace-Options-Response"))
+	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
+}
+
+func TestSignedTriggerTraceNoSetting(t *testing.T) {
+
+	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.NoSettingST))
+	ts := time.Now().Unix()
+	opts := fmt.Sprintf("trigger-trace;pd-keys=lo:se,check-id:123;ts=%d", ts)
+	hd := map[string]string{
+		"X-Trace-Options":           opts,
+		"X-Trace-Options-Signature": reporter.HmacHash([]byte(reporter.TestToken), []byte(opts)),
+	}
+
+	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
+	r.Close(0)
+	rHeader := rr.Header()
+	assert.EqualValues(t, "trigger-trace=settings-not-available;auth=bad-token", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 }
 
@@ -97,6 +114,42 @@ func TestTriggerTraceRateLimited(t *testing.T) {
 		if rsp == "trigger-trace=ok" {
 			triggerTraced++
 		} else if rsp == "trigger-trace=rate-exceeded" {
+			limited++
+		}
+	}
+	assert.True(t, (limited+triggerTraced) == numRequests)
+	assert.True(t, triggerTraced*2 == numEvts,
+		fmt.Sprintf("triggerTraced=%d, numEvts=%d", triggerTraced, numEvts))
+}
+
+func TestRelaxedTriggerTraceRateLimited(t *testing.T) {
+	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.LimitedTriggerTraceST))
+	ts := time.Now().Unix()
+	opts := fmt.Sprintf("trigger-trace;custom-key1=value1;ts=%d", ts)
+	hd := map[string]string{
+		"X-Trace-Options":           opts,
+		"X-Trace-Options-Signature": reporter.HmacHash([]byte(reporter.TestToken), []byte(opts)),
+	}
+
+	var rrs []*httptest.ResponseRecorder
+	numRequests := 5
+	for i := 0; i < numRequests; i++ {
+		rrs = append(rrs, httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd))
+	}
+
+	r.Close(0) // Don't check number of events here
+
+	numEvts := len(r.EventBufs)
+	assert.True(t, numEvts < 10)
+
+	limited := 0
+	triggerTraced := 0
+
+	for _, rr := range rrs {
+		rsp := rr.Header().Get("X-Trace-Options-Response")
+		if rsp == "trigger-trace=ok;auth=ok" {
+			triggerTraced++
+		} else if rsp == "trigger-trace=rate-exceeded;auth=ok" {
 			limited++
 		}
 	}
@@ -320,7 +373,6 @@ func TestRelaxedTriggerTrace(t *testing.T) {
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
 }
 
-// TODO: fix
 func TestRelaxedTriggerTraceTSNotInScope(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	ts := time.Now().Unix() - 60*6
@@ -331,21 +383,13 @@ func TestRelaxedTriggerTraceTSNotInScope(t *testing.T) {
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
-	r.Close(2)
-	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
-		// entry event should have no edges
-		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
-		}},
-		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
-		}},
-	})
+	r.Close(0)
+
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger-trace=not-requested;auth=bad-timestamp", rHeader.Get("X-Trace-Options-Response"))
-	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
+	assert.EqualValues(t, "auth=bad-timestamp", rHeader.Get("X-Trace-Options-Response"))
+	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 }
 
-// TODO: fix
 func TestRelaxedTriggerTraceInvalidSignature(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
@@ -354,16 +398,9 @@ func TestRelaxedTriggerTraceInvalidSignature(t *testing.T) {
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
-	r.Close(2)
-	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
-		// entry event should have no edges
-		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
-			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
-		}},
-		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
-		}},
-	})
+	r.Close(0)
+
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger-trace=not-requested;auth=bad-signature", rHeader.Get("X-Trace-Options-Response"))
-	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "01"))
+	assert.EqualValues(t, "auth=bad-signature", rHeader.Get("X-Trace-Options-Response"))
+	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 }
