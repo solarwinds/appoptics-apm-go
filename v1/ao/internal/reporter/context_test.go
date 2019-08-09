@@ -12,6 +12,7 @@ import (
 
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMetadata(t *testing.T) {
@@ -295,4 +296,35 @@ func TestNullContext(t *testing.T) {
 	assert.Len(t, r.EventBufs, 0) // no reporting
 
 	r.Close(0)
+}
+
+func TestParseTriggerTraceFlag(t *testing.T) {
+	// empty keys
+	opts := ";trigger-trace;custom-something=value_thing;pd-keys=02973r70:9wqj21,0d9j1;1;2;3;4;5;=custom-key=val?;="
+	mode, kvs, ignored, err := parseTriggerTraceFlag(opts, "")
+	assert.Equal(t, ModeStrictTriggerTrace, mode)
+	assert.Nil(t, err)
+	require.NotNil(t, kvs)
+	assert.EqualValues(t, "value_thing", kvs["custom-something"])
+	assert.EqualValues(t, "02973r70:9wqj21,0d9j1", kvs["PDKeys"])
+	assert.EqualValues(t, []string{"", "1", "2", "3", "4", "5", "", ""}, ignored)
+
+	// sequential semicolons
+	opts = "custom-something=value_thing;pd-keys=02973r70;;;;custom-key=val"
+	mode, kvs, ignored, err = parseTriggerTraceFlag(opts, "")
+	assert.Equal(t, ModeTriggerTraceNotPresent, mode)
+	assert.Nil(t, err)
+	require.NotNil(t, kvs)
+	assert.EqualValues(t, "value_thing", kvs["custom-something"])
+	assert.EqualValues(t, "02973r70", kvs["PDKeys"])
+	assert.EqualValues(t, "val", kvs["custom-key"])
+
+	assert.EqualValues(t, []string{"", "", ""}, ignored)
+
+	// ts missing
+	opts = "trigger-trace;pd-keys=lo:se,check-id:123"
+	sig := "2c1c398c3e6be898f47f74bf74f035903b48b59c"
+	mode, kvs, ignored, err = parseTriggerTraceFlag(opts, sig)
+	assert.EqualValues(t, ModeNoTriggerTrace, mode)
+	assert.NotNil(t, err)
 }

@@ -227,11 +227,25 @@ const (
 	ModeStrictTriggerTrace
 )
 
+// Enabled indicates whether it's a trigger-trace request
 func (tm TriggerTraceMode) Enabled() bool {
 	switch tm {
 	case ModeTriggerTraceNotPresent, ModeNoTriggerTrace:
 		return false
 	case ModeRelaxedTriggerTrace, ModeStrictTriggerTrace:
+		return true
+	default:
+		panic(fmt.Sprintf("Unhandled trigger trace mode: %x", tm))
+	}
+}
+
+// Requested indicates whether the user tries to issue a trigger-trace request
+// (but may be rejected if the header is illegal)
+func (tm TriggerTraceMode) Requested() bool {
+	switch tm {
+	case ModeTriggerTraceNotPresent:
+		return false
+	case ModeRelaxedTriggerTrace, ModeStrictTriggerTrace, ModeNoTriggerTrace:
 		return true
 	default:
 		panic(fmt.Sprintf("Unhandled trigger trace mode: %x", tm))
@@ -258,29 +272,34 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 
 	sampleRate, flags, source := mergeURLSetting(setting, url)
 
-	if triggerTrace.Enabled() && !traced {
+	// Choose an appropriate bucket
+	bucket := setting.bucket
+	if triggerTrace == ModeRelaxedTriggerTrace {
+		bucket = setting.triggerTraceRelaxedBucket
+	} else if triggerTrace == ModeStrictTriggerTrace {
+		bucket = setting.triggerTraceStrictBucket
+	}
+
+	if triggerTrace.Requested() && !traced {
+		sampled := (triggerTrace != ModeNoTriggerTrace) && (flags.TriggerTraceEnabled())
 		rsp := "ok"
 
-		if flags.TriggerTraceEnabled() {
-			bucket := setting.triggerTraceRelaxedBucket
-			if triggerTrace == ModeStrictTriggerTrace {
-				bucket = setting.triggerTraceStrictBucket
-			}
-			ret := bucket.count(true, false, true)
+		ret := bucket.count(sampled, false, true)
+
+		if flags.TriggerTraceEnabled() && triggerTrace.Enabled() {
 			if !ret {
 				rsp = "rate-exceeded"
 			}
-			return SampleDecision{ret, -1, SAMPLE_SOURCE_UNSET, true, rsp}
+		} else if triggerTrace == ModeNoTriggerTrace {
+			rsp = ""
 		} else {
 			if !flags.Enabled() {
 				rsp = "tracing-disabled"
 			} else {
 				rsp = "disabled"
 			}
-			return SampleDecision{false, -1, SAMPLE_SOURCE_UNSET, false, rsp}
 		}
-	} else if triggerTrace == ModeNoTriggerTrace {
-		return SampleDecision{false, -1, SAMPLE_SOURCE_UNSET, false, ""}
+		return SampleDecision{ret, -1, SAMPLE_SOURCE_UNSET, flags.Enabled(), rsp}
 	}
 
 	if !traced {
@@ -300,7 +319,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 		}
 	}
 
-	retval = setting.bucket.count(retval, traced, doRateLimiting)
+	retval = bucket.count(retval, traced, doRateLimiting)
 
 	rsp := "not-requested"
 	if triggerTrace.Enabled() {

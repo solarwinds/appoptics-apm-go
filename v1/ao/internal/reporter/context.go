@@ -360,6 +360,7 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 		kvSlice := strings.SplitN(opt, "=", 2)
 		var k, v string
 		k = strings.TrimSpace(kvSlice[0])
+
 		if len(kvSlice) == 2 {
 			v = strings.TrimSpace(kvSlice[1])
 		} else if kvSlice[0] != "trigger-trace" {
