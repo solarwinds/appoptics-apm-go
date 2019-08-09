@@ -17,7 +17,7 @@ import (
 func TestTriggerTrace(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger-trace;pd-keys=lo:se,check-id:123",
+		"X-Trace-Options": "trigger-trace;pd-keys=lo:se,check-id:123;custom-key1=hello;custom-key2=world;custom-key1=hi",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
@@ -27,6 +27,7 @@ func TestTriggerTrace(t *testing.T) {
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
 			assert.Equal(t, true, n.Map["TriggeredTrace"])
+			assert.Equal(t, "hello", n.Map["custom-key1"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
@@ -70,7 +71,7 @@ func TestSignedTriggerTraceNoSetting(t *testing.T) {
 func TestTriggerTraceWithCustomKey(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.TriggerTraceOnlyST))
 	hd := map[string]string{
-		"X-Trace-Options": "trigger-trace;custom-key1=value1",
+		"X-Trace-Options": "trigger-trace; custom-key1 = \tvalue1 ",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
@@ -221,7 +222,7 @@ func TestTriggerTraceWithURLFiltering(t *testing.T) {
 func TestNoTriggerTrace(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterSettingType(reporter.DefaultST))
 	hd := map[string]string{
-		"X-Trace-Options": "pd-keys=lo:se,check-id:123;custom-key1=value1",
+		"X-Trace-Options": "pd keys=lo:se,check-id:123;custom-key1=value1",
 	}
 
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
@@ -231,14 +232,13 @@ func TestNoTriggerTrace(t *testing.T) {
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
 			assert.Equal(t, "value1", n.Map["custom-key1"])
-			assert.Equal(t, "lo:se,check-id:123", n.Map["PDKeys"])
 			assert.Nil(t, n.Map["TriggeredTrace"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 		}},
 	})
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger-trace=not-requested", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=not-requested;ignored=pd keys", rHeader.Get("X-Trace-Options-Response"))
 	assert.NotEmpty(t, rHeader.Get("X-Trace"))
 }
 

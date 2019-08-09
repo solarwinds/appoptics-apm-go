@@ -354,12 +354,22 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 	var ts string
 
 	optsSlice := strings.Split(opts, ";")
+	kMap := make(map[string]struct{})
+
 	for _, opt := range optsSlice {
 		kvSlice := strings.SplitN(opt, "=", 2)
 		var k, v string
-		k = kvSlice[0] // no trim space per the spec
+		k = strings.TrimSpace(kvSlice[0])
 		if len(kvSlice) == 2 {
-			v = kvSlice[1] // no trim space per the spec
+			v = strings.TrimSpace(kvSlice[1])
+		} else if kvSlice[0] != "trigger-trace" {
+			log.Debugf("Dangling key found: %s", kvSlice[0])
+		}
+
+		// ascii spaces only
+		if strings.ContainsAny(k, " \t\n\v\f\r") {
+			ignored = append(ignored, k)
+			continue
 		}
 
 		if !(strings.HasPrefix(k, "custom-") ||
@@ -373,6 +383,12 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 		if k == "pd-keys" {
 			k = "PDKeys"
 		}
+
+		if _, ok := kMap[k]; ok {
+			log.Debugf("Duplicate key found: %s", k)
+			continue
+		}
+		kMap[k] = struct{}{}
 
 		if k != "ts" {
 			kvs[k] = v

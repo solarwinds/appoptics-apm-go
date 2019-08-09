@@ -270,17 +270,17 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 			if !ret {
 				rsp = "rate-exceeded"
 			}
-			return SampleDecision{ret, setting.value, setting.source, true, rsp} // TODO: is the value/source correct?
+			return SampleDecision{ret, -1, SAMPLE_SOURCE_UNSET, true, rsp}
 		} else {
 			if !flags.Enabled() {
 				rsp = "tracing-disabled"
 			} else {
 				rsp = "disabled"
 			}
-			return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, rsp} // TODO: check ret value
+			return SampleDecision{false, -1, SAMPLE_SOURCE_UNSET, false, rsp}
 		}
 	} else if triggerTrace == ModeNoTriggerTrace {
-		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, ""}
+		return SampleDecision{false, -1, SAMPLE_SOURCE_UNSET, false, ""}
 	}
 
 	if !traced {

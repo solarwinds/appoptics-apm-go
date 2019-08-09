@@ -80,10 +80,11 @@ const (
 
 // source of the sample value
 const (
-	SAMPLE_SOURCE_NONE    sampleSource = 0
-	SAMPLE_SOURCE_FILE    sampleSource = 1
-	SAMPLE_SOURCE_DEFAULT sampleSource = 2
-	SAMPLE_SOURCE_LAYER   sampleSource = 3
+	SAMPLE_SOURCE_UNSET sampleSource = iota - 1
+	SAMPLE_SOURCE_NONE
+	SAMPLE_SOURCE_FILE
+	SAMPLE_SOURCE_DEFAULT
+	SAMPLE_SOURCE_LAYER
 )
 
 const (
