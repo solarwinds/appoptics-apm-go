@@ -377,7 +377,6 @@ func (t *aoTrace) SetHTTPRspHeaders(headers map[string]string) {
 // A nullTrace is not tracing.
 type nullTrace struct {
 	nullSpan
-	headers map[string]string
 }
 
 func (t *nullTrace) EndCallback(f func() KVMap)                  {}
@@ -389,8 +388,8 @@ func (t *nullTrace) SetHost(host string)                         {}
 func (t *nullTrace) SetStatus(status int)                        {}
 func (t *nullTrace) LoggableTraceID() string                     { return "" }
 func (t *nullTrace) recordMetrics()                              {}
-func (t *nullTrace) HTTPRspHeaders() map[string]string           { return t.headers }
-func (t *nullTrace) SetHTTPRspHeaders(headers map[string]string) { t.headers = headers }
+func (t *nullTrace) HTTPRspHeaders() map[string]string           { return nil }
+func (t *nullTrace) SetHTTPRspHeaders(headers map[string]string) {}
 
 // NewNullTrace returns a trace that is not sampled.
 func NewNullTrace() Trace { return &nullTrace{} }

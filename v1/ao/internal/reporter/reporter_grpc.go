@@ -825,7 +825,6 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 // settings	new settings
 func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	for _, s := range settings.GetSettings() {
-		log.Debugf("Got sampling setting: %#v\n", s.String())
 		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Value, s.Ttl, s.Arguments)
 
 		// update MetricsFlushInterval

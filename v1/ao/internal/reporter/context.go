@@ -544,7 +544,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			_, flags, _ := mergeURLSetting(setting, opts.URL)
 			ctx.SetEnabled(flags.Enabled())
 
-			if tMode.Enabled() {
+			if tMode.Requested() {
 				SetHeaders("ignored")
 			} else {
 				SetHeaders("not-requested")
