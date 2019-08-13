@@ -371,7 +371,7 @@ func TestAddHistogramToBSON(t *testing.T) {
 
 func TestGenerateMetricsMessage(t *testing.T) {
 	bbuf := bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{},
-		map[string]RateCounts{"": {}}))
+		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}}))
 	m := bsonToMap(bbuf)
 
 	_, ok := m["Hostname"]
@@ -398,6 +398,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		{"TokenBucketExhaustionCount", int64(1)},
 		{"SampleCount", int64(1)},
 		{"ThroughTraceCount", int64(1)},
+		{"TriggeredTraceCount", int64(1)},
 		{"NumSent", int64(1)},
 		{"NumOverflowed", int64(1)},
 		{"NumFailed", int64(1)},
@@ -442,7 +443,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		}
 	}
 	m = bsonToMap(bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{},
-		map[string]RateCounts{"": {}})))
+		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}})))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))
@@ -473,7 +474,7 @@ func TestEventQueueStats(t *testing.T) {
 }
 
 func TestRateCounts(t *testing.T) {
-	rc := RateCounts{}
+	rc := &RateCounts{}
 
 	rc.RequestedInc()
 	assert.EqualValues(t, 1, rc.Requested())
@@ -490,11 +491,11 @@ func TestRateCounts(t *testing.T) {
 	rc.ThroughInc()
 	assert.EqualValues(t, 1, rc.Through())
 
-	original := rc
+	original := *rc
 	cp := rc.FlushRateCounts()
 
-	assert.Equal(t, original, cp)
-	assert.Equal(t, RateCounts{}, rc)
+	assert.Equal(t, original, *cp)
+	assert.Equal(t, &RateCounts{}, rc)
 }
 
 func TestHTTPSpanMessageProcess(t *testing.T) {

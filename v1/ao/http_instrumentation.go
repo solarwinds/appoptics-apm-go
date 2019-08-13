@@ -20,8 +20,12 @@ import (
 const (
 	// HTTPHeaderName is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
 	// the distributed tracing context across HTTP requests.
-	HTTPHeaderName                   = "X-Trace"
-	HTTPHeaderXTraceOptions          = reporter.HTTPHeaderXTraceOptions
+	HTTPHeaderName = "X-Trace"
+	// HTTPHeaderXTraceOptions is a constant for the HTTP header to propagate X-Trace-Options
+	// values. It's for trigger trace requests and may be used for other purposes in the future.
+	HTTPHeaderXTraceOptions = reporter.HTTPHeaderXTraceOptions
+	// HTTPHeaderXTraceOptionsSignature is a constant for the HTTP headers to propagate
+	// X-Trace-Options-Signature values. It contains the response codes for X-Trace-Options
 	HTTPHeaderXTraceOptionsSignature = reporter.HTTPHeaderXTraceOptionsSignature
 	httpHandlerSpanName              = "http.HandlerFunc"
 )

@@ -359,11 +359,12 @@ func (t *aoTrace) LoggableTraceID() string {
 	return mdStr[2:42] + sampledFlag
 }
 
-// HTTPRspHeaders returns the headers which will be attached to the HTTP response
+// HTTPRspHeaders returns the headers which will be attached to the HTTP response.
 func (t *aoTrace) HTTPRspHeaders() map[string]string {
 	return t.httpRspHeaders
 }
 
+// SetHTTPRspHeaders attaches the headers map to the trace.
 func (t *aoTrace) SetHTTPRspHeaders(headers map[string]string) {
 	if t.httpRspHeaders == nil {
 		return

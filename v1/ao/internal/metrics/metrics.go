@@ -36,6 +36,23 @@ const (
 	maxPathLenForTransactionName = 3
 )
 
+// Request counters definition
+const (
+	RequestCount               = "RequestCount"
+	TraceCount                 = "TraceCount"
+	TokenBucketExhaustionCount = "TokenBucketExhaustionCount"
+	SampleCount                = "SampleCount"
+	ThroughTraceCount          = "ThroughTraceCount"
+	TriggeredTraceCount        = "TriggeredTraceCount"
+)
+
+// Request counters collection categories
+const (
+	RCRegular             = "ReqCounterRegular"
+	RCRelaxedTriggerTrace = "ReqCounterRelaxedTriggerTrace"
+	RCStrictTriggerTrace  = "ReqCounterStrictTriggerTrace"
+)
+
 // SpanMessage defines a span message
 type SpanMessage interface {
 	Process()
@@ -114,8 +131,9 @@ func (s *EventQueueStats) TotalEventsAdd(n int64) {
 // RateCounts is the rate counts reported by trace sampler
 type RateCounts struct{ requested, sampled, limited, traced, through int64 }
 
-func (c *RateCounts) FlushRateCounts() RateCounts {
-	return RateCounts{
+// FlushRateCounts reset the counters and returns the current value
+func (c *RateCounts) FlushRateCounts() *RateCounts {
+	return &RateCounts{
 		requested: atomic.SwapInt64(&c.requested, 0),
 		sampled:   atomic.SwapInt64(&c.sampled, 0),
 		limited:   atomic.SwapInt64(&c.limited, 0),
@@ -285,11 +303,36 @@ func init() {
 	}
 }
 
+// addRequestCounters add various request-related counters to the metrics message buffer.
+func addRequestCounters(bbuf *bson.Buffer, index *int, rcs map[string]*RateCounts) {
+	var requested, traced, limited int64
+
+	for _, rc := range rcs {
+		requested += rc.Requested()
+		traced += rc.Traced()
+		limited += rc.Limited()
+	}
+
+	addMetricsValue(bbuf, index, RequestCount, requested)
+	addMetricsValue(bbuf, index, TraceCount, traced)
+	addMetricsValue(bbuf, index, TokenBucketExhaustionCount, limited)
+
+	if rcRegular, ok := rcs[RCRegular]; ok {
+		addMetricsValue(bbuf, index, SampleCount, rcRegular.Sampled())
+		addMetricsValue(bbuf, index, ThroughTraceCount, rcRegular.Through())
+	}
+
+	if rcTT, ok := rcs[RCRelaxedTriggerTrace]; ok {
+		ttTraced := rcTT.Traced() + rcTT.Traced()
+		addMetricsValue(bbuf, index, TriggeredTraceCount, ttTraced)
+	}
+}
+
 // GenerateMetricsMessage generates a metrics message in BSON format with all the currently available values
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
-func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs map[string]RateCounts) []byte {
+func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs map[string]*RateCounts) []byte {
 	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)
@@ -302,13 +345,7 @@ func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs ma
 	index := 0
 
 	// request counters
-	for prefix, rc := range rcs {
-		addMetricsValue(bbuf, &index, prefix+"RequestCount", rc.Requested())
-		addMetricsValue(bbuf, &index, prefix+"TraceCount", rc.Traced())
-		addMetricsValue(bbuf, &index, prefix+"TokenBucketExhaustionCount", rc.Limited())
-		addMetricsValue(bbuf, &index, prefix+"SampleCount", rc.Sampled())
-		addMetricsValue(bbuf, &index, prefix+"ThroughTraceCount", rc.Through())
-	}
+	addRequestCounters(bbuf, &index, rcs)
 
 	// Queue states
 	addMetricsValue(bbuf, &index, "NumSent", qs.numSent)

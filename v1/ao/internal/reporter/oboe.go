@@ -24,15 +24,16 @@ type oboeSettingsCfg struct {
 	lock     sync.RWMutex
 }
 
-func FlushRateCounts() map[string]metrics.RateCounts {
+// FlushRateCounts collects the request counters values by categories.
+func FlushRateCounts() map[string]*metrics.RateCounts {
 	setting, ok := getSetting("")
 	if !ok {
 		return nil
 	}
-	rcs := make(map[string]metrics.RateCounts)
-	rcs[""] = setting.bucket.FlushRateCounts()
-	rcs["RelaxedTriggerTrace"] = setting.triggerTraceRelaxedBucket.FlushRateCounts()
-	rcs["StrictTriggerTrace"] = setting.triggerTraceStrictBucket.FlushRateCounts()
+	rcs := make(map[string]*metrics.RateCounts)
+	rcs[metrics.RCRegular] = setting.bucket.FlushRateCounts()
+	rcs[metrics.RCRelaxedTriggerTrace] = setting.triggerTraceRelaxedBucket.FlushRateCounts()
+	rcs[metrics.RCStrictTriggerTrace] = setting.triggerTraceStrictBucket.FlushRateCounts()
 
 	return rcs
 }

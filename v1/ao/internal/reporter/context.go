@@ -65,23 +65,25 @@ type transactionContext struct {
 
 type KVMap map[string]interface{}
 
-// ContextOptions defines the options of creating a context
+// ContextOptions defines the options of creating a context.
 type ContextOptions struct {
+	// MdStr is the string representation of the X-Trace ID.
 	MdStr string
 	// URL is used to do the URL-based transaction filtering.
 	URL string
-
-	XTraceOptions          string
+	// XTraceOptions is the value of the X-Trace-Options header.
+	XTraceOptions string
+	// XTraceOptions is the value of the X-Trace-Options-Signature header.
 	XTraceOptionsSignature string
-
+	// CB is the callback function to produce the KVs.
 	CB func() KVMap
 }
 
 // ValidMetadata checks if a metadata string is valid.
-func ValidMetadata(mdstr string) bool {
+func ValidMetadata(mdStr string) bool {
 	md := &oboeMetadata{}
 	md.Init()
-	if err := md.FromString(mdstr); err != nil {
+	if err := md.FromString(mdStr); err != nil {
 		return false
 	}
 	return true
@@ -354,6 +356,7 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 	var ts string
 
 	optsSlice := strings.Split(opts, ";")
+	// for deduplication
 	kMap := make(map[string]struct{})
 
 	for _, opt := range optsSlice {
@@ -365,6 +368,8 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 			v = strings.TrimSpace(kvSlice[1])
 		} else if kvSlice[0] != "trigger-trace" {
 			log.Debugf("Dangling key found: %s", kvSlice[0])
+			ignored = append(ignored, k)
+			continue
 		}
 
 		// ascii spaces only
@@ -421,6 +426,7 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 		mode = ModeStrictTriggerTrace
 	}
 
+	// ignore KVs if the signature is invalid
 	if mode == ModeNoTriggerTrace {
 		kvs = nil
 		ignored = nil
@@ -486,6 +492,11 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 	tMode, tKVs, tIgnoredKeys, authErr := parseTriggerTraceFlag(opts.XTraceOptions, opts.XTraceOptionsSignature)
 
 	var SetHeaders = func(tt string) {
+		// Only set response headers when X-Trace-Options is present
+		if opts.XTraceOptions == "" {
+			return
+		}
+
 		if headers == nil {
 			headers = make(map[string]string)
 		}
@@ -526,21 +537,19 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		} else {
 			setting, has := getSetting(layer)
 			if !has {
-				if tMode.Enabled() {
-					SetHeaders("settings-not-available")
-				}
+				SetHeaders("settings-not-available")
 				return ctx, false, headers
 			}
 
 			_, flags, _ := mergeURLSetting(setting, opts.URL)
 			ctx.SetEnabled(flags.Enabled())
-			if opts.XTraceOptions != "" {
-				if tMode.Enabled() {
-					SetHeaders("ignored")
-				} else {
-					SetHeaders("ok")
-				}
+
+			if tMode.Enabled() {
+				SetHeaders("ignored")
+			} else {
+				SetHeaders("not-requested")
 			}
+
 			return ctx, true, headers
 		}
 	}
@@ -576,17 +585,15 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 				return &nullContext{}, false, headers
 			}
 		}
-		if opts.XTraceOptions != "" {
-			SetHeaders(decision.xTraceOptsRsp)
-		}
+		SetHeaders(decision.xTraceOptsRsp)
+
 		return ctx, true, headers
 	}
 
 	ctx.SetSampled(false)
 	ctx.SetEnabled(decision.enabled)
-	if opts.XTraceOptions != "" {
-		SetHeaders(decision.xTraceOptsRsp)
-	}
+	SetHeaders(decision.xTraceOptsRsp)
+
 	return ctx, true, headers
 }
 
