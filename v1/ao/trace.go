@@ -375,9 +375,7 @@ func (t *aoTrace) SetHTTPRspHeaders(headers map[string]string) {
 }
 
 // A nullTrace is not tracing.
-type nullTrace struct {
-	nullSpan
-}
+type nullTrace struct{ nullSpan }
 
 func (t *nullTrace) EndCallback(f func() KVMap)                  {}
 func (t *nullTrace) ExitMetadata() string                        { return "" }

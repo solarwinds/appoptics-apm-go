@@ -371,7 +371,10 @@ func TestAddHistogramToBSON(t *testing.T) {
 
 func TestGenerateMetricsMessage(t *testing.T) {
 	bbuf := bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{},
-		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}}))
+		map[string]*RateCounts{ // requested, sampled, limited, traced, through
+			RCRegular:             {10, 2, 5, 5, 1},
+			RCRelaxedTriggerTrace: {3, 0, 1, 2, 0},
+			RCStrictTriggerTrace:  {4, 0, 3, 1, 0}}))
 	m := bsonToMap(bbuf)
 
 	_, ok := m["Hostname"]
@@ -390,15 +393,13 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		value interface{}
 	}
 
-	// TODO add request counters
-
 	testCases := []testCase{
-		{"RequestCount", int64(1)},
-		{"TraceCount", int64(1)},
-		{"TokenBucketExhaustionCount", int64(1)},
-		{"SampleCount", int64(1)},
+		{"RequestCount", int64(10)},
+		{"TraceCount", int64(5)},
+		{"TokenBucketExhaustionCount", int64(5)},
+		{"SampleCount", int64(2)},
 		{"ThroughTraceCount", int64(1)},
-		{"TriggeredTraceCount", int64(1)},
+		{"TriggeredTraceCount", int64(3)},
 		{"NumSent", int64(1)},
 		{"NumOverflowed", int64(1)},
 		{"NumFailed", int64(1)},

@@ -71,9 +71,9 @@ type ContextOptions struct {
 	MdStr string
 	// URL is used to do the URL-based transaction filtering.
 	URL string
-	// XTraceOptions is the value of the X-Trace-Options header.
+	// XTraceOptions represents the X-Trace-Options header.
 	XTraceOptions string
-	// XTraceOptions is the value of the X-Trace-Options-Signature header.
+	// XTraceOptionsSignature represents the X-Trace-Options-Signature header.
 	XTraceOptionsSignature string
 	// CB is the callback function to produce the KVs.
 	CB func() KVMap

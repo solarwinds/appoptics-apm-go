@@ -305,7 +305,7 @@ func init() {
 
 // addRequestCounters add various request-related counters to the metrics message buffer.
 func addRequestCounters(bbuf *bson.Buffer, index *int, rcs map[string]*RateCounts) {
-	var requested, traced, limited int64
+	var requested, traced, limited, ttTraced int64
 
 	for _, rc := range rcs {
 		requested += rc.Requested()
@@ -322,10 +322,14 @@ func addRequestCounters(bbuf *bson.Buffer, index *int, rcs map[string]*RateCount
 		addMetricsValue(bbuf, index, ThroughTraceCount, rcRegular.Through())
 	}
 
-	if rcTT, ok := rcs[RCRelaxedTriggerTrace]; ok {
-		ttTraced := rcTT.Traced() + rcTT.Traced()
-		addMetricsValue(bbuf, index, TriggeredTraceCount, ttTraced)
+	if relaxed, ok := rcs[RCRelaxedTriggerTrace]; ok {
+		ttTraced += relaxed.Traced()
 	}
+	if strict, ok := rcs[RCStrictTriggerTrace]; ok {
+		ttTraced += strict.Traced()
+	}
+
+	addMetricsValue(bbuf, index, TriggeredTraceCount, ttTraced)
 }
 
 // GenerateMetricsMessage generates a metrics message in BSON format with all the currently available values
