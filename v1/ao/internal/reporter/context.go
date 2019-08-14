@@ -464,6 +464,9 @@ func getTriggerTraceToken() ([]byte, error) {
 	if !ok {
 		return nil, errors.New("failed to get settings")
 	}
+	if len(setting.triggerToken) == 0 {
+		return nil, errors.New("no valid signature key found")
+	}
 	return setting.triggerToken, nil
 }
 
