@@ -66,7 +66,7 @@ func TestSignedTriggerTraceNoSetting(t *testing.T) {
 	rr := httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello", hd)
 	r.Close(0)
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger-trace=settings-not-available;auth=bad-token", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=settings-not-available;auth=no-signature-key", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 }
 

@@ -350,7 +350,7 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 		return ModeTriggerTraceNotPresent, nil, nil, nil
 	}
 
-	mode := ModeNoTriggerTrace
+	mode := ModeInvalidTriggerTrace
 	kvs := make(map[string]string)
 	var ignored []string
 	var ts string
@@ -420,34 +420,41 @@ func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]strin
 		if authErr == nil {
 			mode = ModeRelaxedTriggerTrace
 		} else {
-			mode = ModeNoTriggerTrace
+			mode = ModeInvalidTriggerTrace
 		}
 	} else {
 		mode = ModeStrictTriggerTrace
 	}
 
 	// ignore KVs if the signature is invalid
-	if mode == ModeNoTriggerTrace {
+	if mode == ModeInvalidTriggerTrace {
 		kvs = nil
 		ignored = nil
 	}
 	return mode, kvs, ignored, authErr
 }
 
+// Trigger trace signature authentication errors
+const (
+	ttAuthBadTimestamp   = "bad-timestamp"
+	ttAuthNoSignatureKey = "no-signature-key"
+	ttAuthBadSignature   = "bad-signature"
+)
+
 func validateXTraceOptionsSignature(signature, ts, data string) error {
 	var err error
 	ts, err = tsInScope(ts)
 	if err != nil {
-		return errors.New("bad-timestamp")
+		return errors.New(ttAuthBadTimestamp)
 	}
 
 	token, err := getTriggerTraceToken()
 	if err != nil {
-		return errors.New("bad-token")
+		return errors.New(ttAuthNoSignatureKey)
 	}
 
 	if HmacHash(token, []byte(data)) != signature {
-		return errors.New("bad-signature")
+		return errors.New(ttAuthBadSignature)
 	}
 	return nil
 }
@@ -540,7 +547,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		} else {
 			setting, has := getSetting(layer)
 			if !has {
-				SetHeaders("settings-not-available")
+				SetHeaders(ttSettingsNotAvailable)
 				return ctx, false, headers
 			}
 
@@ -548,9 +555,9 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			ctx.SetEnabled(flags.Enabled())
 
 			if tMode.Requested() {
-				SetHeaders("ignored")
+				SetHeaders(ttIgnored)
 			} else {
-				SetHeaders("not-requested")
+				SetHeaders(ttNotRequested)
 			}
 
 			return ctx, true, headers

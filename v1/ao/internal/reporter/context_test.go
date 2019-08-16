@@ -325,6 +325,6 @@ func TestParseTriggerTraceFlag(t *testing.T) {
 	opts = "trigger-trace;pd-keys=lo:se,check-id:123"
 	sig := "2c1c398c3e6be898f47f74bf74f035903b48b59c"
 	mode, kvs, ignored, err = parseTriggerTraceFlag(opts, sig)
-	assert.EqualValues(t, ModeNoTriggerTrace, mode)
+	assert.EqualValues(t, ModeInvalidTriggerTrace, mode)
 	assert.NotNil(t, err)
 }

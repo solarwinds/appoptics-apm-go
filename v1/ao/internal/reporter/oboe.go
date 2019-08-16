@@ -215,9 +215,9 @@ const (
 	// indicates that it's a trace for regular sampling.
 	ModeTriggerTraceNotPresent TriggerTraceMode = iota
 
-	// ModeNoTriggerTrace means X-Trace-Options is detected but no valid trigger-trace
+	// ModeInvalidTriggerTrace means X-Trace-Options is detected but no valid trigger-trace
 	// flag found, or X-Trace-Options-Signature is present but the authentication is failed.
-	ModeNoTriggerTrace
+	ModeInvalidTriggerTrace
 
 	// ModeRelaxedTriggerTrace means X-Trace-Options-Signature is present and valid.
 	// The trace will be sampled/limited by the relaxed token bucket.
@@ -228,10 +228,22 @@ const (
 	ModeStrictTriggerTrace
 )
 
+// Trigger trace response messages
+const (
+	ttOK                     = "ok"
+	ttRateExceeded           = "rate-exceeded"
+	ttTracingDisabled        = "tracing-disabled"
+	ttTriggerTracingDisabled = "trigger-tracing-disabled"
+	ttNotRequested           = "not-requested"
+	ttIgnored                = "ignored"
+	ttSettingsNotAvailable   = "settings-not-available"
+	ttEmpty                  = ""
+)
+
 // Enabled indicates whether it's a trigger-trace request
 func (tm TriggerTraceMode) Enabled() bool {
 	switch tm {
-	case ModeTriggerTraceNotPresent, ModeNoTriggerTrace:
+	case ModeTriggerTraceNotPresent, ModeInvalidTriggerTrace:
 		return false
 	case ModeRelaxedTriggerTrace, ModeStrictTriggerTrace:
 		return true
@@ -246,7 +258,7 @@ func (tm TriggerTraceMode) Requested() bool {
 	switch tm {
 	case ModeTriggerTraceNotPresent:
 		return false
-	case ModeRelaxedTriggerTrace, ModeStrictTriggerTrace, ModeNoTriggerTrace:
+	case ModeRelaxedTriggerTrace, ModeStrictTriggerTrace, ModeInvalidTriggerTrace:
 		return true
 	default:
 		panic(fmt.Sprintf("Unhandled trigger trace mode: %x", tm))
@@ -257,7 +269,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {
 			if !r.UseSettings {
-				return SampleDecision{r.ShouldTrace, 0, SAMPLE_SOURCE_NONE, true, ""} // trace tests
+				return SampleDecision{r.ShouldTrace, 0, SAMPLE_SOURCE_NONE, true, ttEmpty} // trace tests
 			}
 		}
 	}
@@ -265,7 +277,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, "settings-not-available"}
+		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, ttSettingsNotAvailable}
 	}
 
 	retval := false
@@ -282,22 +294,22 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 	}
 
 	if triggerTrace.Requested() && !traced {
-		sampled := (triggerTrace != ModeNoTriggerTrace) && (flags.TriggerTraceEnabled())
-		rsp := "ok"
+		sampled := (triggerTrace != ModeInvalidTriggerTrace) && (flags.TriggerTraceEnabled())
+		rsp := ttOK
 
 		ret := bucket.count(sampled, false, true)
 
 		if flags.TriggerTraceEnabled() && triggerTrace.Enabled() {
 			if !ret {
-				rsp = "rate-exceeded"
+				rsp = ttRateExceeded
 			}
-		} else if triggerTrace == ModeNoTriggerTrace {
+		} else if triggerTrace == ModeInvalidTriggerTrace {
 			rsp = ""
 		} else {
 			if !flags.Enabled() {
-				rsp = "tracing-disabled"
+				rsp = ttTracingDisabled
 			} else {
-				rsp = "trigger-tracing-disabled"
+				rsp = ttTriggerTracingDisabled
 			}
 		}
 		return SampleDecision{ret, -1, SAMPLE_SOURCE_UNSET, flags.Enabled(), rsp}
@@ -322,9 +334,9 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 
 	retval = bucket.count(retval, traced, doRateLimiting)
 
-	rsp := "not-requested"
+	rsp := ttNotRequested
 	if triggerTrace.Requested() {
-		rsp = "ignored"
+		rsp = ttIgnored
 	}
 	return SampleDecision{retval, sampleRate, source, flags.Enabled(), rsp}
 }
