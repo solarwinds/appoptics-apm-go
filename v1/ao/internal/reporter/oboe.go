@@ -297,7 +297,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 			if !flags.Enabled() {
 				rsp = "tracing-disabled"
 			} else {
-				rsp = "disabled"
+				rsp = "trigger-tracing-disabled"
 			}
 		}
 		return SampleDecision{ret, -1, SAMPLE_SOURCE_UNSET, flags.Enabled(), rsp}

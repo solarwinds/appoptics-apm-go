@@ -178,7 +178,7 @@ func TestTriggerTraceLocalDisabledRemoteEnabled(t *testing.T) {
 	r.Close(0)
 
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger-trace=disabled", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=trigger-tracing-disabled", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 
 	_ = os.Unsetenv("APPOPTICS_TRIGGER_TRACE")
@@ -199,7 +199,7 @@ func TestTriggerTraceLocalEnabledRemoteDisabled(t *testing.T) {
 	r.Close(0)
 
 	rHeader := rr.Header()
-	assert.EqualValues(t, "trigger-trace=disabled", rHeader.Get("X-Trace-Options-Response"))
+	assert.EqualValues(t, "trigger-trace=trigger-tracing-disabled", rHeader.Get("X-Trace-Options-Response"))
 	assert.True(t, strings.HasSuffix(rHeader.Get("X-Trace"), "00"))
 
 	_ = os.Unsetenv("APPOPTICS_TRIGGER_TRACE")
