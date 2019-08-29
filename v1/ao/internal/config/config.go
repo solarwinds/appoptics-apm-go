@@ -115,6 +115,9 @@ type Config struct {
 
 	// The default log level. It should follow the level defined in log.DefaultLevel
 	DebugLevel string `yaml:"DebugLevel,omitempty" env:"APPOPTICS_DEBUG_LEVEL" default:"warn"`
+
+	// The flag for trigger trace. It's enabled by default.
+	TriggerTrace bool `yaml:"TriggerTrace" env:"APPOPTICS_TRIGGER_TRACE" default:"true"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -795,6 +798,13 @@ func (c *Config) GetDebugLevel() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.DebugLevel
+}
+
+// GetTriggerTrace returns the trigger trace configuration
+func (c *Config) GetTriggerTrace() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.TriggerTrace
 }
 
 // GetTransactionFiltering returns the transaction filtering config

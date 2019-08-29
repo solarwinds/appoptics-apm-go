@@ -57,22 +57,34 @@ const (
 	TYPE_LAYER                      // layer specific settings
 )
 
+// setting flags offset
+const (
+	FlagInvalidOffset = iota
+	FlagOverrideOffset
+	FlagSampleStartOffset
+	FlagSampleThroughOffset
+	FlagSampleThroughAlwaysOffset
+	FlagTriggerTraceOffset
+)
+
 // setting flags
 const (
 	FLAG_OK                    settingFlag = 0x0
-	FLAG_INVALID               settingFlag = 0x1
-	FLAG_OVERRIDE              settingFlag = 0x2
-	FLAG_SAMPLE_START          settingFlag = 0x4
-	FLAG_SAMPLE_THROUGH        settingFlag = 0x8
-	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 0x10
+	FLAG_INVALID               settingFlag = 1 << FlagInvalidOffset
+	FLAG_OVERRIDE              settingFlag = 1 << FlagOverrideOffset
+	FLAG_SAMPLE_START          settingFlag = 1 << FlagSampleStartOffset
+	FLAG_SAMPLE_THROUGH        settingFlag = 1 << FlagSampleThroughOffset
+	FLAG_SAMPLE_THROUGH_ALWAYS settingFlag = 1 << FlagSampleThroughAlwaysOffset
+	FLAG_TRIGGER_TRACE         settingFlag = 1 << FlagTriggerTraceOffset
 )
 
 // source of the sample value
 const (
-	SAMPLE_SOURCE_NONE    sampleSource = 0
-	SAMPLE_SOURCE_FILE    sampleSource = 1
-	SAMPLE_SOURCE_DEFAULT sampleSource = 2
-	SAMPLE_SOURCE_LAYER   sampleSource = 3
+	SAMPLE_SOURCE_UNSET sampleSource = iota - 1
+	SAMPLE_SOURCE_NONE
+	SAMPLE_SOURCE_FILE
+	SAMPLE_SOURCE_DEFAULT
+	SAMPLE_SOURCE_LAYER
 )
 
 const (
@@ -82,6 +94,11 @@ const (
 // Enabled returns if the trace is enabled or not.
 func (f settingFlag) Enabled() bool {
 	return f&(FLAG_SAMPLE_START|FLAG_SAMPLE_THROUGH_ALWAYS) != 0
+}
+
+// TriggerTraceEnabled returns if the trigger trace is enabled
+func (f settingFlag) TriggerTraceEnabled() bool {
+	return f&FLAG_TRIGGER_TRACE != 0
 }
 
 func (st settingType) toSampleSource() sampleSource {
@@ -116,7 +133,7 @@ func (tm tracingMode) isUnknown() bool {
 func (tm tracingMode) toFlags() settingFlag {
 	switch tm {
 	case TRACE_ENABLED:
-		return FLAG_SAMPLE_START | FLAG_SAMPLE_THROUGH_ALWAYS
+		return FLAG_SAMPLE_START | FLAG_SAMPLE_THROUGH_ALWAYS | FLAG_TRIGGER_TRACE
 	case TRACE_DISABLED:
 	default:
 	}

@@ -65,29 +65,49 @@ func getTopFramePkg(st StackTracer) (string, error) {
 	return fp.Base(fp.Dir(frames[1])), nil
 }
 
+func getFirstValFromMd(md metadata.MD, key string) string {
+	var v string
+	if xt, ok := md[key]; ok {
+		v = xt[0]
+	} else if xt, ok = md[strings.ToLower(key)]; ok {
+		v = xt[0]
+	}
+	return v
+}
+
 func tracingContext(ctx context.Context, serverName string, methodName string, statusCode *int) (context.Context, ao.Trace) {
 
 	action := actionFromMethod(methodName)
 
 	xtID := ""
+	opt := ""
+	signature := ""
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok {
-		if xt, ok := md[ao.HTTPHeaderName]; ok {
-			xtID = xt[0]
-		} else if xt, ok = md[strings.ToLower(ao.HTTPHeaderName)]; ok {
-			xtID = xt[0]
-		}
+		xtID = getFirstValFromMd(md, ao.HTTPHeaderName)
+		opt = getFirstValFromMd(md, ao.HTTPHeaderXTraceOptions)
+		signature = getFirstValFromMd(md, ao.HTTPHeaderXTraceOptionsSignature)
 	}
 
-	t := ao.NewTraceFromIDForURL(serverName, xtID, methodName, func() ao.KVMap {
-		return ao.KVMap{
-			"Method":     "POST",
-			"Controller": serverName,
-			"Action":     action,
-			"URL":        methodName,
-			"Status":     statusCode,
-		}
-	})
+	t := ao.NewTraceWithOptions(serverName, ao.SpanOptions{
+		ContextOptions: ao.ContextOptions{
+			MdStr:                  xtID,
+			URL:                    methodName,
+			XTraceOptions:          opt,
+			XTraceOptionsSignature: signature,
+			CB: func() ao.KVMap {
+				kvs := ao.KVMap{
+					"Method":     "POST",
+					"Controller": serverName,
+					"Action":     action,
+					"URL":        methodName,
+					"Status":     statusCode,
+				}
+
+				return kvs
+			},
+		}})
+
 	t.SetMethod("POST")
 	t.SetTransactionName(serverName + "." + action)
 	t.SetStartTime(time.Now())

@@ -10,6 +10,9 @@ import (
 )
 
 func TestClient(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping this test case in short mode")
+	}
 	// run distributed_app server
 
 	// test request to distributed_app example

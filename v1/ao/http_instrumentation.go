@@ -13,12 +13,22 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
 
-// HTTPHeaderName is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
-// the distributed tracing context across HTTP requests.
-const HTTPHeaderName = "X-Trace"
-const httpHandlerSpanName = "http.HandlerFunc"
+const (
+	// HTTPHeaderName is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
+	// the distributed tracing context across HTTP requests.
+	HTTPHeaderName = "X-Trace"
+	// HTTPHeaderXTraceOptions is a constant for the HTTP header to propagate X-Trace-Options
+	// values. It's for trigger trace requests and may be used for other purposes in the future.
+	HTTPHeaderXTraceOptions = reporter.HTTPHeaderXTraceOptions
+	// HTTPHeaderXTraceOptionsSignature is a constant for the HTTP headers to propagate
+	// X-Trace-Options-Signature values. It contains the response codes for X-Trace-Options
+	HTTPHeaderXTraceOptionsSignature = reporter.HTTPHeaderXTraceOptionsSignature
+	httpHandlerSpanName              = "http.HandlerFunc"
+)
 
 // key used for HTTP span to indicate a new context
 var httpSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.HTTPSpan")
@@ -87,6 +97,10 @@ func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *htt
 	r = r.WithContext(NewContext(r.Context(), t))
 
 	wrapper := newResponseWriter(w, t) // wrap writer with response-observing writer
+	for k, v := range t.HTTPRspHeaders() {
+		wrapper.Header().Set(k, v)
+	}
+
 	return t, wrapper, r
 }
 
@@ -146,20 +160,28 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 	}
 
 	// start trace, passing in metadata header
-	t := NewTraceFromIDForURL(spanName, r.Header.Get(HTTPHeaderName), r.URL.EscapedPath(), func() KVMap {
-		kvs := KVMap{
-			keyMethod:      r.Method,
-			keyHTTPHost:    r.Host,
-			keyURL:         r.URL.EscapedPath(),
-			keyRemoteHost:  r.RemoteAddr,
-			keyQueryString: r.URL.RawQuery,
-		}
+	t := NewTraceWithOptions(spanName, SpanOptions{
+		false,
+		reporter.ContextOptions{
+			MdStr:                  r.Header.Get(HTTPHeaderName),
+			URL:                    r.URL.EscapedPath(),
+			XTraceOptions:          r.Header.Get(HTTPHeaderXTraceOptions),
+			XTraceOptionsSignature: r.Header.Get(HTTPHeaderXTraceOptionsSignature),
+			CB: func() KVMap {
+				kvs := KVMap{
+					keyMethod:      r.Method,
+					keyHTTPHost:    r.Host,
+					keyURL:         r.URL.EscapedPath(),
+					keyRemoteHost:  r.RemoteAddr,
+					keyQueryString: r.URL.RawQuery,
+				}
 
-		if so.WithBackTrace {
-			kvs[KeyBackTrace] = string(debug.Stack())
-		}
+				if so.WithBackTrace {
+					kvs[KeyBackTrace] = string(debug.Stack())
+				}
 
-		return kvs
+				return kvs
+			}},
 	})
 
 	// set the start time and method for metrics collection
@@ -176,6 +198,7 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 	if !isNewContext {
 		t.SetStartTime(time.Time{})
 	}
+
 	// update incoming metadata in request headers for any downstream readers
 	r.Header.Set(HTTPHeaderName, t.MetadataString())
 	return t

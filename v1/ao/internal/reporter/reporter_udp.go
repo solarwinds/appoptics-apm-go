@@ -42,7 +42,7 @@ func udpNewReporter() reporter {
 	// add default setting
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120, argsToMap(16, 8, -1, -1))
+		1000000, 120, argsToMap(16, 8, 16, 8, 16, 8, -1, -1, []byte("")))
 
 	return &udpReporter{conn: conn}
 }
