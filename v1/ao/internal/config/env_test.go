@@ -10,7 +10,15 @@ import (
 )
 
 func TestToBool(t *testing.T) {
-	b, err := toBool("yes")
+	b, err := toBool("enabled")
+	assert.True(t, b)
+	assert.Nil(t, err)
+
+	b, err = toBool("disabled")
+	assert.False(t, b)
+	assert.Nil(t, err)
+
+	b, err = toBool("yes")
 	assert.True(t, b)
 	assert.Nil(t, err)
 

@@ -15,9 +15,9 @@ import (
 
 func toBool(s string) (bool, error) {
 	s = strings.ToLower(strings.TrimSpace(s))
-	if s == "yes" || s == "true" {
+	if s == "yes" || s == "true" || s == "enabled" {
 		return true, nil
-	} else if s == "no" || s == "false" {
+	} else if s == "no" || s == "false" || s == "disabled" {
 		return false, nil
 	}
 	return false, errors.New("cannot convert input to bool")
