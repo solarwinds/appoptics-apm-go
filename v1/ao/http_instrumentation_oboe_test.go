@@ -19,7 +19,7 @@ func TestCustomTransactionNameWithDomain(t *testing.T) {
 	r := reporter.SetTestReporter() // set up test reporter
 
 	// Test prepending the domain to transaction names.
-	httpTestWithEndpoint(handler200, "http://test.com/hello world/one/two/three?testq")
+	httpTestWithEndpoint(handler200CustomTxnName, "http://test.com/hello world/one/two/three?testq")
 	r.Close(2)
 	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		// entry event should have no edges
@@ -40,7 +40,7 @@ func TestCustomTransactionNameWithDomain(t *testing.T) {
 	hd := map[string]string{
 		"X-Forwarded-Host": "test2.com",
 	}
-	httpTestWithEndpointWithHeaders(handler200, "http://test.com/hello world/one/two/three?testq", hd)
+	httpTestWithEndpointWithHeaders(handler200CustomTxnName, "http://test.com/hello world/one/two/three?testq", hd)
 	r.Close(2)
 	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
 		// entry event should have no edges

@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	grpcReporterVersion = "golang-v2"
+	grpcReporterVersion = "2"
 
 	// default certificate used to verify the collector endpoint,
 	// can be overridden via APPOPTICS_TRUSTEDPATH
@@ -774,7 +774,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	i := int(atomic.LoadInt32(&r.collectMetricInterval))
 	// generate a new metrics message
 	message := metrics.GenerateMetricsMessage(i, r.eventConnection.queueStats.CopyAndReset(),
-		globalSettingsCfg.FlushRateCounts())
+		FlushRateCounts())
 	r.sendMetrics(message)
 }
 
@@ -825,7 +825,6 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 // settings	new settings
 func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	for _, s := range settings.GetSettings() {
-		log.Debugf("Got sampling setting: %#v\n", s.String())
 		updateSetting(int32(s.Type), string(s.Layer), s.Flags, s.Value, s.Ttl, s.Arguments)
 
 		// update MetricsFlushInterval

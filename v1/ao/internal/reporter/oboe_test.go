@@ -11,6 +11,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
+	"github.com/stretchr/testify/require"
 	mbson "gopkg.in/mgo.v2/bson"
 
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
@@ -50,7 +51,8 @@ func TestInitMessageUDP(t *testing.T) {
 
 func TestTokenBucket(t *testing.T) {
 	b := newTokenBucket(5, 2)
-	c := globalSettingsCfg
+	c := b
+
 	consumers := 5
 	iters := 100
 	sendRate := 30 // test request rate of 30 per second
@@ -126,7 +128,7 @@ func TestSamplingRate(t *testing.T) {
 	// set 2.5% sampling rate
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		25000, 120, argsToMap(1000000, 1000000, -1, -1))
+		25000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 
 	total := 100000
 	traced := callShouldTraceRequest(total, false)
@@ -134,7 +136,10 @@ func TestSamplingRate(t *testing.T) {
 	// make sure we're within 20% of our expected rate over 1,000,000 trials
 	assert.InDelta(t, 2.5, float64(traced)*100/float64(total), 0.2)
 
-	c := globalSettingsCfg
+	setting, ok := getSetting("")
+	assert.True(t, ok)
+	c := setting.bucket
+
 	assert.EqualValues(t, c.Requested(), total)
 	assert.EqualValues(t, c.Through(), 0)
 	assert.EqualValues(t, c.Traced(), traced)
@@ -169,14 +174,14 @@ func TestSampleRateBoundaries(t *testing.T) {
 	// check that max value doesn't go above 1000000
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000001, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000001, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 
 	_, rate, _, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, 1000000, rate)
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		0, 120, argsToMap(1000000, 1000000, -1, -1))
+		0, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 
 	_, rate, _, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, 0, rate)
@@ -184,7 +189,7 @@ func TestSampleRateBoundaries(t *testing.T) {
 	// check that min value doesn't go below 0
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		-1, 120, argsToMap(1000000, 1000000, -1, -1))
+		-1, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 
 	_, rate, _, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, 0, rate)
@@ -205,14 +210,14 @@ func TestSampleSource(t *testing.T) {
 	// we're currently only looking up default settings, so this should return NONE sample source
 	updateSetting(int32(TYPE_LAYER), testLayer,
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	_, _, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_NONE, source)
 
 	// as soon as we add the default settings back, we get a valid sample source
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	_, _, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 
@@ -221,26 +226,31 @@ func TestSampleSource(t *testing.T) {
 
 func TestSampleFlags(t *testing.T) {
 	r := SetTestReporter(TestReporterDisableDefaultSetting(true))
-	c := globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte(""),
-		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	ok, _, _, _ := shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
+
+	setting, ok := getSetting("")
+	require.True(t, ok)
+	c := setting.bucket
 	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.False(t, ok)
 	assert.EqualValues(t, 1, c.Through())
 
 	resetSettings()
-	c = globalSettingsCfg
-
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START"),
-		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.True(t, ok)
+
+	setting, ok = getSetting("")
+	require.True(t, ok)
+	c = setting.bucket
 	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.False(t, ok)
@@ -251,30 +261,36 @@ func TestSampleFlags(t *testing.T) {
 		{Type: "url", RegEx: `user\d{3}`, Tracing: config.DisabledTracingMode},
 		{Type: "url", Extensions: []string{".png", ".jpg"}, Tracing: config.DisabledTracingMode},
 	})
-	ok, _, _, _ = shouldTraceRequestWithURL(testLayer, false, "http://test.com/user123")
-	assert.False(t, ok)
+	decision := shouldTraceRequestWithURL(testLayer, false, "http://test.com/user123", ModeTriggerTraceNotPresent)
+	assert.False(t, decision.trace)
 
 	resetSettings()
-	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
+
+	setting, ok = getSetting("")
+	require.True(t, ok)
+	c = setting.bucket
 	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.True(t, ok)
 	assert.EqualValues(t, 1, c.Through())
 
 	resetSettings()
-	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_THROUGH"),
-		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	ok, _, _, _ = shouldTraceRequest(testLayer, false)
 	assert.False(t, ok)
+
+	setting, ok = getSetting("")
+	require.True(t, ok)
+	c = setting.bucket
 	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.True(t, ok)
@@ -285,7 +301,9 @@ func TestSampleFlags(t *testing.T) {
 
 func TestSampleTokenBucket(t *testing.T) {
 	r := SetTestReporter()
-	c := globalSettingsCfg
+	setting, ok := getSetting("")
+	require.True(t, ok)
+	c := setting.bucket
 
 	traced := callShouldTraceRequest(1, false)
 	assert.EqualValues(t, 1, traced)
@@ -294,29 +312,35 @@ func TestSampleTokenBucket(t *testing.T) {
 	assert.EqualValues(t, 0, c.Limited())
 
 	resetSettings()
-	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START"),
-		1000000, 120, argsToMap(0, 0, -1, -1))
+		1000000, 120, argsToMap(0, 0, 0, 0, 0, 0, -1, -1, []byte("")))
 	traced = callShouldTraceRequest(1, false)
 	assert.EqualValues(t, 0, traced)
+
+	setting, ok = getSetting("")
+	require.True(t, ok)
+	c = setting.bucket
 	assert.EqualValues(t, 0, c.Traced())
 	assert.EqualValues(t, 1, c.Requested())
 	assert.EqualValues(t, 1, c.Limited())
 
 	resetSettings()
-	c = globalSettingsCfg
 
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120, argsToMap(16, 8, -1, -1))
+		1000000, 120, argsToMap(16, 8, 16, 8, 16, 8, -1, -1, []byte("")))
 	traced = callShouldTraceRequest(50, false)
 	assert.EqualValues(t, 16, traced)
+
+	setting, ok = getSetting("")
+	require.True(t, ok)
+	c = setting.bucket
 	assert.EqualValues(t, 16, c.Traced())
 	assert.EqualValues(t, 50, c.Requested())
 	assert.EqualValues(t, 34, c.Limited())
-	globalSettingsCfg.FlushRateCounts()
+	FlushRateCounts()
 
 	time.Sleep(1 * time.Second)
 
@@ -439,10 +463,10 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// Remote setting has the override flag && local config has lower rate
 	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
-	config.Load()
+	_ = config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
 	assert.Equal(t, 10000, rate)
@@ -450,10 +474,10 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// Remote setting has the override flag && local config has higher rate
 	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
-	config.Load()
+	_ = config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 	assert.Equal(t, 1000, rate)
@@ -461,50 +485,50 @@ func TestMergeRemoteSettingWithLocalConfig(t *testing.T) {
 	// Remote setting doesn't have the override flag && local config has lower rate
 	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
-	config.Load()
+	_ = config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
 	assert.Equal(t, 10000, rate)
 	// Remote setting doesn't have the override flag && local config has higher rate
 	_ = os.Setenv("APPOPTICS_TRACING_MODE", "enabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
-	config.Load()
+	_ = config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
 	assert.Equal(t, 10000, rate)
 	// Remote setting has the override flag && no local config
 	_ = os.Unsetenv("APPOPTICS_TRACING_MODE")
 	_ = os.Unsetenv("APPOPTICS_SAMPLE_RATE")
-	config.Load()
+	_ = config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		10000, 120, argsToMap(1000000, 1000000, -1, -1))
+		10000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 	assert.Equal(t, 10000, rate)
 	// Remote setting doesn't have the override flag && no local config
 	_ = os.Unsetenv("APPOPTICS_TRACING_MODE")
 	_ = os.Unsetenv("APPOPTICS_SAMPLE_RATE")
-	config.Load()
+	_ = config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		10000, 120, argsToMap(1000000, 1000000, -1, -1))
+		10000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_DEFAULT, source)
 	assert.Equal(t, 10000, rate)
 	// Remote setting has the override flag && local tracing mode = DISABLED
 	_ = os.Setenv("APPOPTICS_TRACING_MODE", "disabled")
 	_ = os.Setenv("APPOPTICS_SAMPLE_RATE", "10000")
-	config.Load()
+	_ = config.Load()
 	updateSetting(int32(TYPE_DEFAULT), "",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120, argsToMap(1000000, 1000000, -1, -1))
+		1000000, 120, argsToMap(1000000, 1000000, 1000000, 1000000, 1000000, 1000000, -1, -1, []byte("")))
 	trace, rate, source, _ = shouldTraceRequest(testLayer, false)
 	assert.Equal(t, SAMPLE_SOURCE_FILE, source)
 	assert.Equal(t, 10000, rate)

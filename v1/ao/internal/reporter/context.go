@@ -3,13 +3,18 @@
 package reporter
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/hex"
-	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -30,6 +35,10 @@ const (
 	XTR_FLAGS_NONE    = 0x0
 	XTR_FLAGS_SAMPLED = 0x1
 )
+
+const HTTPHeaderXTraceOptions = "X-Trace-Options"
+const HTTPHeaderXTraceOptionsSignature = "X-Trace-Options-Signature"
+const HTTPHeaderXTraceOptionsResponse = "X-Trace-Options-Response"
 
 // orchestras tune to the oboe.
 type oboeIDs struct{ taskID, opID []byte }
@@ -54,11 +63,27 @@ type transactionContext struct {
 	sync.RWMutex
 }
 
+type KVMap map[string]interface{}
+
+// ContextOptions defines the options of creating a context.
+type ContextOptions struct {
+	// MdStr is the string representation of the X-Trace ID.
+	MdStr string
+	// URL is used to do the URL-based transaction filtering.
+	URL string
+	// XTraceOptions represents the X-Trace-Options header.
+	XTraceOptions string
+	// XTraceOptionsSignature represents the X-Trace-Options-Signature header.
+	XTraceOptionsSignature string
+	// CB is the callback function to produce the KVs.
+	CB func() KVMap
+}
+
 // ValidMetadata checks if a metadata string is valid.
-func ValidMetadata(mdstr string) bool {
+func ValidMetadata(mdStr string) bool {
 	md := &oboeMetadata{}
 	md.Init()
-	if err := md.FromString(mdstr); err != nil {
+	if err := md.FromString(mdStr); err != nil {
 		return false
 	}
 	return true
@@ -320,22 +345,199 @@ func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
 	return ctx, err
 }
 
-// NewContext starts a trace, possibly continuing one, if mdStr is provided. Setting reportEntry will
-// report an entry event before this function returns, calling cb if provided for additional KV pairs.
-func NewContext(layer, mdStr string, reportEntry bool, cb func() map[string]interface{}) (ctx Context, ok bool) {
-	return NewContextForURL(layer, mdStr, reportEntry, "", cb)
+func parseTriggerTraceFlag(opts, sig string) (TriggerTraceMode, map[string]string, []string, error) {
+	if opts == "" {
+		return ModeTriggerTraceNotPresent, nil, nil, nil
+	}
+
+	mode := ModeInvalidTriggerTrace
+	kvs := make(map[string]string)
+	var ignored []string
+	var ts string
+
+	optsSlice := strings.Split(opts, ";")
+	// for deduplication
+	kMap := make(map[string]struct{})
+
+	for _, opt := range optsSlice {
+		kvSlice := strings.SplitN(opt, "=", 2)
+		var k, v string
+		k = strings.TrimSpace(kvSlice[0])
+
+		if len(kvSlice) == 2 {
+			v = strings.TrimSpace(kvSlice[1])
+		} else if kvSlice[0] != "trigger-trace" {
+			log.Debugf("Dangling key found: %s", kvSlice[0])
+			ignored = append(ignored, k)
+			continue
+		}
+
+		// ascii spaces only
+		if strings.ContainsAny(k, " \t\n\v\f\r") {
+			ignored = append(ignored, k)
+			continue
+		}
+
+		if !(strings.HasPrefix(k, "custom-") ||
+			k == "pd-keys" ||
+			k == "trigger-trace" ||
+			k == "ts") {
+			ignored = append(ignored, k)
+			continue
+		}
+
+		if k == "pd-keys" {
+			k = "PDKeys"
+		}
+
+		if _, ok := kMap[k]; ok {
+			log.Debugf("Duplicate key found: %s", k)
+			continue
+		}
+		kMap[k] = struct{}{}
+
+		if k != "ts" {
+			kvs[k] = v
+		} else {
+			ts = v
+		}
+	}
+	val, ok := kvs["trigger-trace"]
+	if !ok {
+		return ModeTriggerTraceNotPresent, kvs, ignored, nil
+	}
+
+	if val != "" {
+		log.Debug("trigger-trace should not contain any value.")
+		ignored = append(ignored, "trigger-trace")
+		return ModeTriggerTraceNotPresent, kvs, ignored, nil
+	}
+	delete(kvs, "trigger-trace")
+
+	var authErr error
+	if sig != "" {
+		authErr = validateXTraceOptionsSignature(sig, ts, opts)
+		if authErr == nil {
+			mode = ModeRelaxedTriggerTrace
+		} else {
+			mode = ModeInvalidTriggerTrace
+		}
+	} else {
+		mode = ModeStrictTriggerTrace
+	}
+
+	// ignore KVs if the signature is invalid
+	if mode == ModeInvalidTriggerTrace {
+		kvs = nil
+		ignored = nil
+	}
+	return mode, kvs, ignored, authErr
 }
 
-// NewContextForURL starts a trace for the provided URL, possibly continuing one, if mdStr is provided.
-// Setting reportEntry will report an entry event before this function returns, calling cb if provided
-// for additional KV pairs.
-func NewContextForURL(layer, mdStr string, reportEntry bool, url string, cb func() map[string]interface{}) (ctx Context, ok bool) {
+// Trigger trace signature authentication errors
+const (
+	ttAuthBadTimestamp   = "bad-timestamp"
+	ttAuthNoSignatureKey = "no-signature-key"
+	ttAuthBadSignature   = "bad-signature"
+)
+
+func validateXTraceOptionsSignature(signature, ts, data string) error {
+	var err error
+	ts, err = tsInScope(ts)
+	if err != nil {
+		return errors.New(ttAuthBadTimestamp)
+	}
+
+	token, err := getTriggerTraceToken()
+	if err != nil {
+		return errors.New(ttAuthNoSignatureKey)
+	}
+
+	if HmacHash(token, []byte(data)) != signature {
+		return errors.New(ttAuthBadSignature)
+	}
+	return nil
+}
+
+func HmacHash(token, data []byte) string {
+	h := hmac.New(sha1.New, token)
+	h.Write(data)
+	sha := hex.EncodeToString(h.Sum(nil))
+	return sha
+}
+
+func getTriggerTraceToken() ([]byte, error) {
+	setting, ok := getSetting("")
+	if !ok {
+		return nil, errors.New("failed to get settings")
+	}
+	if len(setting.triggerToken) == 0 {
+		return nil, errors.New("no valid signature key found")
+	}
+	return setting.triggerToken, nil
+}
+
+func tsInScope(tsStr string) (string, error) {
+	ts, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		return "", errors.Wrap(err, "tsInScope")
+	}
+
+	t := time.Unix(ts, 0)
+	if t.Before(time.Now().Add(time.Minute*-5)) ||
+		t.After(time.Now().Add(time.Minute*5)) {
+		return "", fmt.Errorf("timestamp out of scope: %s", tsStr)
+	}
+	return strconv.FormatInt(ts, 10), nil
+}
+
+// NewContext starts a trace for the provided URL, possibly continuing one, if
+// mdStr is provided. Setting reportEntry will report an entry event before this
+// function returns, calling cb if provided for additional KV pairs.
+func NewContext(layer string, reportEntry bool, opts ContextOptions,
+	cb func() KVMap) (ctx Context, ok bool, headers map[string]string) {
 	traced := false
 	addCtxEdge := false
 
-	if mdStr != "" {
+	tMode, tKVs, tIgnoredKeys, authErr := parseTriggerTraceFlag(opts.XTraceOptions, opts.XTraceOptionsSignature)
+
+	var SetHeaders = func(tt string) {
+		// Only set response headers when X-Trace-Options is present
+		if opts.XTraceOptions == "" {
+			return
+		}
+
+		if headers == nil {
+			headers = make(map[string]string)
+		}
+		var v []string
+		if tt != "" {
+			v = append(v, "trigger-trace="+tt)
+		}
+		if tMode == ModeRelaxedTriggerTrace {
+			v = append(v, "auth=ok")
+		} else if authErr != nil {
+			v = append(v, "auth="+authErr.Error())
+		}
+		headers[HTTPHeaderXTraceOptionsResponse] = strings.Join(v, ";")
+	}
+
+	defer func() {
+		if len(tIgnoredKeys) != 0 {
+			xTraceOptsRsp, ok := headers[HTTPHeaderXTraceOptionsResponse]
+			ignored := "ignored=" + strings.Join(tIgnoredKeys, ",")
+			if ok && xTraceOptsRsp != "" {
+				xTraceOptsRsp = xTraceOptsRsp + ";" + ignored
+			} else {
+				xTraceOptsRsp = ignored
+			}
+			headers[HTTPHeaderXTraceOptionsResponse] = xTraceOptsRsp
+		}
+	}()
+
+	if opts.MdStr != "" {
 		var err error
-		if ctx, err = newContextFromMetadataString(mdStr); err != nil {
+		if ctx, err = newContextFromMetadataString(opts.MdStr); err != nil {
 			log.Debug("passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
 			log.Debug("passed in x-trace has wrong version, ignoring")
@@ -345,12 +547,20 @@ func NewContextForURL(layer, mdStr string, reportEntry bool, url string, cb func
 		} else {
 			setting, has := getSetting(layer)
 			if !has {
-				return ctx, false
+				SetHeaders(ttSettingsNotAvailable)
+				return ctx, false, headers
 			}
 
-			_, flags, _ := mergeURLSetting(setting, url)
+			_, flags, _ := mergeURLSetting(setting, opts.URL)
 			ctx.SetEnabled(flags.Enabled())
-			return ctx, true
+
+			if tMode.Requested() {
+				SetHeaders(ttIgnored)
+			} else {
+				SetHeaders(ttNotRequested)
+			}
+
+			return ctx, true, headers
 		}
 	}
 
@@ -358,8 +568,8 @@ func NewContextForURL(layer, mdStr string, reportEntry bool, url string, cb func
 		ctx = newContext(true)
 	}
 
-	ok, rate, source, enabled := shouldTraceRequestWithURL(layer, traced, url)
-	if ok {
+	decision := shouldTraceRequestWithURL(layer, traced, opts.URL, tMode)
+	if decision.trace {
 		if reportEntry {
 			var kvs map[string]interface{}
 			if cb != nil {
@@ -368,21 +578,33 @@ func NewContextForURL(layer, mdStr string, reportEntry bool, url string, cb func
 			if len(kvs) == 0 {
 				kvs = make(map[string]interface{})
 			}
-			kvs["SampleRate"] = rate
-			kvs["SampleSource"] = source
+
+			for k, v := range tKVs {
+				kvs[k] = v
+			}
+
+			kvs["SampleRate"] = decision.rate
+			kvs["SampleSource"] = decision.source
+			if tMode.Enabled() && !traced {
+				kvs["TriggeredTrace"] = true
+			}
 			if _, ok = ctx.(*oboeContext); !ok {
-				return &nullContext{}, false
+				return &nullContext{}, false, headers
 			}
 			if err := ctx.(*oboeContext).reportEventMap(LabelEntry, layer, addCtxEdge, kvs); err != nil {
-				return &nullContext{}, false
+				return &nullContext{}, false, headers
 			}
 		}
-		return ctx, true
+		SetHeaders(decision.xTraceOptsRsp)
+
+		return ctx, true, headers
 	}
 
 	ctx.SetSampled(false)
-	ctx.SetEnabled(enabled)
-	return ctx, true
+	ctx.SetEnabled(decision.enabled)
+	SetHeaders(decision.xTraceOptsRsp)
+
+	return ctx, true, headers
 }
 
 func (ctx *oboeContext) Copy() Context {

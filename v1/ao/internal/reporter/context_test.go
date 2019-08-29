@@ -12,6 +12,7 @@ import (
 
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMetadata(t *testing.T) {
@@ -133,7 +134,7 @@ func TestMetadata(t *testing.T) {
 
 	// isSampled()
 	var md3 oboeMetadata
-	md3.FromString(md1Str)
+	_ = md3.FromString(md1Str)
 	ctx3 := &oboeContext{metadata: md3}
 	ctx3.SetSampled(true)
 	assert.True(t, ctx3.IsSampled())
@@ -224,16 +225,22 @@ func TestReportEventMap(t *testing.T) {
 	})
 }
 
-func TestNewContext(t *testing.T) {
+func TestNewContextForURL(t *testing.T) {
 	r := SetTestReporter()
 
-	ctx, ok := NewContext("testBadMDSpan", "hello", true, nil) // test invalid metadata string
-	assert.True(t, ok)                                         // bad metadata string should get ignored
+	// test invalid metadata string
+	ctx, ok, _ := NewContext("testBadMDSpan", true, ContextOptions{
+		MdStr: "hello", URL: "", XTraceOptions: "", XTraceOptionsSignature: ""}, nil)
+
+	assert.True(t, ok) // bad metadata string should get ignored
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
 
 	oldMD := "1BF4CAA9299299E3D38A58A9821BD34F6268E576CFAB2A2203"
-	ctx, ok = NewContext("testOldMDSpan", oldMD, true, nil) // test old metadata string
-	assert.True(t, ok)                                      // old metadata string should get ignore
+	// test old metadata string
+	ctx, ok, _ = NewContext("testOldMDSpan", true, ContextOptions{
+		MdStr: oldMD, URL: "", XTraceOptions: "", XTraceOptionsSignature: ""}, nil)
+
+	assert.True(t, ok) // old metadata string should get ignore
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
 
 	r.Close(2)
@@ -244,11 +251,13 @@ func TestNewContext(t *testing.T) {
 	})
 }
 
-func TestNewContextTracingDisabled(t *testing.T) {
+func TestNewContextForURLTracingDisabled(t *testing.T) {
 	r := SetTestReporter(TestReporterDisableTracing()) // set up test reporter
 
 	// create a valid context even if tracing is disabled
-	ctx, ok := NewContext("testLayer", "", false, nil)
+	ctx, ok, _ := NewContext("testLayer", false, ContextOptions{
+		MdStr: "", URL: "", XTraceOptions: "", XTraceOptionsSignature: ""}, nil)
+
 	assert.True(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctx).Elem().Name(), "oboeContext")
 	assert.False(t, ctx.IsSampled())
@@ -279,11 +288,43 @@ func TestNullContext(t *testing.T) {
 
 	// shouldn't be able to create a trace if the entry event fails
 	r.ShouldError = true
-	ctxBad, ok := NewContext("testBadEntry", "", true, nil)
+	ctxBad, ok, _ := NewContext("testBadEntry", true, ContextOptions{
+		MdStr: "", URL: "", XTraceOptions: "", XTraceOptionsSignature: ""}, nil)
 	assert.False(t, ok)
 	assert.Equal(t, reflect.TypeOf(ctxBad).Elem().Name(), "nullContext")
 	assert.False(t, ctxBad.IsSampled())
 	assert.Len(t, r.EventBufs, 0) // no reporting
 
 	r.Close(0)
+}
+
+func TestParseTriggerTraceFlag(t *testing.T) {
+	// empty keys
+	opts := ";trigger-trace;custom-something=value_thing;pd-keys=02973r70:9wqj21,0d9j1;1;2;3;4;5;=custom-key=val?;="
+	mode, kvs, ignored, err := parseTriggerTraceFlag(opts, "")
+	assert.Equal(t, ModeStrictTriggerTrace, mode)
+	assert.Nil(t, err)
+	require.NotNil(t, kvs)
+	assert.EqualValues(t, "value_thing", kvs["custom-something"])
+	assert.EqualValues(t, "02973r70:9wqj21,0d9j1", kvs["PDKeys"])
+	assert.EqualValues(t, []string{"", "1", "2", "3", "4", "5", "", ""}, ignored)
+
+	// sequential semicolons
+	opts = "custom-something=value_thing;pd-keys=02973r70;;;;custom-key=val"
+	mode, kvs, ignored, err = parseTriggerTraceFlag(opts, "")
+	assert.Equal(t, ModeTriggerTraceNotPresent, mode)
+	assert.Nil(t, err)
+	require.NotNil(t, kvs)
+	assert.EqualValues(t, "value_thing", kvs["custom-something"])
+	assert.EqualValues(t, "02973r70", kvs["PDKeys"])
+	assert.EqualValues(t, "val", kvs["custom-key"])
+
+	assert.EqualValues(t, []string{"", "", ""}, ignored)
+
+	// ts missing
+	opts = "trigger-trace;pd-keys=lo:se,check-id:123"
+	sig := "2c1c398c3e6be898f47f74bf74f035903b48b59c"
+	mode, kvs, ignored, err = parseTriggerTraceFlag(opts, sig)
+	assert.EqualValues(t, ModeInvalidTriggerTrace, mode)
+	assert.NotNil(t, err)
 }

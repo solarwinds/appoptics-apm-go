@@ -29,9 +29,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func handler404(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(404) }
-func handler403(w http.ResponseWriter, r *http.Request)      { w.WriteHeader(403) }
-func handler200(w http.ResponseWriter, r *http.Request)      { checkAOContextAndSetCustomTxnName(w, r) }
+func handler404(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) }
+func handler403(w http.ResponseWriter, r *http.Request) { w.WriteHeader(403) }
+func handler200(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }
+func handler200CustomTxnName(w http.ResponseWriter, r *http.Request) {
+	checkAOContextAndSetCustomTxnName(w, r)
+}
 func handlerPanic(w http.ResponseWriter, r *http.Request)    { panic("panicking!") }
 func handlerDelay200(w http.ResponseWriter, r *http.Request) { time.Sleep(httpSpanSleep) }
 func handlerDelay503(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +125,7 @@ func TestHTTPHandler200(t *testing.T) {
 	os.Setenv("APPOPTICS_PREPEND_DOMAIN", "false")
 	config.Load()
 	r := reporter.SetTestReporter() // set up test reporter
-	response := httpTestWithEndpoint(handler200, "http://test.com/hello world/one/two/three?testq")
+	response := httpTestWithEndpoint(handler200CustomTxnName, "http://test.com/hello world/one/two/three?testq")
 
 	r.Close(2)
 	g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
@@ -140,7 +143,7 @@ func TestHTTPHandler200(t *testing.T) {
 			assert.EqualValues(t, response.Code, n.Map["Status"])
 			assert.EqualValues(t, 200, n.Map["Status"])
 			assert.Equal(t, "ao_test", n.Map["Controller"])
-			assert.Equal(t, "handler200", n.Map["Action"])
+			assert.Equal(t, "handler200CustomTxnName", n.Map["Action"])
 			assert.True(t, strings.HasPrefix(n.Map["TransactionName"].(string),
 				"final-my-custom-transaction-name"),
 				n.Map["TransactionName"].(string))
@@ -250,7 +253,7 @@ func testDoubleWrappedServer(t *testing.T, list net.Listener) {
 
 // testServer200 does not trace and returns a 200.
 func testServer200(t *testing.T, list net.Listener) {
-	s := &http.Server{Handler: http.HandlerFunc(handler200)}
+	s := &http.Server{Handler: http.HandlerFunc(handler200CustomTxnName)}
 	assert.NoError(t, s.Serve(list))
 }
 
