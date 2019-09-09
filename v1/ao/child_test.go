@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
-	"context"
 )
 
 func childExample(ctx context.Context) {
@@ -47,11 +48,6 @@ func childExampleCtx(ctx context.Context) {
 	// currently we don't allow this, so nothing should be reported
 	_, ctxL3 := ao.BeginSpan(ctxL1, "invalidSpan", "notReported", true)
 	ao.End(ctxL3)
-
-	// test attempting to start a profile from a span that has ended
-	// similarly we don't allow this, so nothing should be reported
-	p1 := ao.BeginProfile(ctxL1, "f2")
-	p1.End()
 
 	// end the trace
 	ao.EndTrace(ctx)

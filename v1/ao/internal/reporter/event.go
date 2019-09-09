@@ -25,13 +25,11 @@ type Label string
 
 // Labels used for reporting events for Layer and Profile spans.
 const (
-	LabelEntry        = "entry"
-	LabelExit         = "exit"
-	LabelInfo         = "info"
-	LabelError        = "error"
-	LabelProfileEntry = "profile_entry"
-	LabelProfileExit  = "profile_exit"
-	EdgeKey           = "Edge"
+	LabelEntry = "entry"
+	LabelExit  = "exit"
+	LabelInfo  = "info"
+	LabelError = "error"
+	EdgeKey    = "Edge"
 )
 
 const (

@@ -141,8 +141,6 @@ func traceExampleCtx(t *testing.T, ctx context.Context) {
 
 // example work function
 func f0(ctx context.Context) {
-	defer ao.BeginProfile(ctx, "f0").End()
-
 	// 	l, _ := ao.BeginSpan(ctx, "http.Get", "RemoteURL", "http://a.b")
 	l := ao.BeginRemoteURLSpan(ctx, "http.Get", "http://a.b")
 	time.Sleep(5 * time.Millisecond)
@@ -164,8 +162,6 @@ func f0(ctx context.Context) {
 
 // example work function
 func f0Ctx(ctx context.Context) {
-	defer ao.BeginProfile(ctx, "f0").End()
-
 	_, ctx = ao.BeginSpan(ctx, "http.Get", "RemoteURL", "http://a.b")
 	time.Sleep(5 * time.Millisecond)
 	// _, _ = http.Get("http://a.b")
@@ -190,7 +186,7 @@ func TestTraceExample(t *testing.T) {
 	ctx := ao.NewContext(context.Background(), ao.NewTrace("myExample"))
 	t.Logf("Reporting unrecognized event KV type")
 	traceExample(t, ctx) // generate events
-	r.Close(13)
+	r.Close(11)
 	assertTraceExample(t, "f0", r.EventBufs)
 }
 
@@ -200,25 +196,18 @@ func TestTraceExampleCtx(t *testing.T) {
 	ctx := ao.NewContext(context.Background(), ao.NewTrace("myExample"))
 	t.Logf("Reporting unrecognized event KV type")
 	traceExampleCtx(t, ctx) // generate events
-	r.Close(13)
+	r.Close(11)
 	assertTraceExample(t, "f0Ctx", r.EventBufs)
 }
 
 func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
-	g.AssertGraph(t, bufs, 13, g.AssertNodeMap{
+	g.AssertGraph(t, bufs, 11, g.AssertNodeMap{
 		// entry event should have no edges
 		{"myExample", "entry"}: {Callback: func(n g.Node) {
 			h, err := os.Hostname()
 			assert.NoError(t, err)
 			assert.Equal(t, h, n.Map["Hostname"])
 		}},
-		// first profile event should link to entry event
-		{"", "profile_entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
-			assert.Equal(t, n.Map["Language"], "go")
-			assert.Equal(t, n.Map["ProfileName"], "f0")
-			assert.Equal(t, n.Map["FunctionName"], "github.com/appoptics/appoptics-apm-go/v1/ao_test."+f0name)
-		}},
-		{"", "profile_exit"}: {Edges: g.Edges{{"", "profile_entry"}}},
 		// nested span in http.Get profile points to trace entry
 		{"http.Get", "entry"}: {Edges: g.Edges{{"myExample", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, n.Map["RemoteURL"], "http://a.b")
@@ -262,7 +251,7 @@ func assertTraceExample(t *testing.T, f0name string, bufs [][]byte) {
 			assert.Equal(t, "response timeout", n.Map["ErrorMsg"])
 		}},
 		{"myExample", "exit"}: {Edges: g.Edges{
-			{"http.Get", "exit"}, {"", "profile_exit"}, {"DBx", "exit"}, {"myExample", "error"},
+			{"http.Get", "exit"}, {"DBx", "exit"}, {"myExample", "error"},
 		}},
 	})
 }
