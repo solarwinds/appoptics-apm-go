@@ -55,9 +55,12 @@ func TestBeginSpan(t *testing.T) {
 	subSpan.End()
 
 	s.End()
+
+	BeginProfile(ctx, "testProfile").End()
+
 	EndTrace(ctx)
 
-	r.Close(8)
+	r.Close(10)
 
 	for _, evt := range r.EventBufs {
 		m := make(map[string]interface{})
