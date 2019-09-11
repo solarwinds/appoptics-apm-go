@@ -124,7 +124,7 @@ func TestConfigInit(t *testing.T) {
 		},
 		PrependDomain: false,
 		HostAlias:     "",
-		SkipVerify:    false,
+		SkipVerify:    true,
 		Precision:     2,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2,

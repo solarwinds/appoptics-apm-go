@@ -85,16 +85,15 @@ const (
 
 // everything needed for a GRPC connection
 type grpcConnection struct {
-	name           string                         // connection name
-	client         collector.TraceCollectorClient // GRPC client instance
-	connection     *grpc.ClientConn               // GRPC connection object
-	address        string                         // collector address
-	certificate    []byte                         // collector certificate
-	pingTicker     *time.Timer                    // timer for keep alive pings in seconds
-	pingTickerLock sync.Mutex                     // lock to ensure sequential access of pingTicker
-	lock           sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
-	queueStats     *metrics.EventQueueStats       // queue stats (reset on each metrics report cycle)
-	// for testing only: if true, skip verifying TLS cert hostname
+	name               string                         // connection name
+	client             collector.TraceCollectorClient // GRPC client instance
+	connection         *grpc.ClientConn               // GRPC connection object
+	address            string                         // collector address
+	certificate        []byte                         // collector certificate
+	pingTicker         *time.Timer                    // timer for keep alive pings in seconds
+	pingTickerLock     sync.Mutex                     // lock to ensure sequential access of pingTicker
+	lock               sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
+	queueStats         *metrics.EventQueueStats       // queue stats (reset on each metrics report cycle)
 	insecureSkipVerify bool
 	// atomicActive indicates if the underlying connection is active. It should
 	// be reconnected or redirected to a new address in case of inactive. The
@@ -149,7 +148,7 @@ func newGrpcConnection(name string, target string, opts ...GrpcConnOpt) (*grpcCo
 		address:            target,
 		certificate:        []byte(grpcCertDefault),
 		queueStats:         &metrics.EventQueueStats{},
-		insecureSkipVerify: false,
+		insecureSkipVerify: true,
 		backoff:            DefaultBackoff,
 		Dialer:             &DefaultDialer{},
 		flushed:            make(chan struct{}),
