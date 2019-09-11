@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime"
 	"runtime/debug"
 	"sync"
 
@@ -61,6 +60,9 @@ type Span interface {
 
 	// BeginProfile starts a new Profile, used to measure a named span
 	// of time spent in this Span.
+	//
+	// Deprecated: BeginProfile exists for historical compatibility and should not be
+	// used, use BeginSpan instead.
 	BeginProfile(profileName string, args ...interface{}) Profile
 	// End ends a Span, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
@@ -109,6 +111,9 @@ type Span interface {
 }
 
 // Profile is used to provide micro-benchmarks of named timings inside a Span.
+//
+// Deprecated: Profile exists for historical compatibility and should not be
+// used, use Span instead.
 type Profile interface {
 	// End ends a Profile, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
@@ -209,20 +214,21 @@ func (s *layerSpan) BeginSpanWithOptions(spanName string, opts SpanOptions, args
 //       defer ao.BeginProfile(ctx, "exampleFunc").End()
 //       // ... do something ...
 //    }
+//
+// Deprecated: BeginProfile exists for historical compatibility and should not be used, use
+// BeginSpan instead.
 func BeginProfile(ctx context.Context, profileName string, args ...interface{}) Profile {
-	if parent, ok := fromContext(ctx); ok && parent.ok() { // report profile entry from parent context
-		return newProfile(parent.aoContext().Copy(), profileName, parent, args...)
-	}
-	return nullSpan{}
+	s, _ := BeginSpan(ctx, profileName, args)
+	return s
 }
 
 // BeginProfile starts a new Profile, used to measure a named span of time spent in this Span.
 // The returned Profile should be closed with End().
+//
+// Deprecated: BeginProfile exists for historical compatibility and should not be used, use
+// BeginSpan instead.
 func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profile {
-	if s.ok() { // copy parent context and report entry from child
-		return newProfile(s.aoCtx.Copy(), profileName, s, args...)
-	}
-	return nullSpan{}
+	return s.BeginSpan(profileName, args)
 }
 
 // End a profiled block or method.
@@ -416,17 +422,15 @@ type labeler interface {
 	setName(string)
 }
 type spanLabeler struct{ name string }
+
+// Deprecated: profileLabeler is deprecated, use spanLabeler instead.
 type profileLabeler struct{ name string }
 
 // AO's Span and Profile spans report their layer and label names slightly differently
-func (l spanLabeler) entryLabel() reporter.Label    { return reporter.LabelEntry }
-func (l spanLabeler) exitLabel() reporter.Label     { return reporter.LabelExit }
-func (l spanLabeler) layerName() string             { return l.name }
-func (l spanLabeler) setName(name string)           { l.name = name }
-func (l profileLabeler) entryLabel() reporter.Label { return reporter.LabelProfileEntry }
-func (l profileLabeler) exitLabel() reporter.Label  { return reporter.LabelProfileExit }
-func (l profileLabeler) layerName() string          { return "" }
-func (l profileLabeler) setName(name string)        { l.name = name }
+func (l spanLabeler) entryLabel() reporter.Label { return reporter.LabelEntry }
+func (l spanLabeler) exitLabel() reporter.Label  { return reporter.LabelExit }
+func (l spanLabeler) layerName() string          { return l.name }
+func (l spanLabeler) setName(name string)        { l.name = name }
 
 func newSpan(aoCtx reporter.Context, spanName string, parent Span, args ...interface{}) Span {
 	ll := spanLabeler{spanName}
@@ -435,26 +439,4 @@ func newSpan(aoCtx reporter.Context, spanName string, parent Span, args ...inter
 	}
 	return &layerSpan{span: span{aoCtx: aoCtx.Copy(), labeler: ll, parent: parent}}
 
-}
-
-func newProfile(aoCtx reporter.Context, profileName string, parent Span, args ...interface{}) Profile {
-	var fname string
-	pc, file, line, ok := runtime.Caller(2) // Caller(1) is BeginProfile
-	if ok {
-		f := runtime.FuncForPC(pc)
-		fname = f.Name()
-	}
-	pl := profileLabeler{profileName}
-	if err := aoCtx.ReportEvent(pl.entryLabel(), pl.layerName(), // report profile entry
-		keyLanguage, "go", keyProfileName, profileName,
-		keyFunctionName, fname, keyFile, file, keyLineNumber, line,
-	); err != nil {
-		return nullSpan{}
-	}
-	p := &profileSpan{span{aoCtx: aoCtx.Copy(), labeler: pl, parent: parent,
-		endArgs: []interface{}{keyLanguage, "go", keyProfileName, profileName}}}
-	if parent != nil && parent.ok() {
-		parent.addProfile(p)
-	}
-	return p
 }
