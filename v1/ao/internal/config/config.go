@@ -94,7 +94,7 @@ type Config struct {
 	HostAlias string `yaml:"HostAlias,omitempty" env:"APPOPTICS_HOSTNAME_ALIAS"`
 
 	// Whether to skip verification of hostname
-	SkipVerify bool `yaml:"SkipVerify,omitempty" env:"APPOPTICS_INSECURE_SKIP_VERIFY"`
+	SkipVerify bool `yaml:"SkipVerify,omitempty" env:"APPOPTICS_INSECURE_SKIP_VERIFY" default:"true"`
 
 	// The precision of the histogram
 	Precision int `yaml:"Precision,omitempty" env:"APPOPTICS_HISTOGRAM_PRECISION" default:"2"`
