@@ -127,19 +127,15 @@ To monitor more than just the overall latency of each request to your Go service
 break a request's processing time down by placing small benchmarks into your code. To do so, first
 start or continue a `Trace` (the root `Span`), then create a series of `Span`s to capture the time used by different parts of the app's stack as it is processed.
 
-AppOptics provides two ways of measuring time spent by your code: a `Span` can measure e.g. a
+AppOptics provides a way to measure time spent by your code: a `Span` can measure e.g. a
 single DB query or cache request, an outgoing HTTP or RPC request, the entire time spent within a
-controller method, or the time used by a middleware method between calls to child Spans. A
-`Profile` is a special type of `Span` providing a named measurement of time spent and is typically used to
-measure a single function call or code block, e.g. to represent the time used by expensive
-computation(s) occurring in a `Span`. Spans can be created as children of other Spans, but a
-`Profile` cannot have children.
+controller method, or the time used by a middleware method between calls to child Spans. Spans can be created
+ as children of other Spans.
 
 AppOptics identifies a reported Span's type from its key-value pairs; if keys named "Query" and
 "RemoteHost" are used, a Span is assumed to measure the extent of a DB query. KV pairs can be
-appended to Spans and Profiles as optional extra variadic arguments to methods such as
+appended to Spans as optional extra variadic arguments to methods such as
 [BeginSpan()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginSpan) or
-[BeginProfile()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginProfile),
 [Info()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Span), and
 [End()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Span). We also provide helper methods
 such as [BeginQuerySpan()](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#BeginQuerySpan),
@@ -153,19 +149,10 @@ to report attributes associated with different types of service calls, used for 
 filterable charts and latency heatmaps.
 
 ```go
-func slowFunc(ctx context.Context) {
-    // profile a slow function call
-    defer ao.BeginProfile(ctx, "slowFunc").End()
-    // ... do something slow
-}
-
 func myHandler(ctx context.Context) {
     // create new ao.Span and context.Context for this part of the request
     L, ctxL := ao.BeginSpan(ctx, "myHandler")
     defer L.End()
-
-    // profile a slow part of this ao.Span
-    slowFunc(ctxL)
 
     // Start a new Span, given a parent span
     mL, _ := L.BeginSpan("myMiddleware")
@@ -280,9 +267,8 @@ new Span and an associated context, and
 defined in the provided context.
 
 It is not required to work with context.Context to trace your app, however. You can also use just
-the [Trace](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Trace),
-[Span](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Span), and
-[Profile](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Profile) interfaces directly, if it
+the [Trace](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Trace) and
+[Span](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao#Span) interfaces directly, if it
 better suits your instrumentation use case.
 
 ```go
