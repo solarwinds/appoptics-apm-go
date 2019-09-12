@@ -32,7 +32,6 @@ const (
 	keyErrorMsg        = "ErrorMsg"
 	keyAsync           = "Async"
 	keyLanguage        = "Language"
-	keyProfileName     = "ProfileName"
 	keyFunctionName    = "FunctionName"
 	keyFile            = "File"
 	keyLineNumber      = "LineNumber"
