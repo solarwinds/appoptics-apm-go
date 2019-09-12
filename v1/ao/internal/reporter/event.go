@@ -23,7 +23,7 @@ type event struct {
 // Label is a required event attribute.
 type Label string
 
-// Labels used for reporting events for Layer and Profile spans.
+// Labels used for reporting events for Layer spans.
 const (
 	LabelEntry = "entry"
 	LabelExit  = "exit"

@@ -25,7 +25,6 @@ const (
 type Trace interface {
 	// Span inherited from the Span interface
 	// BeginSpan(spanName string, args ...interface{}) Span
-	// BeginProfile(profileName string, args ...interface{}) Profile
 	// End(args ...interface{})
 	// Info(args ...interface{})
 	// Error(class, msg string)
