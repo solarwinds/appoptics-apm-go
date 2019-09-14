@@ -107,6 +107,7 @@ type grpcConnection struct {
 	// This channel is closed after flushing the metrics.
 	flushed     chan struct{}
 	flushedOnce sync.Once
+	maxReqBytes int64 // the maximum size for an RPC request body
 }
 
 // GrpcConnOpt defines the function type that sets an option of the grpcConnection
@@ -123,6 +124,13 @@ func WithCert(cert []byte) GrpcConnOpt {
 func WithSkipVerify(skip bool) GrpcConnOpt {
 	return func(c *grpcConnection) {
 		c.insecureSkipVerify = skip
+	}
+}
+
+// WithMaxReqBytes sets the maximum size of an RPC request
+func WithMaxReqBytes(size int64) GrpcConnOpt {
+	return func(c *grpcConnection) {
+		c.maxReqBytes = size
 	}
 }
 
@@ -256,6 +264,7 @@ func newGRPCReporter() reporter {
 	}
 
 	opts = append(opts, WithSkipVerify(config.GetSkipVerify()))
+	opts = append(opts, WithMaxReqBytes(config.ReporterOpts().GetMaxReqBytes()))
 
 	// create connection object for events client and metrics client
 	eventConn, err1 := newGrpcConnection("events channel", addr, opts...)
@@ -655,11 +664,13 @@ func (r *grpcReporter) eventSender() {
 
 	go r.eventBatchSender(batches)
 	opts := config.ReporterOpts()
+	// A rough adjustment for the BSON encoding overhead.
+	hwm := int(float64(opts.GetMaxReqBytes())*0.8 - 10000)
 
 	// This event bucket is drainable either after it reaches HWM, or the flush
 	// interval has passed.
 	evtBucket := NewBytesBucket(r.eventMessages,
-		WithHWM(int(opts.GetEventFlushBatchSize()*1024)),
+		WithHWM(hwm),
 		WithIntervalGetter(opts.GetEventFlushInterval))
 
 	var closing bool
@@ -1009,7 +1020,8 @@ var (
 
 	// errConnStale means the connection is broken. This usually happens
 	// when an RPC call is timeout.
-	errConnStale = errors.New("connection is stale")
+	errConnStale     = errors.New("connection is stale")
+	errRequestTooBig = errors.New("RPC request is too big")
 )
 
 // InvokeRPC makes an RPC call and returns an error if something is broken and
@@ -1050,7 +1062,11 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		c.lock.RLock()
 		if c.isActive() {
 			ctx, cancel := context.WithTimeout(context.Background(), grpcCtxTimeout)
-			err = m.Call(ctx, c.client)
+			if m.RequestSize() > c.maxReqBytes {
+				err = errRequestTooBig
+			} else {
+				err = m.Call(ctx, c.client)
+			}
 
 			code := status.Code(err)
 			if code == codes.DeadlineExceeded ||
@@ -1118,8 +1134,12 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			c.reconnect()
 		}
 
-		if !m.RetryOnErr() {
-			return errNoRetryOnErr
+		if !m.RetryOnErr(err) {
+			if err != nil {
+				return errors.Wrap(errNoRetryOnErr, err.Error())
+			} else {
+				return errNoRetryOnErr
+			}
 		}
 
 		retriesNum++
