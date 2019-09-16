@@ -130,7 +130,7 @@ func (pe *PostEventsMethod) CallSummary() string {
 
 // RetryOnErr denotes if retry is needed for this RPC method
 func (pe *PostEventsMethod) RetryOnErr(err error) bool {
-	if err == errRequestTooBig {
+	if errRequestTooBig == errors.Cause(err) {
 		return false
 	}
 	return true
@@ -213,7 +213,7 @@ func (pm *PostMetricsMethod) CallSummary() string {
 
 // RetryOnErr denotes if retry is needed for this RPC method
 func (pm *PostMetricsMethod) RetryOnErr(err error) bool {
-	if err == errRequestTooBig {
+	if errRequestTooBig == errors.Cause(err) {
 		return false
 	}
 	return true
@@ -289,7 +289,7 @@ func (ps *PostStatusMethod) Call(ctx context.Context,
 
 // RetryOnErr denotes if retry is needed for this RPC method
 func (ps *PostStatusMethod) RetryOnErr(err error) bool {
-	if err == errRequestTooBig {
+	if errRequestTooBig == errors.Cause(err) {
 		return false
 	}
 	return true

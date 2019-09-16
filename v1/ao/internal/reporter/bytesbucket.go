@@ -2,7 +2,11 @@
 
 package reporter
 
-import "time"
+import (
+	"time"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+)
 
 // BytesBucket is a struct to simulate a bucket. It has two actions: pour
 // some water into it from the water source, and drain it when it's drainable.
@@ -76,6 +80,11 @@ outer:
 	for {
 		select {
 		case m := <-b.source:
+			if len(m) > b.HWM {
+				log.Debugf("The event(%dB) is larger than HWM(%dB) and is dropped.", len(m), b.HWM)
+				continue
+			}
+
 			b.watermark += len(m)
 			b.water = append(b.water, m)
 			poured += len(m)

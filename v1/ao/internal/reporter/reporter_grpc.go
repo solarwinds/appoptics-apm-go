@@ -5,6 +5,7 @@ package reporter
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"strings"
@@ -666,6 +667,9 @@ func (r *grpcReporter) eventSender() {
 	opts := config.ReporterOpts()
 	// A rough adjustment for the BSON encoding overhead.
 	hwm := int(float64(opts.GetMaxReqBytes())*0.8 - 10000)
+	if hwm < 0 {
+		log.Warningf("The event sender is disabled by setting hwm=%d", hwm)
+	}
 
 	// This event bucket is drainable either after it reaches HWM, or the flush
 	// interval has passed.
@@ -1063,7 +1067,8 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		if c.isActive() {
 			ctx, cancel := context.WithTimeout(context.Background(), grpcCtxTimeout)
 			if m.RequestSize() > c.maxReqBytes {
-				err = errRequestTooBig
+				m := fmt.Sprintf("%d|%d", m.RequestSize(), c.maxReqBytes)
+				err = errors.Wrap(errRequestTooBig, m)
 			} else {
 				err = m.Call(ctx, c.client)
 			}
