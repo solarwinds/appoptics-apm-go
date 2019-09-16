@@ -716,8 +716,6 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 	for {
 		// this will block until a message arrives or the reporter is closed
 		select {
-		case b := <-batches:
-			messages = b
 		case messages = <-batches:
 			if len(messages) == 0 {
 				batches = nil
@@ -1130,7 +1128,6 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			return err
 		}
 	}
-	return errShouldNotHappen
 }
 
 func (c *grpcConnection) setFlushed() {
