@@ -124,8 +124,8 @@ func (pe *PostEventsMethod) Call(ctx context.Context,
 // It is mainly used for debug printing.
 func (pe *PostEventsMethod) CallSummary() string {
 	rsp := resultRespStr(pe.Resp, pe.err)
-	return fmt.Sprintf("[%s] sent %d events, rtt=%v. rsp=%s",
-		pe, pe.MessageLen(), pe.rtt, rsp)
+	return fmt.Sprintf("[%s] sent %d events (%d bytes), rtt=%v. rsp=%s",
+		pe, pe.MessageLen(), pe.RequestSize(), pe.rtt, rsp)
 }
 
 // RetryOnErr denotes if retry is needed for this RPC method
@@ -208,7 +208,8 @@ func (pm *PostMetricsMethod) Call(ctx context.Context,
 // mainly used for debug printing.
 func (pm *PostMetricsMethod) CallSummary() string {
 	rsp := resultRespStr(pm.Resp, pm.err)
-	return fmt.Sprintf("[%s] sent metrics, rtt=%v. rsp=%s", pm, pm.rtt, rsp)
+	return fmt.Sprintf("[%s] sent metrics (%d bytes), rtt=%v. rsp=%s",
+		pm, pm.RequestSize(), pm.rtt, rsp)
 }
 
 // RetryOnErr denotes if retry is needed for this RPC method

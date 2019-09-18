@@ -104,7 +104,7 @@ func WithIntervalGetter(fn func() time.Duration) BucketOption {
 // the water it pours in.
 // This method blocks until it's either full or timeout.
 func (b *BytesBucket) PourIn() int {
-	if b.HWM == 0 || b.full {
+	if b.full {
 		return 0
 	}
 
@@ -121,6 +121,8 @@ func (b *BytesBucket) PourIn() int {
 	}
 
 	drainTimeout := time.After(b.nextDrainTimeout.Sub(time.Now()))
+	// drain the first drop of water ASAP
+	drainASAP := b.neverDrained
 
 outer:
 	for {
@@ -135,8 +137,7 @@ outer:
 			if len(m) <= b.HWM-b.watermark {
 				b.watermark += len(m)
 				b.water = append(b.water, m)
-				// drain the first drop of water ASAP
-				if b.neverDrained {
+				if drainASAP {
 					b.full = true
 					break outer
 				}
@@ -154,6 +155,8 @@ outer:
 			if b.watermark != 0 {
 				b.full = true
 				break outer
+			} else {
+				drainASAP = true
 			}
 
 		case <-b.closing:
