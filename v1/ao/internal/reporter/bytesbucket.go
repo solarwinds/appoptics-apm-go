@@ -23,27 +23,47 @@ type BytesBucket struct {
 	// the current watermark of the bucket, it may exceed the HWM temporarily.
 	watermark int
 
-	// the maximum duration between two drains
-	maxDrainInterval time.Duration
+	// must drain the bucket no later than this time
+	nextDrainTimeout time.Time
 
 	// the function to get the new interval
-	getInterval func() int64
+	getInterval func() time.Duration
 
 	// where the water is stored in
 	water [][]byte
 
-	// the last drain time
-	lastDrainTime time.Time
+	// the events fetched but not poured into the bucket
+	waitingList [][]byte
+
+	// the bucket is not accepting new water
+	full bool
+
+	// drain it before shutdown
+	gracefulShutdown bool
+
+	// the bucket is closing
+	closing chan struct{}
+
+	// if the bucket is never drained
+	neverDrained bool
+
+	// the count of oversize water that gets dropped
+	oversizeCount int
 }
 
 // NewBytesBucket returns a new BytesBucket object with the options provided
 func NewBytesBucket(source chan []byte, opts ...BucketOption) *BytesBucket {
-	b := &BytesBucket{source: source}
+	b := &BytesBucket{
+		source:       source,
+		neverDrained: true,
+		getInterval: func() time.Duration {
+			return time.Duration(1<<63 - 1)
+		},
+	}
 	for _, opt := range opts {
 		opt(b)
 	}
-	// fetch the interval and create a ticker
-	b.maxDrainInterval = time.Second * time.Duration(b.getInterval())
+	b.nextDrainTimeout = time.Now().Add(b.getInterval())
 
 	return b
 }
@@ -58,51 +78,93 @@ func WithHWM(HWM int) BucketOption {
 	}
 }
 
+// WithClosingIndicator assigns the closing indicator to the bucket
+func WithClosingIndicator(closing chan struct{}) BucketOption {
+	return func(b *BytesBucket) {
+		b.closing = closing
+	}
+}
+
+// WithGracefulShutdown sets the flag which determined if the bucket will be closed
+// gracefully.
+func WithGracefulShutdown(graceful bool) BucketOption {
+	return func(b *BytesBucket) {
+		b.gracefulShutdown = graceful
+	}
+}
+
 // WithIntervalGetter provides a ticker to the bucket to drain it periodically.
-func WithIntervalGetter(fn func() int64) BucketOption {
+func WithIntervalGetter(fn func() time.Duration) BucketOption {
 	return func(b *BytesBucket) {
 		b.getInterval = fn
 	}
 }
 
-// PourIn pours as much water as possible from the source into the bucket
-// It stops either when it's full or no more water from the source.
-func (b *BytesBucket) PourIn() (poured int) {
-	if b.watermark >= b.HWM && b.HWM != 0 {
-		return
+// PourIn pours as much water as possible from the source into the bucket and returns
+// the water it pours in.
+// This method blocks until it's either full or timeout.
+func (b *BytesBucket) PourIn() int {
+	if b.HWM == 0 || b.full {
+		return 0
 	}
 
-	if b.HWM == 0 && b.watermark != 0 {
-		return
+	oldWM := b.watermark
+
+	for len(b.waitingList) != 0 {
+		if len(b.waitingList[0]) <= b.HWM-b.watermark {
+			b.watermark += len(b.waitingList[0])
+			b.water = append(b.water, b.waitingList[0])
+			b.waitingList = b.waitingList[1:]
+		} else {
+			break
+		}
 	}
+
+	drainTimeout := time.After(b.nextDrainTimeout.Sub(time.Now()))
 
 outer:
 	for {
+	inner:
 		select {
 		case m := <-b.source:
 			if len(m) > b.HWM {
-				log.Debugf("The event(%dB) is larger than HWM(%dB) and is dropped.", len(m), b.HWM)
-				continue
+				b.oversizeCount++
+				break inner
 			}
 
-			b.watermark += len(m)
-			b.water = append(b.water, m)
-			poured += len(m)
-			// check the water after pour some water in, as we want it
-			// accept some water even with HWM=0
-			if b.watermark >= b.HWM {
+			if len(m) <= b.HWM-b.watermark {
+				b.watermark += len(m)
+				b.water = append(b.water, m)
+				// drain the first drop of water ASAP
+				if b.neverDrained {
+					b.full = true
+					break outer
+				}
+			} else { // let's stop when the bucket is full
+				if len(b.waitingList) <= 100 {
+					b.waitingList = append(b.waitingList, m)
+				} else {
+					log.Debug("Dropping it as waiting list is full.")
+				}
+				b.full = true
 				break outer
 			}
-			// stop it when it's timeout
-			if !b.lastDrainTime.IsZero() &&
-				time.Now().Sub(b.lastDrainTime) >= b.maxDrainInterval {
+
+		case <-drainTimeout:
+			if b.watermark != 0 {
+				b.full = true
 				break outer
 			}
-		default:
+
+		case <-b.closing:
+			if b.gracefulShutdown && b.watermark != 0 {
+				b.full = true
+			}
 			break outer
 		}
 	}
-	return
+
+	return b.watermark - oldWM
 }
 
 // Drain pour all the water out and make the bucket empty.
@@ -111,37 +173,27 @@ func (b *BytesBucket) Drain() [][]byte {
 
 	b.water = [][]byte{}
 	b.watermark = 0
-	b.lastDrainTime = time.Now()
-	// refresh the interval here instead of drainable() to avoid polling
-	// the global config (mutex needed) too often.
-	b.maxDrainInterval = time.Second * time.Duration(b.getInterval())
+	b.full = false
+	b.neverDrained = false
+	b.nextDrainTimeout = time.Now().Add(b.getInterval())
+	b.oversizeCount = 0
 
 	return water
 }
 
-// Drainable checks if it can be drained now. It is true either when the
-// watermark is higher than HWM, or it reaches the maximum drain interval
+// Full checks if it can be drained now. It is true either when the
+// bucket is marked as full, or it reaches the maximum drain interval
 // (we want to at least drain it periodically)
-func (b *BytesBucket) Drainable() bool {
-	if b.watermark == 0 {
-		return false
-	}
-
-	// It's drainable when the current watermark exceeds the HWM
-	// Do the first drain as soon as possible, even for one drop of water.
-	if b.watermark >= b.HWM || b.lastDrainTime.IsZero() {
-		return true
-	}
-
-	// It's drainable when the duration is beyond the maximum interval
-	if time.Now().Sub(b.lastDrainTime) >= b.maxDrainInterval {
-		return true
-	}
-
-	return false
+func (b *BytesBucket) Full() bool {
+	return b.full
 }
 
 // Watermark returns the current watermark of the bucket.
 func (b *BytesBucket) Watermark() int {
 	return b.watermark
+}
+
+// OversizeCount returns the number of dropped water during a drain cycle
+func (b *BytesBucket) OversizeCount() int {
+	return b.oversizeCount
 }

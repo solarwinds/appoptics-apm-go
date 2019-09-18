@@ -667,7 +667,7 @@ func (r *grpcReporter) eventSender() {
 	opts := config.ReporterOpts()
 	// A rough adjustment for the BSON encoding overhead.
 	hwm := int(float64(opts.GetMaxReqBytes())*0.8 - 10000)
-	if hwm < 0 {
+	if hwm <= 0 {
 		log.Warningf("The event sender is disabled by setting hwm=%d", hwm)
 	}
 
@@ -675,23 +675,16 @@ func (r *grpcReporter) eventSender() {
 	// interval has passed.
 	evtBucket := NewBytesBucket(r.eventMessages,
 		WithHWM(hwm),
-		WithIntervalGetter(opts.GetEventFlushInterval))
-
-	var closing bool
+		WithGracefulShutdown(r.isGracefully()),
+		WithClosingIndicator(r.done),
+		WithIntervalGetter(func() time.Duration {
+			return time.Second * time.Duration(opts.GetEventFlushInterval())
+		}),
+	)
 
 	for {
-		select {
-		// Check if the agent is required to quit.
-		case <-r.done:
-			if !r.isGracefully() {
-				return
-			}
-			closing = true
-		default:
-		}
-
-		// Pour as much water as we can into the bucket, until it's full or
-		// no more water can be got from the source. It's not blocking here.
+		// Pour as much water as we can into the bucket. It blocks until it's
+		// full or timeout.
 		evtBucket.PourIn()
 
 		// The events can only be pushed into the channel when the bucket
@@ -702,20 +695,22 @@ func (r *grpcReporter) eventSender() {
 		// events sending is too slow (or the events are generated too fast).
 		// We have to wait in this case.
 		//
-		// If the reporter is closing, we have the last chance to send all
+		// If the reporter is closing, we may have the last chance to send all
 		// the queued events.
-		if evtBucket.Drainable() || closing {
+		if evtBucket.Full() {
 			w := evtBucket.Watermark()
+			oversized := evtBucket.OversizeCount()
 			batches <- evtBucket.Drain()
-			log.Debugf("Pushed %d bytes to the sender.", w)
+			log.Debugf("Pushed %d bytes to the sender. Oversized=%d", w, oversized)
 		}
 
-		if closing {
+		select {
+		// Check if the agent is required to quit.
+		case <-r.done:
 			return
+		default:
 		}
 
-		// Don't consume too much CPU with noop
-		time.Sleep(time.Millisecond * 100)
 	}
 }
 

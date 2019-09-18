@@ -1,11 +1,9 @@
 package reporter
 
 import (
-	"os"
 	"testing"
 	"time"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,67 +17,80 @@ func TestBytesBucket(t *testing.T) {
 		}
 	}
 
-	os.Setenv("APPOPTICS_EVENTS_FLUSH_INTERVAL", "2")
-	config.Load()
-
-	opts := config.ReporterOpts()
-
-	// a new bucket with high watermark=5 and a ticker of 2 seconds
+	// a new bucket with high watermark=5 and a ticker of 20 milliseconds
 	b := NewBytesBucket(source,
 		WithHWM(5),
-		WithIntervalGetter(opts.GetEventFlushInterval))
+		WithIntervalGetter(func() time.Duration { return time.Millisecond * 20 }))
 
-	// try pour in some water and check the returned value
+	// try pour in some water and check the returned value. It should be full with
+	// just one drop of water for the first draining.
 	poured := b.PourIn()
-	assert.Equal(t, 5, poured)
+	assert.Equal(t, 1, poured)
+	assert.True(t, b.Full())
 
-	// try pour in for another 10 times, there should be only 4 drops
-	// of water being poured in.
-	poured = 0
-	for i := 0; i < 3; i++ {
-		poured += b.PourIn()
-	}
-	// no more water can be poured into the bucket
+	// it cannot be poured in as it's full
+	poured = b.PourIn()
 	assert.Equal(t, 0, poured)
 
-	// and it should be drainable now as it's full
-	assert.Equal(t, true, b.Drainable())
+	// drain the bucket
+	b.Drain()
 
-	// drain the water and check the result
-	water := b.Drain()
-	for i, w := range water {
-		assert.True(t, int(w[0]) == i)
-	}
-
-	// pour some water in the bucket
+	// 5 drops of water can be poured in
 	poured = b.PourIn()
+	assert.Equal(t, 5, poured)
+	assert.True(t, b.Full())
+	b.Drain()
 
-	// 2 drops of water are poured into the bucket
-	assert.Equal(t, 2, poured)
-	// should not be drainable right now
-	assert.Equal(t, false, b.Drainable())
-	// sleep for a while to make the ticker timeout
-	time.Sleep(time.Millisecond * 2100)
-	// it should be drainable now
-	assert.Equal(t, true, b.Drainable())
-	// and 2 drops of water are drained from the bucket
-	assert.Equal(t, 2, len(b.Drain()))
+	// there should be only 1 drop of water being poured in.
+	poured = b.PourIn()
+	assert.Equal(t, 1, poured)
+	assert.Equal(t, true, b.Full())
+
+	// no more water can be poured into the bucket
+	poured = b.PourIn()
+	assert.Equal(t, 0, poured)
+
+	b.Drain()
 
 	// get the correct length
 	source <- []byte{1}
 	source <- []byte{2, 3}
 	poured = b.PourIn()
 	assert.Equal(t, 3, poured)
+}
 
-	b.getInterval = func() int64 { return 1 }
-	// Drain it to trigger the refreshing of flush interval
+func TestBytesBucket_OversizeCount(t *testing.T) {
+	source := make(chan []byte, 7)
+	source <- []byte{1}
+	source <- []byte{2, 3}
+	source <- []byte{2, 3, 4, 5}
+	source <- []byte{6, 7}
+
+	closer := make(chan struct{})
+
+	b := NewBytesBucket(source,
+		WithHWM(3),
+		WithIntervalGetter(func() time.Duration { return time.Millisecond * 20 }),
+		WithClosingIndicator(closer))
+
+	poured := b.PourIn()
+	assert.Equal(t, 1, poured)
+	assert.True(t, b.Full())
 	b.Drain()
 
-	source <- []byte{1}
 	poured = b.PourIn()
-	assert.Equal(t, 1, poured)
-	assert.Equal(t, false, b.Drainable())
-	time.Sleep(time.Millisecond * 1500)
-	assert.Equal(t, true, b.Drainable())
+	assert.Equal(t, 2, poured)
+	assert.True(t, b.Full())
+	assert.Equal(t, 1, b.OversizeCount())
+	b.Drain()
 
+	poured = b.PourIn()
+	assert.Equal(t, 2, poured)
+	assert.Equal(t, 0, b.OversizeCount())
+	assert.True(t, b.Full())
+
+	close(closer)
+	poured = b.PourIn()
+	assert.Equal(t, 0, poured)
+	assert.True(t, b.Full())
 }

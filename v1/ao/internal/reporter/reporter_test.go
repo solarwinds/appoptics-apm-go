@@ -4,7 +4,6 @@ package reporter
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -236,15 +235,6 @@ func TestGRPCReporter(t *testing.T) {
 	assert.True(t, r.WaitForReady(ctxTm2))
 	assert.True(t, r.isReady())
 
-	// The reporter becomes not ready after the default setting has been deleted
-	removeSetting("")
-	r.checkSettingsTimeout(make(chan bool, 1))
-
-	assert.False(t, r.isReady())
-	ctxTm3, cancel3 := context.WithTimeout(context.Background(), 0)
-	assert.False(t, r.WaitForReady(ctxTm3))
-	defer cancel3()
-
 	ctx := newTestContext(t)
 	ev1, err := ctx.newEvent(LabelInfo, "layer1")
 	assert.NoError(t, err)
@@ -270,6 +260,15 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, grpcSettingsTimeoutCheckIntervalDefault, r.settingsTimeoutCheckInterval)
 
 	time.Sleep(time.Second)
+
+	// The reporter becomes not ready after the default setting has been deleted
+	removeSetting("")
+	r.checkSettingsTimeout(make(chan bool, 1))
+
+	assert.False(t, r.isReady())
+	ctxTm3, cancel3 := context.WithTimeout(context.Background(), 0)
+	assert.False(t, r.WaitForReady(ctxTm3))
+	defer cancel3()
 
 	// stop test reporter
 	server.Stop()
@@ -371,7 +370,6 @@ func TestInvalidKey(t *testing.T) {
 	ctx := newTestContext(t)
 	ev1, _ := ctx.newEvent(LabelInfo, "hello-from-invalid-key")
 	assert.NoError(t, r.reportEvent(ctx, ev1))
-	fmt.Println("Sent a message at: ", time.Now())
 
 	time.Sleep(time.Second)
 
