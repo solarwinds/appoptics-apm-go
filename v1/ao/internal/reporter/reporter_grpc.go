@@ -664,11 +664,12 @@ func (r *grpcReporter) eventSender() {
 	}()
 
 	go r.eventBatchSender(batches)
+
 	opts := config.ReporterOpts()
-	// A rough adjustment for the BSON encoding overhead.
-	hwm := int(float64(opts.GetMaxReqBytes())*0.8 - 10000)
+	hwm := int(opts.GetMaxReqBytes())
 	if hwm <= 0 {
 		log.Warningf("The event sender is disabled by setting hwm=%d", hwm)
+		hwm = 0
 	}
 
 	// This event bucket is drainable either after it reaches HWM, or the flush
@@ -698,10 +699,15 @@ func (r *grpcReporter) eventSender() {
 		// If the reporter is closing, we may have the last chance to send all
 		// the queued events.
 		if evtBucket.Full() {
-			w := evtBucket.Watermark()
-			oversized := evtBucket.OversizeCount()
+			c := evtBucket.Count()
+			dropped := evtBucket.DroppedCount()
+			if dropped != 0 {
+				log.Infof("Pushed %d events to the sender, dropped %d oversize events.", c, dropped)
+			} else {
+				log.Debugf("Pushed %d events to the sender.", c)
+			}
+
 			batches <- evtBucket.Drain()
-			log.Debugf("Pushed %d bytes to the sender. Oversized=%d", w, oversized)
 		}
 
 		select {

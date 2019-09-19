@@ -48,7 +48,7 @@ type BytesBucket struct {
 	neverDrained bool
 
 	// the count of oversize water that gets dropped
-	oversizeCount int
+	droppedCount int
 }
 
 // NewBytesBucket returns a new BytesBucket object with the options provided
@@ -130,7 +130,7 @@ outer:
 		select {
 		case m := <-b.source:
 			if len(m) > b.HWM {
-				b.oversizeCount++
+				b.droppedCount++
 				break inner
 			}
 
@@ -179,7 +179,7 @@ func (b *BytesBucket) Drain() [][]byte {
 	b.full = false
 	b.neverDrained = false
 	b.nextDrainTimeout = time.Now().Add(b.getInterval())
-	b.oversizeCount = 0
+	b.droppedCount = 0
 
 	return water
 }
@@ -196,7 +196,12 @@ func (b *BytesBucket) Watermark() int {
 	return b.watermark
 }
 
-// OversizeCount returns the number of dropped water during a drain cycle
-func (b *BytesBucket) OversizeCount() int {
-	return b.oversizeCount
+// DroppedCount returns the number of dropped water during a drain cycle
+func (b *BytesBucket) DroppedCount() int {
+	return b.droppedCount
+}
+
+// Count returns the water count during a drain cycle
+func (b *BytesBucket) Count() int {
+	return len(b.water)
 }

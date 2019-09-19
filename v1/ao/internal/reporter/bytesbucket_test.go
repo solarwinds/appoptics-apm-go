@@ -81,12 +81,12 @@ func TestBytesBucket_OversizeCount(t *testing.T) {
 	poured = b.PourIn()
 	assert.Equal(t, 2, poured)
 	assert.True(t, b.Full())
-	assert.Equal(t, 1, b.OversizeCount())
+	assert.Equal(t, 1, b.DroppedCount())
 	b.Drain()
 
 	poured = b.PourIn()
 	assert.Equal(t, 2, poured)
-	assert.Equal(t, 0, b.OversizeCount())
+	assert.Equal(t, 0, b.DroppedCount())
 	assert.True(t, b.Full())
 
 	close(closer)
