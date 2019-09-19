@@ -124,7 +124,7 @@ func (pe *PostEventsMethod) Call(ctx context.Context,
 // It is mainly used for debug printing.
 func (pe *PostEventsMethod) CallSummary() string {
 	rsp := resultRespStr(pe.Resp, pe.err)
-	return fmt.Sprintf("[%s] sent %d events (%d bytes), rtt=%v. rsp=%s",
+	return fmt.Sprintf("[%s] sent %d events, %d bytes, rtt=%v, rsp=%s.",
 		pe, pe.MessageLen(), pe.RequestSize(), pe.rtt, rsp)
 }
 
@@ -208,7 +208,7 @@ func (pm *PostMetricsMethod) Call(ctx context.Context,
 // mainly used for debug printing.
 func (pm *PostMetricsMethod) CallSummary() string {
 	rsp := resultRespStr(pm.Resp, pm.err)
-	return fmt.Sprintf("[%s] sent metrics (%d bytes), rtt=%v. rsp=%s",
+	return fmt.Sprintf("[%s] sent 1 metrics, %d bytes, rtt=%v, rsp=%s.",
 		pm, pm.RequestSize(), pm.rtt, rsp)
 }
 
@@ -300,7 +300,7 @@ func (ps *PostStatusMethod) RetryOnErr(err error) bool {
 // mainly used for debug printing.
 func (ps *PostStatusMethod) CallSummary() string {
 	rsp := resultRespStr(ps.Resp, ps.err)
-	return fmt.Sprintf("[%s] sent status, rtt=%v. rsp=%s", ps, ps.rtt, rsp)
+	return fmt.Sprintf("[%s] sent status, rtt=%v, rsp=%s.", ps, ps.rtt, rsp)
 }
 
 // GetSettingsMethod is the struct for RPC method GetSettings
@@ -365,7 +365,7 @@ func (gs *GetSettingsMethod) Call(ctx context.Context,
 // CallSummary returns a string representation of the RPC call result.
 func (gs *GetSettingsMethod) CallSummary() string {
 	rsp := settingsRespStr(gs.Resp, gs.err)
-	return fmt.Sprintf("[%s] got settings, rtt=%v. rsp=%s", gs, gs.rtt, rsp)
+	return fmt.Sprintf("[%s] got settings, rtt=%v, rsp=%s.", gs, gs.rtt, rsp)
 }
 
 // RetryOnErr denotes if this method needs a retry on failure.
@@ -436,7 +436,7 @@ func (p *PingMethod) Call(ctx context.Context,
 // mainly used for debug printing.
 func (p *PingMethod) CallSummary() string {
 	rsp := resultRespStr(p.Resp, p.err)
-	return fmt.Sprintf("[%s] ping back, rtt=%v. rsp=%s", p, p.rtt, rsp)
+	return fmt.Sprintf("[%s] ping back, rtt=%v, rsp=%s.", p, p.rtt, rsp)
 }
 
 // RetryOnErr denotes if this RPC method needs a retry on failure.
