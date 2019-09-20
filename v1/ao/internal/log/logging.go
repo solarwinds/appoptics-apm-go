@@ -53,6 +53,7 @@ const DefaultLevel = WARNING
 // The global log level.
 var (
 	globalLevel = &logLevel{LogLevel: DefaultLevel}
+	logger      = log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds)
 )
 
 func init() {
@@ -182,7 +183,7 @@ func logIt(level LogLevel, msg string, args []interface{}) {
 	}
 	buffer.WriteString(s)
 
-	log.Print(buffer.String())
+	logger.Print(buffer.String())
 }
 
 // Logf formats the log message with specified args
