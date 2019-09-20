@@ -4,7 +4,6 @@ package metrics
 
 import (
 	"bytes"
-	"log"
 	"math"
 	"net"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/hdrhist"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/stretchr/testify/assert"
 	mbson "gopkg.in/mgo.v2/bson"
 )

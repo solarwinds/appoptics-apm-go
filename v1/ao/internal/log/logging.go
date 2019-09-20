@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -58,6 +59,11 @@ var (
 
 func init() {
 	SetLevelFromStr(os.Getenv(envAppOpticsLogLevel))
+}
+
+// SetOutput sets the output destination for the internal logger.
+func SetOutput(w io.Writer) {
+	logger.SetOutput(w)
 }
 
 // SetLevelFromStr parses the input string to a LogLevel and change the level of
