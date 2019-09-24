@@ -416,7 +416,7 @@ func TestDefaultBackoff(t *testing.T) {
 
 type NoopDialer struct{}
 
-func (d *NoopDialer) Dial(c grpcConnection) (*grpc.ClientConn, error) {
+func (d *NoopDialer) Dial(p DialParams) (*grpc.ClientConn, error) {
 	return nil, nil
 }
 

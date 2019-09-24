@@ -332,7 +332,8 @@ func (r *grpcReporter) start() {
 
 // ShutdownNow stops the reporter immediately.
 func (r *grpcReporter) ShutdownNow() error {
-	ctx, _ := context.WithTimeout(context.Background(), 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
 	return r.Shutdown(ctx)
 }
 
@@ -468,7 +469,11 @@ func (c *grpcConnection) connect() error {
 		return nil
 	}
 	// create a new connection object for this client
-	conn, err := c.Dial(*c)
+	conn, err := c.Dial(DialParams{
+		InsecureSkipVerify: c.insecureSkipVerify,
+		Certificate:        c.certificate,
+		Address:            c.address,
+	})
 	if err != nil {
 		return errors.Wrap(err, "failed to connect to target")
 	}
@@ -1182,7 +1187,13 @@ func buildBestEffortIdentity() *collector.HostID {
 // Dialer has a method Dial which accepts a grpcConnection object as the
 // argument and returns a ClientConn object.
 type Dialer interface {
-	Dial(grpcConnection) (*grpc.ClientConn, error)
+	Dial(options DialParams) (*grpc.ClientConn, error)
+}
+
+type DialParams struct {
+	InsecureSkipVerify bool
+	Certificate        []byte
+	Address            string
 }
 
 // DefaultDialer implements the Dialer interface to provide the default dialing
@@ -1191,23 +1202,23 @@ type DefaultDialer struct{}
 
 // Dial issues the connection to the remote address with attributes provided by
 // the grpcConnection.
-func (d *DefaultDialer) Dial(c grpcConnection) (*grpc.ClientConn, error) {
+func (d *DefaultDialer) Dial(p DialParams) (*grpc.ClientConn, error) {
 	certPool := x509.NewCertPool()
 
-	if ok := certPool.AppendCertsFromPEM(c.certificate); !ok {
+	if ok := certPool.AppendCertsFromPEM(p.Certificate); !ok {
 		return nil, errors.New("unable to append the certificate to pool")
 	}
 
 	// trim port from server name used for TLS verification
-	serverName := c.address
-	if s := strings.Split(c.address, ":"); len(s) > 0 {
+	serverName := p.Address
+	if s := strings.Split(p.Address, ":"); len(s) > 0 {
 		serverName = s[0]
 	}
 
 	tlsConfig := &tls.Config{
 		ServerName:         serverName,
 		RootCAs:            certPool,
-		InsecureSkipVerify: c.insecureSkipVerify,
+		InsecureSkipVerify: p.InsecureSkipVerify,
 	}
 	// turn off server certificate verification for Go < 1.8
 	if !utils.IsHigherOrEqualGoVersion("go1.8") {
@@ -1215,7 +1226,7 @@ func (d *DefaultDialer) Dial(c grpcConnection) (*grpc.ClientConn, error) {
 	}
 	creds := credentials.NewTLS(tlsConfig)
 
-	return grpc.Dial(c.address, grpc.WithTransportCredentials(creds))
+	return grpc.Dial(p.Address, grpc.WithTransportCredentials(creds))
 }
 
 func printRPCMsg(m Method) {
