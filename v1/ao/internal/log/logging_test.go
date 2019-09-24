@@ -5,7 +5,6 @@ package log
 import (
 	"bytes"
 	"io"
-	"log"
 	"math/rand"
 	"os"
 	"strings"
@@ -52,7 +51,7 @@ func TestDebugLevel(t *testing.T) {
 
 func TestLog(t *testing.T) {
 	var buffer bytes.Buffer
-	log.SetOutput(&buffer)
+	SetOutput(&buffer)
 
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 	SetLevelFromStr(os.Getenv(envAppOpticsLogLevel))
@@ -97,7 +96,7 @@ func TestLog(t *testing.T) {
 	Infof("show me the %v", "code")
 	assert.True(t, strings.HasSuffix(buffer.String(), "show me the code\n"))
 
-	log.SetOutput(os.Stderr)
+	SetOutput(os.Stderr)
 	os.Unsetenv("APPOPTICS_DEBUG_LEVEL")
 
 }
@@ -139,10 +138,10 @@ func TestSetLevel(t *testing.T) {
 	writers = append(writers, &buf)
 	writers = append(writers, os.Stderr)
 
-	log.SetOutput(io.MultiWriter(writers...))
+	SetOutput(io.MultiWriter(writers...))
 
 	defer func() {
-		log.SetOutput(os.Stderr)
+		SetOutput(os.Stderr)
 	}()
 
 	SetLevel(INFO)

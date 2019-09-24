@@ -4,9 +4,10 @@ package ao
 
 import (
 	"context"
+	"io"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
-	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/pkg/errors"
 )
@@ -35,7 +36,7 @@ func init() {
 func initDisabled() {
 	disabled = config.GetDisabled()
 	if disabled {
-		aolog.Warningf("AppOptics agent is disabled.")
+		log.Warningf("AppOptics agent is disabled.")
 	}
 }
 
@@ -76,15 +77,20 @@ func Closed() bool {
 // SetLogLevel changes the logging level of the AppOptics agent
 // Valid logging levels: DEBUG, INFO, WARN, ERROR
 func SetLogLevel(level string) error {
-	l, ok := aolog.ToLogLevel(level)
+	l, ok := log.ToLogLevel(level)
 	if !ok {
 		return errInvalidLogLevel
 	}
-	aolog.SetLevel(l)
+	log.SetLevel(l)
 	return nil
 }
 
 // GetLogLevel returns the current logging level of the AppOptics agent
 func GetLogLevel() string {
-	return aolog.LevelStr[aolog.Level()]
+	return log.LevelStr[log.Level()]
+}
+
+// SetLogOutput sets the output destination for the internal logger.
+func SetLogOutput(w io.Writer) {
+	log.SetOutput(w)
 }
