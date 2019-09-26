@@ -4,7 +4,6 @@ package host
 
 import (
 	"io"
-	"log"
 	"net"
 	"os"
 	"runtime"
@@ -12,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
-	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 )
@@ -24,10 +23,10 @@ func init() {
 func TestFilteredIfaces(t *testing.T) {
 	ifaces, err := FilteredIfaces()
 	if err != nil {
-		log.Printf("Got err from FilteredIfaces: %s\n", err)
+		t.Logf("Got err from FilteredIfaces: %s\n", err)
 	}
 	if len(ifaces) == 0 {
-		log.Println("Got none interfaces.")
+		t.Log("Got none interfaces.")
 	}
 	for _, iface := range ifaces {
 		assert.Equal(t, net.Flags(0), iface.Flags&net.FlagLoopback)
@@ -105,14 +104,14 @@ func TestStopHostIDObserver(t *testing.T) {
 		log.SetOutput(os.Stderr)
 	}()
 
-	aolog.SetLevel(aolog.INFO)
+	log.SetLevel(log.INFO)
 	Stop()
 	assert.True(t, strings.Contains(buf.String(),
 		stopHostIdObserverByUser), buf.String())
 	buf.Reset()
 	Stop()
 	assert.Equal(t, "", buf.String())
-	aolog.SetLevel(aolog.WARNING)
+	log.SetLevel(log.WARNING)
 }
 
 func TestCurrentID(t *testing.T) {

@@ -5,7 +5,6 @@ package host
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -14,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	ao "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -121,7 +120,7 @@ func TestUpdateHostId(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	ao.SetLevel(ao.DEBUG)
+	log.SetLevel(log.DEBUG)
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	defer func() {

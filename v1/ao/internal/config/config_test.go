@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v2"
@@ -463,8 +462,8 @@ func TestConfigDefaultValues(t *testing.T) {
 	c := newConfig().reset()
 
 	// check default log level
-	level, ok := aolog.ToLogLevel(c.DebugLevel)
-	assert.Equal(t, level, aolog.DefaultLevel)
+	level, ok := log.ToLogLevel(c.DebugLevel)
+	assert.Equal(t, level, log.DefaultLevel)
 	assert.True(t, ok)
 
 	// check default ssl collector url
