@@ -116,7 +116,7 @@ func TestUpdateHostId(t *testing.T) {
 	assert.Equal(t, getContainerID(), h.ContainerId())
 	assert.Equal(t, strings.Join(getMACAddressList(), ""),
 		strings.Join(h.MAC(), ""))
-	assert.EqualValues(t, getHerokuDynoId(), h.HerokuID())
+	assert.EqualValues(t, getHerokuDynoId(), h.HerokuId())
 }
 
 func TestUpdate(t *testing.T) {

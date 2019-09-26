@@ -16,6 +16,7 @@ func TestLockedHostID(t *testing.T) {
 	dockerId := "23423jlksl4j2l"
 	mac := []string{"72:00:07:e5:23:51", "c6:61:8b:53:d6:b5", "72:00:07:e5:23:50"}
 	herokuId := "heroku-test"
+	azureAppInstId := "azure-test"
 
 	lh := newLockedID()
 	assert.False(t, lh.ready())
@@ -30,7 +31,8 @@ func TestLockedHostID(t *testing.T) {
 		withEC2Zone(ec2Zone),
 		withContainerId(dockerId),
 		withMAC(mac),
-		withHerokuId(herokuId))
+		withHerokuId(herokuId),
+		withAzureAppInstId(azureAppInstId))
 
 	assert.True(t, lh.ready())
 	lh.setReady()
@@ -43,5 +45,6 @@ func TestLockedHostID(t *testing.T) {
 	assert.Equal(t, ec2Zone, h.EC2Zone())
 	assert.Equal(t, dockerId, h.ContainerId())
 	assert.Equal(t, mac, h.MAC())
-	assert.EqualValues(t, herokuId, h.HerokuID())
+	assert.EqualValues(t, herokuId, h.HerokuId())
+	assert.EqualValues(t, azureAppInstId, h.AzureAppInstId())
 }

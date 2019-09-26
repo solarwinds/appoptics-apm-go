@@ -1165,7 +1165,8 @@ func newHostID(id host.ID) *collector.HostID {
 	gid.Ec2AvailabilityZone = id.EC2Zone()
 	gid.DockerContainerID = id.ContainerId()
 	gid.MacAddresses = id.MAC()
-	gid.HerokuDynoID = id.HerokuID()
+	gid.HerokuDynoID = id.HerokuId()
+	gid.AzAppServiceInstanceID = id.AzureAppInstId()
 
 	return gid
 }

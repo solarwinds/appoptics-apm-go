@@ -29,6 +29,10 @@ var (
 	// the Heroku DYNO id
 	dyno     string
 	dynoOnce sync.Once
+
+	// the Azure web application instance ID
+	azureAppInstId     string
+	azureAppInstIdOnce sync.Once
 )
 
 // lockedID is a ID protected by a mutex. To avoid being modified without
@@ -65,7 +69,8 @@ func (h *ID) copy() ID {
 		withEC2Zone(h.ec2Zone),
 		withContainerId(h.containerId),
 		withMAC(h.mac),
-		withHerokuId(h.herokuId))
+		withHerokuId(h.herokuId),
+		withAzureAppInstId(h.azureAppInstId))
 	return *c
 }
 
@@ -143,6 +148,9 @@ type ID struct {
 
 	// The Heroku DynoID
 	herokuId string
+
+	// The Azure's WEBAPP_INSTANCE_ID
+	azureAppInstId string
 }
 
 // Hostname returns the hostname field of ID
@@ -175,9 +183,14 @@ func (h ID) MAC() []string {
 	return h.mac
 }
 
-// HerokuID returns the herokuId field of ID
-func (h ID) HerokuID() string {
+// HerokuId returns the herokuId field of ID
+func (h ID) HerokuId() string {
 	return h.herokuId
+}
+
+// AzureAppInstId returns the Azure's web application instance ID
+func (h ID) AzureAppInstId() string {
+	return h.azureAppInstId
 }
 
 // IDSetter defines a function type which set a field of ID
@@ -225,6 +238,12 @@ func withMAC(mac []string) IDSetter {
 func withHerokuId(id string) IDSetter {
 	return func(h *ID) {
 		h.herokuId = id
+	}
+}
+
+func withAzureAppInstId(id string) IDSetter {
+	return func(h *ID) {
+		h.azureAppInstId = id
 	}
 }
 

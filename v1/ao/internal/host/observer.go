@@ -26,6 +26,9 @@ const (
 
 	// the environment variable for Heroku DYNO ID
 	envDyno = "DYNO"
+
+	// the environment variable for Azure's WEBAPP_INSTANCE_ID
+	envAzureAppInstId = "WEBAPP_INSTANCE_ID"
 )
 
 // logging texts
@@ -110,6 +113,7 @@ func updateHostID(lh *lockedID) {
 	ec2Zone := getOrFallback(getEC2Zone, old.ec2Zone)
 	cid := getOrFallback(getContainerID, old.containerId)
 	herokuId := getOrFallback(getHerokuDynoId, old.herokuId)
+	azureId := getOrFallback(getAzureAppInstId, old.azureAppInstId)
 
 	mac := getMACAddressList()
 	if len(mac) == 0 {
@@ -124,6 +128,7 @@ func updateHostID(lh *lockedID) {
 		withContainerId(cid),
 		withMAC(mac),
 		withHerokuId(herokuId),
+		withAzureAppInstId(azureId),
 	}
 
 	lh.fullUpdate(setters...)
@@ -257,10 +262,25 @@ func getHerokuDynoId() string {
 	return dyno
 }
 
+func getAzureAppInstId() string {
+	azureAppInstIdOnce.Do(func() {
+		initAzureAppInstId(&azureAppInstId)
+	})
+	return azureAppInstId
+}
+
 func initDyno(dyno *string) {
 	if d, has := os.LookupEnv(envDyno); has {
 		*dyno = d
 	} else {
 		*dyno = ""
+	}
+}
+
+func initAzureAppInstId(azureId *string) {
+	if a, has := os.LookupEnv(envAzureAppInstId); has {
+		*azureId = a
+	} else {
+		*azureId = ""
 	}
 }
