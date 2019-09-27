@@ -28,7 +28,7 @@ const (
 	envDyno = "DYNO"
 
 	// the environment variable for Azure's WEBAPP_INSTANCE_ID
-	envAzureAppInstId = "WEBAPP_INSTANCE_ID"
+	envAzureAppInstId = "WEBSITE_INSTANCE_ID"
 )
 
 // logging texts
@@ -265,6 +265,7 @@ func getHerokuDynoId() string {
 func getAzureAppInstId() string {
 	azureAppInstIdOnce.Do(func() {
 		initAzureAppInstId(&azureAppInstId)
+		log.Debugf("Got and cached Azure webapp instance id: %s", azureAppInstId)
 	})
 	return azureAppInstId
 }
