@@ -213,7 +213,7 @@ func getContainerID() (id string) {
 // A typical line returned by cat /proc/self/cgroup:
 // 9:devices:/docker/40188af19439697187e3f60b933e7e37c5c41035f4c0b266a51c86c5a0074b25
 func getContainerIDFromString(getter func(string) string) string {
-	keywords := []string{"/docker/", "/ecs/", "/kubepods/"}
+	keywords := []string{"/docker/", "/ecs/", "/kubepods/", "/docker.service/"}
 	isID := regexp.MustCompile("^[0-9a-f]{64}$").MatchString
 	line := ""
 
