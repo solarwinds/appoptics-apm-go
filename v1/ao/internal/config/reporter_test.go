@@ -14,8 +14,8 @@ func TestReporterOptions(t *testing.T) {
 	r.SetEventFlushInterval(20)
 	assert.Equal(t, r.GetEventFlushInterval(), int64(20))
 
-	r.SetEventFlushBatchSize(2000)
-	assert.Equal(t, r.GetEventFlushBatchSize(), int64(2000))
+	r.SetMaxReqBytes(2000)
+	assert.Equal(t, r.GetMaxReqBytes(), int64(2000))
 
 	assert.Nil(t, r.validate())
 }

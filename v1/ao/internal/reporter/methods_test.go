@@ -23,7 +23,8 @@ func TestPostEventsMethod(t *testing.T) {
 			[]byte("world"),
 		})
 	assert.Equal(t, "PostEvents", pe.String())
-	assert.Equal(t, true, pe.RetryOnErr())
+	assert.Equal(t, true, pe.RetryOnErr(errConnStale))
+	assert.Equal(t, false, pe.RetryOnErr(errRequestTooBig))
 	assert.EqualValues(t, 2, pe.MessageLen())
 
 	result := &collector.MessageResult{}
@@ -47,7 +48,8 @@ func TestPostMetricsMethod(t *testing.T) {
 			[]byte("world"),
 		})
 	assert.Equal(t, "PostMetrics", pe.String())
-	assert.Equal(t, true, pe.RetryOnErr())
+	assert.Equal(t, true, pe.RetryOnErr(errConnStale))
+	assert.Equal(t, false, pe.RetryOnErr(errRequestTooBig))
 	assert.EqualValues(t, 2, pe.MessageLen())
 
 	result := &collector.MessageResult{}
@@ -71,7 +73,8 @@ func TestPostStatusMethod(t *testing.T) {
 			[]byte("world"),
 		})
 	assert.Equal(t, "PostStatus", pe.String())
-	assert.Equal(t, true, pe.RetryOnErr())
+	assert.Equal(t, true, pe.RetryOnErr(errConnStale))
+	assert.Equal(t, false, pe.RetryOnErr(errRequestTooBig))
 	assert.EqualValues(t, 2, pe.MessageLen())
 
 	result := &collector.MessageResult{}
@@ -89,7 +92,8 @@ func TestPostStatusMethod(t *testing.T) {
 func TestGetSettingsMethod(t *testing.T) {
 	pe := newGetSettingsMethod("test-ket")
 	assert.Equal(t, "GetSettings", pe.String())
-	assert.Equal(t, true, pe.RetryOnErr())
+	assert.Equal(t, true, pe.RetryOnErr(errConnStale))
+	assert.Equal(t, true, pe.RetryOnErr(errRequestTooBig))
 	assert.EqualValues(t, 0, pe.MessageLen())
 
 	result := &collector.SettingsResult{}
@@ -108,7 +112,8 @@ func TestGetSettingsMethod(t *testing.T) {
 func TestPingMethod(t *testing.T) {
 	pe := newPingMethod("test-ket", "testConn")
 	assert.Equal(t, "Ping testConn", pe.String())
-	assert.Equal(t, false, pe.RetryOnErr())
+	assert.Equal(t, false, pe.RetryOnErr(errConnStale))
+	assert.Equal(t, false, pe.RetryOnErr(errRequestTooBig))
 	assert.EqualValues(t, 0, pe.MessageLen())
 
 	result := &collector.MessageResult{}

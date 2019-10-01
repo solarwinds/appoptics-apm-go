@@ -5,6 +5,7 @@ package reporter
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"strings"
@@ -107,6 +108,7 @@ type grpcConnection struct {
 	// This channel is closed after flushing the metrics.
 	flushed     chan struct{}
 	flushedOnce sync.Once
+	maxReqBytes int64 // the maximum size for an RPC request body
 }
 
 // GrpcConnOpt defines the function type that sets an option of the grpcConnection
@@ -123,6 +125,13 @@ func WithCert(cert []byte) GrpcConnOpt {
 func WithSkipVerify(skip bool) GrpcConnOpt {
 	return func(c *grpcConnection) {
 		c.insecureSkipVerify = skip
+	}
+}
+
+// WithMaxReqBytes sets the maximum size of an RPC request
+func WithMaxReqBytes(size int64) GrpcConnOpt {
+	return func(c *grpcConnection) {
+		c.maxReqBytes = size
 	}
 }
 
@@ -256,6 +265,7 @@ func newGRPCReporter() reporter {
 	}
 
 	opts = append(opts, WithSkipVerify(config.GetSkipVerify()))
+	opts = append(opts, WithMaxReqBytes(config.ReporterOpts().GetMaxReqBytes()))
 
 	// create connection object for events client and metrics client
 	eventConn, err1 := newGrpcConnection("events channel", addr, opts...)
@@ -659,29 +669,28 @@ func (r *grpcReporter) eventSender() {
 	}()
 
 	go r.eventBatchSender(batches)
+
 	opts := config.ReporterOpts()
+	hwm := int(opts.GetMaxReqBytes())
+	if hwm <= 0 {
+		log.Warningf("The event sender is disabled by setting hwm=%d", hwm)
+		hwm = 0
+	}
 
 	// This event bucket is drainable either after it reaches HWM, or the flush
 	// interval has passed.
 	evtBucket := NewBytesBucket(r.eventMessages,
-		WithHWM(int(opts.GetEventFlushBatchSize()*1024)),
-		WithIntervalGetter(opts.GetEventFlushInterval))
-
-	var closing bool
+		WithHWM(hwm),
+		WithGracefulShutdown(r.isGracefully()),
+		WithClosingIndicator(r.done),
+		WithIntervalGetter(func() time.Duration {
+			return time.Second * time.Duration(opts.GetEventFlushInterval())
+		}),
+	)
 
 	for {
-		select {
-		// Check if the agent is required to quit.
-		case <-r.done:
-			if !r.isGracefully() {
-				return
-			}
-			closing = true
-		default:
-		}
-
-		// Pour as much water as we can into the bucket, until it's full or
-		// no more water can be got from the source. It's not blocking here.
+		// Pour as much water as we can into the bucket. It blocks until it's
+		// full or timeout.
 		evtBucket.PourIn()
 
 		// The events can only be pushed into the channel when the bucket
@@ -692,20 +701,27 @@ func (r *grpcReporter) eventSender() {
 		// events sending is too slow (or the events are generated too fast).
 		// We have to wait in this case.
 		//
-		// If the reporter is closing, we have the last chance to send all
+		// If the reporter is closing, we may have the last chance to send all
 		// the queued events.
-		if evtBucket.Drainable() || closing {
-			w := evtBucket.Watermark()
+		if evtBucket.Full() {
+			c := evtBucket.Count()
+			dropped := evtBucket.DroppedCount()
+			if dropped != 0 {
+				log.Infof("Pushed %d events to the sender, dropped %d oversize events.", c, dropped)
+			} else {
+				log.Debugf("Pushed %d events to the sender.", c)
+			}
+
 			batches <- evtBucket.Drain()
-			log.Debugf("Pushed %d bytes to the sender.", w)
 		}
 
-		if closing {
+		select {
+		// Check if the agent is required to quit.
+		case <-r.done:
 			return
+		default:
 		}
 
-		// Don't consume too much CPU with noop
-		time.Sleep(time.Millisecond * 100)
 	}
 }
 
@@ -1012,7 +1028,8 @@ var (
 
 	// errConnStale means the connection is broken. This usually happens
 	// when an RPC call is timeout.
-	errConnStale = errors.New("connection is stale")
+	errConnStale     = errors.New("connection is stale")
+	errRequestTooBig = errors.New("RPC request is too big")
 )
 
 // InvokeRPC makes an RPC call and returns an error if something is broken and
@@ -1053,7 +1070,12 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		c.lock.RLock()
 		if c.isActive() {
 			ctx, cancel := context.WithTimeout(context.Background(), grpcCtxTimeout)
-			err = m.Call(ctx, c.client)
+			if m.RequestSize() > c.maxReqBytes {
+				m := fmt.Sprintf("%d|%d", m.RequestSize(), c.maxReqBytes)
+				err = errors.Wrap(errRequestTooBig, m)
+			} else {
+				err = m.Call(ctx, c.client)
+			}
 
 			code := status.Code(err)
 			if code == codes.DeadlineExceeded ||
@@ -1121,8 +1143,12 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			c.reconnect()
 		}
 
-		if !m.RetryOnErr() {
-			return errNoRetryOnErr
+		if !m.RetryOnErr(err) {
+			if err != nil {
+				return errors.Wrap(errNoRetryOnErr, err.Error())
+			} else {
+				return errNoRetryOnErr
+			}
 		}
 
 		retriesNum++

@@ -4,7 +4,6 @@ package reporter
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -235,15 +234,6 @@ func TestGRPCReporter(t *testing.T) {
 	assert.True(t, r.WaitForReady(ctxTm2))
 	assert.True(t, r.isReady())
 
-	// The reporter becomes not ready after the default setting has been deleted
-	removeSetting("")
-	r.checkSettingsTimeout(make(chan bool, 1))
-
-	assert.False(t, r.isReady())
-	ctxTm3, cancel3 := context.WithTimeout(context.Background(), 0)
-	assert.False(t, r.WaitForReady(ctxTm3))
-	defer cancel3()
-
 	ctx := newTestContext(t)
 	ev1, err := ctx.newEvent(LabelInfo, "layer1")
 	assert.NoError(t, err)
@@ -269,6 +259,15 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, grpcSettingsTimeoutCheckIntervalDefault, r.settingsTimeoutCheckInterval)
 
 	time.Sleep(time.Second)
+
+	// The reporter becomes not ready after the default setting has been deleted
+	removeSetting("")
+	r.checkSettingsTimeout(make(chan bool, 1))
+
+	assert.False(t, r.isReady())
+	ctxTm3, cancel3 := context.WithTimeout(context.Background(), 0)
+	assert.False(t, r.WaitForReady(ctxTm3))
+	defer cancel3()
 
 	// stop test reporter
 	server.Stop()
@@ -370,7 +369,6 @@ func TestInvalidKey(t *testing.T) {
 	ctx := newTestContext(t)
 	ev1, _ := ctx.newEvent(LabelInfo, "hello-from-invalid-key")
 	assert.NoError(t, r.reportEvent(ctx, ev1))
-	fmt.Println("Sent a message at: ", time.Now())
 
 	time.Sleep(time.Second)
 
@@ -446,10 +444,11 @@ func TestInvokeRPC(t *testing.T) {
 			}
 			return nil
 		},
-		Dialer:  &NoopDialer{},
-		flushed: make(chan struct{}),
+		Dialer:      &NoopDialer{},
+		flushed:     make(chan struct{}),
+		maxReqBytes: 6 * 1024 * 1024,
 	}
-	c.connect()
+	_ = c.connect()
 
 	// Test reporter exiting
 	mockMethod := &mocks.Method{}
@@ -458,10 +457,9 @@ func TestInvokeRPC(t *testing.T) {
 		Return(nil)
 	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("RequestSize").Return(int64(1))
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
-	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
-		Return(pb.ResultCode_OK, nil)
 
 	exit := make(chan struct{})
 	close(exit)
@@ -476,10 +474,12 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("String").Return("mock")
 	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("RequestSize").Return(int64(1))
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_INVALID_API_KEY, nil)
+	mockMethod.On("RetryOnErr", mock.Anything).Return(false)
 
 	assert.Equal(t, errInvalidServiceKey, c.InvokeRPC(exit, mockMethod))
 
@@ -490,13 +490,13 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("String").Return("mock")
 	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("RequestSize").Return(int64(1))
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_LIMIT_EXCEEDED, nil)
 
-	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
-		Return(false)
+	mockMethod.On("RetryOnErr", mock.Anything).Return(false)
 	assert.Equal(t, errNoRetryOnErr, c.InvokeRPC(exit, mockMethod))
 
 	// Test invocation error / recovery logs
@@ -506,10 +506,10 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("String").Return("mock")
 	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("RequestSize").Return(int64(1))
 	mockMethod.On("CallSummary").Return("summary")
 	mockMethod.On("Arg").Return("testArg")
-	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
-		Return(true)
+	mockMethod.On("RetryOnErr", mock.Anything).Return(true)
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
 		Return(pb.ResultCode_OK, nil)
 
@@ -532,9 +532,9 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("String").Return("mock")
 	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("RequestSize").Return(int64(1))
 	mockMethod.On("CallSummary").Return("summary")
-	mockMethod.On("RetryOnErr", mock.Anything, mock.Anything).
-		Return(true)
+	mockMethod.On("RetryOnErr", mock.Anything).Return(true)
 	mockMethod.On("Arg", mock.Anything, mock.Anything).
 		Return("new-addr:9999")
 	mockMethod.On("ResultCode", mock.Anything, mock.Anything).
@@ -552,6 +552,20 @@ func TestInvokeRPC(t *testing.T) {
 	assert.Equal(t, nil, c.InvokeRPC(exit, mockMethod))
 	assert.True(t, c.isActive())
 	assert.Equal(t, "new-addr:9999", c.address)
+
+	// Test request too big
+	mockMethod = &mocks.Method{}
+	mockMethod.On("Call", mock.Anything, mock.Anything).
+		Return(nil)
+	mockMethod.On("String").Return("mock")
+	mockMethod.On("Message").Return(nil)
+	mockMethod.On("MessageLen").Return(int64(0))
+	mockMethod.On("RequestSize").Return(int64(6*1024*1024 + 1))
+	mockMethod.On("CallSummary").Return("summary")
+	mockMethod.On("Arg").Return("testArg")
+	mockMethod.On("RetryOnErr", mock.Anything).Return(false)
+
+	assert.Contains(t, c.InvokeRPC(exit, mockMethod).Error(), errNoRetryOnErr.Error())
 }
 
 func TestInitReporter(t *testing.T) {
