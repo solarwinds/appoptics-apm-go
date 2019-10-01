@@ -3,3 +3,5 @@ test:
 
 vet: 
 	@go vet -composites=false ./... && echo "Go vet analysis passed."
+
+sure: test vet

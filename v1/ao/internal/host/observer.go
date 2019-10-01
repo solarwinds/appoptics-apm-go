@@ -26,6 +26,9 @@ const (
 
 	// the environment variable for Heroku DYNO ID
 	envDyno = "DYNO"
+
+	// the environment variable for Azure's WEBAPP_INSTANCE_ID
+	envAzureAppInstId = "WEBSITE_INSTANCE_ID"
 )
 
 // logging texts
@@ -110,6 +113,7 @@ func updateHostID(lh *lockedID) {
 	ec2Zone := getOrFallback(getEC2Zone, old.ec2Zone)
 	cid := getOrFallback(getContainerID, old.containerId)
 	herokuId := getOrFallback(getHerokuDynoId, old.herokuId)
+	azureId := getOrFallback(getAzureAppInstId, old.azureAppInstId)
 
 	mac := getMACAddressList()
 	if len(mac) == 0 {
@@ -124,6 +128,7 @@ func updateHostID(lh *lockedID) {
 		withContainerId(cid),
 		withMAC(mac),
 		withHerokuId(herokuId),
+		withAzureAppInstId(azureId),
 	}
 
 	lh.fullUpdate(setters...)
@@ -208,7 +213,7 @@ func getContainerID() (id string) {
 // A typical line returned by cat /proc/self/cgroup:
 // 9:devices:/docker/40188af19439697187e3f60b933e7e37c5c41035f4c0b266a51c86c5a0074b25
 func getContainerIDFromString(getter func(string) string) string {
-	keywords := []string{"/docker/", "/ecs/", "/kubepods/"}
+	keywords := []string{"/docker/", "/ecs/", "/kubepods/", "/docker.service/"}
 	isID := regexp.MustCompile("^[0-9a-f]{64}$").MatchString
 	line := ""
 
@@ -257,10 +262,26 @@ func getHerokuDynoId() string {
 	return dyno
 }
 
+func getAzureAppInstId() string {
+	azureAppInstIdOnce.Do(func() {
+		initAzureAppInstId(&azureAppInstId)
+		log.Debugf("Got and cached Azure webapp instance id: %s", azureAppInstId)
+	})
+	return azureAppInstId
+}
+
 func initDyno(dyno *string) {
 	if d, has := os.LookupEnv(envDyno); has {
 		*dyno = d
 	} else {
 		*dyno = ""
+	}
+}
+
+func initAzureAppInstId(azureId *string) {
+	if a, has := os.LookupEnv(envAzureAppInstId); has {
+		*azureId = a
+	} else {
+		*azureId = ""
 	}
 }
