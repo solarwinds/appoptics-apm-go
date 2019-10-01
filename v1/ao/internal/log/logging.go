@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -53,10 +54,16 @@ const DefaultLevel = WARNING
 // The global log level.
 var (
 	globalLevel = &logLevel{LogLevel: DefaultLevel}
+	logger      = log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds)
 )
 
 func init() {
 	SetLevelFromStr(os.Getenv(envAppOpticsLogLevel))
+}
+
+// SetOutput sets the output destination for the internal logger.
+func SetOutput(w io.Writer) {
+	logger.SetOutput(w)
 }
 
 // SetLevelFromStr parses the input string to a LogLevel and change the level of
@@ -182,7 +189,7 @@ func logIt(level LogLevel, msg string, args []interface{}) {
 	}
 	buffer.WriteString(s)
 
-	log.Print(buffer.String())
+	logger.Print(buffer.String())
 }
 
 // Logf formats the log message with specified args

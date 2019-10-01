@@ -5,7 +5,6 @@ package reporter
 import (
 	"context"
 	"io"
-	"log"
 	"net"
 	"os"
 	"reflect"
@@ -17,7 +16,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
-	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/mocks"
@@ -153,7 +152,7 @@ func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) chan struct
 			n, _, err := conn.ReadFromUDP(buf)
 			t.Logf("Got UDP buf len %v err %v", n, err)
 			if err != nil {
-				log.Printf("UDP listener got err, quitting %v", err)
+				t.Logf("UDP listener got err, quitting %v", err)
 				break
 			}
 			*bufs = append(*bufs, buf[0:n])
@@ -362,7 +361,7 @@ func TestInvalidKey(t *testing.T) {
 	config.Load()
 	oldReporter := globalReporter
 
-	aolog.SetLevel(aolog.INFO)
+	log.SetLevel(log.INFO)
 	setGlobalReporter("ssl")
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
@@ -394,9 +393,9 @@ func TestInvalidKey(t *testing.T) {
 		"eventBatchSender goroutine exiting",
 	}
 	for _, ptn := range patterns {
-		assert.True(t, strings.Contains(buf.String(), ptn))
+		assert.True(t, strings.Contains(buf.String(), ptn), buf.String()+"^^^^^^"+ptn)
 	}
-	aolog.SetLevel(aolog.WARNING)
+	log.SetLevel(log.WARNING)
 }
 
 func TestDefaultBackoff(t *testing.T) {
@@ -414,7 +413,7 @@ func TestDefaultBackoff(t *testing.T) {
 
 type NoopDialer struct{}
 
-func (d *NoopDialer) Dial(c grpcConnection) (*grpc.ClientConn, error) {
+func (d *NoopDialer) Dial(p DialParams) (*grpc.ClientConn, error) {
 	return nil, nil
 }
 

@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	aolog "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v2"
@@ -145,7 +144,7 @@ func TestConfigInit(t *testing.T) {
 		DebugLevel:         "warn",
 		TriggerTrace:       true,
 	}
-	assert.Equal(t, *c, defaultC)
+	assert.Equal(t, c, &defaultC)
 }
 
 func ClearEnvs() {
@@ -226,7 +225,7 @@ func TestEnvsLoading(t *testing.T) {
 
 	c := NewConfig()
 
-	assert.Equal(t, *c, envConfig)
+	assert.Equal(t, c, &envConfig)
 }
 
 func TestYamlConfig(t *testing.T) {
@@ -270,7 +269,7 @@ func TestYamlConfig(t *testing.T) {
 		TriggerTrace:       false,
 	}
 
-	out, err := yaml.Marshal(yamlConfig)
+	out, err := yaml.Marshal(&yamlConfig)
 	assert.Nil(t, err)
 
 	err = ioutil.WriteFile("/tmp/appoptics-config.yaml", out, 0644)
@@ -281,7 +280,7 @@ func TestYamlConfig(t *testing.T) {
 	os.Setenv(EnvAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
 
 	c := NewConfig()
-	assert.Equal(t, yamlConfig, *c)
+	assert.Equal(t, &yamlConfig, c)
 
 	// Test with both config file and env variables
 	envs := []string{
@@ -346,7 +345,7 @@ func TestYamlConfig(t *testing.T) {
 	}
 
 	c = NewConfig()
-	assert.Equal(t, envConfig, *c)
+	assert.Equal(t, &envConfig, c)
 
 	os.Unsetenv("APPOPTICS_CONFIG_FILE")
 }
@@ -463,8 +462,8 @@ func TestConfigDefaultValues(t *testing.T) {
 	c := newConfig().reset()
 
 	// check default log level
-	level, ok := aolog.ToLogLevel(c.DebugLevel)
-	assert.Equal(t, level, aolog.DefaultLevel)
+	level, ok := log.ToLogLevel(c.DebugLevel)
+	assert.Equal(t, level, log.DefaultLevel)
 	assert.True(t, ok)
 
 	// check default ssl collector url
