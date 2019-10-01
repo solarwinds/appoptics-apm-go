@@ -127,7 +127,7 @@ func TestConfigInit(t *testing.T) {
 		Precision:     2,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2,
-			EventFlushBatchSize:     2000,
+			MaxReqBytes:             2000 * 1024,
 			MetricFlushInterval:     30,
 			GetSettingsInterval:     30,
 			SettingsTimeoutInterval: 10,
@@ -179,7 +179,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_INSECURE_SKIP_VERIFY=true",
 		"APPOPTICS_HISTOGRAM_PRECISION=4",
 		"APPOPTICS_EVENTS_FLUSH_INTERVAL=4",
-		"APPOPTICS_EVENTS_BATCHSIZE=4000",
+		"APPOPTICS_MAX_REQUEST_BYTES=4096000",
 		"APPOPTICS_DISABLED=true",
 		"APPOPTICS_SQL_SANITIZE=0",
 		"APPOPTICS_EC2_METADATA_TIMEOUT=2000",
@@ -205,7 +205,7 @@ func TestEnvsLoading(t *testing.T) {
 		Precision:     2 * 2,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2 * 2,
-			EventFlushBatchSize:     2000 * 2,
+			MaxReqBytes:             4000 * 1024,
 			MetricFlushInterval:     30,
 			GetSettingsInterval:     30,
 			SettingsTimeoutInterval: 10,
@@ -247,7 +247,7 @@ func TestYamlConfig(t *testing.T) {
 		Precision:     2 * 3,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2 * 3,
-			EventFlushBatchSize:     2000 * 3,
+			MaxReqBytes:             2000 * 3 * 1024,
 			MetricFlushInterval:     30,
 			GetSettingsInterval:     30,
 			SettingsTimeoutInterval: 10,
@@ -296,7 +296,7 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_INSECURE_SKIP_VERIFY=true",
 		"APPOPTICS_HISTOGRAM_PRECISION=4",
 		"APPOPTICS_EVENTS_FLUSH_INTERVAL=4",
-		"APPOPTICS_EVENTS_BATCHSIZE=4000",
+		"APPOPTICS_MAX_REQUEST_BYTES=4096000",
 		"APPOPTICS_DISABLED=true",
 		"APPOPTICS_SQL_SANITIZE=3",
 	}
@@ -322,7 +322,7 @@ func TestYamlConfig(t *testing.T) {
 		Precision:     2 * 2,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2 * 2,
-			EventFlushBatchSize:     2000 * 2,
+			MaxReqBytes:             4000 * 1024,
 			MetricFlushInterval:     30,
 			GetSettingsInterval:     30,
 			SettingsTimeoutInterval: 10,
@@ -425,7 +425,7 @@ func TestInvalidConfig(t *testing.T) {
 		Precision:     2 * 2,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2 * 2,
-			EventFlushBatchSize:     2000 * 2,
+			MaxReqBytes:             4000 * 1024,
 			MetricFlushInterval:     30,
 			GetSettingsInterval:     30,
 			SettingsTimeoutInterval: 10,

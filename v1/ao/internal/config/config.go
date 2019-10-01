@@ -52,7 +52,7 @@ const (
 	envAppOpticsInsecureSkipVerify  = "APPOPTICS_INSECURE_SKIP_VERIFY"
 	envAppOpticsHistogramPrecision  = "APPOPTICS_HISTOGRAM_PRECISION"
 	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
-	envAppOpticsEventsBatchSize     = "APPOPTICS_EVENTS_BATCHSIZE"
+	envAppOpticsMaxReqBytes         = "APPOPTICS_MAX_REQUEST_BYTES"
 	envAppOpticsDisabled            = "APPOPTICS_DISABLED"
 	EnvAppOpticsConfigFile          = "APPOPTICS_CONFIG_FILE"
 )

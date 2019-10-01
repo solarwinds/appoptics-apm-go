@@ -12,8 +12,8 @@ type ReporterOptions struct {
 	// Events flush interval in seconds
 	EventFlushInterval int64 `yaml:"EventFlushInterval,omitempty" env:"APPOPTICS_EVENTS_FLUSH_INTERVAL" default:"2"`
 
-	// Event sending batch size in KB
-	EventFlushBatchSize int64 `yaml:"EventFlushBatchSize,omitempty" env:"APPOPTICS_EVENTS_BATCHSIZE" default:"2000"`
+	// The maximum bytes per RPC request
+	MaxReqBytes int64 `yaml:"MaxReqBytes,omitempty" env:"APPOPTICS_MAX_REQUEST_BYTES" default:"2048000"`
 
 	// Metrics flush interval in seconds
 	MetricFlushInterval int64 `yaml:"MetricFlushInterval,omitempty" default:"30"`
@@ -48,21 +48,19 @@ func (r *ReporterOptions) SetEventFlushInterval(i int64) {
 	atomic.StoreInt64(&r.EventFlushInterval, i)
 }
 
-// SetEventFlushBatchSize sets the event flush interval to i
-func (r *ReporterOptions) SetEventFlushBatchSize(i int64) {
-	atomic.StoreInt64(&r.EventFlushBatchSize, i)
+// SetMaxReqBytes sets the maximum bytes of the PRC request body to i
+func (r *ReporterOptions) SetMaxReqBytes(i int64) {
+	atomic.StoreInt64(&r.MaxReqBytes, i)
 }
 
 // GetEventFlushInterval returns the current event flush interval
 func (r *ReporterOptions) GetEventFlushInterval() int64 {
-
 	return atomic.LoadInt64(&r.EventFlushInterval)
 }
 
-// GetEventFlushBatchSize returns the current event flush interval
-func (r *ReporterOptions) GetEventFlushBatchSize() int64 {
-
-	return atomic.LoadInt64(&r.EventFlushBatchSize)
+// GetMaxReqBytes returns the maximum RPC request size
+func (r *ReporterOptions) GetMaxReqBytes() int64 {
+	return atomic.LoadInt64(&r.MaxReqBytes)
 }
 
 func (r *ReporterOptions) validate() error {

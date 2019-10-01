@@ -25,6 +25,9 @@ type Method interface {
 	// MessageLen returns the length (number of elements) of the method request
 	MessageLen() int64
 
+	// RequestSize returns the total bytes for an rpc request body
+	RequestSize() int64
+
 	// Message returns the message body, if any
 	Message() [][]byte
 
@@ -40,7 +43,7 @@ type Method interface {
 	String() string
 
 	// RetryOnErr checks if the method allows retry
-	RetryOnErr() bool
+	RetryOnErr(error) bool
 }
 
 var (
@@ -52,6 +55,7 @@ var (
 type PostEventsMethod struct {
 	serviceKey string
 	messages   [][]byte
+	msgSize    int64
 	Resp       *collector.MessageResult
 	err        error
 	rtt        time.Duration
@@ -87,6 +91,15 @@ func (pe *PostEventsMethod) MessageLen() int64 {
 	return int64(len(pe.messages))
 }
 
+// RequestSize returns the total bytes for an rpc request body
+func (pe *PostEventsMethod) RequestSize() int64 {
+	if pe.msgSize != 0 {
+		return pe.msgSize
+	}
+	pe.msgSize = getMsgsBytes(pe.messages)
+	return pe.msgSize
+}
+
 // Message returns the message body of the RPC call
 func (pe *PostEventsMethod) Message() [][]byte {
 	return pe.messages
@@ -111,12 +124,15 @@ func (pe *PostEventsMethod) Call(ctx context.Context,
 // It is mainly used for debug printing.
 func (pe *PostEventsMethod) CallSummary() string {
 	rsp := resultRespStr(pe.Resp, pe.err)
-	return fmt.Sprintf("[%s] sent %d events, rtt=%v. rsp=%s",
-		pe, pe.MessageLen(), pe.rtt, rsp)
+	return fmt.Sprintf("[%s] sent %d events, %d bytes, rtt=%v, rsp=%s.",
+		pe, pe.MessageLen(), pe.RequestSize(), pe.rtt, rsp)
 }
 
 // RetryOnErr denotes if retry is needed for this RPC method
-func (pe *PostEventsMethod) RetryOnErr() bool {
+func (pe *PostEventsMethod) RetryOnErr(err error) bool {
+	if errRequestTooBig == errors.Cause(err) {
+		return false
+	}
 	return true
 }
 
@@ -124,6 +140,7 @@ func (pe *PostEventsMethod) RetryOnErr() bool {
 type PostMetricsMethod struct {
 	serviceKey string
 	messages   [][]byte
+	msgSize    int64
 	Resp       *collector.MessageResult
 	err        error
 	rtt        time.Duration
@@ -158,6 +175,15 @@ func (pm *PostMetricsMethod) MessageLen() int64 {
 	return int64(len(pm.messages))
 }
 
+// RequestSize returns the total bytes for an rpc request body
+func (pm *PostMetricsMethod) RequestSize() int64 {
+	if pm.msgSize != 0 {
+		return pm.msgSize
+	}
+	pm.msgSize = getMsgsBytes(pm.messages)
+	return pm.msgSize
+}
+
 // Message returns the message body of the RPC call.
 func (pm *PostMetricsMethod) Message() [][]byte {
 	return pm.messages
@@ -182,11 +208,15 @@ func (pm *PostMetricsMethod) Call(ctx context.Context,
 // mainly used for debug printing.
 func (pm *PostMetricsMethod) CallSummary() string {
 	rsp := resultRespStr(pm.Resp, pm.err)
-	return fmt.Sprintf("[%s] sent metrics, rtt=%v. rsp=%s", pm, pm.rtt, rsp)
+	return fmt.Sprintf("[%s] sent 1 metrics, %d bytes, rtt=%v, rsp=%s.",
+		pm, pm.RequestSize(), pm.rtt, rsp)
 }
 
 // RetryOnErr denotes if retry is needed for this RPC method
-func (pm *PostMetricsMethod) RetryOnErr() bool {
+func (pm *PostMetricsMethod) RetryOnErr(err error) bool {
+	if errRequestTooBig == errors.Cause(err) {
+		return false
+	}
 	return true
 }
 
@@ -194,6 +224,7 @@ func (pm *PostMetricsMethod) RetryOnErr() bool {
 type PostStatusMethod struct {
 	serviceKey string
 	messages   [][]byte
+	msgSize    int64
 	Resp       *collector.MessageResult
 	err        error
 	rtt        time.Duration
@@ -227,6 +258,16 @@ func (ps *PostStatusMethod) MessageLen() int64 {
 	return int64(len(ps.messages))
 }
 
+// RequestSize returns the total bytes for an rpc request body
+func (ps *PostStatusMethod) RequestSize() int64 {
+	if ps.msgSize != 0 {
+		return ps.msgSize
+	}
+
+	ps.msgSize = getMsgsBytes(ps.messages)
+	return ps.msgSize
+}
+
 // Message returns the RPC call message body
 func (ps *PostStatusMethod) Message() [][]byte {
 	return ps.messages
@@ -248,7 +289,10 @@ func (ps *PostStatusMethod) Call(ctx context.Context,
 }
 
 // RetryOnErr denotes if retry is needed for this RPC method
-func (ps *PostStatusMethod) RetryOnErr() bool {
+func (ps *PostStatusMethod) RetryOnErr(err error) bool {
+	if errRequestTooBig == errors.Cause(err) {
+		return false
+	}
 	return true
 }
 
@@ -256,7 +300,7 @@ func (ps *PostStatusMethod) RetryOnErr() bool {
 // mainly used for debug printing.
 func (ps *PostStatusMethod) CallSummary() string {
 	rsp := resultRespStr(ps.Resp, ps.err)
-	return fmt.Sprintf("[%s] sent status, rtt=%v. rsp=%s", ps, ps.rtt, rsp)
+	return fmt.Sprintf("[%s] sent status, rtt=%v, rsp=%s.", ps, ps.rtt, rsp)
 }
 
 // GetSettingsMethod is the struct for RPC method GetSettings
@@ -294,6 +338,11 @@ func (gs *GetSettingsMethod) MessageLen() int64 {
 	return 0
 }
 
+// RequestSize returns the total bytes for an rpc request body
+func (gs *GetSettingsMethod) RequestSize() int64 {
+	return 0
+}
+
 // Message returns the message body of the RPC call.
 func (gs *GetSettingsMethod) Message() [][]byte {
 	return nil
@@ -316,11 +365,11 @@ func (gs *GetSettingsMethod) Call(ctx context.Context,
 // CallSummary returns a string representation of the RPC call result.
 func (gs *GetSettingsMethod) CallSummary() string {
 	rsp := settingsRespStr(gs.Resp, gs.err)
-	return fmt.Sprintf("[%s] got settings, rtt=%v. rsp=%s", gs, gs.rtt, rsp)
+	return fmt.Sprintf("[%s] got settings, rtt=%v, rsp=%s.", gs, gs.rtt, rsp)
 }
 
 // RetryOnErr denotes if this method needs a retry on failure.
-func (gs *GetSettingsMethod) RetryOnErr() bool {
+func (gs *GetSettingsMethod) RetryOnErr(err error) bool {
 	return true
 }
 
@@ -361,6 +410,11 @@ func (p *PingMethod) MessageLen() int64 {
 	return 0
 }
 
+// RequestSize returns the total bytes for an rpc request body
+func (p *PingMethod) RequestSize() int64 {
+	return 0
+}
+
 // Message returns the message body, if any.
 func (p *PingMethod) Message() [][]byte {
 	return nil
@@ -382,11 +436,11 @@ func (p *PingMethod) Call(ctx context.Context,
 // mainly used for debug printing.
 func (p *PingMethod) CallSummary() string {
 	rsp := resultRespStr(p.Resp, p.err)
-	return fmt.Sprintf("[%s] ping back, rtt=%v. rsp=%s", p, p.rtt, rsp)
+	return fmt.Sprintf("[%s] ping back, rtt=%v, rsp=%s.", p, p.rtt, rsp)
 }
 
 // RetryOnErr denotes if this RPC method needs a retry on failure.
-func (p *PingMethod) RetryOnErr() bool {
+func (p *PingMethod) RetryOnErr(err error) bool {
 	return false
 }
 
@@ -408,4 +462,14 @@ func settingsRespStr(r *collector.SettingsResult, err error) string {
 		return errGotNilResp.Error()
 	}
 	return fmt.Sprintf("%v %s", r.Result, r.Arg)
+}
+
+// getMsgsBytes is a internal helper function to calculate the total bytes of a
+// message slice.
+func getMsgsBytes(msg [][]byte) int64 {
+	size := 0
+	for i := 0; i < len(msg); i++ {
+		size += len(msg[i])
+	}
+	return int64(size)
 }
