@@ -4,6 +4,7 @@ package reporter
 
 import (
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -30,11 +31,17 @@ func TestInitMessage(t *testing.T) {
 	assertInitMessage(t, r.EventBufs)
 }
 func assertInitMessage(t *testing.T, bufs [][]byte) {
+	baseline, err := time.Parse(time.RFC3339, "2019-10-02T10:04:05Z")
+	require.Nil(t, err)
+
 	g.AssertGraph(t, bufs, 1, g.AssertNodeMap{
 		{"go", "single"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, 1, n.Map["__Init"])
 			assert.Equal(t, utils.Version(), n.Map["Go.AppOptics.Version"])
 			assert.NotEmpty(t, n.Map["Go.Version"])
+			assert.True(t, strings.HasSuffix(n.Map["Go.InstallDirectory"].(string), "appoptics-apm-go/v1/ao"))
+			assert.Less(t, baseline.Unix(), n.Map["Go.InstallTimestamp"])
+			assert.Less(t, baseline.UnixNano()/1e3, n.Map["Go.LastRestart"])
 		}},
 	})
 }
