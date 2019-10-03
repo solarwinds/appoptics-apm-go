@@ -32,14 +32,16 @@ func initInstallDir() string {
 		return "unknown"
 	}
 
-	for path != "/" {
+	prevPath := string(os.PathSeparator)
+	for path != prevPath {
 		base := filepath.Base(path)
 		if base == "ao" {
 			return path
 		}
+		prevPath = path
 		path = filepath.Dir(path)
 	}
-	return path
+	return "unknown"
 }
 
 func initInstallTsInSec() int64 {
