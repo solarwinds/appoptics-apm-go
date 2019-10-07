@@ -277,3 +277,6 @@ func (r *TestReporter) updateSetting() {
 		panic("No such setting type.")
 	}
 }
+
+func (r *TestReporter) CustomSummaryMetric(name string, value float32, opts metrics.MetricOptions) {}
+func (r *TestReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions)              {}

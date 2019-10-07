@@ -332,6 +332,61 @@ func addRequestCounters(bbuf *bson.Buffer, index *int, rcs map[string]*RateCount
 	addMetricsValue(bbuf, index, TriggeredTraceCount, ttTraced)
 }
 
+type Metrics struct {
+	sync.Mutex
+	IsCustom      bool
+	FlushInterval int
+	// TODO
+}
+
+// BuildCustomMetricsMessage creates and encodes the custom metrics message
+func (m *Metrics) BuildMessage() []byte {
+	bbuf := bson.NewBuffer()
+	if m.IsCustom {
+		bbuf.AppendBool("IsCustom", m.IsCustom)
+	}
+	appendHostId(bbuf)
+	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
+	bbuf.AppendInt("MetricsFlushInterval", m.FlushInterval)
+
+	// TODO: add measurements
+	bbuf.Finish()
+	return bbuf.GetBuf()
+}
+
+// ResetCustom resets the custom metrics and return the old one
+func (m *Metrics) Reset() *Metrics {
+	m.Lock()
+	defer m.Unlock()
+
+	curr := m.Clone()
+	// TODO: reset metrics
+	return curr
+}
+
+func (m *Metrics) Clone() *Metrics {
+	// TODO
+	return &Metrics{}
+}
+
+func (m *Metrics) Summary(name string, value float32, opts MetricOptions) {
+	m.Lock()
+	defer m.Unlock()
+	// TODO
+}
+
+func (m *Metrics) Increment(name string, opts MetricOptions) {
+	m.Lock()
+	defer m.Unlock()
+	// TODO
+}
+
+type MetricOptions struct {
+	count   int
+	hostTag bool
+	tags    map[string]string
+}
+
 // GenerateMetricsMessage generates a metrics message in BSON format with all the currently available values
 // metricsFlushInterval	current metrics flush interval
 //
