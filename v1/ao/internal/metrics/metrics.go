@@ -56,7 +56,7 @@ const (
 
 // SpanMessage defines a span message
 type SpanMessage interface {
-	Process()
+	Process(m *Measurements)
 }
 
 // BaseSpanMessage is the base span message with properties found in all types of span messages
@@ -284,9 +284,6 @@ func (t *TransMap) Overflow() bool {
 // (flushed on each metrics report cycle)
 var GlobalTransMap = NewTransMap(metricsTransactionsMaxDefault)
 
-// collection of currently stored measurements (flushed on each metrics report cycle)
-var metricsHTTPMeasurements = NewMeasurements(false, 60)
-
 // collection of currently stored histograms (flushed on each metrics report cycle)
 var metricsHTTPHistograms = &histograms{
 	histograms: make(map[string]*histogram),
@@ -342,10 +339,7 @@ func addRequestCounters(bbuf *bson.Buffer, index *int, rcs map[string]*RateCount
 }
 
 // BuildCustomMetricsMessage creates and encodes the custom metrics message
-func (m *Measurements) BuildMessage() []byte {
-	m.Lock()
-	defer m.Unlock()
-
+func BuildMessage(m *Measurements) []byte {
 	bbuf := bson.NewBuffer()
 	if m.IsCustom {
 		bbuf.AppendBool("IsCustom", m.IsCustom)
@@ -368,12 +362,13 @@ func (m *Measurements) BuildMessage() []byte {
 }
 
 // ResetCustom resets the custom metrics and return the old one
-func (m *Measurements) Reset() *Measurements {
+func (m *Measurements) Reset(flushInterval int) *Measurements {
 	m.Lock()
 	defer m.Unlock()
 
 	clone := m.Clone()
 	m.m = make(map[string]*Measurement)
+	m.FlushInterval = flushInterval
 	return clone
 }
 
@@ -400,16 +395,17 @@ type MetricOptions struct {
 	Tags    map[string]string
 }
 
-// GenerateMetricsMessage generates a metrics message in BSON format with all the currently available values
+// BuildBuiltinMetricsMessage generates a metrics message in BSON format with all the currently available values
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
-func (m *Measurements) BuildBuiltinMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs map[string]*RateCounts) []byte {
+func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
+	rcs map[string]*RateCounts, TransactionNameOverflow bool) []byte {
 	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)
 	bbuf.AppendInt64("Timestamp_u", int64(time.Now().UnixNano()/1000))
-	bbuf.AppendInt("MetricsFlushInterval", metricsFlushInterval)
+	bbuf.AppendInt("MetricsFlushInterval", m.FlushInterval)
 
 	// measurements
 	// ==========================================
@@ -471,11 +467,9 @@ func (m *Measurements) BuildBuiltinMetricsMessage(metricsFlushInterval int, qs E
 	bbuf.AppendFinishObject(start)
 	// ==========================================
 
-	if GlobalTransMap.Overflow() {
+	if TransactionNameOverflow {
 		bbuf.AppendBool("TransactionNameOverflow", true)
 	}
-	// The transaction map is reset in every metrics cycle.
-	GlobalTransMap.Reset()
 
 	bbuf.Finish()
 	return bbuf.GetBuf()
@@ -575,7 +569,7 @@ func GetTransactionFromPath(path string) string {
 }
 
 // Process processes an HttpSpanMessage
-func (s *HTTPSpanMessage) Process() {
+func (s *HTTPSpanMessage) Process(m *Measurements) {
 	// always add to overall histogram
 	recordHistogram(metricsHTTPHistograms, "", s.Duration)
 
@@ -584,19 +578,19 @@ func (s *HTTPSpanMessage) Process() {
 		// otherwise report it as an 'other' measurement
 		if GlobalTransMap.IsWithinLimit(s.Transaction) {
 			recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
-			s.processMeasurements(s.Transaction)
+			s.processMeasurements(s.Transaction, m)
 		} else {
-			s.processMeasurements(OtherTransactionName)
+			s.processMeasurements(OtherTransactionName, m)
 		}
 	} else {
 		// no transaction/url name given, record as 'unknown'
-		s.processMeasurements(UnknownTransactionName)
+		s.processMeasurements(UnknownTransactionName, m)
 	}
 }
 
 // processes HTTP measurements, record one for primary key, and one for each secondary key
 // transactionName	the transaction name to be used for these measurements
-func (s *HTTPSpanMessage) processMeasurements(transactionName string) {
+func (s *HTTPSpanMessage) processMeasurements(transactionName string, m *Measurements) {
 	name := "TransactionResponseTime"
 	duration := float64(s.Duration)
 
@@ -622,7 +616,7 @@ func (s *HTTPSpanMessage) processMeasurements(transactionName string) {
 		tagsList = append(tagsList, withErrorTags)
 	}
 
-	metricsHTTPMeasurements.record(name, tagsList, duration, 1, true)
+	m.record(name, tagsList, duration, 1, true)
 }
 
 func (m *Measurements) recordWithSoloTags(name string, tags map[string]string,

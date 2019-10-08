@@ -796,10 +796,12 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 
 	i := int(atomic.LoadInt32(&r.collectMetricInterval))
 	// generate a new metrics message
-	builtin := r.httpMetrics.Reset().BuildBuiltinMetricsMessage(i,
+	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.Reset(i),
 		r.eventConnection.queueStats.CopyAndReset(),
-		FlushRateCounts())
-	custom := r.customMetrics.Reset().BuildMessage()
+		FlushRateCounts(), metrics.GlobalTransMap.Overflow())
+	metrics.GlobalTransMap.Reset() // TODO
+
+	custom := metrics.BuildMessage(r.customMetrics.Reset(i))
 
 	r.sendMetrics([][]byte{builtin, custom})
 }
@@ -987,7 +989,7 @@ func (r *grpcReporter) spanMessageAggregator() {
 	for {
 		select {
 		case span := <-r.spanMessages:
-			span.Process()
+			span.Process(r.httpMetrics)
 		case <-r.done:
 			return
 		}

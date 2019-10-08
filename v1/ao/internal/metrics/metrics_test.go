@@ -370,12 +370,12 @@ func TestAddHistogramToBSON(t *testing.T) {
 }
 
 func TestGenerateMetricsMessage(t *testing.T) {
-	testMetrics := NewMeasurements(false, 60)
-	bbuf := bson.WithBuf(testMetrics.BuildBuiltinMetricsMessage(15, EventQueueStats{},
+	testMetrics := NewMeasurements(false, 15)
+	bbuf := bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, EventQueueStats{},
 		map[string]*RateCounts{ // requested, sampled, limited, traced, through
 			RCRegular:             {10, 2, 5, 5, 1},
 			RCRelaxedTriggerTrace: {3, 0, 1, 2, 0},
-			RCStrictTriggerTrace:  {4, 0, 3, 1, 0}}))
+			RCStrictTriggerTrace:  {4, 0, 3, 1, 0}}, false))
 	m := bsonToMap(bbuf)
 
 	_, ok := m["Hostname"]
@@ -446,8 +446,8 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	}
 	testMetrics = NewMeasurements(false, 60)
 
-	m = bsonToMap(bson.WithBuf(testMetrics.BuildBuiltinMetricsMessage(15, EventQueueStats{},
-		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}})))
+	m = bsonToMap(bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, EventQueueStats{},
+		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}}, GlobalTransMap.Overflow())))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))
@@ -512,9 +512,10 @@ func TestHTTPSpanMessageProcess(t *testing.T) {
 		Method:          "GET",
 	}
 
-	s.Process()
-	m, ok := metricsHTTPMeasurements.m["TransactionResponseTime&true&TransactionName:transaction&"]
+	m := NewMeasurements(false, 60)
+	s.Process(m)
+	measurement, ok := m.m["TransactionResponseTime&true&TransactionName:transaction&"]
 	assert.True(t, ok)
 	assert.NotNil(t, m)
-	assert.EqualValues(t, "TransactionResponseTime", m.Name)
+	assert.EqualValues(t, "TransactionResponseTime", measurement.Name)
 }
