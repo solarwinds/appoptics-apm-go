@@ -63,8 +63,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 	// These are hard-coded parameters for the gRPC reporter. Any of them become
 	// configurable in future versions will be moved to package config.
 	// TODO: use time.Time
-	grpcMetricIntervalDefault               = 30               // default metrics flush interval in seconds
-	grpcCustomMetricIntervalDefault         = 60               // default custom metrics flush interval in seconds
+	grpcMetricIntervalDefault               = 60               // default metrics flush interval in seconds
 	grpcGetSettingsIntervalDefault          = 30               // default settings retrieval interval in seconds
 	grpcSettingsTimeoutCheckIntervalDefault = 10               // default check interval for timed out settings in seconds
 	grpcPingIntervalDefault                 = 20               // default interval for keep alive pings in seconds
@@ -200,7 +199,7 @@ type grpcReporter struct {
 	spanMessages   chan metrics.SpanMessage // channel for span messages (sent from agent)
 	statusMessages chan []byte              // channel for status messages (sent from agent)
 
-	customMetrics *metrics.Metrics
+	customMetrics *metrics.Measurements
 
 	// The reporter is considered ready if there is a valid default setting for sampling.
 	// It should be accessed atomically.
@@ -297,10 +296,7 @@ func newGRPCReporter() reporter {
 		eventMessages:  make(chan []byte, 10000),
 		spanMessages:   make(chan metrics.SpanMessage, 10000),
 		statusMessages: make(chan []byte, 100),
-		customMetrics: &metrics.Metrics{
-			IsCustom:      true,
-			FlushInterval: grpcCustomMetricIntervalDefault,
-		},
+		customMetrics:  metrics.NewMeasurements(true, grpcMetricIntervalDefault),
 
 		cond: sync.NewCond(&sync.Mutex{}),
 		done: make(chan struct{}),
@@ -825,12 +821,12 @@ func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 	}
 }
 
-func (r *grpcReporter) CustomSummaryMetric(name string, value float32, opts metrics.MetricOptions) {
-	r.customMetrics.Summary(name, value, opts)
+func (r *grpcReporter) CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
+	return r.customMetrics.Summary(name, value, opts)
 }
 
-func (r *grpcReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) {
-	r.customMetrics.Increment(name, opts)
+func (r *grpcReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
+	return r.customMetrics.Increment(name, opts)
 }
 
 // ================================ Settings Handling ====================================

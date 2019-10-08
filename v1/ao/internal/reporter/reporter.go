@@ -34,8 +34,8 @@ type reporter interface {
 	// WaitForReady waits until the reporter becomes ready or the context is canceled.
 	WaitForReady(context.Context) bool
 
-	CustomSummaryMetric(name string, value float32, opts metrics.MetricOptions)
-	CustomIncrementMetric(name string, opts metrics.MetricOptions)
+	CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error
+	CustomIncrementMetric(name string, opts metrics.MetricOptions) error
 }
 
 // KVs from getSettingsResult arguments
@@ -62,16 +62,20 @@ var (
 // a noop reporter
 type nullReporter struct{}
 
-func newNullReporter() *nullReporter                                                               { return &nullReporter{} }
-func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error                               { return nil }
-func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error                              { return nil }
-func (r *nullReporter) reportSpan(span metrics.SpanMessage) error                                  { return nil }
-func (r *nullReporter) Shutdown(ctx context.Context) error                                         { return nil }
-func (r *nullReporter) ShutdownNow() error                                                         { return nil }
-func (r *nullReporter) Closed() bool                                                               { return true }
-func (r *nullReporter) WaitForReady(ctx context.Context) bool                                      { return true }
-func (r *nullReporter) CustomSummaryMetric(name string, value float32, opts metrics.MetricOptions) {}
-func (r *nullReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions)              {}
+func newNullReporter() *nullReporter                                  { return &nullReporter{} }
+func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
+func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
+func (r *nullReporter) reportSpan(span metrics.SpanMessage) error     { return nil }
+func (r *nullReporter) Shutdown(ctx context.Context) error            { return nil }
+func (r *nullReporter) ShutdownNow() error                            { return nil }
+func (r *nullReporter) Closed() bool                                  { return true }
+func (r *nullReporter) WaitForReady(ctx context.Context) bool         { return true }
+func (r *nullReporter) CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
+	return nil
+}
+func (r *nullReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
+	return nil
+}
 
 // init() is called only once on program startup. Here we create the reporter
 // that will be used throughout the runtime of the app. Default is 'ssl' but
@@ -234,10 +238,10 @@ func argsToMap(capacity, ratePerSec, tRCap, tRRate, tSCap, tSRate float64,
 	return args
 }
 
-func SummaryMetric(name string, value float32, opts metrics.MetricOptions) {
-	globalReporter.CustomSummaryMetric(name, value, opts)
+func SummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
+	return globalReporter.CustomSummaryMetric(name, value, opts)
 }
 
-func IncrementMetric(name string, opts metrics.MetricOptions) {
-	globalReporter.CustomIncrementMetric(name, opts)
+func IncrementMetric(name string, opts metrics.MetricOptions) error {
+	return globalReporter.CustomIncrementMetric(name, opts)
 }
