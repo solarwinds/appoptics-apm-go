@@ -152,6 +152,9 @@ func sendInitMessage() {
 		_ = e.AddKV("__Init", 1)
 		_ = e.AddKV("Go.Version", utils.GoVersion())
 		_ = e.AddKV("Go.AppOptics.Version", utils.Version())
+		_ = e.AddKV("Go.InstallDirectory", utils.InstallDir())
+		_ = e.AddKV("Go.InstallTimestamp", utils.InstallTsInSec())
+		_ = e.AddKV("Go.LastRestart", utils.LastRestartInUSec())
 
 		_ = e.ReportStatus(c)
 	}
