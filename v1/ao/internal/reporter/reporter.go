@@ -50,6 +50,7 @@ const (
 	kvMetricsFlushInterval              = "MetricsFlushInterval"
 	kvEventsFlushInterval               = "EventsFlushInterval"
 	kvMaxTransactions                   = "MaxTransactions"
+	kvMaxCustomMetrics                  = "MaxCustomMetrics"
 )
 
 // currently used reporter

@@ -54,6 +54,11 @@ const (
 	RCStrictTriggerTrace  = "ReqCounterStrictTriggerTrace"
 )
 
+// errors
+var (
+	errExceedsMeasurementCountLimit = errors.New("exceeds measurement count limit per flush interval")
+)
+
 // SpanMessage defines a span message
 type SpanMessage interface {
 	Process(m *Measurements)
@@ -87,14 +92,16 @@ type Measurement struct {
 // Measurements are a collection of mutext-protected measurements
 type Measurements struct {
 	m             map[string]*Measurement
+	transMap      *TransMap
 	IsCustom      bool
 	FlushInterval int
 	sync.Mutex    // protect access to this collection
 }
 
-func NewMeasurements(isCustom bool, flushInterval int) *Measurements {
+func NewMeasurements(isCustom bool, flushInterval int, maxCount int32) *Measurements {
 	return &Measurements{
 		m:             make(map[string]*Measurement),
+		transMap:      NewTransMap(maxCount),
 		IsCustom:      isCustom,
 		FlushInterval: flushInterval,
 	}
@@ -252,6 +259,16 @@ func (t *TransMap) Reset() {
 	t.overflow = false
 }
 
+// Clone returns a shallow copy
+func (t *TransMap) Clone() *TransMap {
+	return &TransMap{
+		transactionNames: t.transactionNames,
+		currCap:          t.currCap,
+		nextCap:          t.nextCap,
+		overflow:         t.overflow,
+	}
+}
+
 // IsWithinLimit checks if the transaction name is stored in the TransMap. It will store this new
 // transaction name and return true if not stored before and the map isn't full, or return false
 // otherwise.
@@ -279,10 +296,6 @@ func (t *TransMap) Overflow() bool {
 	defer t.mutex.Unlock()
 	return t.overflow
 }
-
-// GlobalTransMap is the list of currently stored unique HTTP transaction names
-// (flushed on each metrics report cycle)
-var GlobalTransMap = NewTransMap(metricsTransactionsMaxDefault)
 
 // collection of currently stored histograms (flushed on each metrics report cycle)
 var metricsHTTPHistograms = &histograms{
@@ -361,6 +374,14 @@ func BuildMessage(m *Measurements) []byte {
 	return bbuf.GetBuf()
 }
 
+func (m *Measurements) SetCap(cap int32) {
+	m.transMap.SetCap(cap)
+}
+
+func (m *Measurements) Cap() int32 {
+	return m.transMap.Cap()
+}
+
 // ResetCustom resets the custom metrics and return the old one
 func (m *Measurements) Reset(flushInterval int) *Measurements {
 	m.Lock()
@@ -368,6 +389,7 @@ func (m *Measurements) Reset(flushInterval int) *Measurements {
 
 	clone := m.Clone()
 	m.m = make(map[string]*Measurement)
+	m.transMap.Reset()
 	m.FlushInterval = flushInterval
 	return clone
 }
@@ -376,6 +398,7 @@ func (m *Measurements) Reset(flushInterval int) *Measurements {
 func (m *Measurements) Clone() *Measurements {
 	return &Measurements{
 		m:             m.m,
+		transMap:      m.transMap.Clone(),
 		IsCustom:      m.IsCustom,
 		FlushInterval: m.FlushInterval,
 	}
@@ -400,7 +423,7 @@ type MetricOptions struct {
 //
 // return				metrics message in BSON format
 func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
-	rcs map[string]*RateCounts, TransactionNameOverflow bool) []byte {
+	rcs map[string]*RateCounts) []byte {
 	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)
@@ -467,7 +490,7 @@ func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
 	bbuf.AppendFinishObject(start)
 	// ==========================================
 
-	if TransactionNameOverflow {
+	if m.transMap.Overflow() {
 		bbuf.AppendBool("TransactionNameOverflow", true)
 	}
 
@@ -573,32 +596,28 @@ func (s *HTTPSpanMessage) Process(m *Measurements) {
 	// always add to overall histogram
 	recordHistogram(metricsHTTPHistograms, "", s.Duration)
 
-	if s.Transaction != UnknownTransactionName {
-		// only record the transaction-specific histogram and measurements if we are still within the limit
-		// otherwise report it as an 'other' measurement
-		if GlobalTransMap.IsWithinLimit(s.Transaction) {
-			recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
-			s.processMeasurements(s.Transaction, m)
-		} else {
-			s.processMeasurements(OtherTransactionName, m)
-		}
-	} else {
-		// no transaction/url name given, record as 'unknown'
-		s.processMeasurements(UnknownTransactionName, m)
+	if s.Transaction == "" {
+		s.Transaction = UnknownTransactionName // no transaction/url name given, record as 'unknown'
+
 	}
+
+	// only record the transaction-specific histogram and measurements if we are still within the limit
+	// otherwise report it as an 'other' measurement
+	if err, tagsList := s.processMeasurements(nil, m); err == errExceedsMeasurementCountLimit {
+		s.Transaction = OtherTransactionName
+		s.processMeasurements(tagsList, m)
+	} else {
+		recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
+	}
+
 }
 
-// processes HTTP measurements, record one for primary key, and one for each secondary key
-// transactionName	the transaction name to be used for these measurements
-func (s *HTTPSpanMessage) processMeasurements(transactionName string, m *Measurements) {
-	name := "TransactionResponseTime"
-	duration := float64(s.Duration)
-
+func (s *HTTPSpanMessage) produceTagsList() []map[string]string {
 	var tagsList []map[string]string
 
 	// primary key: TransactionName
 	primaryTags := make(map[string]string)
-	primaryTags["TransactionName"] = transactionName
+	primaryTags["TransactionName"] = s.Transaction
 	tagsList = append(tagsList, primaryTags)
 
 	// secondary keys: HttpMethod, HttpStatus, Errors
@@ -616,7 +635,26 @@ func (s *HTTPSpanMessage) processMeasurements(transactionName string, m *Measure
 		tagsList = append(tagsList, withErrorTags)
 	}
 
-	m.record(name, tagsList, duration, 1, true)
+	return tagsList
+}
+
+// processes HTTP measurements, record one for primary key, and one for each secondary key
+// transactionName	the transaction name to be used for these measurements
+func (s *HTTPSpanMessage) processMeasurements(tagsList []map[string]string,
+	m *Measurements) (error, []map[string]string) {
+	name := "TransactionResponseTime"
+	duration := float64(s.Duration)
+
+	if tagsList == nil {
+		tagsList = s.produceTagsList()
+	}
+
+	err := m.record(name, tagsList, duration, 1, true)
+
+	if err != nil {
+		return err, tagsList
+	}
+	return nil, nil
 }
 
 func (m *Measurements) recordWithSoloTags(name string, tags map[string]string,
@@ -666,7 +704,8 @@ func (m *Measurements) record(name string, tagsList []map[string]string,
 	defer m.Unlock()
 	for id, tags := range idTagsMap {
 		if me, ok = m.m[id]; !ok {
-			if len(m.m) < 500 { // TODO: configurable
+			if strings.HasPrefix(id, OtherTransactionName+"&") ||
+				m.transMap.IsWithinLimit(id) {
 				me = &Measurement{
 					Name:      name,
 					Tags:      tags,
@@ -674,7 +713,7 @@ func (m *Measurements) record(name string, tagsList []map[string]string,
 				}
 				m.m[id] = me
 			} else {
-				return errors.New("exceeds measurement count limit per flush interval")
+				return errExceedsMeasurementCountLimit
 			}
 		}
 

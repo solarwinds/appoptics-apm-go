@@ -297,8 +297,8 @@ func newGRPCReporter() reporter {
 		eventMessages:  make(chan []byte, 10000),
 		spanMessages:   make(chan metrics.SpanMessage, 10000),
 		statusMessages: make(chan []byte, 100),
-		httpMetrics:    metrics.NewMeasurements(false, grpcMetricIntervalDefault),
-		customMetrics:  metrics.NewMeasurements(true, grpcMetricIntervalDefault),
+		httpMetrics:    metrics.NewMeasurements(false, grpcMetricIntervalDefault, 200),
+		customMetrics:  metrics.NewMeasurements(true, grpcMetricIntervalDefault, 500), // TODO configurable
 
 		cond: sync.NewCond(&sync.Mutex{}),
 		done: make(chan struct{}),
@@ -797,9 +797,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	i := int(atomic.LoadInt32(&r.collectMetricInterval))
 	// generate a new metrics message
 	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.Reset(i),
-		r.eventConnection.queueStats.CopyAndReset(),
-		FlushRateCounts(), metrics.GlobalTransMap.Overflow())
-	metrics.GlobalTransMap.Reset() // TODO
+		r.eventConnection.queueStats.CopyAndReset(), FlushRateCounts())
 
 	custom := metrics.BuildMessage(r.customMetrics.Reset(i))
 
@@ -873,8 +871,11 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 		o.SetEventFlushInterval(int64(ei))
 
 		// update MaxTransactions
-		mt := parseInt32(s.Arguments, kvMaxTransactions, metrics.GlobalTransMap.Cap())
-		metrics.GlobalTransMap.SetCap(mt)
+		mt := parseInt32(s.Arguments, kvMaxTransactions, r.httpMetrics.Cap())
+		r.httpMetrics.SetCap(mt)
+
+		maxCustomMetrics := parseInt32(s.Arguments, kvMaxCustomMetrics, r.httpMetrics.Cap())
+		r.customMetrics.SetCap(maxCustomMetrics)
 	}
 
 	if !r.isReady() && hasDefaultSetting() {

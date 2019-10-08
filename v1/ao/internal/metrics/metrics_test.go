@@ -200,9 +200,7 @@ func TestTransMap(t *testing.T) {
 }
 
 func TestRecordMeasurement(t *testing.T) {
-	var me = &Measurements{
-		m: make(map[string]*Measurement),
-	}
+	var me = NewMeasurements(false, 60, 100)
 
 	t1 := make(map[string]string)
 	t1["t1"] = "tag1"
@@ -370,12 +368,12 @@ func TestAddHistogramToBSON(t *testing.T) {
 }
 
 func TestGenerateMetricsMessage(t *testing.T) {
-	testMetrics := NewMeasurements(false, 15)
+	testMetrics := NewMeasurements(false, 15, metricsTransactionsMaxDefault)
 	bbuf := bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, EventQueueStats{},
 		map[string]*RateCounts{ // requested, sampled, limited, traced, through
 			RCRegular:             {10, 2, 5, 5, 1},
 			RCRelaxedTriggerTrace: {3, 0, 1, 2, 0},
-			RCStrictTriggerTrace:  {4, 0, 3, 1, 0}}, false))
+			RCStrictTriggerTrace:  {4, 0, 3, 1, 0}}))
 	m := bsonToMap(bbuf)
 
 	_, ok := m["Hostname"]
@@ -439,19 +437,18 @@ func TestGenerateMetricsMessage(t *testing.T) {
 
 	assert.Nil(t, m["TransactionNameOverflow"])
 
+	testMetrics = NewMeasurements(false, 60, metricsTransactionsMaxDefault)
 	for i := 0; i <= metricsTransactionsMaxDefault; i++ {
-		if !GlobalTransMap.IsWithinLimit("Transaction-" + strconv.Itoa(i)) {
+		if !testMetrics.transMap.IsWithinLimit("Transaction-" + strconv.Itoa(i)) {
 			break
 		}
 	}
-	testMetrics = NewMeasurements(false, 60)
 
 	m = bsonToMap(bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, EventQueueStats{},
-		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}}, GlobalTransMap.Overflow())))
+		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}})))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))
-	GlobalTransMap.Reset()
 }
 
 func TestEventQueueStats(t *testing.T) {
@@ -512,7 +509,7 @@ func TestHTTPSpanMessageProcess(t *testing.T) {
 		Method:          "GET",
 	}
 
-	m := NewMeasurements(false, 60)
+	m := NewMeasurements(false, 60, metricsTransactionsMaxDefault)
 	s.Process(m)
 	measurement, ok := m.m["TransactionResponseTime&true&TransactionName:transaction&"]
 	assert.True(t, ok)
