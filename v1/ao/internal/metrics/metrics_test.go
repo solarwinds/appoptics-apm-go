@@ -207,8 +207,8 @@ func TestRecordMeasurement(t *testing.T) {
 	t1 := make(map[string]string)
 	t1["t1"] = "tag1"
 	t1["t2"] = "tag2"
-	recordMeasurement(me, "name1", t1, 111.11, 1, false)
-	recordMeasurement(me, "name1", t1, 222, 1, false)
+	me.recordWithSoloTags("name1", t1, 111.11, 1, false)
+	me.recordWithSoloTags("name1", t1, 222, 1, false)
 	assert.NotNil(t, me.m["name1&false&t1:tag1&t2:tag2&"])
 	m := me.m["name1&false&t1:tag1&t2:tag2&"]
 	assert.Equal(t, "tag1", m.Tags["t1"])
@@ -219,7 +219,7 @@ func TestRecordMeasurement(t *testing.T) {
 
 	t2 := make(map[string]string)
 	t2["t3"] = "tag3"
-	recordMeasurement(me, "name2", t2, 123.456, 3, true)
+	me.recordWithSoloTags("name2", t2, 123.456, 3, true)
 	assert.NotNil(t, me.m["name2&true&t3:tag3&"])
 	m = me.m["name2&true&t3:tag3&"]
 	assert.Equal(t, "tag3", m.Tags["t3"])
@@ -370,7 +370,8 @@ func TestAddHistogramToBSON(t *testing.T) {
 }
 
 func TestGenerateMetricsMessage(t *testing.T) {
-	bbuf := bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{},
+	testMetrics := NewMeasurements(false, 60)
+	bbuf := bson.WithBuf(testMetrics.BuildBuiltinMetricsMessage(15, EventQueueStats{},
 		map[string]*RateCounts{ // requested, sampled, limited, traced, through
 			RCRegular:             {10, 2, 5, 5, 1},
 			RCRelaxedTriggerTrace: {3, 0, 1, 2, 0},
@@ -443,7 +444,9 @@ func TestGenerateMetricsMessage(t *testing.T) {
 			break
 		}
 	}
-	m = bsonToMap(bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{},
+	testMetrics = NewMeasurements(false, 60)
+
+	m = bsonToMap(bson.WithBuf(testMetrics.BuildBuiltinMetricsMessage(15, EventQueueStats{},
 		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}})))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])

@@ -199,6 +199,7 @@ type grpcReporter struct {
 	spanMessages   chan metrics.SpanMessage // channel for span messages (sent from agent)
 	statusMessages chan []byte              // channel for status messages (sent from agent)
 
+	httpMetrics   *metrics.Measurements
 	customMetrics *metrics.Measurements
 
 	// The reporter is considered ready if there is a valid default setting for sampling.
@@ -296,6 +297,7 @@ func newGRPCReporter() reporter {
 		eventMessages:  make(chan []byte, 10000),
 		spanMessages:   make(chan metrics.SpanMessage, 10000),
 		statusMessages: make(chan []byte, 100),
+		httpMetrics:    metrics.NewMeasurements(false, grpcMetricIntervalDefault),
 		customMetrics:  metrics.NewMeasurements(true, grpcMetricIntervalDefault),
 
 		cond: sync.NewCond(&sync.Mutex{}),
@@ -794,9 +796,11 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 
 	i := int(atomic.LoadInt32(&r.collectMetricInterval))
 	// generate a new metrics message
-	builtin := metrics.GenerateMetricsMessage(i, r.eventConnection.queueStats.CopyAndReset(),
+	builtin := r.httpMetrics.Reset().BuildBuiltinMetricsMessage(i,
+		r.eventConnection.queueStats.CopyAndReset(),
 		FlushRateCounts())
 	custom := r.customMetrics.Reset().BuildMessage()
+
 	r.sendMetrics([][]byte{builtin, custom})
 }
 

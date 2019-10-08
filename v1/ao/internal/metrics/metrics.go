@@ -285,9 +285,7 @@ func (t *TransMap) Overflow() bool {
 var GlobalTransMap = NewTransMap(metricsTransactionsMaxDefault)
 
 // collection of currently stored measurements (flushed on each metrics report cycle)
-var metricsHTTPMeasurements = &Measurements{
-	m: make(map[string]*Measurement),
-}
+var metricsHTTPMeasurements = NewMeasurements(false, 60)
 
 // collection of currently stored histograms (flushed on each metrics report cycle)
 var metricsHTTPHistograms = &histograms{
@@ -389,15 +387,11 @@ func (m *Measurements) Clone() *Measurements {
 }
 
 func (m *Measurements) Summary(name string, value float64, opts MetricOptions) error {
-	m.Lock()
-	defer m.Unlock()
-	return recordMeasurement(m, name, opts.Tags, value, opts.Count, true)
+	return m.recordWithSoloTags(name, opts.Tags, value, opts.Count, true)
 }
 
 func (m *Measurements) Increment(name string, opts MetricOptions) error {
-	m.Lock()
-	defer m.Unlock()
-	return recordMeasurement(m, name, opts.Tags, 0, opts.Count, false)
+	return m.recordWithSoloTags(name, opts.Tags, 0, opts.Count, false)
 }
 
 type MetricOptions struct {
@@ -410,7 +404,7 @@ type MetricOptions struct {
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
-func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs map[string]*RateCounts) []byte {
+func (m *Measurements) BuildBuiltinMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs map[string]*RateCounts) []byte {
 	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)
@@ -454,12 +448,9 @@ func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs ma
 	host.GC(&gc)
 	addMetricsValue(bbuf, &index, "JMX.type=count,name=GCStats.NumGC", gc.NumGC)
 
-	metricsHTTPMeasurements.Lock()
-	for _, m := range metricsHTTPMeasurements.m {
+	for _, m := range m.m {
 		addMeasurementToBSON(bbuf, &index, m)
 	}
-	metricsHTTPMeasurements.m = make(map[string]*Measurement) // clear measurements
-	metricsHTTPMeasurements.Unlock()
 
 	bbuf.AppendFinishObject(start)
 	// ==========================================
@@ -609,28 +600,34 @@ func (s *HTTPSpanMessage) processMeasurements(transactionName string) {
 	name := "TransactionResponseTime"
 	duration := float64(s.Duration)
 
-	metricsHTTPMeasurements.Lock()
-	defer metricsHTTPMeasurements.Unlock()
+	var tagsList []map[string]string
 
 	// primary key: TransactionName
 	primaryTags := make(map[string]string)
 	primaryTags["TransactionName"] = transactionName
-	recordMeasurement(metricsHTTPMeasurements, name, primaryTags, duration, 1, true)
+	tagsList = append(tagsList, primaryTags)
 
 	// secondary keys: HttpMethod, HttpStatus, Errors
 	withMethodTags := utils.CopyMap(&primaryTags)
 	withMethodTags["HttpMethod"] = s.Method
-	recordMeasurement(metricsHTTPMeasurements, name, withMethodTags, duration, 1, true)
+	tagsList = append(tagsList, withMethodTags)
 
 	withStatusTags := utils.CopyMap(&primaryTags)
 	withStatusTags["HttpStatus"] = strconv.Itoa(s.Status)
-	recordMeasurement(metricsHTTPMeasurements, name, withStatusTags, duration, 1, true)
+	tagsList = append(tagsList, withStatusTags)
 
 	if s.HasError {
 		withErrorTags := utils.CopyMap(&primaryTags)
 		withErrorTags["Errors"] = "true"
-		recordMeasurement(metricsHTTPMeasurements, name, withErrorTags, duration, 1, true)
+		tagsList = append(tagsList, withErrorTags)
 	}
+
+	metricsHTTPMeasurements.record(name, tagsList, duration, 1, true)
+}
+
+func (m *Measurements) recordWithSoloTags(name string, tags map[string]string,
+	value float64, count int, reportValue bool) error {
+	return m.record(name, []map[string]string{tags}, value, count, reportValue)
 }
 
 // records a measurement
@@ -640,50 +637,57 @@ func (s *HTTPSpanMessage) processMeasurements(transactionName string) {
 // value		measurement value
 // count		measurement count
 // reportValue	should the sum of all values be reported?
-func recordMeasurement(me *Measurements, name string, tags map[string]string,
+func (m *Measurements) record(name string, tagsList []map[string]string,
 	value float64, count int, reportValue bool) error {
 
-	measurements := me.m
-
 	// assemble the ID for this measurement (a combination of different values)
-	id := name + "&" + strconv.FormatBool(reportValue) + "&"
+	idPrefix := name + "&" + strconv.FormatBool(reportValue) + "&"
 
-	if tags != nil {
-		// tags are part of the ID but since there's no guarantee that the map items
-		// are always iterated in the same order, we need to sort them ourselves
-		var tagsSorted []string
-		for k, v := range tags {
-			tagsSorted = append(tagsSorted, k+":"+v)
-		}
-		sort.Strings(tagsSorted)
+	idTagsMap := make(map[string]map[string]string)
+	if len(tagsList) != 0 {
+		for _, tags := range tagsList {
+			id := idPrefix
+			// tags are part of the ID but since there's no guarantee that the map items
+			// are always iterated in the same order, we need to sort them ourselves
+			var tagsSorted []string
+			for k, v := range tags {
+				tagsSorted = append(tagsSorted, k+":"+v)
+			}
+			sort.Strings(tagsSorted)
 
-		// tags are all sorted now, append them to the ID
-		for _, t := range tagsSorted {
-			id += t + "&"
+			// tags are all sorted now, append them to the ID
+			for _, t := range tagsSorted {
+				id += t + "&"
+			}
+			idTagsMap[id] = tags
 		}
 	}
 
-	var m *Measurement
+	var me *Measurement
 	var ok bool
 
 	// create a new measurement if it doesn't exist
-	if m, ok = measurements[id]; !ok {
-		if len(measurements) < 500 { // TODO: configurable
-			m = &Measurement{
-				Name:      name,
-				Tags:      tags,
-				ReportSum: reportValue,
+	// the lock protects both Measurements and Measurement
+	m.Lock()
+	defer m.Unlock()
+	for id, tags := range idTagsMap {
+		if me, ok = m.m[id]; !ok {
+			if len(m.m) < 500 { // TODO: configurable
+				me = &Measurement{
+					Name:      name,
+					Tags:      tags,
+					ReportSum: reportValue,
+				}
+				m.m[id] = me
+			} else {
+				return errors.New("exceeds measurement count limit per flush interval")
 			}
-			measurements[id] = m
-		} else {
-			return errors.New("exceeds measurement count limit per flush interval")
 		}
+
+		// add count and value
+		me.Count += count
+		me.Sum += value
 	}
-
-	// add count and value
-	m.Count += count
-	m.Sum += value
-
 	return nil
 }
 
