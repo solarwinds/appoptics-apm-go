@@ -239,10 +239,14 @@ func argsToMap(capacity, ratePerSec, tRCap, tRRate, tSCap, tSRate float64,
 	return args
 }
 
+// SummaryMetric submits a summary type measurement to the reporter. The measurements
+// will be collected in the background and reported periodically.
 func SummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
 	return globalReporter.CustomSummaryMetric(name, value, opts)
 }
 
+// IncrementMetric submits a incremental measurement to the reporter. The measurements
+// // will be collected in the background and reported periodically.
 func IncrementMetric(name string, opts metrics.MetricOptions) error {
 	return globalReporter.CustomIncrementMetric(name, opts)
 }
