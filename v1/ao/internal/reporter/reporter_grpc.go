@@ -794,12 +794,12 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { collectReady <- true }()
 
-	i := int(atomic.LoadInt32(&r.collectMetricInterval))
+	i := atomic.LoadInt32(&r.collectMetricInterval)
 	// generate a new metrics message
-	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.Reset(i),
+	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(i),
 		r.eventConnection.queueStats.CopyAndReset(), FlushRateCounts())
 
-	custom := metrics.BuildMessage(r.customMetrics.Reset(i))
+	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i))
 
 	r.sendMetrics([][]byte{builtin, custom})
 }
@@ -825,10 +825,14 @@ func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 	}
 }
 
+// CustomSummaryMetric submits a summary type measurement to the reporter. The measurements
+// will be collected in the background and reported periodically.
 func (r *grpcReporter) CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
 	return r.customMetrics.Summary(name, value, opts)
 }
 
+// CustomIncrementMetric submits a incremental measurement to the reporter. The measurements
+// // will be collected in the background and reported periodically.
 func (r *grpcReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
 	return r.customMetrics.Increment(name, opts)
 }

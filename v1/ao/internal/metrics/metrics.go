@@ -34,6 +34,9 @@ const (
 const (
 	UnknownTransactionName       = "unknown"
 	OtherTransactionName         = "other"
+	MeasurementIDSeparator       = "&"
+	TagsKVSeparator              = ":"
+	OtherTransactionNameIDPrefix = OtherTransactionName + MeasurementIDSeparator
 	maxPathLenForTransactionName = 3
 )
 
@@ -54,9 +57,9 @@ const (
 	RCStrictTriggerTrace  = "ReqCounterStrictTriggerTrace"
 )
 
-// errors
 var (
-	errExceedsMeasurementCountLimit = errors.New("exceeds measurement count limit per flush interval")
+	// ErrExceedsMeasurementCountLimit indicates there are too many distinct measurements.
+	ErrExceedsMeasurementCountLimit = errors.New("exceeds measurement count limit per flush interval")
 )
 
 // SpanMessage defines a span message
@@ -94,11 +97,11 @@ type Measurements struct {
 	m             map[string]*Measurement
 	transMap      *TransMap
 	IsCustom      bool
-	FlushInterval int
+	FlushInterval int32
 	sync.Mutex    // protect access to this collection
 }
 
-func NewMeasurements(isCustom bool, flushInterval int, maxCount int32) *Measurements {
+func NewMeasurements(isCustom bool, flushInterval int32, maxCount int32) *Measurements {
 	return &Measurements{
 		m:             make(map[string]*Measurement),
 		transMap:      NewTransMap(maxCount),
@@ -221,7 +224,7 @@ type TransMap struct {
 	overflow bool
 	// The mutex to protect this whole struct. If the performance is a concern we should use separate
 	// mutexes for each of the fields. But for now it seems not necessary.
-	mutex *sync.Mutex
+	mutex sync.Mutex
 }
 
 // NewTransMap initializes a new TransMap struct
@@ -231,7 +234,6 @@ func NewTransMap(cap int32) *TransMap {
 		currCap:          cap,
 		nextCap:          cap,
 		overflow:         false,
-		mutex:            &sync.Mutex{},
 	}
 }
 
@@ -351,7 +353,7 @@ func addRequestCounters(bbuf *bson.Buffer, index *int, rcs map[string]*RateCount
 	addMetricsValue(bbuf, index, TriggeredTraceCount, ttTraced)
 }
 
-// BuildCustomMetricsMessage creates and encodes the custom metrics message
+// BuildMessage creates and encodes the custom metrics message.
 func BuildMessage(m *Measurements) []byte {
 	bbuf := bson.NewBuffer()
 	if m.IsCustom {
@@ -359,7 +361,7 @@ func BuildMessage(m *Measurements) []byte {
 	}
 	appendHostId(bbuf)
 	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
-	bbuf.AppendInt("MetricsFlushInterval", m.FlushInterval)
+	bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
 
 	start := bbuf.AppendStartArray("measurements")
 	index := 0
@@ -374,16 +376,18 @@ func BuildMessage(m *Measurements) []byte {
 	return bbuf.GetBuf()
 }
 
+// SetCap sets the maximum number of distinct metrics allowed.
 func (m *Measurements) SetCap(cap int32) {
 	m.transMap.SetCap(cap)
 }
 
+// Cap returns the maximum number of distinct metrics allowed.
 func (m *Measurements) Cap() int32 {
 	return m.transMap.Cap()
 }
 
-// ResetCustom resets the custom metrics and return the old one
-func (m *Measurements) Reset(flushInterval int) *Measurements {
+// CopyAndReset resets the custom metrics and return a copy of the old one.
+func (m *Measurements) CopyAndReset(flushInterval int32) *Measurements {
 	m.Lock()
 	defer m.Unlock()
 
@@ -404,14 +408,17 @@ func (m *Measurements) Clone() *Measurements {
 	}
 }
 
+// Summary submits the summary measurement to the reporter.
 func (m *Measurements) Summary(name string, value float64, opts MetricOptions) error {
 	return m.recordWithSoloTags(name, opts.Tags, value, opts.Count, true)
 }
 
+// Increment submits the incremental measurement to the reporter.
 func (m *Measurements) Increment(name string, opts MetricOptions) error {
 	return m.recordWithSoloTags(name, opts.Tags, 0, opts.Count, false)
 }
 
+// MetricOptions is a struct for the optional parameters of a measurement.
 type MetricOptions struct {
 	Count   int
 	HostTag bool
@@ -428,7 +435,7 @@ func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
 
 	appendHostId(bbuf)
 	bbuf.AppendInt64("Timestamp_u", int64(time.Now().UnixNano()/1000))
-	bbuf.AppendInt("MetricsFlushInterval", m.FlushInterval)
+	bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
 
 	// measurements
 	// ==========================================
@@ -603,7 +610,7 @@ func (s *HTTPSpanMessage) Process(m *Measurements) {
 
 	// only record the transaction-specific histogram and measurements if we are still within the limit
 	// otherwise report it as an 'other' measurement
-	if err, tagsList := s.processMeasurements(nil, m); err == errExceedsMeasurementCountLimit {
+	if err, tagsList := s.processMeasurements(nil, m); err == ErrExceedsMeasurementCountLimit {
 		s.Transaction = OtherTransactionName
 		s.processMeasurements(tagsList, m)
 	} else {
@@ -663,36 +670,37 @@ func (m *Measurements) recordWithSoloTags(name string, tags map[string]string,
 }
 
 // records a measurement
-// me			collection of measurements that this measurement should be added to
 // name			key name
-// tags			additional tags
+// tagsList		the list of the additional tags
 // value		measurement value
 // count		measurement count
 // reportValue	should the sum of all values be reported?
 func (m *Measurements) record(name string, tagsList []map[string]string,
 	value float64, count int, reportValue bool) error {
-
-	// assemble the ID for this measurement (a combination of different values)
-	idPrefix := name + "&" + strconv.FormatBool(reportValue) + "&"
+	if len(tagsList) == 0 {
+		return nil
+	}
 
 	idTagsMap := make(map[string]map[string]string)
-	if len(tagsList) != 0 {
-		for _, tags := range tagsList {
-			id := idPrefix
+	idPrefixList := []string{name, strconv.FormatBool(reportValue)}
+
+	for _, tags := range tagsList {
+		idList := append(idPrefixList[:0:0], idPrefixList...)
+		if tags != nil {
 			// tags are part of the ID but since there's no guarantee that the map items
 			// are always iterated in the same order, we need to sort them ourselves
 			var tagsSorted []string
 			for k, v := range tags {
-				tagsSorted = append(tagsSorted, k+":"+v)
+				tagsSorted = append(tagsSorted, k+TagsKVSeparator+v)
 			}
 			sort.Strings(tagsSorted)
 
-			// tags are all sorted now, append them to the ID
-			for _, t := range tagsSorted {
-				id += t + "&"
-			}
-			idTagsMap[id] = tags
+			idList = append(idList, tagsSorted...)
 		}
+		idList = append(idList, "")
+		id := strings.Join(idList, MeasurementIDSeparator)
+
+		idTagsMap[id] = tags
 	}
 
 	var me *Measurement
@@ -704,7 +712,7 @@ func (m *Measurements) record(name string, tagsList []map[string]string,
 	defer m.Unlock()
 	for id, tags := range idTagsMap {
 		if me, ok = m.m[id]; !ok {
-			if strings.HasPrefix(id, OtherTransactionName+"&") ||
+			if strings.HasPrefix(id, OtherTransactionNameIDPrefix) ||
 				m.transMap.IsWithinLimit(id) {
 				me = &Measurement{
 					Name:      name,
@@ -713,7 +721,7 @@ func (m *Measurements) record(name string, tagsList []map[string]string,
 				}
 				m.m[id] = me
 			} else {
-				return errExceedsMeasurementCountLimit
+				return ErrExceedsMeasurementCountLimit
 			}
 		}
 
