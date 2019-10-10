@@ -624,15 +624,19 @@ func TestCustomMetrics(t *testing.T) {
 	mts := mMap["measurements"].([]interface{})
 	require.Equal(t, len(mts), 2)
 
-	m1 := mts[0].(mbson.M)
+	mSummary := mts[0].(mbson.M)
+	mIncremental := mts[1].(mbson.M)
 
-	assert.Equal(t, m1["name"], "Summary")
-	assert.Equal(t, m1["count"], 1)
-	assert.Equal(t, m1["sum"], 1.1)
-	assert.EqualValues(t, mbson.M{"hello": "world"}, m1["tags"])
+	if mSummary["name"] == "Incremental" {
+		mSummary, mIncremental = mIncremental, mSummary
+	}
 
-	m2 := mts[1].(mbson.M)
-	assert.Equal(t, m2["name"], "Incremental")
-	assert.Equal(t, m2["count"], 1)
-	assert.EqualValues(t, mbson.M{"hi": "globe"}, m2["tags"])
+	assert.Equal(t, mSummary["name"], "Summary")
+	assert.Equal(t, mSummary["count"], 1)
+	assert.Equal(t, mSummary["sum"], 1.1)
+	assert.EqualValues(t, mbson.M{"hello": "world"}, mSummary["tags"])
+
+	assert.Equal(t, mIncremental["name"], "Incremental")
+	assert.Equal(t, mIncremental["count"], 1)
+	assert.EqualValues(t, mbson.M{"hi": "globe"}, mIncremental["tags"])
 }
