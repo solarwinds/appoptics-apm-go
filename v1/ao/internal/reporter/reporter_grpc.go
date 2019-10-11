@@ -832,7 +832,7 @@ func (r *grpcReporter) CustomSummaryMetric(name string, value float64, opts metr
 }
 
 // CustomIncrementMetric submits a incremental measurement to the reporter. The measurements
-// // will be collected in the background and reported periodically.
+// will be collected in the background and reported periodically.
 func (r *grpcReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
 	return r.customMetrics.Increment(name, opts)
 }

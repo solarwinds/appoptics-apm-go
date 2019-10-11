@@ -33,8 +33,11 @@ type reporter interface {
 	Closed() bool
 	// WaitForReady waits until the reporter becomes ready or the context is canceled.
 	WaitForReady(context.Context) bool
-
+	// CustomSummaryMetric submits a summary type measurement to the reporter. The measurements
+	// will be collected in the background and reported periodically.
 	CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error
+	// CustomIncrementMetric submits a incremental measurement to the reporter. The measurements
+	// will be collected in the background and reported periodically.
 	CustomIncrementMetric(name string, opts metrics.MetricOptions) error
 }
 
@@ -246,7 +249,7 @@ func SummaryMetric(name string, value float64, opts metrics.MetricOptions) error
 }
 
 // IncrementMetric submits a incremental measurement to the reporter. The measurements
-// // will be collected in the background and reported periodically.
+// will be collected in the background and reported periodically.
 func IncrementMetric(name string, opts metrics.MetricOptions) error {
 	return globalReporter.CustomIncrementMetric(name, opts)
 }

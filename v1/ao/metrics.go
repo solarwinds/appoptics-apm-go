@@ -21,8 +21,8 @@ const (
 var (
 	// ErrExceedsTagsCountLimit indicates the count of tags exceeds the limit
 	ErrExceedsTagsCountLimit = errors.New("exceeds tags count limit")
-	// ErrExceedsMeasurementCountLimit indicates there are too many distinct measurements.
-	ErrExceedsMeasurementCountLimit = metrics.ErrExceedsMeasurementCountLimit
+	// ErrExceedsMetricsCountLimit indicates there are too many distinct measurements in a flush cycle.
+	ErrExceedsMetricsCountLimit = metrics.ErrExceedsMetricsCountLimit
 )
 
 // SummaryMetric submits a summary type measurement to the reporter. The measurements
@@ -35,7 +35,7 @@ func SummaryMetric(name string, value float64, opts MetricOptions) error {
 }
 
 // IncrementMetric submits a incremental measurement to the reporter. The measurements
-// // will be collected in the background and reported periodically.
+// will be collected in the background and reported periodically.
 func IncrementMetric(name string, opts MetricOptions) error {
 	if len(opts.Tags) > MaxTagsCount {
 		return ErrExceedsTagsCountLimit

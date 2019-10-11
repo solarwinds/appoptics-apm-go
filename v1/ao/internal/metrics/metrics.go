@@ -34,9 +34,9 @@ const (
 const (
 	UnknownTransactionName       = "unknown"
 	OtherTransactionName         = "other"
-	MeasurementIDSeparator       = "&"
+	MetricIDSeparator            = "&"
 	TagsKVSeparator              = ":"
-	OtherTransactionNameIDPrefix = OtherTransactionName + MeasurementIDSeparator
+	OtherMetricIDPrefix          = OtherTransactionName + MetricIDSeparator
 	maxPathLenForTransactionName = 3
 )
 
@@ -58,8 +58,8 @@ const (
 )
 
 var (
-	// ErrExceedsMeasurementCountLimit indicates there are too many distinct measurements.
-	ErrExceedsMeasurementCountLimit = errors.New("exceeds measurement count limit per flush interval")
+	// ErrExceedsMetricsCountLimit indicates there are too many distinct metrics.
+	ErrExceedsMetricsCountLimit = errors.New("exceeds metrics count limit per flush interval")
 )
 
 // SpanMessage defines a span message
@@ -92,7 +92,7 @@ type Measurement struct {
 	ReportSum bool              // include the sum in the report?
 }
 
-// Measurements are a collection of mutext-protected measurements
+// Measurements are a collection of mutex-protected measurements
 type Measurements struct {
 	m             map[string]*Measurement
 	transMap      *TransMap
@@ -474,8 +474,8 @@ func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
 	host.GC(&gc)
 	addMetricsValue(bbuf, &index, "JMX.type=count,name=GCStats.NumGC", gc.NumGC)
 
-	for _, m := range m.m {
-		addMeasurementToBSON(bbuf, &index, m)
+	for _, measurement := range m.m {
+		addMeasurementToBSON(bbuf, &index, measurement)
 	}
 
 	bbuf.AppendFinishObject(start)
@@ -603,20 +603,20 @@ func (s *HTTPSpanMessage) Process(m *Measurements) {
 	// always add to overall histogram
 	recordHistogram(metricsHTTPHistograms, "", s.Duration)
 
-	if s.Transaction == "" {
-		s.Transaction = UnknownTransactionName // no transaction/url name given, record as 'unknown'
-
+	if s.Transaction == UnknownTransactionName {
+		s.processMeasurements(nil, m)
+		return
 	}
 
 	// only record the transaction-specific histogram and measurements if we are still within the limit
 	// otherwise report it as an 'other' measurement
-	if err, tagsList := s.processMeasurements(nil, m); err == ErrExceedsMeasurementCountLimit {
+	if err, reusableTags := s.processMeasurements(nil, m); err == ErrExceedsMetricsCountLimit {
 		s.Transaction = OtherTransactionName
-		s.processMeasurements(tagsList, m)
-	} else {
-		recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
+		s.processMeasurements(reusableTags, m)
+		return
 	}
 
+	recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
 }
 
 func (s *HTTPSpanMessage) produceTagsList() []map[string]string {
@@ -698,7 +698,7 @@ func (m *Measurements) record(name string, tagsList []map[string]string,
 			idList = append(idList, tagsSorted...)
 		}
 		idList = append(idList, "")
-		id := strings.Join(idList, MeasurementIDSeparator)
+		id := strings.Join(idList, MetricIDSeparator)
 
 		idTagsMap[id] = tags
 	}
@@ -712,7 +712,7 @@ func (m *Measurements) record(name string, tagsList []map[string]string,
 	defer m.Unlock()
 	for id, tags := range idTagsMap {
 		if me, ok = m.m[id]; !ok {
-			if strings.HasPrefix(id, OtherTransactionNameIDPrefix) ||
+			if strings.HasPrefix(id, OtherMetricIDPrefix) ||
 				m.transMap.IsWithinLimit(id) {
 				me = &Measurement{
 					Name:      name,
@@ -721,7 +721,7 @@ func (m *Measurements) record(name string, tagsList []map[string]string,
 				}
 				m.m[id] = me
 			} else {
-				return ErrExceedsMeasurementCountLimit
+				return ErrExceedsMetricsCountLimit
 			}
 		}
 
