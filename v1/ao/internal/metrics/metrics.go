@@ -18,6 +18,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
+	"github.com/pkg/errors"
 )
 
 // Linux distributions and their identifying files
@@ -33,6 +34,9 @@ const (
 const (
 	UnknownTransactionName       = "unknown"
 	OtherTransactionName         = "other"
+	MetricIDSeparator            = "&"
+	TagsKVSeparator              = ":"
+	OtherMetricIDPrefix          = OtherTransactionName + MetricIDSeparator
 	maxPathLenForTransactionName = 3
 )
 
@@ -53,9 +57,14 @@ const (
 	RCStrictTriggerTrace  = "ReqCounterStrictTriggerTrace"
 )
 
+var (
+	// ErrExceedsMetricsCountLimit indicates there are too many distinct metrics.
+	ErrExceedsMetricsCountLimit = errors.New("exceeds metrics count limit per flush interval")
+)
+
 // SpanMessage defines a span message
 type SpanMessage interface {
-	Process()
+	Process(m *Measurements)
 }
 
 // BaseSpanMessage is the base span message with properties found in all types of span messages
@@ -77,16 +86,28 @@ type HTTPSpanMessage struct {
 // Measurement is a single measurement for reporting
 type Measurement struct {
 	Name      string            // the name of the measurement (e.g. TransactionResponseTime)
-	Tags      map[string]string // map of KVs
+	Tags      map[string]string // map of KVs. It may be nil
 	Count     int               // count of this measurement
 	Sum       float64           // sum for this measurement
 	ReportSum bool              // include the sum in the report?
 }
 
-// a collection of measurements
-type measurements struct {
-	measurements map[string]*Measurement
-	lock         sync.Mutex // protect access to this collection
+// Measurements are a collection of mutex-protected measurements
+type Measurements struct {
+	m             map[string]*Measurement
+	transMap      *TransMap
+	IsCustom      bool
+	FlushInterval int32
+	sync.Mutex    // protect access to this collection
+}
+
+func NewMeasurements(isCustom bool, flushInterval int32, maxCount int32) *Measurements {
+	return &Measurements{
+		m:             make(map[string]*Measurement),
+		transMap:      NewTransMap(maxCount),
+		IsCustom:      isCustom,
+		FlushInterval: flushInterval,
+	}
 }
 
 // a single histogram
@@ -203,7 +224,7 @@ type TransMap struct {
 	overflow bool
 	// The mutex to protect this whole struct. If the performance is a concern we should use separate
 	// mutexes for each of the fields. But for now it seems not necessary.
-	mutex *sync.Mutex
+	mutex sync.Mutex
 }
 
 // NewTransMap initializes a new TransMap struct
@@ -213,7 +234,6 @@ func NewTransMap(cap int32) *TransMap {
 		currCap:          cap,
 		nextCap:          cap,
 		overflow:         false,
-		mutex:            &sync.Mutex{},
 	}
 }
 
@@ -239,6 +259,16 @@ func (t *TransMap) Reset() {
 	t.transactionNames = make(map[string]struct{})
 	t.currCap = t.nextCap
 	t.overflow = false
+}
+
+// Clone returns a shallow copy
+func (t *TransMap) Clone() *TransMap {
+	return &TransMap{
+		transactionNames: t.transactionNames,
+		currCap:          t.currCap,
+		nextCap:          t.nextCap,
+		overflow:         t.overflow,
+	}
 }
 
 // IsWithinLimit checks if the transaction name is stored in the TransMap. It will store this new
@@ -267,15 +297,6 @@ func (t *TransMap) Overflow() bool {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	return t.overflow
-}
-
-// GlobalTransMap is the list of currently stored unique HTTP transaction names
-// (flushed on each metrics report cycle)
-var GlobalTransMap = NewTransMap(metricsTransactionsMaxDefault)
-
-// collection of currently stored measurements (flushed on each metrics report cycle)
-var metricsHTTPMeasurements = &measurements{
-	measurements: make(map[string]*Measurement),
 }
 
 // collection of currently stored histograms (flushed on each metrics report cycle)
@@ -332,16 +353,89 @@ func addRequestCounters(bbuf *bson.Buffer, index *int, rcs map[string]*RateCount
 	addMetricsValue(bbuf, index, TriggeredTraceCount, ttTraced)
 }
 
-// GenerateMetricsMessage generates a metrics message in BSON format with all the currently available values
+// BuildMessage creates and encodes the custom metrics message.
+func BuildMessage(m *Measurements) []byte {
+	bbuf := bson.NewBuffer()
+	if m.IsCustom {
+		bbuf.AppendBool("IsCustom", m.IsCustom)
+	}
+	appendHostId(bbuf)
+	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
+	bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
+
+	start := bbuf.AppendStartArray("measurements")
+	index := 0
+
+	for _, measurement := range m.m {
+		addMeasurementToBSON(bbuf, &index, measurement)
+	}
+
+	bbuf.AppendFinishObject(start)
+
+	bbuf.Finish()
+	return bbuf.GetBuf()
+}
+
+// SetCap sets the maximum number of distinct metrics allowed.
+func (m *Measurements) SetCap(cap int32) {
+	m.transMap.SetCap(cap)
+}
+
+// Cap returns the maximum number of distinct metrics allowed.
+func (m *Measurements) Cap() int32 {
+	return m.transMap.Cap()
+}
+
+// CopyAndReset resets the custom metrics and return a copy of the old one.
+func (m *Measurements) CopyAndReset(flushInterval int32) *Measurements {
+	m.Lock()
+	defer m.Unlock()
+
+	clone := m.Clone()
+	m.m = make(map[string]*Measurement)
+	m.transMap.Reset()
+	m.FlushInterval = flushInterval
+	return clone
+}
+
+// Clone returns a shallow copy
+func (m *Measurements) Clone() *Measurements {
+	return &Measurements{
+		m:             m.m,
+		transMap:      m.transMap.Clone(),
+		IsCustom:      m.IsCustom,
+		FlushInterval: m.FlushInterval,
+	}
+}
+
+// Summary submits the summary measurement to the reporter.
+func (m *Measurements) Summary(name string, value float64, opts MetricOptions) error {
+	return m.recordWithSoloTags(name, opts.Tags, value, opts.Count, true)
+}
+
+// Increment submits the incremental measurement to the reporter.
+func (m *Measurements) Increment(name string, opts MetricOptions) error {
+	return m.recordWithSoloTags(name, opts.Tags, 0, opts.Count, false)
+}
+
+// MetricOptions is a struct for the optional parameters of a measurement.
+type MetricOptions struct {
+	Count   int
+	HostTag bool
+	Tags    map[string]string
+}
+
+// BuildBuiltinMetricsMessage generates a metrics message in BSON format with all the currently available values
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
-func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs map[string]*RateCounts) []byte {
+func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
+	rcs map[string]*RateCounts) []byte {
 	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)
 	bbuf.AppendInt64("Timestamp_u", int64(time.Now().UnixNano()/1000))
-	bbuf.AppendInt("MetricsFlushInterval", metricsFlushInterval)
+	bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
 
 	// measurements
 	// ==========================================
@@ -380,12 +474,9 @@ func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs ma
 	host.GC(&gc)
 	addMetricsValue(bbuf, &index, "JMX.type=count,name=GCStats.NumGC", gc.NumGC)
 
-	metricsHTTPMeasurements.lock.Lock()
-	for _, m := range metricsHTTPMeasurements.measurements {
-		addMeasurementToBSON(bbuf, &index, m)
+	for _, measurement := range m.m {
+		addMeasurementToBSON(bbuf, &index, measurement)
 	}
-	metricsHTTPMeasurements.measurements = make(map[string]*Measurement) // clear measurements
-	metricsHTTPMeasurements.lock.Unlock()
 
 	bbuf.AppendFinishObject(start)
 	// ==========================================
@@ -406,11 +497,9 @@ func GenerateMetricsMessage(metricsFlushInterval int, qs EventQueueStats, rcs ma
 	bbuf.AppendFinishObject(start)
 	// ==========================================
 
-	if GlobalTransMap.Overflow() {
+	if m.transMap.Overflow() {
 		bbuf.AppendBool("TransactionNameOverflow", true)
 	}
-	// The transaction map is reset in every metrics cycle.
-	GlobalTransMap.Reset()
 
 	bbuf.Finish()
 	return bbuf.GetBuf()
@@ -510,99 +599,137 @@ func GetTransactionFromPath(path string) string {
 }
 
 // Process processes an HttpSpanMessage
-func (s *HTTPSpanMessage) Process() {
+func (s *HTTPSpanMessage) Process(m *Measurements) {
 	// always add to overall histogram
 	recordHistogram(metricsHTTPHistograms, "", s.Duration)
 
-	if s.Transaction != UnknownTransactionName {
-		// only record the transaction-specific histogram and measurements if we are still within the limit
-		// otherwise report it as an 'other' measurement
-		if GlobalTransMap.IsWithinLimit(s.Transaction) {
-			recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
-			s.processMeasurements(s.Transaction)
-		} else {
-			s.processMeasurements(OtherTransactionName)
-		}
-	} else {
-		// no transaction/url name given, record as 'unknown'
-		s.processMeasurements(UnknownTransactionName)
+	if s.Transaction == UnknownTransactionName {
+		s.processMeasurements(nil, m)
+		return
 	}
+
+	// only record the transaction-specific histogram and measurements if we are still within the limit
+	// otherwise report it as an 'other' measurement
+	if err, reusableTags := s.processMeasurements(nil, m); err == ErrExceedsMetricsCountLimit {
+		s.Transaction = OtherTransactionName
+		s.processMeasurements(reusableTags, m)
+		return
+	}
+
+	recordHistogram(metricsHTTPHistograms, s.Transaction, s.Duration)
 }
 
-// processes HTTP measurements, record one for primary key, and one for each secondary key
-// transactionName	the transaction name to be used for these measurements
-func (s *HTTPSpanMessage) processMeasurements(transactionName string) {
-	name := "TransactionResponseTime"
-	duration := float64(s.Duration)
-
-	metricsHTTPMeasurements.lock.Lock()
-	defer metricsHTTPMeasurements.lock.Unlock()
+func (s *HTTPSpanMessage) produceTagsList() []map[string]string {
+	var tagsList []map[string]string
 
 	// primary key: TransactionName
 	primaryTags := make(map[string]string)
-	primaryTags["TransactionName"] = transactionName
-	recordMeasurement(metricsHTTPMeasurements, name, &primaryTags, duration, 1, true)
+	primaryTags["TransactionName"] = s.Transaction
+	tagsList = append(tagsList, primaryTags)
 
 	// secondary keys: HttpMethod, HttpStatus, Errors
 	withMethodTags := utils.CopyMap(&primaryTags)
 	withMethodTags["HttpMethod"] = s.Method
-	recordMeasurement(metricsHTTPMeasurements, name, &withMethodTags, duration, 1, true)
+	tagsList = append(tagsList, withMethodTags)
 
 	withStatusTags := utils.CopyMap(&primaryTags)
 	withStatusTags["HttpStatus"] = strconv.Itoa(s.Status)
-	recordMeasurement(metricsHTTPMeasurements, name, &withStatusTags, duration, 1, true)
+	tagsList = append(tagsList, withStatusTags)
 
 	if s.HasError {
 		withErrorTags := utils.CopyMap(&primaryTags)
 		withErrorTags["Errors"] = "true"
-		recordMeasurement(metricsHTTPMeasurements, name, &withErrorTags, duration, 1, true)
+		tagsList = append(tagsList, withErrorTags)
 	}
+
+	return tagsList
+}
+
+// processes HTTP measurements, record one for primary key, and one for each secondary key
+// transactionName	the transaction name to be used for these measurements
+func (s *HTTPSpanMessage) processMeasurements(tagsList []map[string]string,
+	m *Measurements) (error, []map[string]string) {
+	name := "TransactionResponseTime"
+	duration := float64(s.Duration)
+
+	if tagsList == nil {
+		tagsList = s.produceTagsList()
+	}
+
+	err := m.record(name, tagsList, duration, 1, true)
+
+	if err != nil {
+		return err, tagsList
+	}
+	return nil, nil
+}
+
+func (m *Measurements) recordWithSoloTags(name string, tags map[string]string,
+	value float64, count int, reportValue bool) error {
+	return m.record(name, []map[string]string{tags}, value, count, reportValue)
 }
 
 // records a measurement
-// me			collection of measurements that this measurement should be added to
 // name			key name
-// tags			additional tags
+// tagsList		the list of the additional tags
 // value		measurement value
 // count		measurement count
 // reportValue	should the sum of all values be reported?
-func recordMeasurement(me *measurements, name string, tags *map[string]string,
-	value float64, count int, reportValue bool) {
-
-	measurements := me.measurements
-
-	// assemble the ID for this measurement (a combination of different values)
-	id := name + "&" + strconv.FormatBool(reportValue) + "&"
-
-	// tags are part of the ID but since there's no guarantee that the map items
-	// are always iterated in the same order, we need to sort them ourselves
-	var tagsSorted []string
-	for k, v := range *tags {
-		tagsSorted = append(tagsSorted, k+":"+v)
-	}
-	sort.Strings(tagsSorted)
-
-	// tags are all sorted now, append them to the ID
-	for _, t := range tagsSorted {
-		id += t + "&"
+func (m *Measurements) record(name string, tagsList []map[string]string,
+	value float64, count int, reportValue bool) error {
+	if len(tagsList) == 0 {
+		return nil
 	}
 
-	var m *Measurement
+	idTagsMap := make(map[string]map[string]string)
+	idPrefixList := []string{name, strconv.FormatBool(reportValue)}
+
+	for _, tags := range tagsList {
+		idList := append(idPrefixList[:0:0], idPrefixList...)
+		if tags != nil {
+			// tags are part of the ID but since there's no guarantee that the map items
+			// are always iterated in the same order, we need to sort them ourselves
+			var tagsSorted []string
+			for k, v := range tags {
+				tagsSorted = append(tagsSorted, k+TagsKVSeparator+v)
+			}
+			sort.Strings(tagsSorted)
+
+			idList = append(idList, tagsSorted...)
+		}
+		idList = append(idList, "")
+		id := strings.Join(idList, MetricIDSeparator)
+
+		idTagsMap[id] = tags
+	}
+
+	var me *Measurement
 	var ok bool
 
 	// create a new measurement if it doesn't exist
-	if m, ok = measurements[id]; !ok {
-		m = &Measurement{
-			Name:      name,
-			Tags:      *tags,
-			ReportSum: reportValue,
+	// the lock protects both Measurements and Measurement
+	m.Lock()
+	defer m.Unlock()
+	for id, tags := range idTagsMap {
+		if me, ok = m.m[id]; !ok {
+			if strings.HasPrefix(id, OtherMetricIDPrefix) ||
+				m.transMap.IsWithinLimit(id) {
+				me = &Measurement{
+					Name:      name,
+					Tags:      tags,
+					ReportSum: reportValue,
+				}
+				m.m[id] = me
+			} else {
+				return ErrExceedsMetricsCountLimit
+			}
 		}
-		measurements[id] = m
-	}
 
-	// add count and value
-	m.Count += count
-	m.Sum += value
+		// add count and value
+		me.Count += count
+		me.Sum += value
+	}
+	return nil
 }
 
 // records a histogram

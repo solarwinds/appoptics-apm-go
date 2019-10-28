@@ -13,6 +13,7 @@ import (
 
 	"strings"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
@@ -590,4 +591,52 @@ func TestCollectMetricsNextInterval(t *testing.T) {
 	next := r.collectMetricsNextInterval()
 	// very weak check
 	assert.True(t, next <= time.Second*10, next)
+}
+
+func TestCustomMetrics(t *testing.T) {
+	r := &grpcReporter{
+		// Other fields are not needed.
+		customMetrics: metrics.NewMeasurements(true, grpcMetricIntervalDefault, 500),
+	}
+
+	r.CustomSummaryMetric("Summary", 1.1, metrics.MetricOptions{
+		Count:   1,
+		HostTag: true,
+		Tags:    map[string]string{"hello": "world"},
+	})
+	r.CustomIncrementMetric("Incremental", metrics.MetricOptions{
+		Count:   1,
+		HostTag: true,
+		Tags:    map[string]string{"hi": "globe"},
+	})
+	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(grpcMetricIntervalDefault))
+
+	bbuf := bson.WithBuf(custom)
+	mMap := mbson.M{}
+	mbson.Unmarshal(bbuf.GetBuf(), mMap)
+
+	assert.Equal(t, mMap["IsCustom"], true)
+	assert.NotEqual(t, mMap["Timestamp_u"], 0)
+	assert.Equal(t, mMap["MetricsFlushInterval"], grpcMetricIntervalDefault)
+	assert.NotEqual(t, mMap["IPAddresses"], nil)
+	assert.NotEqual(t, mMap["Distro"], "")
+
+	mts := mMap["measurements"].([]interface{})
+	require.Equal(t, len(mts), 2)
+
+	mSummary := mts[0].(mbson.M)
+	mIncremental := mts[1].(mbson.M)
+
+	if mSummary["name"] == "Incremental" {
+		mSummary, mIncremental = mIncremental, mSummary
+	}
+
+	assert.Equal(t, mSummary["name"], "Summary")
+	assert.Equal(t, mSummary["count"], 1)
+	assert.Equal(t, mSummary["sum"], 1.1)
+	assert.EqualValues(t, mbson.M{"hello": "world"}, mSummary["tags"])
+
+	assert.Equal(t, mIncremental["name"], "Incremental")
+	assert.Equal(t, mIncremental["count"], 1)
+	assert.EqualValues(t, mbson.M{"hi": "globe"}, mIncremental["tags"])
 }

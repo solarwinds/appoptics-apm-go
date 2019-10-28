@@ -63,7 +63,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 	// These are hard-coded parameters for the gRPC reporter. Any of them become
 	// configurable in future versions will be moved to package config.
 	// TODO: use time.Time
-	grpcMetricIntervalDefault               = 30               // default metrics flush interval in seconds
+	grpcMetricIntervalDefault               = 60               // default metrics flush interval in seconds
 	grpcGetSettingsIntervalDefault          = 30               // default settings retrieval interval in seconds
 	grpcSettingsTimeoutCheckIntervalDefault = 10               // default check interval for timed out settings in seconds
 	grpcPingIntervalDefault                 = 20               // default interval for keep alive pings in seconds
@@ -199,6 +199,9 @@ type grpcReporter struct {
 	spanMessages   chan metrics.SpanMessage // channel for span messages (sent from agent)
 	statusMessages chan []byte              // channel for status messages (sent from agent)
 
+	httpMetrics   *metrics.Measurements
+	customMetrics *metrics.Measurements
+
 	// The reporter is considered ready if there is a valid default setting for sampling.
 	// It should be accessed atomically.
 	ready int32
@@ -294,6 +297,8 @@ func newGRPCReporter() reporter {
 		eventMessages:  make(chan []byte, 10000),
 		spanMessages:   make(chan metrics.SpanMessage, 10000),
 		statusMessages: make(chan []byte, 100),
+		httpMetrics:    metrics.NewMeasurements(false, grpcMetricIntervalDefault, 200),
+		customMetrics:  metrics.NewMeasurements(true, grpcMetricIntervalDefault, 500), // TODO configurable
 
 		cond: sync.NewCond(&sync.Mutex{}),
 		done: make(chan struct{}),
@@ -789,22 +794,25 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { collectReady <- true }()
 
-	i := int(atomic.LoadInt32(&r.collectMetricInterval))
+	i := atomic.LoadInt32(&r.collectMetricInterval)
 	// generate a new metrics message
-	message := metrics.GenerateMetricsMessage(i, r.eventConnection.queueStats.CopyAndReset(),
-		FlushRateCounts())
-	r.sendMetrics(message)
+	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(i),
+		r.eventConnection.queueStats.CopyAndReset(), FlushRateCounts())
+
+	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i))
+
+	r.sendMetrics([][]byte{builtin, custom})
 }
 
 // listens on the metrics message channel, collects all messages on that channel and
 // attempts to send them to the collector using the GRPC method PostMetrics()
-func (r *grpcReporter) sendMetrics(msg []byte) {
+func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 	// no messages on the channel so nothing to send, return
-	if len(msg) == 0 {
+	if len(msgs) == 0 {
 		return
 	}
 
-	method := newPostMetricsMethod(r.serviceKey, [][]byte{msg})
+	method := newPostMetricsMethod(r.serviceKey, msgs)
 
 	err := r.metricConnection.InvokeRPC(r.done, method)
 	switch err {
@@ -815,6 +823,18 @@ func (r *grpcReporter) sendMetrics(msg []byte) {
 	default:
 		log.Warningf("sendMetrics: %s", err)
 	}
+}
+
+// CustomSummaryMetric submits a summary type measurement to the reporter. The measurements
+// will be collected in the background and reported periodically.
+func (r *grpcReporter) CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
+	return r.customMetrics.Summary(name, value, opts)
+}
+
+// CustomIncrementMetric submits a incremental measurement to the reporter. The measurements
+// will be collected in the background and reported periodically.
+func (r *grpcReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
+	return r.customMetrics.Increment(name, opts)
 }
 
 // ================================ Settings Handling ====================================
@@ -855,8 +875,11 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 		o.SetEventFlushInterval(int64(ei))
 
 		// update MaxTransactions
-		mt := parseInt32(s.Arguments, kvMaxTransactions, metrics.GlobalTransMap.Cap())
-		metrics.GlobalTransMap.SetCap(mt)
+		mt := parseInt32(s.Arguments, kvMaxTransactions, r.httpMetrics.Cap())
+		r.httpMetrics.SetCap(mt)
+
+		maxCustomMetrics := parseInt32(s.Arguments, kvMaxCustomMetrics, r.httpMetrics.Cap())
+		r.customMetrics.SetCap(maxCustomMetrics)
 	}
 
 	if !r.isReady() && hasDefaultSetting() {
@@ -971,7 +994,7 @@ func (r *grpcReporter) spanMessageAggregator() {
 	for {
 		select {
 		case span := <-r.spanMessages:
-			span.Process()
+			span.Process(r.httpMetrics)
 		case <-r.done:
 			return
 		}

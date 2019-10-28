@@ -95,3 +95,11 @@ func (r *udpReporter) reportSpan(span metrics.SpanMessage) error {
 	_, err := r.conn.Write(bbuf.GetBuf())
 	return err
 }
+
+func (r *udpReporter) CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
+	return nil
+}
+
+func (r *udpReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
+	return nil
+}

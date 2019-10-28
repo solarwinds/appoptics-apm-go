@@ -33,6 +33,12 @@ type reporter interface {
 	Closed() bool
 	// WaitForReady waits until the reporter becomes ready or the context is canceled.
 	WaitForReady(context.Context) bool
+	// CustomSummaryMetric submits a summary type measurement to the reporter. The measurements
+	// will be collected in the background and reported periodically.
+	CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error
+	// CustomIncrementMetric submits a incremental measurement to the reporter. The measurements
+	// will be collected in the background and reported periodically.
+	CustomIncrementMetric(name string, opts metrics.MetricOptions) error
 }
 
 // KVs from getSettingsResult arguments
@@ -47,6 +53,7 @@ const (
 	kvMetricsFlushInterval              = "MetricsFlushInterval"
 	kvEventsFlushInterval               = "EventsFlushInterval"
 	kvMaxTransactions                   = "MaxTransactions"
+	kvMaxCustomMetrics                  = "MaxCustomMetrics"
 )
 
 // currently used reporter
@@ -67,6 +74,12 @@ func (r *nullReporter) Shutdown(ctx context.Context) error            { return n
 func (r *nullReporter) ShutdownNow() error                            { return nil }
 func (r *nullReporter) Closed() bool                                  { return true }
 func (r *nullReporter) WaitForReady(ctx context.Context) bool         { return true }
+func (r *nullReporter) CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
+	return nil
+}
+func (r *nullReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
+	return nil
+}
 
 // init() is called only once on program startup. Here we create the reporter
 // that will be used throughout the runtime of the app. Default is 'ssl' but
@@ -227,4 +240,16 @@ func argsToMap(capacity, ratePerSec, tRCap, tRRate, tSCap, tSRate float64,
 	args[kvSignatureKey] = token
 
 	return args
+}
+
+// SummaryMetric submits a summary type measurement to the reporter. The measurements
+// will be collected in the background and reported periodically.
+func SummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
+	return globalReporter.CustomSummaryMetric(name, value, opts)
+}
+
+// IncrementMetric submits a incremental measurement to the reporter. The measurements
+// will be collected in the background and reported periodically.
+func IncrementMetric(name string, opts metrics.MetricOptions) error {
+	return globalReporter.CustomIncrementMetric(name, opts)
 }

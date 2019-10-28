@@ -200,17 +200,15 @@ func TestTransMap(t *testing.T) {
 }
 
 func TestRecordMeasurement(t *testing.T) {
-	var me = &measurements{
-		measurements: make(map[string]*Measurement),
-	}
+	var me = NewMeasurements(false, 60, 100)
 
 	t1 := make(map[string]string)
 	t1["t1"] = "tag1"
 	t1["t2"] = "tag2"
-	recordMeasurement(me, "name1", &t1, 111.11, 1, false)
-	recordMeasurement(me, "name1", &t1, 222, 1, false)
-	assert.NotNil(t, me.measurements["name1&false&t1:tag1&t2:tag2&"])
-	m := me.measurements["name1&false&t1:tag1&t2:tag2&"]
+	me.recordWithSoloTags("name1", t1, 111.11, 1, false)
+	me.recordWithSoloTags("name1", t1, 222, 1, false)
+	assert.NotNil(t, me.m["name1&false&t1:tag1&t2:tag2&"])
+	m := me.m["name1&false&t1:tag1&t2:tag2&"]
 	assert.Equal(t, "tag1", m.Tags["t1"])
 	assert.Equal(t, "tag2", m.Tags["t2"])
 	assert.Equal(t, 333.11, m.Sum)
@@ -219,9 +217,9 @@ func TestRecordMeasurement(t *testing.T) {
 
 	t2 := make(map[string]string)
 	t2["t3"] = "tag3"
-	recordMeasurement(me, "name2", &t2, 123.456, 3, true)
-	assert.NotNil(t, me.measurements["name2&true&t3:tag3&"])
-	m = me.measurements["name2&true&t3:tag3&"]
+	me.recordWithSoloTags("name2", t2, 123.456, 3, true)
+	assert.NotNil(t, me.m["name2&true&t3:tag3&"])
+	m = me.m["name2&true&t3:tag3&"]
 	assert.Equal(t, "tag3", m.Tags["t3"])
 	assert.Equal(t, 123.456, m.Sum)
 	assert.Equal(t, 3, m.Count)
@@ -370,7 +368,8 @@ func TestAddHistogramToBSON(t *testing.T) {
 }
 
 func TestGenerateMetricsMessage(t *testing.T) {
-	bbuf := bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{},
+	testMetrics := NewMeasurements(false, 15, metricsTransactionsMaxDefault)
+	bbuf := bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, EventQueueStats{},
 		map[string]*RateCounts{ // requested, sampled, limited, traced, through
 			RCRegular:             {10, 2, 5, 5, 1},
 			RCRelaxedTriggerTrace: {3, 0, 1, 2, 0},
@@ -438,17 +437,18 @@ func TestGenerateMetricsMessage(t *testing.T) {
 
 	assert.Nil(t, m["TransactionNameOverflow"])
 
+	testMetrics = NewMeasurements(false, 60, metricsTransactionsMaxDefault)
 	for i := 0; i <= metricsTransactionsMaxDefault; i++ {
-		if !GlobalTransMap.IsWithinLimit("Transaction-" + strconv.Itoa(i)) {
+		if !testMetrics.transMap.IsWithinLimit("Transaction-" + strconv.Itoa(i)) {
 			break
 		}
 	}
-	m = bsonToMap(bson.WithBuf(GenerateMetricsMessage(15, EventQueueStats{},
+
+	m = bsonToMap(bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, EventQueueStats{},
 		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}})))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))
-	GlobalTransMap.Reset()
 }
 
 func TestEventQueueStats(t *testing.T) {
@@ -509,9 +509,10 @@ func TestHTTPSpanMessageProcess(t *testing.T) {
 		Method:          "GET",
 	}
 
-	s.Process()
-	m, ok := metricsHTTPMeasurements.measurements["TransactionResponseTime&true&TransactionName:transaction&"]
+	m := NewMeasurements(false, 60, metricsTransactionsMaxDefault)
+	s.Process(m)
+	measurement, ok := m.m["TransactionResponseTime&true&TransactionName:transaction&"]
 	assert.True(t, ok)
 	assert.NotNil(t, m)
-	assert.EqualValues(t, "TransactionResponseTime", m.Name)
+	assert.EqualValues(t, "TransactionResponseTime", measurement.Name)
 }

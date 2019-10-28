@@ -208,8 +208,8 @@ func (pm *PostMetricsMethod) Call(ctx context.Context,
 // mainly used for debug printing.
 func (pm *PostMetricsMethod) CallSummary() string {
 	rsp := resultRespStr(pm.Resp, pm.err)
-	return fmt.Sprintf("[%s] sent 1 metrics, %d bytes, rtt=%v, rsp=%s.",
-		pm, pm.RequestSize(), pm.rtt, rsp)
+	return fmt.Sprintf("[%s] sent %d metrics, %d bytes, rtt=%v, rsp=%s.",
+		pm, pm.MessageLen(), pm.RequestSize(), pm.rtt, rsp)
 }
 
 // RetryOnErr denotes if retry is needed for this RPC method
