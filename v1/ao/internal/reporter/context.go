@@ -569,6 +569,8 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 	}
 
 	decision := shouldTraceRequestWithURL(layer, traced, opts.URL, tMode)
+	ctx.SetEnabled(decision.enabled)
+
 	if decision.trace {
 		if reportEntry {
 			var kvs map[string]interface{}
@@ -601,7 +603,6 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 	}
 
 	ctx.SetSampled(false)
-	ctx.SetEnabled(decision.enabled)
 	SetHeaders(decision.xTraceOptsRsp)
 
 	return ctx, true, headers

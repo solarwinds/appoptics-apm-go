@@ -231,7 +231,7 @@ func (t *aoTrace) reportExit() {
 		}
 
 		// if this is an HTTP trace, record a new span
-		if !t.httpSpan.start.IsZero() {
+		if !t.httpSpan.start.IsZero() && t.aoCtx.GetEnabled() {
 			t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)
 			t.recordHTTPSpan()
 		}
@@ -299,9 +299,7 @@ func (t *aoTrace) recordHTTPSpan() {
 		t.httpSpan.span.HasError = true
 	}
 
-	if t.aoCtx.GetEnabled() {
-		_ = reporter.ReportSpan(&t.httpSpan.span)
-	}
+	reporter.ReportSpan(&t.httpSpan.span)
 
 	// This will add the TransactionName KV into the exit event.
 	t.endArgs = append(t.endArgs, keyTransactionName, t.httpSpan.span.Transaction)
