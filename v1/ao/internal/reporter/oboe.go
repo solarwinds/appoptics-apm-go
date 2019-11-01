@@ -203,9 +203,11 @@ func (b *tokenBucket) update(now time.Time) {
 }
 
 type SampleDecision struct {
-	trace         bool
-	rate          int
-	source        sampleSource
+	trace  bool
+	rate   int
+	source sampleSource
+	// if the request is disabled from tracing in a per-transaction level or for
+	// the entire service.
 	enabled       bool
 	xTraceOptsRsp string
 }
