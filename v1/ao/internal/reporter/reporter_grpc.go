@@ -96,6 +96,7 @@ type grpcConnection struct {
 	lock               sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
 	queueStats         *metrics.EventQueueStats       // queue stats (reset on each metrics report cycle)
 	insecureSkipVerify bool
+	proxy              string
 	// atomicActive indicates if the underlying connection is active. It should
 	// be reconnected or redirected to a new address in case of inactive. The
 	// value 0 represents false and a value other than 0 (usually 1) means true
@@ -125,6 +126,13 @@ func WithCert(cert []byte) GrpcConnOpt {
 func WithSkipVerify(skip bool) GrpcConnOpt {
 	return func(c *grpcConnection) {
 		c.insecureSkipVerify = skip
+	}
+}
+
+// WithProxy assign the proxy url to the gRPC connection
+func WithProxy(proxy string) GrpcConnOpt {
+	return func(c *grpcConnection) {
+		c.proxy = proxy
 	}
 }
 
@@ -269,6 +277,10 @@ func newGRPCReporter() reporter {
 
 	opts = append(opts, WithSkipVerify(config.GetSkipVerify()))
 	opts = append(opts, WithMaxReqBytes(config.ReporterOpts().GetMaxReqBytes()))
+
+	if proxy := config.GetProxy(); proxy != "" {
+		opts = append(opts, WithProxy(proxy))
+	}
 
 	// create connection object for events client and metrics client
 	eventConn, err1 := newGrpcConnection("events channel", addr, opts...)
@@ -488,6 +500,7 @@ func (c *grpcConnection) connect() error {
 		InsecureSkipVerify: c.insecureSkipVerify,
 		Certificate:        c.certificate,
 		Address:            c.address,
+		Proxy:              c.proxy,
 	})
 	if err != nil {
 		return errors.Wrap(err, "failed to connect to target")
@@ -1244,6 +1257,7 @@ type DialParams struct {
 	InsecureSkipVerify bool
 	Certificate        []byte
 	Address            string
+	Proxy              string
 }
 
 // DefaultDialer implements the Dialer interface to provide the default dialing
@@ -1276,7 +1290,11 @@ func (d *DefaultDialer) Dial(p DialParams) (*grpc.ClientConn, error) {
 	}
 	creds := credentials.NewTLS(tlsConfig)
 
-	return grpc.Dial(p.Address, grpc.WithTransportCredentials(creds))
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
+	if p.Proxy != "" {
+		// TODO
+	}
+	return grpc.Dial(p.Address, opts...)
 }
 
 func printRPCMsg(m Method) {

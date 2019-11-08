@@ -55,6 +55,9 @@ var DebugLevel = conf.GetDebugLevel
 // GetTriggerTrace is a wrapper to the method of the global config
 var GetTriggerTrace = conf.GetTriggerTrace
 
+// GetProxy is a wrapper to the method of the global config
+var GetProxy = conf.GetProxy
+
 // GetTransactionFiltering is a wrapper to the method of the global config
 var GetTransactionFiltering = conf.GetTransactionFiltering
 
