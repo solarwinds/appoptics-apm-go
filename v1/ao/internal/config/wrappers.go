@@ -58,6 +58,9 @@ var GetTriggerTrace = conf.GetTriggerTrace
 // GetProxy is a wrapper to the method of the global config
 var GetProxy = conf.GetProxy
 
+// GetProxyCertPath is a wrapper to the method of the global config
+var GetProxyCertPath = conf.GetProxyCertPath
+
 // GetTransactionFiltering is a wrapper to the method of the global config
 var GetTransactionFiltering = conf.GetTransactionFiltering
 

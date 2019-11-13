@@ -3,11 +3,19 @@
 package reporter
 
 import (
+	"bufio"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -96,7 +104,10 @@ type grpcConnection struct {
 	lock               sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
 	queueStats         *metrics.EventQueueStats       // queue stats (reset on each metrics report cycle)
 	insecureSkipVerify bool
-	proxy              string
+
+	proxy            string
+	proxyTLSCertPath string
+
 	// atomicActive indicates if the underlying connection is active. It should
 	// be reconnected or redirected to a new address in case of inactive. The
 	// value 0 represents false and a value other than 0 (usually 1) means true
@@ -133,6 +144,13 @@ func WithSkipVerify(skip bool) GrpcConnOpt {
 func WithProxy(proxy string) GrpcConnOpt {
 	return func(c *grpcConnection) {
 		c.proxy = proxy
+	}
+}
+
+// WithProxyCertPath assigns the proxy TLS certificate path to the gRPC connection
+func WithProxyCertPath(certPath string) GrpcConnOpt {
+	return func(c *grpcConnection) {
+		c.proxyTLSCertPath = certPath
 	}
 }
 
@@ -248,6 +266,24 @@ const (
 	may be different from your setting.`
 )
 
+func getProxy() string {
+	proxy := config.GetProxy()
+	if proxy != "" {
+		return proxy
+	}
+
+	proxy = os.Getenv("HTTPS_PROXY")
+	if proxy != "" {
+		return proxy
+	}
+
+	return os.Getenv("HTTP_PROXY")
+}
+
+func getProxyCertPath() string {
+	return config.GetProxyCertPath()
+}
+
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
@@ -278,8 +314,9 @@ func newGRPCReporter() reporter {
 	opts = append(opts, WithSkipVerify(config.GetSkipVerify()))
 	opts = append(opts, WithMaxReqBytes(config.ReporterOpts().GetMaxReqBytes()))
 
-	if proxy := config.GetProxy(); proxy != "" {
+	if proxy := getProxy(); proxy != "" {
 		opts = append(opts, WithProxy(proxy))
+		opts = append(opts, WithProxyCertPath(getProxyCertPath()))
 	}
 
 	// create connection object for events client and metrics client
@@ -501,6 +538,7 @@ func (c *grpcConnection) connect() error {
 		Certificate:        c.certificate,
 		Address:            c.address,
 		Proxy:              c.proxy,
+		ProxyCertPath:      c.proxyTLSCertPath,
 	})
 	if err != nil {
 		return errors.Wrap(err, "failed to connect to target")
@@ -1258,6 +1296,7 @@ type DialParams struct {
 	Certificate        []byte
 	Address            string
 	Proxy              string
+	ProxyCertPath      string
 }
 
 // DefaultDialer implements the Dialer interface to provide the default dialing
@@ -1292,10 +1331,114 @@ func (d *DefaultDialer) Dial(p DialParams) (*grpc.ClientConn, error) {
 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
 	if p.Proxy != "" {
-		// TODO
+		opts = append(opts, grpc.WithContextDialer(newGRPCProxyDialer(p)))
 	}
 	return grpc.Dial(p.Address, opts...)
 }
+
+func newGRPCProxyDialer(p DialParams) func(context.Context, string) (net.Conn, error) {
+	return func(ctx context.Context, addr string) (conn net.Conn, err error) {
+		defer func() {
+			if err != nil && conn != nil {
+				conn.Close()
+			}
+		}()
+
+		proxy, err := url.Parse(p.Proxy)
+		if err != nil {
+			return nil, errors.Wrap(err, "error parsing the proxy url")
+		}
+
+		if proxy.Scheme == "https" {
+			cert, err := ioutil.ReadFile(p.ProxyCertPath)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to load proxy cert")
+			}
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(cert)
+
+			// No mutual TLS for now
+			tlsConfig := tls.Config{RootCAs: caCertPool, InsecureSkipVerify: true}
+			conn, err = tls.Dial("tcp", proxy.Host, &tlsConfig)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to dial the https proxy")
+			}
+		} else if proxy.Scheme == "http" {
+			conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", proxy.Host)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to dial the http proxy")
+			}
+		} else {
+			return nil, fmt.Errorf("proxy scheme not supported: %s", proxy.Scheme)
+		}
+
+		return doHTTPConnectHandshake(ctx, conn, addr, proxy)
+	}
+}
+
+// doHTTPConnectHandshake is a copy of the function in google.golang.org/proxy.go
+func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr string, proxyURL *url.URL) (_ net.Conn, err error) {
+	req := &http.Request{
+		Method: http.MethodConnect,
+		URL:    &url.URL{Host: backendAddr},
+		Header: map[string][]string{"User-Agent": {grpcUA}},
+	}
+	if t := proxyURL.User; t != nil {
+		u := t.Username()
+		p, _ := t.Password()
+		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
+	}
+
+	if err := sendHTTPRequest(ctx, req, conn); err != nil {
+		return nil, fmt.Errorf("failed to write the HTTP request: %v", err)
+	}
+
+	r := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(r, req)
+	if err != nil {
+		return nil, fmt.Errorf("reading server HTTP response: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		dump, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
+		}
+		return nil, fmt.Errorf("failed to do connect handshake, response: %q", dump)
+	}
+
+	return &bufConn{Conn: conn, r: r}, nil
+}
+
+// sendHTTPRequest is a copy of the function in google.golang.org/proxy.go
+func sendHTTPRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
+	req = req.WithContext(ctx)
+	if err := req.Write(conn); err != nil {
+		return fmt.Errorf("failed to write the HTTP request: %v", err)
+	}
+	return nil
+}
+
+// bufConn is a copy of the struct in google.golang.org/proxy.go
+type bufConn struct {
+	net.Conn
+	r io.Reader
+}
+
+// Read is a copy of the method in google.golang.org/proxy.go
+func (c *bufConn) Read(b []byte) (int, error) {
+	return c.r.Read(b)
+}
+
+// basicAuth is a copy of the function in google.golang.org/proxy.go
+func basicAuth(username, password string) string {
+	auth := username + ":" + password
+	return base64.StdEncoding.EncodeToString([]byte(auth))
+}
+
+// The constants below are copied from the gRPC-go library
+const proxyAuthHeaderKey = "Proxy-Authorization"
+const grpcUA = "grpc-go/" + grpc.Version
 
 func printRPCMsg(m Method) {
 	if log.Level() > log.DEBUG {
