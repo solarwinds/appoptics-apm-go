@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -267,17 +266,7 @@ const (
 )
 
 func getProxy() string {
-	proxy := config.GetProxy()
-	if proxy != "" {
-		return proxy
-	}
-
-	proxy = os.Getenv("HTTPS_PROXY")
-	if proxy != "" {
-		return proxy
-	}
-
-	return os.Getenv("HTTP_PROXY")
+	return config.GetProxy()
 }
 
 func getProxyCertPath() string {
