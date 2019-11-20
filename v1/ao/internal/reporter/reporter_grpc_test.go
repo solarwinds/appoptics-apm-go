@@ -3,17 +3,23 @@
 package reporter
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -132,4 +138,99 @@ func (s *TestGRPCServer) Ping(ctx context.Context, req *pb.PingRequest) (*pb.Mes
 	fmt.Printf("TestGRPCServer.Ping with APIKey: %s\n", req.ApiKey)
 	s.pings++
 	return &pb.MessageResult{Result: pb.ResultCode_OK}, nil
+}
+
+// TestProxyServer is a simple proxy server prototype which supports http, https and socks5.
+// It's not production-ready and should only be used for tests.
+type TestProxyServer struct {
+	url       *url.URL
+	pemFile   string
+	keyFile   string
+	closeFunc func() error
+}
+
+func NewTestProxyServer(rawUrl string, pem, key string) (*TestProxyServer, error) {
+	u, err := url.Parse(rawUrl)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create test proxy server")
+	}
+	return &TestProxyServer{url: u, pemFile: pem, keyFile: key}, nil
+}
+
+func (p *TestProxyServer) Start() error {
+	srv := &http.Server{Addr: p.url.Host, Handler: http.HandlerFunc(p.proxyHttpHandler)}
+
+	closeFunc := func() error {
+		return srv.Close()
+	}
+	switch p.url.Scheme {
+	case "http":
+		go srv.ListenAndServe()
+		p.closeFunc = closeFunc
+	case "https":
+		go srv.ListenAndServeTLS(p.pemFile, p.keyFile)
+		p.closeFunc = closeFunc
+	// TODO: case "socks5":
+	default:
+		panic(fmt.Sprintf("Unsupported proxy type: %s", p.url.Scheme))
+	}
+
+	return nil
+}
+
+func (p *TestProxyServer) Stop() error {
+	if p.closeFunc != nil {
+		return p.closeFunc()
+	}
+	return errors.New("no close function found")
+}
+
+// Ref: https://medium.com/@mlowicki/http-s-proxy-in-golang-in-less-than-100-lines-of-code-6a51c2f2c38c
+func (p *TestProxyServer) proxyHttpHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodConnect {
+		panic("CONNECT only, please")
+	}
+
+	r.Header.Add("Authorization", r.Header.Get("Proxy-Authorization")) // a dirty hack
+	user, pwd, ok := r.BasicAuth()
+	expectedUser := p.url.User.Username()
+	expectedPwd, _ := p.url.User.Password()
+
+	if !ok || subtle.ConstantTimeCompare([]byte(user), []byte(expectedUser)) != 1 ||
+		subtle.ConstantTimeCompare([]byte(pwd), []byte(expectedPwd)) != 1 {
+		w.Header().Set("WWW-Authenticate", `Basic realm="wrong auth"`)
+		w.WriteHeader(401)
+		w.Write([]byte("Unauthorised.\n"))
+		return
+	}
+
+	serverConn, err := net.DialTimeout("tcp", r.Host, 1*time.Second)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "Hijacking failed", http.StatusInternalServerError)
+		return
+	}
+	clientConn, _, err := hj.Hijack()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	go forward(serverConn, clientConn)
+	go forward(clientConn, serverConn)
+}
+
+func forward(dst io.WriteCloser, src io.ReadCloser) {
+	defer func() {
+		dst.Close()
+		src.Close()
+	}()
+	io.Copy(dst, src)
 }

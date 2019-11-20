@@ -1387,7 +1387,7 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 	if err != nil {
 		return nil, fmt.Errorf("reading server HTTP response: %v", err)
 	}
-	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		dump, err := httputil.DumpResponse(resp, true)
 		if err != nil {
