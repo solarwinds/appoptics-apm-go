@@ -209,10 +209,7 @@ func (p *TestProxyServer) proxyHttpHandler(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
+
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "Hijacking failed", http.StatusInternalServerError)
@@ -221,7 +218,9 @@ func (p *TestProxyServer) proxyHttpHandler(w http.ResponseWriter, r *http.Reques
 	clientConn, _, err := hj.Hijack()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	clientConn.Write([]byte("HTTP/1.0 200 OK\r\n\r\n"))
 
 	go forward(serverConn, clientConn)
 	go forward(clientConn, serverConn)
