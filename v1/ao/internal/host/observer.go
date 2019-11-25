@@ -4,6 +4,7 @@ package host
 
 import (
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -158,8 +159,21 @@ func getAWSMeta(url string) (meta string) {
 		return
 	}
 	// Fetch it from the specified URL if the cache is uninitialized or no
-	// cache at all.
-	client := http.Client{Timeout: time.Millisecond * time.Duration(timeout)}
+	// cache at all. This request requires no proxy (and shouldn't).
+	t := &http.Transport{
+		Proxy: nil,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	client := http.Client{Transport: t, Timeout: time.Millisecond * time.Duration(timeout)}
 	resp, err := client.Get(url)
 	if err != nil {
 		log.Debugf("Failed to get AWS metadata from %s", url)
