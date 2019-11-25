@@ -1,7 +1,6 @@
 language: go
 
 go:
-  - "1.10"
   - "1.11"
   - "1.12"
   - "1.13"
@@ -48,4 +47,4 @@ script:
   - gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/metrics/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
 
 after_success:
-  - if [[ $TRAVIS_GO_VERSION == 1.12 ]]; then bash <(curl -s https://codecov.io/bash); fi
+  - if [[ $TRAVIS_GO_VERSION == 1.13 ]]; then bash <(curl -s https://codecov.io/bash); fi
