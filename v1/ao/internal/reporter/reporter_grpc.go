@@ -1361,24 +1361,24 @@ func newGRPCProxyDialer(p DialParams) func(context.Context, string) (net.Conn, e
 			return nil, fmt.Errorf("proxy scheme not supported: %s", proxy.Scheme)
 		}
 
-		return doHTTPConnectHandshake(ctx, conn, addr, proxy)
+		return httpConnectHandshake(ctx, conn, addr, proxy)
 	}
 }
 
-// doHTTPConnectHandshake is a copy of the function in google.golang.org/proxy.go
-func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr string, proxyURL *url.URL) (_ net.Conn, err error) {
+func httpConnectHandshake(ctx context.Context, conn net.Conn, server string, proxy *url.URL) (net.Conn, error) {
 	req := &http.Request{
 		Method: http.MethodConnect,
-		URL:    &url.URL{Host: backendAddr},
+		URL:    &url.URL{Host: server},
 		Header: map[string][]string{"User-Agent": {grpcUA}},
 	}
-	if t := proxyURL.User; t != nil {
+	if t := proxy.User; t != nil {
 		u := t.Username()
 		p, _ := t.Password()
-		req.Header.Add(proxyAuthHeaderKey, "Basic "+basicAuth(u, p))
+		req.Header.Add(proxyAuthHeader, "Basic "+basicAuth(u, p))
 	}
 
-	if err := sendHTTPRequest(ctx, req, conn); err != nil {
+	req = req.WithContext(ctx)
+	if err := req.Write(conn); err != nil {
 		return nil, fmt.Errorf("failed to write the HTTP request: %v", err)
 	}
 
@@ -1399,34 +1399,21 @@ func doHTTPConnectHandshake(ctx context.Context, conn net.Conn, backendAddr stri
 	return &bufConn{Conn: conn, r: r}, nil
 }
 
-// sendHTTPRequest is a copy of the function in google.golang.org/proxy.go
-func sendHTTPRequest(ctx context.Context, req *http.Request, conn net.Conn) error {
-	req = req.WithContext(ctx)
-	if err := req.Write(conn); err != nil {
-		return fmt.Errorf("failed to write the HTTP request: %v", err)
-	}
-	return nil
-}
-
-// bufConn is a copy of the struct in google.golang.org/proxy.go
 type bufConn struct {
 	net.Conn
 	r io.Reader
 }
 
-// Read is a copy of the method in google.golang.org/proxy.go
 func (c *bufConn) Read(b []byte) (int, error) {
 	return c.r.Read(b)
 }
 
-// basicAuth is a copy of the function in google.golang.org/proxy.go
 func basicAuth(username, password string) string {
 	auth := username + ":" + password
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-// The constants below are copied from the gRPC-go library
-const proxyAuthHeaderKey = "Proxy-Authorization"
+const proxyAuthHeader = "Proxy-Authorization"
 const grpcUA = "grpc-go/" + grpc.Version
 
 func printRPCMsg(m Method) {
