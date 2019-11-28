@@ -6,7 +6,6 @@ import (
 	"context"
 	"io"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/pkg/errors"
@@ -15,35 +14,6 @@ import (
 var (
 	errInvalidLogLevel = errors.New("invalid log level")
 )
-
-// The `const` variable which should not be updated on runtime.
-// These variables are accessed by every request in the critical path, which
-// makes it too expensive to be protected by a mutex.
-//
-// Do NOT modify it outside the init() function.
-var (
-	// This flag indicates whether the agent is disabled.
-	//
-	// It is initialized when the package is imported and won't be changed
-	// in runtime.
-	disabled = false
-)
-
-func init() {
-	initDisabled()
-}
-
-func initDisabled() {
-	disabled = config.GetDisabled()
-	if disabled {
-		log.Warningf("AppOptics agent is disabled.")
-	}
-}
-
-// Disabled indicates if the agent is disabled
-func Disabled() bool {
-	return disabled
-}
 
 // WaitForReady checks if the agent is ready. It returns true is the agent is ready,
 // or false if it is not.

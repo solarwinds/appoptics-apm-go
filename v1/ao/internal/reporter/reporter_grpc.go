@@ -226,32 +226,10 @@ var (
 	ErrReporterIsClosed       = errors.New("the reporter is closed")
 )
 
-const (
-	fullTextInvalidServiceKey = `AppOptics agent is disabled. Check errors below.
-
-	    **No valid service key (defined as token:service_name) is found.** 
-	
-	Please check AppOptics dashboard for your token and use a valid service name.
-	A valid service name should be shorter than 256 characters and contain only 
-	valid characters: [a-z0-9.:_-]. 
-
-	Also note that the agent may convert the service name by removing invalid 
-	characters and replacing spaces with hyphens, so the finalized service key 
-	may be different from your setting.`
-)
-
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
 func newGRPCReporter() reporter {
-	// service key is required, so bail out if not found
-	serviceKey := config.GetServiceKey()
-
-	if !config.IsValidServiceKey(serviceKey) {
-		log.Error(fullTextInvalidServiceKey)
-		return &nullReporter{}
-	}
-
 	// collector address override
 	addr := config.GetCollector()
 
@@ -292,7 +270,7 @@ func newGRPCReporter() reporter {
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
 		settingsTimeoutCheckInterval: grpcSettingsTimeoutCheckIntervalDefault,
 
-		serviceKey: serviceKey,
+		serviceKey: config.GetServiceKey(),
 
 		eventMessages:  make(chan []byte, 10000),
 		spanMessages:   make(chan metrics.SpanMessage, 10000),
@@ -306,7 +284,7 @@ func newGRPCReporter() reporter {
 
 	r.start()
 
-	log.Warningf("AppOptics reporter v%s is initialized. id: %v Go version: %s.",
+	log.Warningf("AppOptics APM reporter v%s is initialized. id: %v Go version: %s.",
 		utils.Version(), r.done, utils.GoVersion())
 	return r
 }
@@ -383,7 +361,7 @@ func (r *grpcReporter) Shutdown(ctx context.Context) error {
 			r.closeConns()
 			r.setReady(false)
 			host.Stop()
-			log.Warning("AppOptics agent is stopped.")
+			log.Warning("AppOptics APM agent is stopped.")
 		})
 	}
 	return err

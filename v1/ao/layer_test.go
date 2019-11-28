@@ -12,6 +12,12 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+const TestServiceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go"
+
+func init() {
+	os.Setenv("APPOPTICS_SERVICE_KEY", TestServiceKey)
+}
+
 func TestErrorSpec(t *testing.T) {
 	r := reporter.SetTestReporter()
 

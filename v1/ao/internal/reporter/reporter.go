@@ -93,8 +93,8 @@ func init() {
 func initReporter() {
 	r := config.GetReporterType()
 	if config.GetDisabled() {
+		log.Warning("AppOptics APM agent is disabled.")
 		r = "none"
-		log.Warning("AppOptics reporter is disabled.")
 	}
 	setGlobalReporter(r)
 }
@@ -114,6 +114,7 @@ func setGlobalReporter(reporterType string) {
 		globalReporter = udpNewReporter()
 	case "none":
 		globalReporter = newNullReporter()
+
 	}
 }
 
