@@ -277,14 +277,6 @@ func getProxyCertPath() string {
 //
 // returns	GRPC reporter object
 func newGRPCReporter() reporter {
-	// service key is required, so bail out if not found
-	serviceKey := config.GetServiceKey()
-
-	if !config.IsValidServiceKey(serviceKey) {
-		log.Error(fullTextInvalidServiceKey)
-		return &nullReporter{}
-	}
-
 	// collector address override
 	addr := config.GetCollector()
 
@@ -330,7 +322,7 @@ func newGRPCReporter() reporter {
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
 		settingsTimeoutCheckInterval: grpcSettingsTimeoutCheckIntervalDefault,
 
-		serviceKey: serviceKey,
+		serviceKey: config.GetServiceKey(),
 
 		eventMessages:  make(chan []byte, 10000),
 		spanMessages:   make(chan metrics.SpanMessage, 10000),
@@ -344,7 +336,7 @@ func newGRPCReporter() reporter {
 
 	r.start()
 
-	log.Warningf("AppOptics reporter v%s is initialized. id: %v Go version: %s.",
+	log.Warningf("AppOptics APM reporter v%s is initialized. id: %v Go version: %s.",
 		utils.Version(), r.done, utils.GoVersion())
 	return r
 }
@@ -421,7 +413,7 @@ func (r *grpcReporter) Shutdown(ctx context.Context) error {
 			r.closeConns()
 			r.setReady(false)
 			host.Stop()
-			log.Warning("AppOptics agent is stopped.")
+			log.Warning("AppOptics APM agent is stopped.")
 		})
 	}
 	return err

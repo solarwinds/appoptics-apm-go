@@ -61,7 +61,7 @@ const (
 var (
 	ErrUnsupportedFormat = errors.New("unsupported format")
 	ErrFileTooLarge      = errors.New("file size exceeds limit")
-	ErrInvalidServiceKey = errors.New("invalid service key")
+	ErrInvalidServiceKey = errors.New(fullTextInvalidServiceKey)
 )
 
 // Config is the struct to define the agent configuration. The configuration
@@ -245,11 +245,11 @@ func (s *SamplingConfig) ResetSampleRate() {
 
 func (s *SamplingConfig) validate() {
 	if ok := IsValidTracingMode(s.TracingMode); !ok {
-		log.Warning(InvalidEnv("TracingMode", string(s.TracingMode)))
+		log.Info(InvalidEnv("TracingMode", string(s.TracingMode)))
 		s.ResetTracingMode()
 	}
 	if ok := IsValidSampleRate(s.SampleRate); !ok {
-		log.Warning(InvalidEnv("SampleRate", strconv.Itoa(s.SampleRate)))
+		log.Info(InvalidEnv("SampleRate", strconv.Itoa(s.SampleRate)))
 		s.ResetSampleRate()
 	}
 }
@@ -310,40 +310,47 @@ func WithServiceKey(key string) Option {
 // If there is a fatal error (e.g., invalid config file), it will return a config
 // object with default values.
 func NewConfig(opts ...Option) *Config {
-	c := newConfig()
-	if err := c.Load(opts...); err != nil {
-		log.Error(errors.Wrap(err, "Failed to initialize configuration"))
-		c.reset()
-	}
-	return c
+	return newConfig().Load(opts...)
 }
+
+const (
+	fullTextInvalidServiceKey = `
+	    **No valid service key (defined as token:service_name) is found.** 
+	
+	Please check AppOptics dashboard for your token and use a valid service name.
+	A valid service name should be shorter than 256 characters and contain only 
+	valid characters: [a-z0-9.:_-]. 
+
+	Also note that the agent may convert the service name by removing invalid 
+	characters and replacing spaces with hyphens, so the finalized service key 
+	may be different from your setting.`
+)
 
 func (c *Config) validate() error {
 	if ok := IsValidHost(c.Collector); !ok {
-		log.Warning(InvalidEnv("Collector", c.Collector))
+		log.Info(InvalidEnv("Collector", c.Collector))
 		c.Collector = getFieldDefaultValue(c, "Collector")
 	}
 
 	c.ServiceKey = ToServiceKey(c.ServiceKey)
 	if ok := IsValidServiceKey(c.ServiceKey); !ok {
-		log.Warning(MissingEnv("ServiceKey"))
-		return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("\"%s\"", c.ServiceKey))
+		return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("service key: \"%s\"", c.ServiceKey))
 	}
 
 	if ok := IsValidFile(c.TrustedPath); !ok {
-		log.Warning(InvalidEnv("TrustedPath", c.TrustedPath))
+		log.Info(InvalidEnv("TrustedPath", c.TrustedPath))
 		c.TrustedPath = getFieldDefaultValue(c, "TrustedPath")
 	}
 
 	if ok := IsValidEc2MetadataTimeout(c.Ec2MetadataTimeout); !ok {
-		log.Warning(InvalidEnv("Ec2MetadataTimeout", strconv.Itoa(c.Ec2MetadataTimeout)))
+		log.Info(InvalidEnv("Ec2MetadataTimeout", strconv.Itoa(c.Ec2MetadataTimeout)))
 		t, _ := strconv.Atoi(getFieldDefaultValue(c, "Ec2MetadataTimeout"))
 		c.Ec2MetadataTimeout = t
 	}
 
 	c.ReporterType = strings.ToLower(strings.TrimSpace(c.ReporterType))
 	if ok := IsValidReporterType(c.ReporterType); !ok {
-		log.Warning(InvalidEnv("ReporterType", c.ReporterType))
+		log.Info(InvalidEnv("ReporterType", c.ReporterType))
 		c.ReporterType = getFieldDefaultValue(c, "ReporterType")
 	}
 
@@ -363,32 +370,42 @@ func (c *Config) validate() error {
 }
 
 // Load reads configuration from config file and environment variables.
-func (c *Config) Load(opts ...Option) error {
+func (c *Config) Load(opts ...Option) *Config {
 	c.Lock()
 	defer c.Unlock()
 
 	c.reset()
 
 	if err := c.loadConfigFile(); err != nil {
-		return errors.Wrap(err, "Load")
+		log.Warning(errors.Wrap(err, "config file load error").Error())
+		return c.resetThenDisable()
 	}
 	c.loadEnvs()
 
 	for _, opt := range opts {
 		opt(c)
 	}
-	if err := c.validate(); err != nil {
-		return errors.Wrap(err, "Load")
+
+	if c.Disabled {
+		return c.resetThenDisable()
 	}
 
-	c.printDelta()
+	if err := c.validate(); err != nil {
+		log.Warning(errors.Wrap(err, "validation error").Error())
+		return c.resetThenDisable()
+	}
 
-	return nil
+	return c
 }
 
-func (c *Config) printDelta() {
-	base := newConfig().reset()
-	log.Warningf("Accepted config items: \n%s", getDelta(base, c, "").sanitize())
+func (c *Config) resetThenDisable() *Config {
+	c.reset()
+	c.Disabled = true
+	return c
+}
+
+func (c *Config) GetDelta() *Delta {
+	return getDelta(newConfig().reset(), c, "").sanitize()
 }
 
 // DeltaItem defines a delta item  of two Config objects
@@ -586,7 +603,6 @@ func setField(c interface{}, prefix string, field reflect.StructField, val refle
 
 // loadEnvs loads environment variable values and update the Config object.
 func (c *Config) loadEnvs() {
-	log.Warning("Loading environment variables.")
 	loadEnvsInternal(c)
 }
 
@@ -674,7 +690,6 @@ func (c *Config) checkFileSize(path string) error {
 func (c *Config) loadConfigFile() error {
 	path := c.getConfigPath()
 	if path == "" {
-		log.Info("No config file found.")
 		return nil
 	}
 
@@ -685,7 +700,6 @@ func (c *Config) loadConfigFile() error {
 
 	switch ext {
 	case ".yml", ".yaml":
-		log.Warningf("Loading config file: %s", path)
 		return c.loadYaml(path)
 	default:
 		return errors.Wrap(ErrUnsupportedFormat, path)

@@ -425,7 +425,7 @@ func TestSQLSanitize(t *testing.T) {
 
 	for _, c := range cases {
 		_ = os.Setenv("APPOPTICS_SQL_SANITIZE", strconv.Itoa(c.mode))
-		assert.Nil(t, config.Load())
+		config.Load()
 		ss := initSanitizersMap()
 
 		assert.Equal(t, c.sanitizedSQL, sqlSanitize(ss, c.dbType, c.sql),

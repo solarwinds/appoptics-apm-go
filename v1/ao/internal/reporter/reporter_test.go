@@ -31,15 +31,13 @@ import (
 	mbson "gopkg.in/mgo.v2/bson"
 )
 
-const (
-	serviceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go"
-)
+const TestServiceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go"
 
 // this runs before init()
 var _ = func() (_ struct{}) {
 	periodicTasksDisabled = true
 
-	os.Setenv("APPOPTICS_SERVICE_KEY", serviceKey)
+	os.Setenv("APPOPTICS_SERVICE_KEY", TestServiceKey)
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 
 	config.Load()
@@ -253,7 +251,7 @@ func TestGRPCReporter(t *testing.T) {
 	assert.Equal(t, addr, r.eventConnection.address)
 	assert.Equal(t, addr, r.metricConnection.address)
 
-	assert.Equal(t, serviceKey, r.serviceKey)
+	assert.Equal(t, TestServiceKey, r.serviceKey)
 
 	assert.Equal(t, int32(grpcMetricIntervalDefault), r.collectMetricInterval)
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
@@ -703,7 +701,7 @@ func testProxy(t *testing.T, proxyUrl string) {
 	assert.Equal(t, addr, r.eventConnection.address)
 	assert.Equal(t, addr, r.metricConnection.address)
 
-	assert.Equal(t, serviceKey, r.serviceKey)
+	assert.Equal(t, TestServiceKey, r.serviceKey)
 
 	assert.Equal(t, int32(grpcMetricIntervalDefault), r.collectMetricInterval)
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)

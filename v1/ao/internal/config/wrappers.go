@@ -2,6 +2,8 @@
 
 package config
 
+import "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+
 var conf = NewConfig()
 
 // GetCollector is a wrapper to the method of the global config
@@ -69,3 +71,11 @@ var GetSQLSanitize = conf.GetSQLSanitize
 
 // Load reads the customized configurations
 var Load = conf.Load
+
+var GetDelta = conf.GetDelta
+
+func init() {
+	if !conf.GetDisabled() {
+		log.Warningf("Accepted config items: \n%s", conf.GetDelta())
+	}
+}

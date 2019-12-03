@@ -17,6 +17,13 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const TestServiceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go"
+
+func init() {
+	os.Setenv("APPOPTICS_SERVICE_KEY", TestServiceKey)
+	Load()
+}
+
 func TestLoadConfig(t *testing.T) {
 	key1 := "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
 	key2 := "bbbb315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
@@ -25,13 +32,13 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsPrependDomain, "true")
 	os.Setenv(envAppOpticsHistogramPrecision, "2")
 	os.Setenv(envAppOpticsServiceKey, key1)
-	os.Setenv(envAppOpticsDisabled, "true")
+	os.Setenv(envAppOpticsDisabled, "false")
 
 	c := NewConfig()
 	assert.Equal(t, "example.com:12345", c.GetCollector())
 	assert.Equal(t, true, c.PrependDomain)
 	assert.Equal(t, 2, c.Precision)
-	assert.Equal(t, true, c.Disabled)
+	assert.Equal(t, false, c.Disabled)
 
 	os.Setenv(envAppOpticsCollector, "test.abc:8080")
 	os.Setenv(envAppOpticsDisabled, "false")
@@ -182,7 +189,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_HISTOGRAM_PRECISION=4",
 		"APPOPTICS_EVENTS_FLUSH_INTERVAL=4",
 		"APPOPTICS_MAX_REQUEST_BYTES=4096000",
-		"APPOPTICS_DISABLED=true",
+		"APPOPTICS_DISABLED=false",
 		"APPOPTICS_SQL_SANITIZE=0",
 		"APPOPTICS_EC2_METADATA_TIMEOUT=2000",
 		"APPOPTICS_TRIGGER_TRACE=false",
@@ -221,7 +228,7 @@ func TestEnvsLoading(t *testing.T) {
 			MaxRetries:              20,
 		},
 		SQLSanitize:        0,
-		Disabled:           true,
+		Disabled:           false,
 		Ec2MetadataTimeout: 2000,
 		DebugLevel:         "warn",
 		TriggerTrace:       false,
@@ -269,7 +276,7 @@ func TestYamlConfig(t *testing.T) {
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
 		SQLSanitize:        2,
-		Disabled:           true,
+		Disabled:           false,
 		Ec2MetadataTimeout: 1500,
 		DebugLevel:         "info",
 		TriggerTrace:       false,
@@ -305,7 +312,7 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_HISTOGRAM_PRECISION=4",
 		"APPOPTICS_EVENTS_FLUSH_INTERVAL=4",
 		"APPOPTICS_MAX_REQUEST_BYTES=4096000",
-		"APPOPTICS_DISABLED=true",
+		"APPOPTICS_DISABLED=false",
 		"APPOPTICS_SQL_SANITIZE=3",
 	}
 	ClearEnvs()
@@ -346,7 +353,7 @@ func TestYamlConfig(t *testing.T) {
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
 		SQLSanitize:        3,
-		Disabled:           true,
+		Disabled:           false,
 		Ec2MetadataTimeout: 1500,
 		DebugLevel:         "info",
 		TriggerTrace:       false,
@@ -412,6 +419,7 @@ func TestInvalidConfig(t *testing.T) {
 	writers = append(writers, os.Stderr)
 
 	log.SetOutput(io.MultiWriter(writers...))
+	log.SetLevel(log.INFO)
 
 	defer func() {
 		log.SetOutput(os.Stderr)
