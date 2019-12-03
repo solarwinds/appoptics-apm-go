@@ -108,7 +108,7 @@ func NewTrace(spanName string) Trace {
 
 // NewTraceWithOptions creates a new trace with the provided options
 func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
-	if Disabled() || Closed() {
+	if Closed() {
 		return NewNullTrace()
 	}
 
