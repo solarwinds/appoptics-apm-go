@@ -638,3 +638,116 @@ func TestCustomMetrics(t *testing.T) {
 	assert.Equal(t, mIncremental["count"], 1)
 	assert.EqualValues(t, mbson.M{"hi": "globe"}, mIncremental["tags"])
 }
+
+// testProxy performs tests of http/https proxy.
+func testProxy(t *testing.T, proxyUrl string) {
+	addr := "localhost:4567"
+
+	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
+	os.Setenv("APPOPTICS_COLLECTOR", addr)
+	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
+
+	// set proxy
+	os.Setenv("APPOPTICS_PROXY", proxyUrl)
+	os.Setenv("APPOPTICS_PROXY_CERT_PATH", testCertFile)
+	proxy, err := NewTestProxyServer(proxyUrl, testCertFile, testKeyFile)
+	require.Nil(t, err)
+	require.Nil(t, proxy.Start())
+	defer proxy.Stop()
+
+	config.Load()
+
+	server := StartTestGRPCServer(t, addr)
+	time.Sleep(100 * time.Millisecond)
+
+	oldReporter := globalReporter
+	defer func() { globalReporter = oldReporter }()
+
+	setGlobalReporter("ssl")
+
+	require.IsType(t, &grpcReporter{}, globalReporter)
+
+	r := globalReporter.(*grpcReporter)
+
+	// Test WaitForReady
+	// The reporter is not ready when there is no default setting.
+	ctxTm1, cancel1 := context.WithTimeout(context.Background(), 0)
+	defer cancel1()
+	assert.False(t, r.WaitForReady(ctxTm1))
+
+	// The reporter becomes ready after it has got the default setting.
+	ready := make(chan bool, 1)
+	r.getSettings(ready)
+	ctxTm2, cancel2 := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel2()
+	assert.True(t, r.WaitForReady(ctxTm2))
+	assert.True(t, r.isReady())
+
+	ctx := newTestContext(t)
+	ev1, err := ctx.newEvent(LabelInfo, "layer1")
+	assert.NoError(t, err)
+	ev2, err := ctx.newEvent(LabelInfo, "layer2")
+	assert.NoError(t, err)
+
+	assert.Error(t, r.reportEvent(nil, nil))
+	assert.Error(t, r.reportEvent(ctx, nil))
+	assert.NoError(t, r.reportEvent(ctx, ev1))
+
+	assert.Error(t, r.reportStatus(nil, nil))
+	assert.Error(t, r.reportStatus(ctx, nil))
+	// time.Sleep(time.Second)
+	assert.NoError(t, r.reportStatus(ctx, ev2))
+
+	assert.Equal(t, addr, r.eventConnection.address)
+	assert.Equal(t, addr, r.metricConnection.address)
+
+	assert.Equal(t, TestServiceKey, r.serviceKey)
+
+	assert.Equal(t, int32(grpcMetricIntervalDefault), r.collectMetricInterval)
+	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
+	assert.Equal(t, grpcSettingsTimeoutCheckIntervalDefault, r.settingsTimeoutCheckInterval)
+
+	time.Sleep(time.Second)
+
+	// The reporter becomes not ready after the default setting has been deleted
+	removeSetting("")
+	r.checkSettingsTimeout(make(chan bool, 1))
+
+	assert.False(t, r.isReady())
+	ctxTm3, cancel3 := context.WithTimeout(context.Background(), 0)
+	assert.False(t, r.WaitForReady(ctxTm3))
+	defer cancel3()
+
+	// stop test reporter
+	server.Stop()
+
+	// assert data received
+	require.Len(t, server.events, 1)
+	assert.Equal(t, server.events[0].Encoding, pb.EncodingType_BSON)
+	require.Len(t, server.events[0].Messages, 1)
+
+	require.Len(t, server.status, 1)
+	assert.Equal(t, server.status[0].Encoding, pb.EncodingType_BSON)
+	require.Len(t, server.status[0].Messages, 1)
+
+	dec1, dec2 := mbson.M{}, mbson.M{}
+	err = mbson.Unmarshal(server.events[0].Messages[0], &dec1)
+	require.NoError(t, err)
+	err = mbson.Unmarshal(server.status[0].Messages[0], &dec2)
+	require.NoError(t, err)
+
+	assert.Equal(t, dec1["Layer"], "layer1")
+	assert.Equal(t, dec1["Hostname"], host.Hostname())
+	assert.Equal(t, dec1["Label"], LabelInfo)
+	assert.Equal(t, dec1["PID"], host.PID())
+
+	assert.Equal(t, dec2["Layer"], "layer2")
+}
+
+func TestHttpProxy(t *testing.T) {
+	testProxy(t, "http://usr:pwd@localhost:12345")
+}
+
+func TestHttpsProxy(t *testing.T) {
+	testProxy(t, "https://usr:pwd@localhost:12345")
+}
