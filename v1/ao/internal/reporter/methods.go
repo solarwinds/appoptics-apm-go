@@ -451,7 +451,7 @@ func resultRespStr(r *collector.MessageResult, err error) string {
 	if r == nil {
 		return errGotNilResp.Error()
 	}
-	return fmt.Sprintf("%v %s", r.Result, r.Arg)
+	return fmt.Sprintf("%v %s %s", r.Result, r.Arg, r.Warning)
 }
 
 func settingsRespStr(r *collector.SettingsResult, err error) string {
@@ -461,7 +461,7 @@ func settingsRespStr(r *collector.SettingsResult, err error) string {
 	if r == nil {
 		return errGotNilResp.Error()
 	}
-	return fmt.Sprintf("%v %s", r.Result, r.Arg)
+	return fmt.Sprintf("%v %s %s", r.Result, r.Arg, r.Warning)
 }
 
 // getMsgsBytes is a internal helper function to calculate the total bytes of a

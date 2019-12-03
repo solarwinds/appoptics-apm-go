@@ -830,7 +830,11 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	case errInvalidServiceKey:
 		r.ShutdownNow()
 	case nil:
-		log.Info(method.CallSummary())
+		logger := log.Info
+		if method.Resp.Warning != "" {
+			logger = log.Warning
+		}
+		logger(method.CallSummary())
 		r.updateSettings(method.Resp)
 	default:
 		log.Infof("getSettings: %s", err)
@@ -1072,8 +1076,8 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 		if c.isActive() {
 			ctx, cancel := context.WithTimeout(context.Background(), grpcCtxTimeout)
 			if m.RequestSize() > c.maxReqBytes {
-				m := fmt.Sprintf("%d|%d", m.RequestSize(), c.maxReqBytes)
-				err = errors.Wrap(errRequestTooBig, m)
+				v := fmt.Sprintf("%d|%d", m.RequestSize(), c.maxReqBytes)
+				err = errors.Wrap(errRequestTooBig, v)
 			} else {
 				err = m.Call(ctx, c.client)
 			}
