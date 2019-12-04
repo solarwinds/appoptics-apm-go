@@ -118,6 +118,11 @@ type Config struct {
 
 	// The flag for trigger trace. It's enabled by default.
 	TriggerTrace bool `yaml:"TriggerTrace" env:"APPOPTICS_TRIGGER_TRACE" default:"true"`
+
+	// Url of the HTTP/HTTPS proxy in the format of "scheme://<username>:<password>@<host>:<port>"
+	Proxy string `yaml:"Proxy,omitempty" env:"APPOPTICS_PROXY"`
+
+	ProxyCertPath string `yaml:"ProxyCertPath" env:"APPOPTICS_PROXY_CERT_PATH"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -819,6 +824,20 @@ func (c *Config) GetTriggerTrace() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.TriggerTrace
+}
+
+// GetProxy returns the HTTP/HTTPS proxy url
+func (c *Config) GetProxy() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.Proxy
+}
+
+// GetProxyCertPath returns the proxy's certificate path
+func (c *Config) GetProxyCertPath() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.ProxyCertPath
 }
 
 // GetTransactionFiltering returns the transaction filtering config

@@ -150,6 +150,8 @@ func TestConfigInit(t *testing.T) {
 		Ec2MetadataTimeout: 1000,
 		DebugLevel:         "warn",
 		TriggerTrace:       true,
+		Proxy:              "",
+		ProxyCertPath:      "",
 	}
 	assert.Equal(t, c, &defaultC)
 }
@@ -191,6 +193,8 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_SQL_SANITIZE=0",
 		"APPOPTICS_EC2_METADATA_TIMEOUT=2000",
 		"APPOPTICS_TRIGGER_TRACE=false",
+		"APPOPTICS_PROXY=http://usr/pwd@internal.proxy:3306",
+		"APPOPTICS_PROXY_CERT_PATH=./proxy.pem",
 	}
 	SetEnvs(envs)
 
@@ -228,6 +232,8 @@ func TestEnvsLoading(t *testing.T) {
 		Ec2MetadataTimeout: 2000,
 		DebugLevel:         "warn",
 		TriggerTrace:       false,
+		Proxy:              "http://usr/pwd@internal.proxy:3306",
+		ProxyCertPath:      "./proxy.pem",
 	}
 
 	c := NewConfig()
@@ -274,6 +280,8 @@ func TestYamlConfig(t *testing.T) {
 		Ec2MetadataTimeout: 1500,
 		DebugLevel:         "info",
 		TriggerTrace:       false,
+		Proxy:              "http://usr:pwd@internal.proxy:3306",
+		ProxyCertPath:      "./proxy.pem",
 	}
 
 	out, err := yaml.Marshal(&yamlConfig)
@@ -349,6 +357,8 @@ func TestYamlConfig(t *testing.T) {
 		Ec2MetadataTimeout: 1500,
 		DebugLevel:         "info",
 		TriggerTrace:       false,
+		Proxy:              "http://usr:pwd@internal.proxy:3306",
+		ProxyCertPath:      "./proxy.pem",
 	}
 
 	c = NewConfig()

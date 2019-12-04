@@ -3,11 +3,18 @@
 package reporter
 
 import (
+	"bufio"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -96,6 +103,10 @@ type grpcConnection struct {
 	lock               sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
 	queueStats         *metrics.EventQueueStats       // queue stats (reset on each metrics report cycle)
 	insecureSkipVerify bool
+
+	proxy            string
+	proxyTLSCertPath string
+
 	// atomicActive indicates if the underlying connection is active. It should
 	// be reconnected or redirected to a new address in case of inactive. The
 	// value 0 represents false and a value other than 0 (usually 1) means true
@@ -125,6 +136,20 @@ func WithCert(cert []byte) GrpcConnOpt {
 func WithSkipVerify(skip bool) GrpcConnOpt {
 	return func(c *grpcConnection) {
 		c.insecureSkipVerify = skip
+	}
+}
+
+// WithProxy assign the proxy url to the gRPC connection
+func WithProxy(proxy string) GrpcConnOpt {
+	return func(c *grpcConnection) {
+		c.proxy = proxy
+	}
+}
+
+// WithProxyCertPath assigns the proxy TLS certificate path to the gRPC connection
+func WithProxyCertPath(certPath string) GrpcConnOpt {
+	return func(c *grpcConnection) {
+		c.proxyTLSCertPath = certPath
 	}
 }
 
@@ -226,6 +251,28 @@ var (
 	ErrReporterIsClosed       = errors.New("the reporter is closed")
 )
 
+const (
+	fullTextInvalidServiceKey = `AppOptics agent is disabled. Check errors below.
+
+	    **No valid service key (defined as token:service_name) is found.** 
+	
+	Please check AppOptics dashboard for your token and use a valid service name.
+	A valid service name should be shorter than 256 characters and contain only 
+	valid characters: [a-z0-9.:_-]. 
+
+	Also note that the agent may convert the service name by removing invalid 
+	characters and replacing spaces with hyphens, so the finalized service key 
+	may be different from your setting.`
+)
+
+func getProxy() string {
+	return config.GetProxy()
+}
+
+func getProxyCertPath() string {
+	return config.GetProxyCertPath()
+}
+
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
@@ -247,6 +294,11 @@ func newGRPCReporter() reporter {
 
 	opts = append(opts, WithSkipVerify(config.GetSkipVerify()))
 	opts = append(opts, WithMaxReqBytes(config.ReporterOpts().GetMaxReqBytes()))
+
+	if proxy := getProxy(); proxy != "" {
+		opts = append(opts, WithProxy(proxy))
+		opts = append(opts, WithProxyCertPath(getProxyCertPath()))
+	}
 
 	// create connection object for events client and metrics client
 	eventConn, err1 := newGrpcConnection("events channel", addr, opts...)
@@ -466,6 +518,8 @@ func (c *grpcConnection) connect() error {
 		InsecureSkipVerify: c.insecureSkipVerify,
 		Certificate:        c.certificate,
 		Address:            c.address,
+		Proxy:              c.proxy,
+		ProxyCertPath:      c.proxyTLSCertPath,
 	})
 	if err != nil {
 		return errors.Wrap(err, "failed to connect to target")
@@ -1226,6 +1280,8 @@ type DialParams struct {
 	InsecureSkipVerify bool
 	Certificate        []byte
 	Address            string
+	Proxy              string
+	ProxyCertPath      string
 }
 
 // DefaultDialer implements the Dialer interface to provide the default dialing
@@ -1258,8 +1314,103 @@ func (d *DefaultDialer) Dial(p DialParams) (*grpc.ClientConn, error) {
 	}
 	creds := credentials.NewTLS(tlsConfig)
 
-	return grpc.Dial(p.Address, grpc.WithTransportCredentials(creds))
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
+	if p.Proxy != "" {
+		opts = append(opts, grpc.WithContextDialer(newGRPCProxyDialer(p)))
+	}
+	return grpc.Dial(p.Address, opts...)
 }
+
+func newGRPCProxyDialer(p DialParams) func(context.Context, string) (net.Conn, error) {
+	return func(ctx context.Context, addr string) (conn net.Conn, err error) {
+		defer func() {
+			if err != nil && conn != nil {
+				conn.Close()
+			}
+		}()
+
+		proxy, err := url.Parse(p.Proxy)
+		if err != nil {
+			return nil, errors.Wrap(err, "error parsing the proxy url")
+		}
+
+		if proxy.Scheme == "https" {
+			cert, err := ioutil.ReadFile(p.ProxyCertPath)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to load proxy cert")
+			}
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(cert)
+
+			// No mutual TLS for now
+			tlsConfig := tls.Config{RootCAs: caCertPool, InsecureSkipVerify: true}
+			conn, err = tls.Dial("tcp", proxy.Host, &tlsConfig)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to dial the https proxy")
+			}
+		} else if proxy.Scheme == "http" {
+			conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", proxy.Host)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to dial the http proxy")
+			}
+		} else {
+			return nil, fmt.Errorf("proxy scheme not supported: %s", proxy.Scheme)
+		}
+
+		return httpConnectHandshake(ctx, conn, addr, proxy)
+	}
+}
+
+func httpConnectHandshake(ctx context.Context, conn net.Conn, server string, proxy *url.URL) (net.Conn, error) {
+	req := &http.Request{
+		Method: http.MethodConnect,
+		URL:    &url.URL{Host: server},
+		Header: map[string][]string{"User-Agent": {grpcUA}},
+	}
+	if t := proxy.User; t != nil {
+		u := t.Username()
+		p, _ := t.Password()
+		req.Header.Add(proxyAuthHeader, "Basic "+basicAuth(u, p))
+	}
+
+	req = req.WithContext(ctx)
+	if err := req.Write(conn); err != nil {
+		return nil, fmt.Errorf("failed to write the HTTP request: %v", err)
+	}
+
+	r := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(r, req)
+	if err != nil {
+		return nil, fmt.Errorf("reading server HTTP response: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		dump, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to do connect handshake, status code: %s", resp.Status)
+		}
+		return nil, fmt.Errorf("failed to do connect handshake, response: %q", dump)
+	}
+
+	return &bufConn{Conn: conn, r: r}, nil
+}
+
+type bufConn struct {
+	net.Conn
+	r io.Reader
+}
+
+func (c *bufConn) Read(b []byte) (int, error) {
+	return c.r.Read(b)
+}
+
+func basicAuth(username, password string) string {
+	auth := username + ":" + password
+	return base64.StdEncoding.EncodeToString([]byte(auth))
+}
+
+const proxyAuthHeader = "Proxy-Authorization"
+const grpcUA = "grpc-go/" + grpc.Version
 
 func printRPCMsg(m Method) {
 	if log.Level() > log.DEBUG {
