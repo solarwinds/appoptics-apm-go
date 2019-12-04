@@ -336,8 +336,7 @@ func newGRPCReporter() reporter {
 
 	r.start()
 
-	log.Warningf("AppOptics APM reporter v%s is initialized. id: %v Go version: %s.",
-		utils.Version(), r.done, utils.GoVersion())
+	log.Infof("The AppOptics APM reporter (%v) is initialized.", r.done)
 	return r
 }
 
@@ -921,7 +920,8 @@ func (r *grpcReporter) updateSettings(settings *collector.SettingsResult) {
 	if !r.isReady() && hasDefaultSetting() {
 		r.cond.L.Lock()
 		r.setReady(true)
-		log.Warningf("AppOptics agent (%v) is ready.", r.done)
+		log.Warningf("Got dynamic settings. The AppOptics APM agent (%v, v%v, go%v) is ready.",
+			r.done, utils.Version(), utils.GoVersion())
 		r.cond.Broadcast()
 		r.cond.L.Unlock()
 	}
