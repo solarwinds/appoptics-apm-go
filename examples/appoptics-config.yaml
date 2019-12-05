@@ -20,3 +20,5 @@ ServiceKey: your_service_key:your_service_name  # - env var: APPOPTICS_SERVICE_K
 # Ec2MetadataTimeout: 1000 # - env var: APPOPTICS_EC2_METADATA_TIMEOUT
 # DebugLevel: warn  # - env var: APPOPTICS_DEBUG_LEVEL
 # TriggerTrace: true # - env var: APPOPTICS_TRIGGER_TRACE
+# Proxy: https://proxy_user:pwd@proxy_host:3307 # - env var: APPOPTICS_PROXY
+# ProxyCertPath: /proxy.crt # - env var: APPOPTICS_PROXY_CERT_PATH
