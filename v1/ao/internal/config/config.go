@@ -43,7 +43,6 @@ const (
 	envAppOpticsCollector           = "APPOPTICS_COLLECTOR"
 	envAppOpticsServiceKey          = "APPOPTICS_SERVICE_KEY"
 	envAppOpticsTrustedPath         = "APPOPTICS_TRUSTEDPATH"
-	envAppOpticsCollectorUDP        = "APPOPTICS_COLLECTOR_UDP"
 	envAppOpticsReporter            = "APPOPTICS_REPORTER"
 	envAppOpticsTracingMode         = "APPOPTICS_TRACING_MODE"
 	envAppOpticsSampleRate          = "APPOPTICS_SAMPLE_RATE"
@@ -79,10 +78,7 @@ type Config struct {
 	// The file path of the cert file for gRPC connection
 	TrustedPath string `yaml:"TrustedPath,omitempty" env:"APPOPTICS_TRUSTEDPATH"`
 
-	// The host and port of the UDP collector
-	CollectorUDP string `yaml:"CollectorUDP,omitempty" env:"APPOPTICS_COLLECTOR_UDP"`
-
-	// The reporter type, ssl or udp
+	// The reporter type, ssl or none
 	ReporterType string `yaml:"ReporterType,omitempty" env:"APPOPTICS_REPORTER" default:"ssl"`
 
 	Sampling *SamplingConfig `yaml:"Sampling,omitempty"`
@@ -732,13 +728,6 @@ func (c *Config) GetReporterType() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.ReporterType
-}
-
-// GetCollectorUDP returns the UDP collector host
-func (c *Config) GetCollectorUDP() string {
-	c.RLock()
-	defer c.RUnlock()
-	return c.CollectorUDP
 }
 
 // GetTracingMode returns the local tracing mode

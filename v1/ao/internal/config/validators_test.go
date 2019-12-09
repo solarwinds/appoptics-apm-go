@@ -67,9 +67,7 @@ func TestIsValidTracingMode(t *testing.T) {
 }
 
 func TestIsValidReporterType(t *testing.T) {
-	assert.Equal(t, true, IsValidReporterType("udp"))
 	assert.Equal(t, true, IsValidReporterType("ssl"))
-	assert.Equal(t, true, IsValidReporterType("Udp"))
 	assert.Equal(t, false, IsValidReporterType("xxx"))
 	assert.Equal(t, false, IsValidReporterType(""))
 	assert.Equal(t, false, IsValidReporterType("udpabc"))

@@ -5,7 +5,6 @@ package reporter
 import (
 	"context"
 	"io"
-	"net"
 	"os"
 	"reflect"
 	"testing"
@@ -135,67 +134,10 @@ func TestNullReporter(t *testing.T) {
 
 }
 
-// ========================= UDP Reporter =============================
-func startTestUDPListener(t *testing.T, bufs *[][]byte, numbufs int) chan struct{} {
-	done := make(chan struct{})
-	assert.IsType(t, &udpReporter{}, globalReporter)
-
-	addr, err := net.ResolveUDPAddr("udp4", os.Getenv("APPOPTICS_COLLECTOR_UDP"))
-	assert.NoError(t, err)
-	conn, err := net.ListenUDP("udp4", addr)
-	assert.NoError(t, err)
-	go func(numBufs int) {
-		defer conn.Close()
-		for i := 0; i < numBufs; i++ {
-			buf := make([]byte, 128*1024)
-			n, _, err := conn.ReadFromUDP(buf)
-			t.Logf("Got UDP buf len %v err %v", n, err)
-			if err != nil {
-				t.Logf("UDP listener got err, quitting %v", err)
-				break
-			}
-			*bufs = append(*bufs, buf[0:n])
-		}
-		close(done)
-		t.Logf("Closing UDP listener, got %d bufs", numBufs)
-	}(numbufs)
-	return done
-}
-
-func assertUDPMode(t *testing.T) {
-	// for UDP mode run test like this:
-	// APPOPTICS_REPORTER=udp go test -v
-
-	if os.Getenv("APPOPTICS_REPORTER") != "udp" {
-		t.Skip("not running in UDP mode, skipping.")
-	}
-}
-
-func TestUDPReporter(t *testing.T) {
-	assertUDPMode(t)
-	assert.IsType(t, &udpReporter{}, globalReporter)
-
-	r := globalReporter.(*udpReporter)
-	ctx := newTestContext(t)
-	ev1, _ := ctx.newEvent(LabelInfo, testLayer)
-	ev2, _ := ctx.newEvent(LabelInfo, testLayer)
-
-	var bufs [][]byte
-	startTestUDPListener(t, &bufs, 2)
-
-	assert.Error(t, r.reportEvent(nil, nil))
-	assert.Error(t, r.reportEvent(ctx, nil))
-	assert.NoError(t, r.reportEvent(ctx, ev1))
-
-	assert.Error(t, r.reportStatus(nil, nil))
-	assert.Error(t, r.reportStatus(ctx, nil))
-	assert.NoError(t, r.reportStatus(ctx, ev2))
-}
-
 // ========================= GRPC Reporter =============================
 
 func assertSSLMode(t *testing.T) {
-	if os.Getenv("APPOPTICS_REPORTER") == "udp" {
+	if os.Getenv("APPOPTICS_REPORTER") != "ssl" {
 		t.Skip("not running in SSL mode, skipping.")
 	}
 }

@@ -46,16 +46,6 @@ func assertInitMessage(t *testing.T, bufs [][]byte) {
 	})
 }
 
-func TestInitMessageUDP(t *testing.T) {
-	assertUDPMode(t)
-
-	var bufs [][]byte
-	done := startTestUDPListener(t, &bufs, 2)
-	sendInitMessage()
-	<-done
-	assertInitMessage(t, bufs)
-}
-
 func TestTokenBucket(t *testing.T) {
 	b := newTokenBucket(5, 2)
 	c := b

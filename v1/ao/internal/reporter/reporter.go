@@ -107,14 +107,11 @@ func setGlobalReporter(reporterType string) {
 
 	switch strings.ToLower(reporterType) {
 	case "ssl":
-		fallthrough // using fallthrough since the SSL reporter (gRPC) is our default reporter
-	default:
 		globalReporter = newGRPCReporter()
-	case "udp":
-		globalReporter = udpNewReporter()
 	case "none":
+		fallthrough
+	default:
 		globalReporter = newNullReporter()
-
 	}
 }
 
