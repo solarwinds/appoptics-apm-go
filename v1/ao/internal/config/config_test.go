@@ -59,7 +59,6 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsHostnameAlias, "test")
 	os.Setenv(envAppOpticsInsecureSkipVerify, "false")
 	os.Setenv(envAppOpticsTrustedPath, "test.crt")
-	os.Setenv(envAppOpticsCollectorUDP, "hello.udp")
 	os.Setenv(envAppOpticsDisabled, "invalidValue")
 
 	c.Load()
@@ -67,7 +66,6 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "test", c.GetHostAlias())
 	assert.Equal(t, false, c.GetSkipVerify())
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
-	assert.Equal(t, "hello.udp", c.GetCollectorUDP())
 	assert.Equal(t, false, c.GetDisabled())
 }
 
@@ -120,7 +118,6 @@ func TestConfigInit(t *testing.T) {
 		Collector:    defaultSSLCollector,
 		ServiceKey:   "",
 		TrustedPath:  "",
-		CollectorUDP: "",
 		ReporterType: "ssl",
 		Sampling: &SamplingConfig{
 			TracingMode:           "enabled",
@@ -179,8 +176,6 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_COLLECTOR=collector.test.com",
 		"APPOPTICS_SERVICE_KEY=ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
 		"APPOPTICS_TRUSTEDPATH=/collector.crt",
-		"APPOPTICS_COLLECTOR_UDP=udp.test.com",
-		"APPOPTICS_REPORTER=udp",
 		"APPOPTICS_TRACING_MODE=never",
 		"APPOPTICS_SAMPLE_RATE=1000",
 		"APPOPTICS_PREPEND_DOMAIN=true",
@@ -202,8 +197,7 @@ func TestEnvsLoading(t *testing.T) {
 		Collector:    "collector.test.com",
 		ServiceKey:   "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
 		TrustedPath:  "/collector.crt",
-		CollectorUDP: "udp.test.com",
-		ReporterType: "udp",
+		ReporterType: "ssl",
 		Sampling: &SamplingConfig{
 			TracingMode:           "disabled",
 			tracingModeConfigured: true,
@@ -246,8 +240,7 @@ func TestYamlConfig(t *testing.T) {
 		Collector:    "yaml.test.com",
 		ServiceKey:   "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189218:go",
 		TrustedPath:  "/yaml-collector.crt",
-		CollectorUDP: "yamludp.test.com",
-		ReporterType: "udp",
+		ReporterType: "ssl",
 		Sampling: &SamplingConfig{
 			TracingMode:           "disabled",
 			tracingModeConfigured: true,
@@ -302,8 +295,7 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_COLLECTOR=collector.test.com",
 		"APPOPTICS_SERVICE_KEY=ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
 		"APPOPTICS_TRUSTEDPATH=/collector.crt",
-		"APPOPTICS_COLLECTOR_UDP=udp.test.com",
-		"APPOPTICS_REPORTER=udp",
+		"APPOPTICS_REPORTER=ssl",
 		"APPOPTICS_TRACING_MODE=never",
 		"APPOPTICS_SAMPLE_RATE=1000",
 		"APPOPTICS_PREPEND_DOMAIN=true",
@@ -323,8 +315,7 @@ func TestYamlConfig(t *testing.T) {
 		Collector:    "collector.test.com",
 		ServiceKey:   "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
 		TrustedPath:  "/collector.crt",
-		CollectorUDP: "udp.test.com",
-		ReporterType: "udp",
+		ReporterType: "ssl",
 		Sampling: &SamplingConfig{
 			TracingMode:           "disabled",
 			tracingModeConfigured: true,
@@ -429,7 +420,6 @@ func TestInvalidConfig(t *testing.T) {
 		Collector:    "",
 		ServiceKey:   "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
 		TrustedPath:  "",
-		CollectorUDP: "",
 		ReporterType: "invalid",
 		Sampling: &SamplingConfig{
 			TracingMode:           "disabled",
