@@ -5,7 +5,6 @@ package metrics
 import (
 	"os"
 	"runtime"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -425,12 +424,44 @@ type MetricOptions struct {
 	Tags    map[string]string
 }
 
+func addRuntimeMetrics(bbuf *bson.Buffer, index *int) {
+	// category runtime
+	addMetricsValue(bbuf, index, "trace.go.runtime.NumGoroutine", runtime.NumGoroutine())
+	addMetricsValue(bbuf, index, "trace.go.runtime.NumCgoCall", runtime.NumCgoCall())
+
+	var mem runtime.MemStats
+	host.Mem(&mem)
+	// category gc
+	addMetricsValue(bbuf, index, "trace.go.gc.LastGC", int64(mem.LastGC)) // TODO may overflow
+	addMetricsValue(bbuf, index, "trace.go.gc.NextGC", int64(mem.NextGC))
+	addMetricsValue(bbuf, index, "trace.go.gc.PauseTotalNs", int64(mem.PauseTotalNs))
+	addMetricsValue(bbuf, index, "trace.go.gc.NumGC", int64(mem.NumGC))
+	addMetricsValue(bbuf, index, "trace.go.gc.NumForcedGC", int64(mem.NumForcedGC))
+	addMetricsValue(bbuf, index, "trace.go.gc.GCCPUFraction", mem.GCCPUFraction)
+
+	// category memory
+	addMetricsValue(bbuf, index, "trace.go.memory.Alloc", int64(mem.Alloc))
+	addMetricsValue(bbuf, index, "trace.go.memory.TotalAlloc", int64(mem.TotalAlloc))
+	addMetricsValue(bbuf, index, "trace.go.memory.Sys", int64(mem.Sys))
+	addMetricsValue(bbuf, index, "trace.go.memory.Lookups", int64(mem.Lookups))
+	addMetricsValue(bbuf, index, "trace.go.memory.Mallocs", int64(mem.Mallocs))
+	addMetricsValue(bbuf, index, "trace.go.memory.Frees", int64(mem.Frees))
+	addMetricsValue(bbuf, index, "trace.go.memory.HeapAlloc", int64(mem.HeapAlloc))
+	addMetricsValue(bbuf, index, "trace.go.memory.HeapSys", int64(mem.HeapSys))
+	addMetricsValue(bbuf, index, "trace.go.memory.HeapIdle", int64(mem.HeapIdle))
+	addMetricsValue(bbuf, index, "trace.go.memory.HeapInuse", int64(mem.HeapInuse))
+	addMetricsValue(bbuf, index, "trace.go.memory.HeapReleased", int64(mem.HeapReleased))
+	addMetricsValue(bbuf, index, "trace.go.memory.HeapObjects", int64(mem.HeapObjects))
+	addMetricsValue(bbuf, index, "trace.go.memory.StackInuse", int64(mem.StackInuse))
+	addMetricsValue(bbuf, index, "trace.go.memory.StackSys", int64(mem.StackSys))
+}
+
 // BuildBuiltinMetricsMessage generates a metrics message in BSON format with all the currently available values
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
 func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
-	rcs map[string]*RateCounts) []byte {
+	rcs map[string]*RateCounts, runtimeMetrics bool) []byte {
 	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)
@@ -454,25 +485,10 @@ func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
 
 	addHostMetrics(bbuf, &index)
 
-	// runtime stats
-	addMetricsValue(bbuf, &index, "JMX.type=threadcount,name=NumGoroutine", runtime.NumGoroutine())
-	var mem runtime.MemStats
-	host.Mem(&mem)
-	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Alloc", int64(mem.Alloc))
-	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.TotalAlloc", int64(mem.TotalAlloc))
-	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Sys", int64(mem.Sys))
-	addMetricsValue(bbuf, &index, "JMX.Memory:type=count,name=MemStats.Lookups", int64(mem.Lookups))
-	addMetricsValue(bbuf, &index, "JMX.Memory:type=count,name=MemStats.Mallocs", int64(mem.Mallocs))
-	addMetricsValue(bbuf, &index, "JMX.Memory:type=count,name=MemStats.Frees", int64(mem.Frees))
-	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Alloc", int64(mem.HeapAlloc))
-	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Sys", int64(mem.HeapSys))
-	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Idle", int64(mem.HeapIdle))
-	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Inuse", int64(mem.HeapInuse))
-	addMetricsValue(bbuf, &index, "JMX.Memory:MemStats.Heap.Released", int64(mem.HeapReleased))
-	addMetricsValue(bbuf, &index, "JMX.Memory:type=count,name=MemStats.Heap.Objects", int64(mem.HeapObjects))
-	var gc debug.GCStats
-	host.GC(&gc)
-	addMetricsValue(bbuf, &index, "JMX.type=count,name=GCStats.NumGC", gc.NumGC)
+	if runtimeMetrics {
+		// runtime stats
+		addRuntimeMetrics(bbuf, &index)
+	}
 
 	for _, measurement := range m.m {
 		addMeasurementToBSON(bbuf, &index, measurement)
