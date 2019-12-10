@@ -293,24 +293,13 @@ func main() {
 
 ### Configuration
 
-These environment variables may be set:
+The only environment variable you need to set before kicking off is the service key:
 
 | Variable Name        | Required           | Default  | Description |
 | -------------------- | ------------------ | -------- | ----------- |
-|APPOPTICS_SERVICE_KEY|Yes||The service key identifies the service being instrumented within your Organization. It should be in the form of ``<api token>:<service name>``.|
-|APPOPTICS_DEBUG_LEVEL|No|WARN|Logging level to adjust the logging verbosity. Increase the logging verbosity to one of the debug levels to get more detailed information. Possible values: DEBUG, INFO, WARN, ERROR|
-|APPOPTICS_HOSTNAME_ALIAS|No||A logical/readable hostname that can be used to easily identify the host|
-|APPOPTICS_TRACING_MODE|No|enabled|Mode "enabled" will instruct AppOptics to consider sampling every inbound request for tracing. Mode "disabled" will disable tracing, and will neither start nor continue traces.|
-|APPOPTICS_REPORTER|No|ssl|The reporter that will be used throughout the runtime of the app. Possible values: ssl, udp, none|
-|APPOPTICS_COLLECTOR|No|collector.appoptics.com:443|SSL collector endpoint address and port (only used if APPOPTICS_REPORTER = ssl).|
-|APPOPTICS_COLLECTOR_UDP|No|127.0.0.1:7831|UDP collector endpoint address and port (only used if APPOPTICS_REPORTER = udp).|
-|APPOPTICS_TRUSTEDPATH|No||Path to the certificate used to verify the collector endpoint.|
-|APPOPTICS_INSECURE_SKIP_VERIFY|No|true|Skip verification of the server's certificate chain and host name. Possible values: true, false|
-|APPOPTICS_PREPEND_DOMAIN|No|false|Prepend the domain name to the transaction name. Possible values: true, false|
-|APPOPTICS_DISABLED|No|false|Disable the agent. Possible values: true, false|
-|APPOPTICS_EC2_METADATA_TIMEOUT|No|1000|EC2 metadata retrieval timeout value in milliseconds. Setting to 0 effectively disables fetching from the metadata URL (not waiting), should only be used if not running on EC2 / Openstack and need to minimize agent start up time. Possible values: [0, 3000]|
+|APPOPTICS_SERVICE_KEY|Yes|N.A|The service key identifies the service being instrumented within your Organization. It should be in the form of ``<api token>:<service name>``.|
 
-For the up-to-date configuration items and descriptions, including YAML config file support in the upcoming version, please refer to our knowledge base website: https://docs.appoptics.com/kb/apm_tracing/go/configure/
+For the full list of the configuration items and descriptions, including YAML config file options, please refer to our knowledge base website: https://docs.appoptics.com/kb/apm_tracing/go/configure/
 
 ## Help and examples
 
