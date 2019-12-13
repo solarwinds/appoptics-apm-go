@@ -248,8 +248,7 @@ func TestGRPCReporter(t *testing.T) {
 	// time.Sleep(time.Second)
 	assert.NoError(t, r.reportStatus(ctx, ev2))
 
-	assert.Equal(t, addr, r.eventConnection.address)
-	assert.Equal(t, addr, r.metricConnection.address)
+	assert.Equal(t, addr, r.conn.address)
 
 	assert.Equal(t, TestServiceKey, r.serviceKey)
 
@@ -698,8 +697,7 @@ func testProxy(t *testing.T, proxyUrl string) {
 	// time.Sleep(time.Second)
 	assert.NoError(t, r.reportStatus(ctx, ev2))
 
-	assert.Equal(t, addr, r.eventConnection.address)
-	assert.Equal(t, addr, r.metricConnection.address)
+	assert.Equal(t, addr, r.conn.address)
 
 	assert.Equal(t, TestServiceKey, r.serviceKey)
 
