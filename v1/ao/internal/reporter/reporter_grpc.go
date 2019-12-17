@@ -212,8 +212,7 @@ func (c *grpcConnection) Close() {
 }
 
 type grpcReporter struct {
-	eventConnection              *grpcConnection // used for events only
-	metricConnection             *grpcConnection // used for everything else (postMetrics, postStatus, getSettings)
+	conn                         *grpcConnection // used for all RPC calls
 	collectMetricInterval        int32           // metrics flush interval in seconds
 	getSettingsInterval          int             // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int             // check interval for timed out settings in seconds
@@ -301,22 +300,15 @@ func newGRPCReporter() reporter {
 	}
 
 	// create connection object for events client and metrics client
-	eventConn, err1 := newGrpcConnection("events channel", addr, opts...)
+	grpcConn, err1 := newGrpcConnection("AO gRPC channel", addr, opts...)
 	if err1 != nil {
 		log.Errorf("Failed to initialize gRPC reporter %v: %v", addr, err1)
-		return &nullReporter{}
-	}
-	metricConn, err2 := newGrpcConnection("metrics channel", addr, opts...)
-	if err2 != nil {
-		eventConn.Close()
-		log.Errorf("Failed to initialize gRPC reporter %v: %v", addr, err2)
 		return &nullReporter{}
 	}
 
 	// construct the reporter object which handles two connections
 	r := &grpcReporter{
-		eventConnection:  eventConn,
-		metricConnection: metricConn,
+		conn: grpcConn,
 
 		collectMetricInterval:        grpcMetricIntervalDefault,
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
@@ -423,8 +415,7 @@ func (r *grpcReporter) flushed() chan struct{} {
 	c := make(chan struct{})
 	go func(o chan struct{}) {
 		chs := []chan struct{}{
-			r.eventConnection.getFlushedChan(),
-			r.metricConnection.getFlushedChan(),
+			r.conn.getFlushedChan(),
 		}
 		for _, ch := range chs {
 			<-ch
@@ -436,8 +427,7 @@ func (r *grpcReporter) flushed() chan struct{} {
 
 // closeConns closes all the gRPC connections of a reporter
 func (r *grpcReporter) closeConns() {
-	r.eventConnection.Close()
-	r.metricConnection.Close()
+	r.conn.Close()
 }
 
 // Closed return true if the reporter is already closed, or false otherwise.
@@ -562,15 +552,13 @@ func (r *grpcReporter) periodicTasks() {
 	collectMetricsTicker := time.NewTimer(r.collectMetricsNextInterval())
 	getSettingsTicker := time.NewTimer(0)
 	settingsTimeoutCheckTicker := time.NewTimer(time.Duration(r.settingsTimeoutCheckInterval) * time.Second)
-	r.eventConnection.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
-	r.metricConnection.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
+	r.conn.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
 
 	defer func() {
 		collectMetricsTicker.Stop()
 		getSettingsTicker.Stop()
 		settingsTimeoutCheckTicker.Stop()
-		r.eventConnection.pingTicker.Stop()
-		r.metricConnection.pingTicker.Stop()
+		r.conn.pingTicker.Stop()
 	}()
 
 	// set up 'ready' channels to indicate if a goroutine has terminated
@@ -602,7 +590,7 @@ func (r *grpcReporter) periodicTasks() {
 			default:
 			}
 			<-collectMetricsReady
-			r.metricConnection.setFlushed()
+			r.conn.setFlushed()
 			return
 		case <-collectMetricsTicker.C: // collect and send metrics
 			// set up ticker for next round
@@ -631,19 +619,11 @@ func (r *grpcReporter) periodicTasks() {
 				go r.checkSettingsTimeout(settingsTimeoutCheckReady)
 			default:
 			}
-		case <-r.eventConnection.pingTicker.C: // ping on event connection (keep alive)
+		case <-r.conn.pingTicker.C: // ping on event connection (keep alive)
 			// set up ticker for next round
-			r.eventConnection.resetPing()
+			r.conn.resetPing()
 			go func() {
-				if r.eventConnection.ping(r.done, r.serviceKey) == errInvalidServiceKey {
-					r.ShutdownNow()
-				}
-			}()
-		case <-r.metricConnection.pingTicker.C: // ping on metrics connection (keep alive)
-			// set up ticker for next round
-			r.metricConnection.resetPing()
-			go func() {
-				if r.metricConnection.ping(r.done, r.serviceKey) == errInvalidServiceKey {
+				if r.conn.ping(r.done, r.serviceKey) == errInvalidServiceKey {
 					r.ShutdownNow()
 				}
 			}()
@@ -687,10 +667,10 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 
 	select {
 	case r.eventMessages <- (*e).bbuf.GetBuf():
-		r.eventConnection.queueStats.TotalEventsAdd(int64(1))
+		r.conn.queueStats.TotalEventsAdd(int64(1))
 		return nil
 	default:
-		r.eventConnection.queueStats.NumOverflowedAdd(int64(1))
+		r.conn.queueStats.NumOverflowedAdd(int64(1))
 		return errors.New("event message queue is full")
 	}
 }
@@ -764,7 +744,7 @@ func (r *grpcReporter) eventSender() {
 
 func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 	defer func() {
-		r.eventConnection.setFlushed()
+		r.conn.setFlushed()
 		log.Info("eventBatchSender goroutine exiting.")
 	}()
 
@@ -791,7 +771,7 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 
 		if len(messages) != 0 {
 			method := newPostEventsMethod(r.serviceKey, messages)
-			err := r.eventConnection.InvokeRPC(r.done, method)
+			err := r.conn.InvokeRPC(r.done, method)
 
 			switch err {
 			case errInvalidServiceKey:
@@ -829,7 +809,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	i := atomic.LoadInt32(&r.collectMetricInterval)
 	// generate a new metrics message
 	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(i),
-		r.eventConnection.queueStats.CopyAndReset(), FlushRateCounts(), config.GetRuntimeMetrics())
+		r.conn.queueStats.CopyAndReset(), FlushRateCounts(), config.GetRuntimeMetrics())
 
 	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i))
 
@@ -846,7 +826,7 @@ func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 
 	method := newPostMetricsMethod(r.serviceKey, msgs)
 
-	err := r.metricConnection.InvokeRPC(r.done, method)
+	err := r.conn.InvokeRPC(r.done, method)
 	switch err {
 	case errInvalidServiceKey:
 		r.ShutdownNow()
@@ -878,7 +858,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	defer func() { ready <- true }()
 
 	method := newGetSettingsMethod(r.serviceKey)
-	err := r.metricConnection.InvokeRPC(r.done, method)
+	err := r.conn.InvokeRPC(r.done, method)
 
 	switch err {
 	case errInvalidServiceKey:
@@ -991,7 +971,7 @@ func (r *grpcReporter) statusSender() {
 			}
 		}
 		method := newPostStatusMethod(r.serviceKey, messages)
-		err := r.metricConnection.InvokeRPC(r.done, method)
+		err := r.conn.InvokeRPC(r.done, method)
 
 		switch err {
 		case errInvalidServiceKey:
