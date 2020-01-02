@@ -152,7 +152,7 @@ func TestConfigInit(t *testing.T) {
 		TriggerTrace:       true,
 		Proxy:              "",
 		ProxyCertPath:      "",
-		RuntimeMetrics:     false,
+		RuntimeMetrics:     true,
 	}
 	assert.Equal(t, c, &defaultC)
 }
