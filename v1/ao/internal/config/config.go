@@ -124,7 +124,7 @@ type Config struct {
 	// Cert path for the HTTP/HTTPS proxy
 	ProxyCertPath string `yaml:"ProxyCertPath" env:"APPOPTICS_PROXY_CERT_PATH"`
 	// Report runtime metrics or not
-	RuntimeMetrics bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS"`
+	RuntimeMetrics bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision

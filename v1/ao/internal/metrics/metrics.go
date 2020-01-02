@@ -432,7 +432,7 @@ func addRuntimeMetrics(bbuf *bson.Buffer, index *int) {
 	var mem runtime.MemStats
 	host.Mem(&mem)
 	// category gc
-	addMetricsValue(bbuf, index, "trace.go.gc.LastGC", int64(mem.LastGC)) // TODO may overflow
+	addMetricsValue(bbuf, index, "trace.go.gc.LastGC", int64(mem.LastGC))
 	addMetricsValue(bbuf, index, "trace.go.gc.NextGC", int64(mem.NextGC))
 	addMetricsValue(bbuf, index, "trace.go.gc.PauseTotalNs", int64(mem.PauseTotalNs))
 	addMetricsValue(bbuf, index, "trace.go.gc.NumGC", int64(mem.NumGC))
