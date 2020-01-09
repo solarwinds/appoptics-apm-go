@@ -373,7 +373,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		map[string]*RateCounts{ // requested, sampled, limited, traced, through
 			RCRegular:             {10, 2, 5, 5, 1},
 			RCRelaxedTriggerTrace: {3, 0, 1, 2, 0},
-			RCStrictTriggerTrace:  {4, 0, 3, 1, 0}}))
+			RCStrictTriggerTrace:  {4, 0, 3, 1, 0}}, true))
 	m := bsonToMap(bbuf)
 
 	_, ok := m["Hostname"]
@@ -391,6 +391,8 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		name  string
 		value interface{}
 	}
+
+	t.Logf("Got metrics: %+v", mts)
 
 	testCases := []testCase{
 		{"RequestCount", int64(10)},
@@ -414,21 +416,34 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		}...)
 	}
 	testCases = append(testCases, []testCase{
-		{"JMX.type=threadcount,name=NumGoroutine", int(1)},
-		{"JMX.Memory:MemStats.Alloc", int64(1)},
-		{"JMX.Memory:MemStats.TotalAlloc", int64(1)},
-		{"JMX.Memory:MemStats.Sys", int64(1)},
-		{"JMX.Memory:type=count,name=MemStats.Lookups", int64(1)},
-		{"JMX.Memory:type=count,name=MemStats.Mallocs", int64(1)},
-		{"JMX.Memory:type=count,name=MemStats.Frees", int64(1)},
-		{"JMX.Memory:MemStats.Heap.Alloc", int64(1)},
-		{"JMX.Memory:MemStats.Heap.Sys", int64(1)},
-		{"JMX.Memory:MemStats.Heap.Idle", int64(1)},
-		{"JMX.Memory:MemStats.Heap.Inuse", int64(1)},
-		{"JMX.Memory:MemStats.Heap.Released", int64(1)},
-		{"JMX.Memory:type=count,name=MemStats.Heap.Objects", int64(1)},
-		{"JMX.type=count,name=GCStats.NumGC", int64(1)},
+		// runtime
+		{"trace.go.runtime.NumGoroutine", int(1)},
+		{"trace.go.runtime.NumCgoCall", int64(1)},
+		// gc
+		{"trace.go.gc.LastGC", int64(1)},
+		{"trace.go.gc.NextGC", int64(1)},
+		{"trace.go.gc.PauseTotalNs", int64(1)},
+		{"trace.go.gc.NumGC", int64(1)},
+		{"trace.go.gc.NumForcedGC", int64(1)},
+		{"trace.go.gc.GCCPUFraction", float64(1)},
+		// memory
+		{"trace.go.memory.Alloc", int64(1)},
+		{"trace.go.memory.TotalAlloc", int64(1)},
+		{"trace.go.memory.Sys", int64(1)},
+		{"trace.go.memory.Lookups", int64(1)},
+		{"trace.go.memory.Mallocs", int64(1)},
+		{"trace.go.memory.Frees", int64(1)},
+		{"trace.go.memory.HeapAlloc", int64(1)},
+		{"trace.go.memory.HeapSys", int64(1)},
+		{"trace.go.memory.HeapIdle", int64(1)},
+		{"trace.go.memory.HeapInuse", int64(1)},
+		{"trace.go.memory.HeapReleased", int64(1)},
+		{"trace.go.memory.HeapObjects", int64(1)},
+		{"trace.go.memory.StackInuse", int64(1)},
+		{"trace.go.memory.StackSys", int64(1)},
 	}...)
+
+	assert.Equal(t, len(testCases), len(mts))
 
 	for i, tc := range testCases {
 		assert.Equal(t, tc.name, mts[i].(map[string]interface{})["name"])
@@ -445,7 +460,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	}
 
 	m = bsonToMap(bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, EventQueueStats{},
-		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}})))
+		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}}, true)))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))

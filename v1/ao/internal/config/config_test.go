@@ -152,6 +152,7 @@ func TestConfigInit(t *testing.T) {
 		TriggerTrace:       true,
 		Proxy:              "",
 		ProxyCertPath:      "",
+		RuntimeMetrics:     true,
 	}
 	assert.Equal(t, c, &defaultC)
 }
@@ -195,6 +196,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_TRIGGER_TRACE=false",
 		"APPOPTICS_PROXY=http://usr/pwd@internal.proxy:3306",
 		"APPOPTICS_PROXY_CERT_PATH=./proxy.pem",
+		"APPOPTICS_RUNTIME_METRICS=true",
 	}
 	SetEnvs(envs)
 
@@ -234,6 +236,7 @@ func TestEnvsLoading(t *testing.T) {
 		TriggerTrace:       false,
 		Proxy:              "http://usr/pwd@internal.proxy:3306",
 		ProxyCertPath:      "./proxy.pem",
+		RuntimeMetrics:     true,
 	}
 
 	c := NewConfig()
@@ -282,6 +285,7 @@ func TestYamlConfig(t *testing.T) {
 		TriggerTrace:       false,
 		Proxy:              "http://usr:pwd@internal.proxy:3306",
 		ProxyCertPath:      "./proxy.pem",
+		RuntimeMetrics:     true,
 	}
 
 	out, err := yaml.Marshal(&yamlConfig)
@@ -359,6 +363,7 @@ func TestYamlConfig(t *testing.T) {
 		TriggerTrace:       false,
 		Proxy:              "http://usr:pwd@internal.proxy:3306",
 		ProxyCertPath:      "./proxy.pem",
+		RuntimeMetrics:     true,
 	}
 
 	c = NewConfig()

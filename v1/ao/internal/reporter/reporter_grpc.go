@@ -809,7 +809,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	i := atomic.LoadInt32(&r.collectMetricInterval)
 	// generate a new metrics message
 	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(i),
-		r.conn.queueStats.CopyAndReset(), FlushRateCounts())
+		r.conn.queueStats.CopyAndReset(), FlushRateCounts(), config.GetRuntimeMetrics())
 
 	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i))
 

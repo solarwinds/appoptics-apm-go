@@ -121,8 +121,10 @@ type Config struct {
 
 	// Url of the HTTP/HTTPS proxy in the format of "scheme://<username>:<password>@<host>:<port>"
 	Proxy string `yaml:"Proxy,omitempty" env:"APPOPTICS_PROXY"`
-
+	// Cert path for the HTTP/HTTPS proxy
 	ProxyCertPath string `yaml:"ProxyCertPath" env:"APPOPTICS_PROXY_CERT_PATH"`
+	// Report runtime metrics or not
+	RuntimeMetrics bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -838,6 +840,13 @@ func (c *Config) GetProxyCertPath() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.ProxyCertPath
+}
+
+// GetRuntimeMetrics returns the runtime metrics flag
+func (c *Config) GetRuntimeMetrics() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.RuntimeMetrics
 }
 
 // GetTransactionFiltering returns the transaction filtering config
