@@ -24,6 +24,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding/gzip"
 
 	"context"
 
@@ -1294,10 +1295,15 @@ func (d *DefaultDialer) Dial(p DialParams) (*grpc.ClientConn, error) {
 	}
 	creds := credentials.NewTLS(tlsConfig)
 
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(creds)}
+	opts := []grpc.DialOption{
+		grpc.WithTransportCredentials(creds),
+		grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)),
+	}
+
 	if p.Proxy != "" {
 		opts = append(opts, grpc.WithContextDialer(newGRPCProxyDialer(p)))
 	}
+
 	return grpc.Dial(p.Address, opts...)
 }
 
