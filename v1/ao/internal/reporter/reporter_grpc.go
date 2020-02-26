@@ -94,16 +94,15 @@ const (
 
 // everything needed for a GRPC connection
 type grpcConnection struct {
-	name               string                         // connection name
-	client             collector.TraceCollectorClient // GRPC client instance
-	connection         *grpc.ClientConn               // GRPC connection object
-	address            string                         // collector address
-	certificate        []byte                         // collector certificate
-	pingTicker         *time.Timer                    // timer for keep alive pings in seconds
-	pingTickerLock     sync.Mutex                     // lock to ensure sequential access of pingTicker
-	lock               sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
-	queueStats         *metrics.EventQueueStats       // queue stats (reset on each metrics report cycle)
-	insecureSkipVerify bool
+	name           string                         // connection name
+	client         collector.TraceCollectorClient // GRPC client instance
+	connection     *grpc.ClientConn               // GRPC connection object
+	address        string                         // collector address
+	certificate    []byte                         // collector certificate
+	pingTicker     *time.Timer                    // timer for keep alive pings in seconds
+	pingTickerLock sync.Mutex                     // lock to ensure sequential access of pingTicker
+	lock           sync.RWMutex                   // lock to ensure sequential access (in case of connection loss)
+	queueStats     *metrics.EventQueueStats       // queue stats (reset on each metrics report cycle)
 
 	proxy            string
 	proxyTLSCertPath string
@@ -130,13 +129,6 @@ type GrpcConnOpt func(c *grpcConnection)
 func WithCert(cert []byte) GrpcConnOpt {
 	return func(c *grpcConnection) {
 		c.certificate = cert
-	}
-}
-
-// WithSkipVerify returns a function that sets the insecureSkipVerify option
-func WithSkipVerify(skip bool) GrpcConnOpt {
-	return func(c *grpcConnection) {
-		c.insecureSkipVerify = skip
 	}
 }
 
@@ -177,16 +169,15 @@ func WithBackoff(b Backoff) GrpcConnOpt {
 
 func newGrpcConnection(name string, target string, opts ...GrpcConnOpt) (*grpcConnection, error) {
 	gc := &grpcConnection{
-		name:               name,
-		client:             nil,
-		connection:         nil,
-		address:            target,
-		certificate:        []byte(grpcCertDefault),
-		queueStats:         &metrics.EventQueueStats{},
-		insecureSkipVerify: true,
-		backoff:            DefaultBackoff,
-		Dialer:             &DefaultDialer{},
-		flushed:            make(chan struct{}),
+		name:        name,
+		client:      nil,
+		connection:  nil,
+		address:     target,
+		certificate: []byte(grpcCertDefault),
+		queueStats:  &metrics.EventQueueStats{},
+		backoff:     DefaultBackoff,
+		Dialer:      &DefaultDialer{},
+		flushed:     make(chan struct{}),
 	}
 
 	for _, opt := range opts {
@@ -292,7 +283,6 @@ func newGRPCReporter() reporter {
 		opts = append(opts, WithCert(cert))
 	}
 
-	opts = append(opts, WithSkipVerify(config.GetSkipVerify()))
 	opts = append(opts, WithMaxReqBytes(config.ReporterOpts().GetMaxReqBytes()))
 
 	if proxy := getProxy(); proxy != "" {
@@ -506,11 +496,10 @@ func (c *grpcConnection) connect() error {
 	}
 	// create a new connection object for this client
 	conn, err := c.Dial(DialParams{
-		InsecureSkipVerify: c.insecureSkipVerify,
-		Certificate:        c.certificate,
-		Address:            c.address,
-		Proxy:              c.proxy,
-		ProxyCertPath:      c.proxyTLSCertPath,
+		Certificate:   c.certificate,
+		Address:       c.address,
+		Proxy:         c.proxy,
+		ProxyCertPath: c.proxyTLSCertPath,
 	})
 	if err != nil {
 		return errors.Wrap(err, "failed to connect to target")
@@ -1258,11 +1247,10 @@ type Dialer interface {
 }
 
 type DialParams struct {
-	InsecureSkipVerify bool
-	Certificate        []byte
-	Address            string
-	Proxy              string
-	ProxyCertPath      string
+	Certificate   []byte
+	Address       string
+	Proxy         string
+	ProxyCertPath string
 }
 
 // DefaultDialer implements the Dialer interface to provide the default dialing
@@ -1285,14 +1273,10 @@ func (d *DefaultDialer) Dial(p DialParams) (*grpc.ClientConn, error) {
 	}
 
 	tlsConfig := &tls.Config{
-		ServerName:         serverName,
-		RootCAs:            certPool,
-		InsecureSkipVerify: p.InsecureSkipVerify,
+		ServerName: serverName,
+		RootCAs:    certPool,
 	}
-	// turn off server certificate verification for Go < 1.8
-	if !utils.IsHigherOrEqualGoVersion("go1.8") {
-		tlsConfig.InsecureSkipVerify = true
-	}
+
 	creds := credentials.NewTLS(tlsConfig)
 
 	opts := []grpc.DialOption{
@@ -1329,7 +1313,7 @@ func newGRPCProxyDialer(p DialParams) func(context.Context, string) (net.Conn, e
 			caCertPool.AppendCertsFromPEM(cert)
 
 			// No mutual TLS for now
-			tlsConfig := tls.Config{RootCAs: caCertPool, InsecureSkipVerify: true}
+			tlsConfig := tls.Config{RootCAs: caCertPool}
 			conn, err = tls.Dial("tcp", proxy.Host, &tlsConfig)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to dial the https proxy")

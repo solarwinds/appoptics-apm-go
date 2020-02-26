@@ -49,7 +49,6 @@ const (
 	envAppOpticsSampleRate          = "APPOPTICS_SAMPLE_RATE"
 	envAppOpticsPrependDomain       = "APPOPTICS_PREPEND_DOMAIN"
 	envAppOpticsHostnameAlias       = "APPOPTICS_HOSTNAME_ALIAS"
-	envAppOpticsInsecureSkipVerify  = "APPOPTICS_INSECURE_SKIP_VERIFY"
 	envAppOpticsHistogramPrecision  = "APPOPTICS_HISTOGRAM_PRECISION"
 	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
 	envAppOpticsMaxReqBytes         = "APPOPTICS_MAX_REQUEST_BYTES"
@@ -92,9 +91,6 @@ type Config struct {
 
 	// The alias of the hostname
 	HostAlias string `yaml:"HostAlias,omitempty" env:"APPOPTICS_HOSTNAME_ALIAS"`
-
-	// Whether to skip verification of hostname
-	SkipVerify bool `yaml:"SkipVerify,omitempty" env:"APPOPTICS_INSECURE_SKIP_VERIFY" default:"true"`
 
 	// The precision of the histogram
 	Precision int `yaml:"Precision,omitempty" env:"APPOPTICS_HISTOGRAM_PRECISION" default:"2"`
@@ -776,13 +772,6 @@ func (c *Config) GetHostAlias() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.HostAlias
-}
-
-// GetSkipVerify returns the config of skipping hostname verification
-func (c *Config) GetSkipVerify() bool {
-	c.RLock()
-	defer c.RUnlock()
-	return c.SkipVerify
 }
 
 // GetPrecision returns the histogram precision
