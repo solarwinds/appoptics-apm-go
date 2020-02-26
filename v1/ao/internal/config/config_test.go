@@ -57,7 +57,6 @@ func TestLoadConfig(t *testing.T) {
 
 	os.Setenv(envAppOpticsServiceKey, key1)
 	os.Setenv(envAppOpticsHostnameAlias, "test")
-	os.Setenv(envAppOpticsInsecureSkipVerify, "false")
 	os.Setenv(envAppOpticsTrustedPath, "test.crt")
 	os.Setenv(envAppOpticsCollectorUDP, "hello.udp")
 	os.Setenv(envAppOpticsDisabled, "invalidValue")
@@ -65,7 +64,6 @@ func TestLoadConfig(t *testing.T) {
 	c.Load()
 	assert.Equal(t, ToServiceKey(key1), c.GetServiceKey())
 	assert.Equal(t, "test", c.GetHostAlias())
-	assert.Equal(t, false, c.GetSkipVerify())
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
 	assert.Equal(t, "hello.udp", c.GetCollectorUDP())
 	assert.Equal(t, false, c.GetDisabled())
@@ -130,7 +128,6 @@ func TestConfigInit(t *testing.T) {
 		},
 		PrependDomain: false,
 		HostAlias:     "",
-		SkipVerify:    true,
 		Precision:     2,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2,
@@ -186,7 +183,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_SAMPLE_RATE=1000",
 		"APPOPTICS_PREPEND_DOMAIN=true",
 		"APPOPTICS_HOSTNAME_ALIAS=alias",
-		"APPOPTICS_INSECURE_SKIP_VERIFY=true",
+
 		"APPOPTICS_HISTOGRAM_PRECISION=4",
 		"APPOPTICS_EVENTS_FLUSH_INTERVAL=4",
 		"APPOPTICS_MAX_REQUEST_BYTES=4096000",
@@ -214,7 +211,6 @@ func TestEnvsLoading(t *testing.T) {
 		},
 		PrependDomain: true,
 		HostAlias:     "alias",
-		SkipVerify:    true,
 		Precision:     2 * 2,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2 * 2,
@@ -259,7 +255,6 @@ func TestYamlConfig(t *testing.T) {
 		},
 		PrependDomain: true,
 		HostAlias:     "yaml-alias",
-		SkipVerify:    true,
 		Precision:     2 * 3,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2 * 3,
@@ -312,7 +307,6 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_SAMPLE_RATE=1000",
 		"APPOPTICS_PREPEND_DOMAIN=true",
 		"APPOPTICS_HOSTNAME_ALIAS=alias",
-		"APPOPTICS_INSECURE_SKIP_VERIFY=true",
 		"APPOPTICS_HISTOGRAM_PRECISION=4",
 		"APPOPTICS_EVENTS_FLUSH_INTERVAL=4",
 		"APPOPTICS_MAX_REQUEST_BYTES=4096000",
@@ -337,7 +331,6 @@ func TestYamlConfig(t *testing.T) {
 		},
 		PrependDomain: true,
 		HostAlias:     "alias",
-		SkipVerify:    true,
 		Precision:     2 * 2,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2 * 2,
@@ -444,7 +437,6 @@ func TestInvalidConfig(t *testing.T) {
 		},
 		PrependDomain: true,
 		HostAlias:     "alias",
-		SkipVerify:    true,
 		Precision:     2 * 2,
 		ReporterProperties: &ReporterOptions{
 			EventFlushInterval:      2 * 2,

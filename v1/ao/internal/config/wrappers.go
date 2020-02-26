@@ -36,9 +36,6 @@ var GetPrependDomain = conf.GetPrependDomain
 // GetHostAlias is a wrapper to the method of the global config
 var GetHostAlias = conf.GetHostAlias
 
-// GetSkipVerify is a wrapper to the method of the global config
-var GetSkipVerify = conf.GetSkipVerify
-
 // GetPrecision is a wrapper to the method of the global config
 var GetPrecision = conf.GetPrecision
 

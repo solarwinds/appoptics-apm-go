@@ -429,13 +429,12 @@ func TestInvokeRPC(t *testing.T) {
 	}()
 
 	c := &grpcConnection{
-		name:               "events channel",
-		client:             nil,
-		connection:         nil,
-		address:            "test-addr",
-		certificate:        []byte(grpcCertDefault),
-		queueStats:         &metrics.EventQueueStats{},
-		insecureSkipVerify: true,
+		name:        "events channel",
+		client:      nil,
+		connection:  nil,
+		address:     "test-addr",
+		certificate: []byte(grpcCertDefault),
+		queueStats:  &metrics.EventQueueStats{},
 		backoff: func(retries int, wait func(d time.Duration)) error {
 			if retries > grpcMaxRetries {
 				return errGiveUpAfterRetries
