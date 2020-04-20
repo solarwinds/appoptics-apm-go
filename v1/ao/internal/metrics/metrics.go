@@ -20,13 +20,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Linux distributions and their identifying files
 const (
 	metricsTransactionsMaxDefault = 200 // default max amount of transaction names we allow per cycle
 	metricsHistPrecisionDefault   = 2   // default histogram precision
 
 	metricsTagNameLengthMax  = 64  // max number of characters for tag names
 	metricsTagValueLengthMax = 255 // max number of characters for tag values
+
+	// MaxTagsCount is the maximum number of tags allowed
+	MaxTagsCount = 50
 )
 
 // Special transaction names
@@ -59,6 +61,10 @@ const (
 var (
 	// ErrExceedsMetricsCountLimit indicates there are too many distinct metrics.
 	ErrExceedsMetricsCountLimit = errors.New("exceeds metrics count limit per flush interval")
+	// ErrExceedsTagsCountLimit indicates there are too many tags
+	ErrExceedsTagsCountLimit = errors.New("exceeds tags count limit")
+	// ErrMetricsWithNonPositiveCount indicates the count is negative or zero
+	ErrMetricsWithNonPositiveCount = errors.New("metrics with non-positive count")
 )
 
 // SpanMessage defines a span message
@@ -409,11 +415,17 @@ func (m *Measurements) Clone() *Measurements {
 
 // Summary submits the summary measurement to the reporter.
 func (m *Measurements) Summary(name string, value float64, opts MetricOptions) error {
+	if err := opts.validate(); err != nil {
+		return err
+	}
 	return m.recordWithSoloTags(name, opts.Tags, value, opts.Count, true)
 }
 
 // Increment submits the incremental measurement to the reporter.
 func (m *Measurements) Increment(name string, opts MetricOptions) error {
+	if err := opts.validate(); err != nil {
+		return err
+	}
 	return m.recordWithSoloTags(name, opts.Tags, 0, opts.Count, false)
 }
 
@@ -422,6 +434,18 @@ type MetricOptions struct {
 	Count   int
 	HostTag bool
 	Tags    map[string]string
+}
+
+func (mo *MetricOptions) validate() error {
+	if len(mo.Tags) > MaxTagsCount {
+		return ErrExceedsTagsCountLimit
+	}
+
+	if mo.Count <= 0 {
+		return ErrMetricsWithNonPositiveCount
+	}
+
+	return nil
 }
 
 func addRuntimeMetrics(bbuf *bson.Buffer, index *int) {

@@ -3,8 +3,6 @@
 package ao
 
 import (
-	"errors"
-
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
@@ -14,31 +12,27 @@ type MetricOptions = metrics.MetricOptions
 
 const (
 	// MaxTagsCount is the maximum number of tags allowed.
-	MaxTagsCount = 50
+	MaxTagsCount = metrics.MaxTagsCount
 )
 
 // The measurements submission errors
 var (
 	// ErrExceedsTagsCountLimit indicates the count of tags exceeds the limit
-	ErrExceedsTagsCountLimit = errors.New("exceeds tags count limit")
+	ErrExceedsTagsCountLimit = metrics.ErrExceedsTagsCountLimit
 	// ErrExceedsMetricsCountLimit indicates there are too many distinct measurements in a flush cycle.
 	ErrExceedsMetricsCountLimit = metrics.ErrExceedsMetricsCountLimit
+	// ErrMetricsWithNonPositiveCount indicates the count is negative or zero
+	ErrMetricsWithNonPositiveCount = metrics.ErrMetricsWithNonPositiveCount
 )
 
 // SummaryMetric submits a summary type measurement to the reporter. The measurements
 // will be collected in the background and reported periodically.
 func SummaryMetric(name string, value float64, opts MetricOptions) error {
-	if len(opts.Tags) > MaxTagsCount {
-		return ErrExceedsTagsCountLimit
-	}
 	return reporter.SummaryMetric(name, value, opts)
 }
 
 // IncrementMetric submits a incremental measurement to the reporter. The measurements
 // will be collected in the background and reported periodically.
 func IncrementMetric(name string, opts MetricOptions) error {
-	if len(opts.Tags) > MaxTagsCount {
-		return ErrExceedsTagsCountLimit
-	}
 	return reporter.IncrementMetric(name, opts)
 }
