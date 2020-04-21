@@ -595,6 +595,18 @@ func TestCustomMetrics(t *testing.T) {
 		customMetrics: metrics.NewMeasurements(true, grpcMetricIntervalDefault, 500),
 	}
 
+	// Test non-positive count
+	assert.NotNil(t, r.CustomSummaryMetric("Summary", 1.1, metrics.MetricOptions{
+		Count:   0,
+		HostTag: true,
+		Tags:    map[string]string{"hello": "world"},
+	}))
+	assert.NotNil(t, r.CustomIncrementMetric("Incremental", metrics.MetricOptions{
+		Count:   -1,
+		HostTag: true,
+		Tags:    map[string]string{"hi": "globe"},
+	}))
+
 	r.CustomSummaryMetric("Summary", 1.1, metrics.MetricOptions{
 		Count:   1,
 		HostTag: true,
