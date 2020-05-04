@@ -7,12 +7,12 @@ import (
 
 // EncodedEvent denotes the event after encoding.
 type EncodedEvent struct {
-	bson.Buffer
+	*bson.Buffer
 }
 
 // NewEncodedEvent creates a new EncodedEvent object
 func NewEncodedEvent(layer, label, xTrace, edge string, ts int64) EncodedEvent {
-	ee := EncodedEvent{}
+	ee := EncodedEvent{bson.NewBuffer()}
 	ee.AppendString("_V", "1")
 	ee.AppendString("X-Trace", xTrace)
 	ee.AppendString("Label", label)
