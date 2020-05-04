@@ -647,16 +647,20 @@ func DefaultBackoff(retries int, wait func(d time.Duration)) error {
 //
 // returns	error if something goes wrong during preparation or if channel is full
 func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
-	if r.Closed() {
-		return ErrReporterIsClosed
-	}
 	if err := prepareEvent(ctx, e); err != nil {
 		// don't continue if preparation failed
 		return err
 	}
+	return r.reportBuf((*e).bbuf.GetBuf())
+}
+
+func (r *grpcReporter) reportBuf(buf []byte) error {
+	if r.Closed() {
+		return ErrReporterIsClosed
+	}
 
 	select {
-	case r.eventMessages <- (*e).bbuf.GetBuf():
+	case r.eventMessages <- buf:
 		r.conn.queueStats.TotalEventsAdd(int64(1))
 		return nil
 	default:

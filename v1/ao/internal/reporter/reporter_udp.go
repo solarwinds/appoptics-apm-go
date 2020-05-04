@@ -53,7 +53,11 @@ func (r *udpReporter) report(ctx *oboeContext, e *event) error {
 		return err
 	}
 
-	_, err := r.conn.Write((*e).bbuf.GetBuf())
+	return r.reportBuf((*e).bbuf.GetBuf())
+}
+
+func (r *udpReporter) reportBuf(buf []byte) error {
+	_, err := r.conn.Write(buf)
 	return err
 }
 

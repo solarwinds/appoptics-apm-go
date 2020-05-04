@@ -21,6 +21,9 @@ import (
 type reporter interface {
 	// called when an event should be reported
 	reportEvent(ctx *oboeContext, e *event) error
+
+	reportBuf(buf []byte) error
+
 	// called when a status (e.g. __Init message) should be reported
 	reportStatus(ctx *oboeContext, e *event) error
 	// called when a Span message should be reported
@@ -68,6 +71,7 @@ type nullReporter struct{}
 
 func newNullReporter() *nullReporter                                  { return &nullReporter{} }
 func (r *nullReporter) reportEvent(ctx *oboeContext, e *event) error  { return nil }
+func (r *nullReporter) reportBuf([]byte) error                        { return nil }
 func (r *nullReporter) reportStatus(ctx *oboeContext, e *event) error { return nil }
 func (r *nullReporter) reportSpan(span metrics.SpanMessage) error     { return nil }
 func (r *nullReporter) Shutdown(ctx context.Context) error            { return nil }

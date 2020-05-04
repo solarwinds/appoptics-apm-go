@@ -25,8 +25,8 @@ const (
 	maskVersion           = 0xF0
 
 	xtrCurrentVersion      = 2
-	oboeMaxTaskIDLen       = 20
-	oboeMaxOpIDLen         = 8
+	OboeMaxTaskIDLen       = 20
+	OboeMaxOpIDLen         = 8
 	oboeMaxMetadataPackLen = 512
 )
 
@@ -94,10 +94,10 @@ func (md *oboeMetadata) Init() {
 		return
 	}
 	md.version = xtrCurrentVersion
-	md.taskLen = oboeMaxTaskIDLen
-	md.opLen = oboeMaxOpIDLen
-	md.ids.taskID = make([]byte, oboeMaxTaskIDLen)
-	md.ids.opID = make([]byte, oboeMaxOpIDLen)
+	md.taskLen = OboeMaxTaskIDLen
+	md.opLen = OboeMaxOpIDLen
+	md.ids.taskID = make([]byte, OboeMaxTaskIDLen)
+	md.ids.opID = make([]byte, OboeMaxOpIDLen)
 }
 
 // randReader provides random IDs, and can be overridden for testing.

@@ -192,12 +192,17 @@ func (r *TestReporter) report(ctx *oboeContext, e *event) error {
 		(r.ErrorEvents != nil && r.ErrorEvents[(int(r.eventCount)-1)]) { // error certain specified events
 		return errors.New("TestReporter error")
 	}
-	r.eventChan <- (*e).bbuf.GetBuf() // a send to a closed channel panics.
+	r.reportBuf((*e).bbuf.GetBuf()) // a send to a closed channel panics.
 	return nil
 }
 
 func (r *TestReporter) reportEvent(ctx *oboeContext, e *event) error {
 	return r.report(ctx, e)
+}
+
+func (r *TestReporter) reportBuf(buf []byte) error {
+	r.eventChan <- buf
+	return nil
 }
 
 func (r *TestReporter) reportStatus(ctx *oboeContext, e *event) error {
