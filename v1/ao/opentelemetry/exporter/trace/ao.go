@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
+
 	"go.opentelemetry.io/otel/api/core"
 	ot "go.opentelemetry.io/otel/sdk/export/trace"
 )
@@ -35,15 +36,31 @@ func (e *Exporter) ExportSpan(ctx context.Context, data *ot.SpanData) {
 	spanName := fmt.Sprintf("%s.%s", data.SpanKind, data.Name)
 	ts := data.StartTime.UnixNano() / 1000
 	xTrace := e.getXTraceID(data.SpanContext.SpanID, data.SpanContext.TraceID, data.SpanContext.IsSampled())
-	edge := e.getXTraceID(data.ParentSpanID, data.SpanContext.TraceID, data.SpanContext.IsSampled())
+	edge := e.getEdge(data.ParentSpanID)
 
 	entry := reporter.NewEncodedEvent(spanName, "entry", xTrace, edge, ts)
 	e.addAttributes(entry, data.Attributes)
+	if !data.ParentSpanID.IsValid() {
+		entry.AppendString("TransactionName", spanName)
+	}
 	entry.Report()
 
-	exitXTrace := reporter.XTraceIDFrom(xTrace)
+	infoEdge := e.getEdge(data.SpanContext.SpanID)
+	for _, ev := range data.MessageEvents {
+		xid := reporter.NewXTraceIDFrom(xTrace)
+		info := reporter.NewEncodedEvent(spanName, "info",
+			xid, infoEdge, ev.Time.UnixNano()/1000)
+		info.AppendString("Name", ev.Name)
+		e.addAttributes(info, ev.Attributes)
+		info.Report()
+
+		infoEdge = reporter.GetOpIDFromXTraceID(xid)
+	}
+
+	exitXTrace := reporter.NewXTraceIDFrom(xTrace)
 	exitTs := data.EndTime.UnixNano() / 1000
-	exit := reporter.NewEncodedEvent(spanName, "exit", exitXTrace, xTrace, exitTs)
+	exitEdge := infoEdge
+	exit := reporter.NewEncodedEvent(spanName, "exit", exitXTrace, exitEdge, exitTs)
 	exit.Report()
 }
 
@@ -66,6 +83,20 @@ func (e *Exporter) addAttributes(ee reporter.EncodedEvent, attrs []core.KeyValue
 			ee.AppendString(key, val.AsString())
 		}
 	}
+}
+
+func (e *Exporter) getEdge(spanID core.SpanID) string {
+	if !spanID.IsValid() {
+		return ""
+	}
+
+	buf := bytes.Buffer{}
+
+	spanIDStr := spanID.String()
+	buf.WriteString(spanIDStr)
+	buf.WriteString(strings.Repeat("0", reporter.OboeMaxOpIDLen*2-len(spanIDStr)))
+
+	return strings.ToUpper(buf.String())
 }
 
 func (e *Exporter) getXTraceID(spanID core.SpanID, traceID core.TraceID, sampled bool) string {

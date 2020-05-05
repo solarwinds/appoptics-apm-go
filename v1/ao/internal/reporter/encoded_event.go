@@ -37,16 +37,22 @@ func (ee EncodedEvent) reportWith(r reporter) {
 	r.reportBuf(ee.GetBuf())
 }
 
-// XTraceIDFrom get a new X-Trace ID from the existing one, with the op Id
+// NewXTraceIDFrom get a new X-Trace ID from the existing one, with the op Id
 // randomized
-func XTraceIDFrom(mdStr string) string {
+func NewXTraceIDFrom(mdStr string) string {
 	md := &oboeMetadata{}
 	md.FromString(mdStr)
-	md.SetRandom()
+	md.SetRandomOpID()
 	xTrace, err := md.ToString()
 	if err != nil {
 		return ""
 	} else {
 		return xTrace
 	}
+}
+
+func GetOpIDFromXTraceID(mdString string) string {
+	md := &oboeMetadata{}
+	md.FromString(mdString)
+	return md.OpString()
 }

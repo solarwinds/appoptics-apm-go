@@ -268,7 +268,7 @@ func (md *oboeMetadata) ToString() (string, error) {
 	return strings.ToUpper(string(enc[:l])), nil
 }
 
-func (md *oboeMetadata) opString() string {
+func (md *oboeMetadata) OpString() string {
 	enc := make([]byte, 2*md.opLen)
 	l := hex.Encode(enc, md.ids.opID[:md.opLen])
 	return strings.ToUpper(string(enc[:l]))

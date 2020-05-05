@@ -225,7 +225,7 @@ func (e *event) AddBool(key string, value bool) { e.bbuf.AppendBool(key, value) 
 
 // Adds edge (reference to previous event) to event
 func (e *event) AddEdge(ctx *oboeContext) {
-	e.bbuf.AppendString(EdgeKey, ctx.metadata.opString())
+	e.bbuf.AppendString(EdgeKey, ctx.metadata.OpString())
 }
 
 func (e *event) AddEdgeFromMetadataString(mdstr string) {
@@ -234,7 +234,7 @@ func (e *event) AddEdgeFromMetadataString(mdstr string) {
 	err := md.FromString(mdstr)
 	// only add Edge if metadata references same trace as ours
 	if err == nil && bytes.Equal(e.metadata.ids.taskID, md.ids.taskID) {
-		e.bbuf.AppendString(EdgeKey, md.opString())
+		e.bbuf.AppendString(EdgeKey, md.OpString())
 	}
 }
 
