@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/api/core"
-	oteltrace "go.opentelemetry.io/otel/api/trace"
+	api "go.opentelemetry.io/otel/api/trace"
 	"google.golang.org/grpc/codes"
 )
 
@@ -14,12 +14,12 @@ type span struct {
 	// TODO
 }
 
-func (s *span) Tracer() oteltrace.Tracer {
+func (s *span) Tracer() api.Tracer {
 	// TODO
 	return nil
 }
 
-func (s *span) End(options ...oteltrace.EndOption) {
+func (s *span) End(options ...api.EndOption) {
 	// TODO
 }
 
@@ -27,7 +27,8 @@ func (s *span) AddEvent(ctx context.Context, name string, attrs ...core.KeyValue
 	// TODO
 }
 
-func (s *span) AddEventWithTimestamp(ctx context.Context, timestamp time.Time, name string, attrs ...core.KeyValue) {
+func (s *span) AddEventWithTimestamp(ctx context.Context, timestamp time.Time,
+	name string, attrs ...core.KeyValue) {
 	// TODO
 }
 
@@ -36,7 +37,7 @@ func (s *span) IsRecording() bool {
 	return false
 }
 
-func (s *span) RecordError(ctx context.Context, err error, opts ...oteltrace.ErrorOption) {
+func (s *span) RecordError(ctx context.Context, err error, opts ...api.ErrorOption) {
 	// TODO
 }
 
