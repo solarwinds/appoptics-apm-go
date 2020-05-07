@@ -4,60 +4,71 @@ import (
 	"context"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	"go.opentelemetry.io/otel/api/core"
-	api "go.opentelemetry.io/otel/api/trace"
+	trace "go.opentelemetry.io/otel/api/trace"
 	"google.golang.org/grpc/codes"
 )
 
 // TODO test
-type span struct {
+type spanImpl struct {
+	tracer  trace.Tracer
+	aoSpan  ao.Span
+	context core.SpanContext
+	links   []trace.Link
+	parent  trace.Span
 	// TODO
 }
 
-func (s *span) Tracer() api.Tracer {
-	// TODO
-	return nil
+var _ trace.Span = &spanImpl{}
+
+func (s *spanImpl) Tracer() trace.Tracer {
+	return s.tracer
 }
 
-func (s *span) End(options ...api.EndOption) {
-	// TODO
-}
-
-func (s *span) AddEvent(ctx context.Context, name string, attrs ...core.KeyValue) {
+func (s *spanImpl) End(options ...trace.EndOption) {
 	// TODO
 }
 
-func (s *span) AddEventWithTimestamp(ctx context.Context, timestamp time.Time,
+func (s *spanImpl) AddEvent(ctx context.Context, name string, attrs ...core.KeyValue) {
+	// TODO
+}
+
+func (s *spanImpl) AddEventWithTimestamp(ctx context.Context, timestamp time.Time,
 	name string, attrs ...core.KeyValue) {
 	// TODO
 }
 
-func (s *span) IsRecording() bool {
+func (s *spanImpl) IsRecording() bool {
 	// TODO
 	return false
 }
 
-func (s *span) RecordError(ctx context.Context, err error, opts ...api.ErrorOption) {
+func (s *spanImpl) RecordError(ctx context.Context, err error, opts ...trace.ErrorOption) {
 	// TODO
 }
 
-func (s *span) SpanContext() core.SpanContext {
+func (s *spanImpl) SpanContext() core.SpanContext {
 	// TODO
 	return core.SpanContext{}
 }
 
-func (s *span) SetStatus(codes.Code, string) {
+func (s *spanImpl) SetStatus(codes.Code, string) {
 	// TODO
 }
 
-func (s *span) SetName(name string) {
+func (s *spanImpl) SetName(name string) {
 	// TODO
 }
 
-func (s *span) SetAttributes(...core.KeyValue) {
+func (s *spanImpl) SetAttributes(...core.KeyValue) {
 	// TODO
 }
 
-func (s *span) SetAttribute(string, interface{}) {
+func (s *spanImpl) SetAttribute(string, interface{}) {
 	// TODO
+}
+
+func (s *spanImpl) addLink(link trace.Link) {
+	s.links = append(s.links, link)
 }

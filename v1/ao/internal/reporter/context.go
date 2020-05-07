@@ -25,8 +25,8 @@ const (
 	maskVersion           = 0xF0
 
 	xtrCurrentVersion      = 2
-	oboeMaxTaskIDLen       = 20
-	oboeMaxOpIDLen         = 8
+	OboeMaxTaskIDLen       = 20
+	OboeMaxOpIDLen         = 8
 	oboeMaxMetadataPackLen = 512
 )
 
