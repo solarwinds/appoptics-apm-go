@@ -17,6 +17,8 @@ type tracer struct {
 	name string
 }
 
+var _ trace.Tracer = &tracer{}
+
 // WithSpan wraps the execution of the fn function with a spanImpl.
 // It starts a new spanImpl, sets it as an active spanImpl in the context,
 // executes the fn function and closes the spanImpl before returning the
@@ -70,6 +72,7 @@ func (t *tracer) Start(ctx context.Context, name string,
 
 // GetSpanContextAndLinks get local and remote SpanContext from the context, and
 // produces the links accordingly.
+// This is based from the OpenTelemetry sdk code.
 func GetSpanContextAndLinks(ctx context.Context,
 	ignoreContext bool) (trace.Span, core.SpanContext, []trace.Link) {
 	local := trace.SpanFromContext(ctx)

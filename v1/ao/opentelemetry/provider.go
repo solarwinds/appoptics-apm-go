@@ -1,20 +1,21 @@
 package opentelemetry
 
 import (
-	api "go.opentelemetry.io/otel/api/trace"
+	trace "go.opentelemetry.io/otel/api/trace"
 )
 
-// TracerProvider implements the Provider interface of OpenTelemetry api.
+// TracerProvider implements the Provider interface of OpenTelemetry trace.
 type TracerProvider struct{}
 
 // ProviderOptions defines the options for creating a Provider object.
 type ProviderOptions struct {
 }
 
+// ProviderOption defines the function type to update the Tracer provider options.
 type ProviderOption func(*ProviderOptions)
 
 // make sure TracerProvider implements the Provider interface.
-var _ api.Provider = &TracerProvider{}
+var _ trace.Provider = &TracerProvider{}
 
 // NewTracerProvider returns a new TracerProvider object.
 func NewTracerProvider(opts ...ProviderOption) (*TracerProvider, error) {
@@ -22,6 +23,6 @@ func NewTracerProvider(opts ...ProviderOption) (*TracerProvider, error) {
 }
 
 // Tracer creates and returns a Tracer object.
-func (p *TracerProvider) Tracer(name string) api.Tracer {
+func (p *TracerProvider) Tracer(name string) trace.Tracer {
 	return &tracer{name: name}
 }
