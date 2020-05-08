@@ -1,7 +1,7 @@
 package opentelemetry
 
 import (
-	trace "go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel/api/trace"
 )
 
 // TracerProvider implements the Provider interface of OpenTelemetry trace.

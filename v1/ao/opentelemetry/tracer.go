@@ -43,22 +43,19 @@ func (t *tracer) Start(ctx context.Context, name string,
 		op(&opts)
 	}
 
-	localParent, remoteContext, links := GetSpanContextAndLinks(ctx, opts.NewRoot)
+	parentSpan, remoteSpanCtx, links := GetSpanContextAndLinks(ctx, opts.NewRoot)
 	s := &spanImpl{tracer: t}
-	if localParent != nil {
-		s.parent = localParent
-		parentAoSpan := localParent.(*spanImpl)
+	if parentSpan != nil {
+		s.parent = parentSpan // TODO we don't seem to need it?
+		parentAoSpan := parentSpan.(*spanImpl)
 		s.aoSpan = parentAoSpan.aoSpan.BeginSpan(name)
-	} else if remoteContext != core.EmptySpanContext() {
-		s.aoSpan, ctx = ao.BeginSpanWithOptions(ctx, name, ao.SpanOptions{
-			ContextOptions: ao.ContextOptions{
-				MdStr: OTSpanContext2MdStr(remoteContext),
-			},
-		})
-		ctx = trace.ContextWithSpan(ctx, s)
+	} else if remoteSpanCtx != core.EmptySpanContext() {
+		s.aoSpan = ao.NewTraceFromID(s.name, OTSpanContext2MdStr(remoteSpanCtx), nil)
 	} else {
 		s.aoSpan = ao.NewTrace(name)
 	}
+
+	ctx = trace.ContextWithSpan(ctx, s)
 
 	for _, l := range links {
 		s.addLink(l)
