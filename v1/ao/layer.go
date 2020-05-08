@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
@@ -80,6 +81,8 @@ type Span interface {
 	// Err reports details about error err (along with a stack trace) for this Span.
 	Err(error)
 
+	ErrWithOptions(ErrorOptions)
+
 	// MetadataString returns a string representing this Span for use
 	// in distributed tracing, e.g. to provide as an "X-Trace" header
 	// in an outgoing HTTP request.
@@ -122,6 +125,12 @@ type Profile interface {
 	Err(error)
 }
 
+type ErrorOptions struct {
+	Timestamp time.Time
+	Class     string
+	Msg       string
+}
+
 // SpanOptions defines the options of creating a span
 type SpanOptions struct {
 	// WithBackTrace indicates whether to include the backtrace in BeginSpan
@@ -129,7 +138,8 @@ type SpanOptions struct {
 	// `debug.Stack()` internally to gather the stack trace. Please consider
 	// the impact on performance/memory footprint carefully.
 	WithBackTrace bool
-
+	StartTime     time.Time
+	EndTime       time.Time
 	ContextOptions
 }
 
@@ -202,6 +212,9 @@ func (s *layerSpan) BeginSpan(spanName string, args ...interface{}) Span {
 func (s *layerSpan) BeginSpanWithOptions(spanName string, opts SpanOptions, args ...interface{}) Span {
 	if s.ok() { // copy parent context and report entry from child
 		kvs := addKVsFromOpts(opts, args...)
+		if !opts.StartTime.IsZero() {
+			kvs = append(kvs, "Timestamp_u", opts.StartTime.UnixNano()/1000)
+		}
 		return newSpan(s.aoCtx.Copy(), spanName, s, kvs...)
 	}
 	return nullSpan{}
@@ -333,12 +346,24 @@ func (s *span) GetTransactionName() string {
 
 // Error reports an error, distinguished by its class and message
 func (s *span) Error(class, msg string) {
+	s.ErrWithOptions(ErrorOptions{
+		Timestamp: time.Time{},
+		Class:     class,
+		Msg:       msg,
+	})
+}
+
+func (s *span) ErrWithOptions(opts ErrorOptions) {
 	if s.ok() {
-		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
-			keySpec, "error",
-			keyErrorClass, class,
-			keyErrorMsg, msg,
-			KeyBackTrace, string(debug.Stack()))
+		args := []interface{}{keySpec, "error",
+			keyErrorClass, opts.Class,
+			keyErrorMsg, opts.Msg,
+			KeyBackTrace, string(debug.Stack()),
+		}
+		if !opts.Timestamp.IsZero() {
+			args = append(args, "Timestamp_u", opts.Timestamp.UnixNano()/1000)
+		}
+		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(), args...)
 	}
 }
 
@@ -347,7 +372,7 @@ func (s *span) Err(err error) {
 	if err == nil {
 		return
 	}
-	s.Error("error", err.Error())
+	s.ErrWithOptions(ErrorOptions{Class: "error", Msg: err.Error()})
 }
 
 // span satisfies the Extent interface and consolidates common reporting routines used by
@@ -375,6 +400,7 @@ func (s nullSpan) End(args ...interface{})                               {}
 func (s nullSpan) AddEndArgs(args ...interface{})                        {}
 func (s nullSpan) Error(class, msg string)                               {}
 func (s nullSpan) Err(err error)                                         {}
+func (s nullSpan) ErrWithOptions(ErrorOptions)                           {}
 func (s nullSpan) Info(args ...interface{})                              {}
 func (s nullSpan) InfoWithOptions(opts SpanOptions, args ...interface{}) {}
 func (s nullSpan) IsReporting() bool                                     { return false }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
@@ -203,7 +204,7 @@ func TestWithTransactionFiltering(t *testing.T) {
 
 	// 2. “disabled” transaction settings not matched
 	r = reporter.SetTestReporter()
-	tr = NewTraceWithOptions(layerName, SpanOptions{false, ContextOptions{URL: "/eric"}})
+	tr = NewTraceWithOptions(layerName, SpanOptions{false, time.Time{}, time.Time{}, ContextOptions{URL: "/eric"}})
 	tr.End()
 	r.Close(2)
 	assert.Equal(t, 2, len(r.EventBufs))
@@ -211,7 +212,7 @@ func TestWithTransactionFiltering(t *testing.T) {
 
 	// 3.1 “disabled” transaction settings matched
 	r = reporter.SetTestReporter()
-	tr = NewTraceWithOptions(layerName, SpanOptions{false, ContextOptions{URL: "/test1"}})
+	tr = NewTraceWithOptions(layerName, SpanOptions{false, time.Time{}, time.Time{}, ContextOptions{URL: "/test1"}})
 	tr.End()
 	r.Close(0)
 	assert.Equal(t, 0, len(r.EventBufs))
@@ -219,7 +220,7 @@ func TestWithTransactionFiltering(t *testing.T) {
 
 	// 3.2 “disabled” transaction settings matched
 	r = reporter.SetTestReporter()
-	tr = NewTraceWithOptions(layerName, SpanOptions{false, ContextOptions{URL: "/eric.jpg"}})
+	tr = NewTraceWithOptions(layerName, SpanOptions{false, time.Time{}, time.Time{}, ContextOptions{URL: "/eric.jpg"}})
 	tr.End()
 	r.Close(0)
 	assert.Equal(t, 0, len(r.EventBufs))
@@ -278,7 +279,7 @@ func TestWithTransactionFiltering(t *testing.T) {
 
 	// 9.“enabled” transaction settings not matched
 	r = reporter.SetTestReporter()
-	tr = NewTraceWithOptions(layerName, SpanOptions{false, ContextOptions{URL: "/eric"}})
+	tr = NewTraceWithOptions(layerName, SpanOptions{false, time.Time{}, time.Time{}, ContextOptions{URL: "/eric"}})
 	tr.End()
 	r.Close(0)
 	assert.Equal(t, 0, len(r.EventBufs))
@@ -286,7 +287,7 @@ func TestWithTransactionFiltering(t *testing.T) {
 
 	// 10.“enabled” transaction settings matching
 	r = reporter.SetTestReporter()
-	tr = NewTraceWithOptions(layerName, SpanOptions{false, ContextOptions{URL: "/test1"}})
+	tr = NewTraceWithOptions(layerName, SpanOptions{false, time.Time{}, time.Time{}, ContextOptions{URL: "/test1"}})
 	tr.End()
 	r.Close(2)
 	assert.Equal(t, 2, len(r.EventBufs))

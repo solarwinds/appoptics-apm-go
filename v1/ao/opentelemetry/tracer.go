@@ -48,11 +48,20 @@ func (t *tracer) Start(ctx context.Context, name string,
 	if parentSpan != nil {
 		s.parent = parentSpan // TODO we don't seem to need it?
 		parentAoSpan := parentSpan.(*spanImpl)
-		s.aoSpan = parentAoSpan.aoSpan.BeginSpan(name)
-	} else if remoteSpanCtx != core.EmptySpanContext() {
-		s.aoSpan = ao.NewTraceFromID(s.name, OTSpanContext2MdStr(remoteSpanCtx), nil)
+		s.aoSpan = parentAoSpan.aoSpan.BeginSpanWithOptions(name, ao.SpanOptions{
+			StartTime: opts.StartTime,
+		})
 	} else {
-		s.aoSpan = ao.NewTrace(name)
+		mdStr := ""
+		if remoteSpanCtx != core.EmptySpanContext() {
+			mdStr = OTSpanContext2MdStr(remoteSpanCtx)
+		}
+		s.aoSpan = ao.NewTraceWithOptions(s.name, ao.SpanOptions{
+			StartTime: opts.StartTime,
+			ContextOptions: ao.ContextOptions{
+				MdStr: mdStr,
+			},
+		})
 	}
 
 	ctx = trace.ContextWithSpan(ctx, s)

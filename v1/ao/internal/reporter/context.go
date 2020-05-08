@@ -700,6 +700,15 @@ func (ctx *oboeContext) report(e *event, addCtxEdge bool, args ...interface{}) e
 		if err := e.AddKV(args[i], args[i+1]); err != nil {
 			return err
 		}
+		if !e.TimestampOverride {
+			key, ok := args[i].(string)
+			if !ok {
+				continue
+			}
+			if key == "Timestamp_u" {
+				e.TimestampOverride = true
+			}
+		}
 	}
 	if addCtxEdge {
 		e.AddEdge(ctx)

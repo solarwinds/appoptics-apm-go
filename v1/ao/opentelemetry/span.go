@@ -2,6 +2,7 @@ package opentelemetry
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -46,13 +47,21 @@ func (s *spanImpl) Tracer() trace.Tracer {
 func (s *spanImpl) End(options ...trace.EndOption) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// TODO explicitly set span end time
 	var args []interface{}
 	for _, link := range s.links {
 		args = append(args, "link", OTSpanContext2MdStr(link.SpanContext))
 	}
 	for _, attr := range s.attributes {
 		args = append(args, string(attr.Key), attr.Value.AsInterface())
+	}
+
+	cfg := &trace.EndConfig{}
+	for _, opt := range options {
+		opt(cfg)
+	}
+
+	if !cfg.EndTime.IsZero() {
+		args = append(args, "Timestamp_u", cfg.EndTime.UnixNano()/1000)
 	}
 	s.aoSpan.End(args...)
 }
@@ -65,13 +74,15 @@ func (s *spanImpl) AddEvent(ctx context.Context, name string, attrs ...core.KeyV
 
 func (s *spanImpl) addEventWithTimestamp(ctx context.Context, timestamp time.Time,
 	name string, attrs ...core.KeyValue) {
-	// TODO explicitly set timestamp
 	var args []interface{}
 	args = append(args, "Name", name)
 	for _, attr := range attrs {
 		args = append(args, string(attr.Key), attr.Value.AsInterface())
 	}
-	s.aoSpan.Info(args...) // TODO add attrs
+	if !timestamp.IsZero() {
+		args = append(args, "Timestamp_u", timestamp.UnixNano()/1000)
+	}
+	s.aoSpan.Info(args...)
 }
 
 func (s *spanImpl) AddEventWithTimestamp(ctx context.Context, timestamp time.Time,
@@ -104,8 +115,11 @@ func (s *spanImpl) RecordError(ctx context.Context, err error, opts ...trace.Err
 	if cfg.StatusCode != codes.OK {
 		s.SetStatus(cfg.StatusCode, "")
 	}
-	// TODO pass in ErrorOption (timestamp, etc)
-	s.aoSpan.Err(err)
+	s.aoSpan.ErrWithOptions(ao.ErrorOptions{
+		Timestamp: cfg.Timestamp,
+		Class:     fmt.Sprintf("error-%d", cfg.StatusCode),
+		Msg:       err.Error(),
+	})
 }
 
 func (s *spanImpl) SpanContext() core.SpanContext {
