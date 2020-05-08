@@ -7,6 +7,9 @@ import (
 	"net/http"
 
 	"context"
+	// "github.com/appoptics/appoptics-apm-go/v1/ao/opentelemetry"
+	// "go.opentelemetry.io/otel/api/trace"
+	// "go.opentelemetry.io/otel/plugin/httptrace"
 )
 
 // HTTPClientSpan is a Span that aids in reporting HTTP client requests.
@@ -27,6 +30,11 @@ func BeginHTTPClientSpan(ctx context.Context, req *http.Request) HTTPClientSpan 
 	if req != nil {
 		l := BeginRemoteURLSpan(ctx, "http.Client", req.URL.String())
 		req.Header.Set(HTTPHeaderName, l.MetadataString())
+
+		// // Inject OT span context TODO
+		// otSpan := opentelemetry.Wrapper(l)
+		// httptrace.Inject(trace.ContextWithSpan(ctx, otSpan), req)
+
 		return HTTPClientSpan{Span: l}
 	}
 	return HTTPClientSpan{Span: nullSpan{}}

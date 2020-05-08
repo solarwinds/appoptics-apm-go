@@ -28,6 +28,15 @@ type spanImpl struct {
 
 var _ trace.Span = &spanImpl{}
 
+func Wrapper(aoSpan ao.Span) trace.Span {
+	return &spanImpl{
+		tracer:  nil, // TODO no tracer for it, should be OK?
+		aoSpan:  aoSpan,
+		context: MdStr2OTSpanContext(aoSpan.MetadataString()),
+		name:    "", // TODO expose AO span name
+	}
+}
+
 func (s *spanImpl) Tracer() trace.Tracer {
 	s.mu.Lock()
 	defer s.mu.Unlock()

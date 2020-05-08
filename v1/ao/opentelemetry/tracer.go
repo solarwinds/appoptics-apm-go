@@ -107,6 +107,14 @@ func OTSpanContext2MdStr(context core.SpanContext) string {
 	return getXTraceID(context.SpanID, context.TraceID, context.IsSampled())
 }
 
+func MdStr2OTSpanContext(mdStr string) core.SpanContext {
+	// TODO
+	//
+	//  we are not able to convert it back seamlessly as the task ID will be
+	// truncated and lose precision.
+	return core.EmptySpanContext()
+}
+
 func getXTraceID(spanID core.SpanID, traceID core.TraceID, sampled bool) string {
 	buf := bytes.Buffer{}
 	buf.WriteString("2B")
