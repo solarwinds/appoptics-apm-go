@@ -43,7 +43,7 @@ func (s *spanImpl) End(options ...trace.EndOption) {
 		args = append(args, "link", OTSpanContext2MdStr(link.SpanContext))
 	}
 	for _, attr := range s.attributes {
-		args = append(args, attr.Key, attr.Value.AsInterface())
+		args = append(args, string(attr.Key), attr.Value.AsInterface())
 	}
 	s.aoSpan.End(args...)
 }
@@ -51,15 +51,25 @@ func (s *spanImpl) End(options ...trace.EndOption) {
 func (s *spanImpl) AddEvent(ctx context.Context, name string, attrs ...core.KeyValue) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.AddEventWithTimestamp(ctx, time.Now(), name, attrs...)
+	s.addEventWithTimestamp(ctx, time.Now(), name, attrs...)
+}
+
+func (s *spanImpl) addEventWithTimestamp(ctx context.Context, timestamp time.Time,
+	name string, attrs ...core.KeyValue) {
+	// TODO explicitly set timestamp
+	var args []interface{}
+	args = append(args, "Name", name)
+	for _, attr := range attrs {
+		args = append(args, string(attr.Key), attr.Value.AsInterface())
+	}
+	s.aoSpan.Info(args...) // TODO add attrs
 }
 
 func (s *spanImpl) AddEventWithTimestamp(ctx context.Context, timestamp time.Time,
 	name string, attrs ...core.KeyValue) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// TODO explicitly set timestamp
-	s.aoSpan.Info() // TODO add attrs
+	s.addEventWithTimestamp(ctx, timestamp, name, attrs...)
 }
 
 func (s *spanImpl) IsRecording() bool {
