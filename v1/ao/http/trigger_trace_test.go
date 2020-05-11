@@ -1,4 +1,4 @@
-package ao_test
+package http_test
 
 import (
 	"fmt"

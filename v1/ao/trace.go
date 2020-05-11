@@ -243,7 +243,7 @@ func (t *aoTrace) reportExit() {
 		}
 
 		for _, edge := range t.childEdges { // add Edge KV for each joined child
-			t.endArgs = append(t.endArgs, keyEdge, edge)
+			t.endArgs = append(t.endArgs, KeyEdge, edge)
 		}
 		if t.exitEvent != nil { // use exit event, if one was provided
 			t.exitEvent.ReportContext(t.aoCtx, true, t.endArgs...)
@@ -276,13 +276,13 @@ func (t *aoTrace) ExitMetadata() (mdHex string) {
 // and fill them into trace's httpSpan struct. The data is then sent to the span message channel.
 func (t *aoTrace) recordHTTPSpan() {
 	var controller, action string
-	num := len([]string{keyStatus, keyController, keyAction})
+	num := len([]string{KeyStatus, KeyController, KeyAction})
 	for i := 0; (i+1 < len(t.endArgs)) && (num > 0); i += 2 {
 		k, isStr := t.endArgs[i].(string)
 		if !isStr {
 			continue
 		}
-		if k == keyStatus {
+		if k == KeyStatus {
 			switch v := t.endArgs[i+1].(type) {
 			case int:
 				t.httpSpan.span.Status = v
@@ -290,10 +290,10 @@ func (t *aoTrace) recordHTTPSpan() {
 				t.httpSpan.span.Status = *v
 			}
 			num--
-		} else if k == keyController {
+		} else if k == KeyController {
 			controller += t.endArgs[i+1].(string)
 			num--
-		} else if k == keyAction {
+		} else if k == KeyAction {
 			action += t.endArgs[i+1].(string)
 			num--
 		}
@@ -308,7 +308,7 @@ func (t *aoTrace) recordHTTPSpan() {
 	reporter.ReportSpan(&t.httpSpan.span)
 
 	// This will add the TransactionName KV into the exit event.
-	t.endArgs = append(t.endArgs, keyTransactionName, t.httpSpan.span.Transaction)
+	t.endArgs = append(t.endArgs, KeyTransactionName, t.httpSpan.span.Transaction)
 }
 
 // finalizeTxnName finalizes the transaction name based on the following factors:

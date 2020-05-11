@@ -9,7 +9,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/http"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
@@ -157,7 +157,7 @@ func TestTextMapExtract(t *testing.T) {
 
 	// valid trace ID, false sample flag
 	carrier := opentracing.TextMapCarrier{}
-	carrier.Set(ao.HTTPHeaderName, textCarrier[ao.HTTPHeaderName])
+	carrier.Set(http.HTTPHeaderName, textCarrier[http.HTTPHeaderName])
 	carrier.Set(fieldNameSampled, "false")
 	ctx, err = tr.Extract(opentracing.TextMap, carrier)
 	assert.NotNil(t, ctx)
@@ -169,7 +169,7 @@ func TestTextMapExtract(t *testing.T) {
 
 	// valid trace ID, no sampled flag
 	aoCarrier := opentracing.TextMapCarrier{}
-	aoCarrier.Set(ao.HTTPHeaderName, textCarrier[ao.HTTPHeaderName])
+	aoCarrier.Set(http.HTTPHeaderName, textCarrier[http.HTTPHeaderName])
 	ctx, err = tr.Extract(opentracing.TextMap, aoCarrier)
 	assert.NotNil(t, ctx)
 	assert.NoError(t, err)
@@ -180,14 +180,14 @@ func TestTextMapExtract(t *testing.T) {
 
 	// invalid trace ID
 	invalidCarrier := opentracing.TextMapCarrier{}
-	invalidCarrier.Set(ao.HTTPHeaderName, "!!!")
+	invalidCarrier.Set(http.HTTPHeaderName, "!!!")
 	ctx, err = tr.Extract(opentracing.TextMap, invalidCarrier)
 	assert.Nil(t, ctx)
 	assert.Equal(t, opentracing.ErrSpanContextCorrupted, err)
 
 	// invalid sampled flag
 	invalidCarrier = opentracing.TextMapCarrier{}
-	invalidCarrier.Set(ao.HTTPHeaderName, textCarrier[ao.HTTPHeaderName])
+	invalidCarrier.Set(http.HTTPHeaderName, textCarrier[http.HTTPHeaderName])
 	invalidCarrier.Set(fieldNameSampled, "!!!")
 	ctx, err = tr.Extract(opentracing.TextMap, invalidCarrier)
 	assert.Nil(t, ctx)

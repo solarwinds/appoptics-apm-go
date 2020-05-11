@@ -1,6 +1,6 @@
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 
-package ao_test
+package http_test
 
 import (
 	"os"
@@ -12,6 +12,12 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
 )
+
+const TestServiceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:Go"
+
+func init() {
+	os.Setenv("APPOPTICS_SERVICE_KEY", TestServiceKey)
+}
 
 func TestCustomTransactionNameWithDomain(t *testing.T) {
 	os.Setenv("APPOPTICS_PREPEND_DOMAIN", "true")

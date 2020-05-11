@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/http"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/opentelemetry"
 	"go.opentelemetry.io/otel/api/trace"
 	"golang.org/x/net/context"
@@ -87,9 +88,9 @@ func tracingContext(ctx context.Context, serverName string, methodName string, s
 	signature := ""
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok {
-		xtID = getFirstValFromMd(md, ao.HTTPHeaderName)
-		opt = getFirstValFromMd(md, ao.HTTPHeaderXTraceOptions)
-		signature = getFirstValFromMd(md, ao.HTTPHeaderXTraceOptionsSignature)
+		xtID = getFirstValFromMd(md, http.HTTPHeaderName)
+		opt = getFirstValFromMd(md, http.HTTPHeaderXTraceOptions)
+		signature = getFirstValFromMd(md, http.HTTPHeaderXTraceOptionsSignature)
 	}
 
 	// try OT span context if X-Trace ID is not found
@@ -225,7 +226,7 @@ func UnaryClientInterceptor(target string, serviceName string) grpc.UnaryClientI
 		defer span.End()
 		xtID := span.MetadataString()
 		if len(xtID) > 0 {
-			ctx = metadata.AppendToOutgoingContext(ctx, ao.HTTPHeaderName, xtID)
+			ctx = metadata.AppendToOutgoingContext(ctx, http.HTTPHeaderName, xtID)
 		}
 
 		ctx = injectOTSpanContext(ctx, span)
@@ -249,7 +250,7 @@ func StreamClientInterceptor(target string, serviceName string) grpc.StreamClien
 		xtID := span.MetadataString()
 		// lg.Debug("stream client interceptor", "x-trace", xtID)
 		if len(xtID) > 0 {
-			ctx = metadata.AppendToOutgoingContext(ctx, ao.HTTPHeaderName, xtID)
+			ctx = metadata.AppendToOutgoingContext(ctx, http.HTTPHeaderName, xtID)
 		}
 
 		ctx = injectOTSpanContext(ctx, span)

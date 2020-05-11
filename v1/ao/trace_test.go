@@ -12,6 +12,7 @@ import (
 	"context"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/http"
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/stretchr/testify/assert"
@@ -36,7 +37,7 @@ func TestTraceMetadata(t *testing.T) {
 		{"test", "entry"}: {},
 		{"test", "exit"}: {Edges: g.Edges{{"test", "entry"}}, Callback: func(n g.Node) {
 			// exit event should match ExitMetadata
-			assert.Equal(t, md, n.Map[ao.HTTPHeaderName])
+			assert.Equal(t, md, n.Map[http.HTTPHeaderName])
 		}},
 	})
 }
@@ -294,12 +295,12 @@ func TestTraceFromMetadata(t *testing.T) {
 		// entry event should have edge to incoming opID
 		{"test", "entry"}: {Edges: g.Edges{{"Edge", incomingID[42:58]}}, Callback: func(n g.Node) {
 			// trace ID should match incoming ID
-			assert.Equal(t, incomingID[2:42], n.Map[ao.HTTPHeaderName].(string)[2:42])
+			assert.Equal(t, incomingID[2:42], n.Map[http.HTTPHeaderName].(string)[2:42])
 		}},
 		// exit event links to entry
 		{"test", "exit"}: {Edges: g.Edges{{"test", "entry"}}, Callback: func(n g.Node) {
 			// trace ID should match incoming ID
-			assert.Equal(t, incomingID[2:42], n.Map[ao.HTTPHeaderName].(string)[2:42])
+			assert.Equal(t, incomingID[2:42], n.Map[http.HTTPHeaderName].(string)[2:42])
 			assert.Equal(t, "Arg", n.Map["Extra"])
 		}},
 	})

@@ -113,6 +113,9 @@ func addLinkIfValid(links []trace.Link, sc core.SpanContext, kind string) []trac
 
 // OTSpanContext2MdStr generates the X-Trace ID from the OpenTelemetry span context.
 func OTSpanContext2MdStr(context core.SpanContext) string {
+	if !context.IsValid() {
+		return ""
+	}
 	return getXTraceID(context.SpanID, context.TraceID, context.IsSampled())
 }
 
