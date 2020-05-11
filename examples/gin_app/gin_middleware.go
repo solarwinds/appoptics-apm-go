@@ -20,7 +20,7 @@ const (
 func tracer() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		t, w, _ := http2.TraceFromHTTPRequestResponse(ginSpanName, c.Writer, c.Request)
-		c.Writer = &ginResponseWriter{w.(*http2.HTTPResponseWriter), c.Writer}
+		c.Writer = &ginResponseWriter{w.(*http2.ResponseWriter), c.Writer}
 		t.SetTransactionName(c.HandlerName())
 		defer t.End()
 		// create a context.Context and bind it to the gin.Context
@@ -33,7 +33,7 @@ func tracer() gin.HandlerFunc {
 // ginResponseWriter satisfies the gin.ResponseWriter interface
 type ginResponseWriter struct {
 	// handles Write, WriteHeader, Header (by calling wrapped gin writer)
-	*http2.HTTPResponseWriter
+	*http2.ResponseWriter
 	// handles all other gin.ResponseWriter methods
 	ginWriter gin.ResponseWriter
 }

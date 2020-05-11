@@ -15,7 +15,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 )
 
-// HTTPClientSpan is a Span that aids in reporting HTTP client requests.
+// ClientSpan is a Span that aids in reporting HTTP client requests.
 //   req, err := http.NewRequest("GET", "http://example.com", nil)
 //   l := ao.BeginHTTPClientSpan(ctx, httpReq)
 //   defer l.End()
@@ -23,36 +23,39 @@ import (
 //   resp, err := client.Do(req)
 //   l.AddHTTPResponse(resp, err)
 //   // ...
-type HTTPClientSpan struct{ ao.Span }
+type ClientSpan struct{ ao.Span }
+
+// Deprecated: use ClientSpan
+type HTTPClientSpan = ClientSpan
 
 // BeginHTTPClientSpan stores trace metadata in the headers of an HTTP client request, allowing the
 // trace to be continued on the other end. It returns a Span that must have End() called to
 // benchmark the client request, and should have AddHTTPResponse(r, err) called to process response
 // metadata.
-func BeginHTTPClientSpan(ctx context.Context, req *http.Request) HTTPClientSpan {
+func BeginHTTPClientSpan(ctx context.Context, req *http.Request) ClientSpan {
 	if req != nil {
 		l := ao.BeginRemoteURLSpan(ctx, "http.Client", req.URL.String())
-		req.Header.Set(HTTPHeaderName, l.MetadataString())
+		req.Header.Set(XTraceHeader, l.MetadataString())
 
 		// Inject OT span context
 		otSpan := opentelemetry.Wrapper(l)
 		httptrace.Inject(trace.ContextWithSpan(ctx, otSpan), req)
 
-		return HTTPClientSpan{Span: l}
+		return ClientSpan{Span: l}
 	}
-	return HTTPClientSpan{Span: ao.NewNullSpan()}
+	return ClientSpan{Span: ao.NewNullSpan()}
 }
 
 // AddHTTPResponse adds information from http.Response to this span. It will also check the HTTP
 // response headers and propagate any valid distributed trace context from the end of the HTTP
 // server's span to this one.
-func (l HTTPClientSpan) AddHTTPResponse(resp *http.Response, err error) {
+func (l ClientSpan) AddHTTPResponse(resp *http.Response, err error) {
 	if err != nil {
 		l.Err(err)
 	}
 	if resp != nil {
 		l.AddEndArgs(ao.KeyRemoteStatus, resp.StatusCode, ao.KeyContentLength, resp.ContentLength)
-		if md := resp.Header.Get(HTTPHeaderName); md != "" {
+		if md := resp.Header.Get(XTraceHeader); md != "" {
 			l.AddEndArgs(ao.KeyEdge, md)
 		}
 	}

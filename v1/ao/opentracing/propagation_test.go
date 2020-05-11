@@ -157,7 +157,7 @@ func TestTextMapExtract(t *testing.T) {
 
 	// valid trace ID, false sample flag
 	carrier := opentracing.TextMapCarrier{}
-	carrier.Set(http.HTTPHeaderName, textCarrier[http.HTTPHeaderName])
+	carrier.Set(http.XTraceHeader, textCarrier[http.XTraceHeader])
 	carrier.Set(fieldNameSampled, "false")
 	ctx, err = tr.Extract(opentracing.TextMap, carrier)
 	assert.NotNil(t, ctx)
@@ -169,7 +169,7 @@ func TestTextMapExtract(t *testing.T) {
 
 	// valid trace ID, no sampled flag
 	aoCarrier := opentracing.TextMapCarrier{}
-	aoCarrier.Set(http.HTTPHeaderName, textCarrier[http.HTTPHeaderName])
+	aoCarrier.Set(http.XTraceHeader, textCarrier[http.XTraceHeader])
 	ctx, err = tr.Extract(opentracing.TextMap, aoCarrier)
 	assert.NotNil(t, ctx)
 	assert.NoError(t, err)
@@ -180,14 +180,14 @@ func TestTextMapExtract(t *testing.T) {
 
 	// invalid trace ID
 	invalidCarrier := opentracing.TextMapCarrier{}
-	invalidCarrier.Set(http.HTTPHeaderName, "!!!")
+	invalidCarrier.Set(http.XTraceHeader, "!!!")
 	ctx, err = tr.Extract(opentracing.TextMap, invalidCarrier)
 	assert.Nil(t, ctx)
 	assert.Equal(t, opentracing.ErrSpanContextCorrupted, err)
 
 	// invalid sampled flag
 	invalidCarrier = opentracing.TextMapCarrier{}
-	invalidCarrier.Set(http.HTTPHeaderName, textCarrier[http.HTTPHeaderName])
+	invalidCarrier.Set(http.XTraceHeader, textCarrier[http.XTraceHeader])
 	invalidCarrier.Set(fieldNameSampled, "!!!")
 	ctx, err = tr.Extract(opentracing.TextMap, invalidCarrier)
 	assert.Nil(t, ctx)

@@ -88,9 +88,9 @@ func tracingContext(ctx context.Context, serverName string, methodName string, s
 	signature := ""
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok {
-		xtID = getFirstValFromMd(md, http.HTTPHeaderName)
-		opt = getFirstValFromMd(md, http.HTTPHeaderXTraceOptions)
-		signature = getFirstValFromMd(md, http.HTTPHeaderXTraceOptionsSignature)
+		xtID = getFirstValFromMd(md, http.XTraceHeader)
+		opt = getFirstValFromMd(md, http.XTraceOptionsHeader)
+		signature = getFirstValFromMd(md, http.XTraceOptionsSignatureHeader)
 	}
 
 	// try OT span context if X-Trace ID is not found
@@ -226,7 +226,7 @@ func UnaryClientInterceptor(target string, serviceName string) grpc.UnaryClientI
 		defer span.End()
 		xtID := span.MetadataString()
 		if len(xtID) > 0 {
-			ctx = metadata.AppendToOutgoingContext(ctx, http.HTTPHeaderName, xtID)
+			ctx = metadata.AppendToOutgoingContext(ctx, http.XTraceHeader, xtID)
 		}
 
 		ctx = injectOTSpanContext(ctx, span)
@@ -250,7 +250,7 @@ func StreamClientInterceptor(target string, serviceName string) grpc.StreamClien
 		xtID := span.MetadataString()
 		// lg.Debug("stream client interceptor", "x-trace", xtID)
 		if len(xtID) > 0 {
-			ctx = metadata.AppendToOutgoingContext(ctx, http.HTTPHeaderName, xtID)
+			ctx = metadata.AppendToOutgoingContext(ctx, http.XTraceHeader, xtID)
 		}
 
 		ctx = injectOTSpanContext(ctx, span)
