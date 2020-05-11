@@ -18,7 +18,7 @@ type spanImpl struct {
 	mu            sync.Mutex
 	tracer        trace.Tracer
 	aoSpan        ao.Span
-	context       core.SpanContext
+	context       trace.SpanContext
 	name          string
 	statusCode    codes.Code
 	statusMessage string
@@ -122,7 +122,7 @@ func (s *spanImpl) RecordError(ctx context.Context, err error, opts ...trace.Err
 	})
 }
 
-func (s *spanImpl) SpanContext() core.SpanContext {
+func (s *spanImpl) SpanContext() trace.SpanContext {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.context
