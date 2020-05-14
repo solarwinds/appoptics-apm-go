@@ -22,9 +22,10 @@ type spanImpl struct {
 	name          string
 	statusCode    codes.Code
 	statusMessage string
-	attributes    []core.KeyValue
-	links         []trace.Link
-	parent        trace.Span
+	// TODO: attributes should be overridable
+	attributes []core.KeyValue
+	links      []trace.Link
+	parent     trace.Span
 }
 
 var _ trace.Span = &spanImpl{}

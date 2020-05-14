@@ -17,6 +17,16 @@ type tracer struct {
 	name string
 }
 
+const (
+	AttrHttpUrl = "http.url"
+)
+
+const (
+	AOXTraceOptions          = "ao.xtrace.options"
+	AOXTraceOptionsSignature = "ao.xtrace.options.signature"
+	AOMdStr                  = "ao.mdstr"
+)
+
 var _ trace.Tracer = &tracer{}
 
 // WithSpan wraps the execution of the fn function with a spanImpl.
@@ -45,11 +55,34 @@ func (t *tracer) Start(ctx context.Context, name string,
 
 	parentSpan, remoteSpanCtx, links := GetSpanContextAndLinks(ctx, opts.NewRoot)
 	s := &spanImpl{tracer: t}
+
+	var url, xtraceOptions, xtraceOptionsSig, mdStr string
+	for _, attr := range opts.Attributes {
+		switch attr.Key {
+		case AttrHttpUrl:
+			url = attr.Value.AsString()
+		case AOXTraceOptions:
+			xtraceOptions = attr.Value.AsString()
+		case AOXTraceOptionsSignature:
+			xtraceOptionsSig = attr.Value.AsString()
+		case AOMdStr:
+			mdStr = attr.Value.AsString()
+		}
+
+		s.attributes = append(s.attributes, attr)
+	}
+
 	if parentSpan != nil {
 		s.parent = parentSpan // TODO we don't seem to need it?
 		parentAoSpan := parentSpan.(*spanImpl)
 		s.aoSpan = parentAoSpan.aoSpan.BeginSpanWithOptions(name, ao.SpanOptions{
 			StartTime: opts.StartTime,
+			ContextOptions: ao.ContextOptions{
+				URL:                    url,
+				XTraceOptions:          xtraceOptions,
+				XTraceOptionsSignature: xtraceOptionsSig,
+				MdStr: mdStr,
+			},
 		})
 	} else {
 		mdStr := ""
