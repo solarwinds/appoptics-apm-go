@@ -37,6 +37,7 @@ func (t *Tracer) StartSpan(operationName string, opts ...ot.StartSpanOption) ot.
 func (t *Tracer) startSpanWithOptions(operationName string, opts ot.StartSpanOptions) ot.Span {
 	// check if trace has already started (use Trace if there is no parent, Span otherwise)
 	// XXX handle StartTime
+	var newSpan ot.Span
 
 	for _, ref := range opts.References {
 		switch ref.Type {
@@ -46,26 +47,33 @@ func (t *Tracer) startSpanWithOptions(operationName string, opts ot.StartSpanOpt
 			if refCtx.span == nil { // referenced spanContext created by Extract()
 				var span ao.Span
 				if refCtx.sampled {
-					span = ao.NewTraceFromID(operationName, refCtx.remoteMD, func() ao.KVMap {
-						return translateTags(opts.Tags)
-					})
+					span = ao.NewTraceFromID(operationName, refCtx.remoteMD, nil)
 				} else {
 					span = ao.NewNullTrace()
 				}
-				return &spanImpl{tracer: t, context: spanContext{
+				newSpan = &spanImpl{tracer: t, context: spanContext{
 					span:    span,
 					sampled: refCtx.sampled,
 					baggage: refCtx.baggage,
 				},
 				}
+			} else {
+				// referenced spanContext was in-process
+				newSpan = &spanImpl{tracer: t, context: spanContext{span: refCtx.span.BeginSpan(operationName)}}
 			}
-			// referenced spanContext was in-process
-			return &spanImpl{tracer: t, context: spanContext{span: refCtx.span.BeginSpan(operationName)}}
 		}
 	}
 
 	// otherwise, no parent span found, so make new trace and return as span
-	newSpan := &spanImpl{tracer: t, context: spanContext{span: ao.NewTrace(operationName)}}
+	if newSpan == nil {
+		newSpan = &spanImpl{tracer: t, context: spanContext{span: ao.NewTrace(operationName)}}
+	}
+
+	// add tags, if provided in span options
+	for k, v := range opts.Tags {
+		newSpan.SetTag(k, v)
+	}
+
 	return newSpan
 }
 
@@ -190,7 +198,14 @@ func (s *spanImpl) SetOperationName(operationName string) ot.Span {
 func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
 	s.Lock()
 	defer s.Unlock()
-	s.context.span.AddEndArgs(translateTagName(key), value)
+	// if transaction name is passed, set on the span
+	if tagName := translateTagName(key); tagName == "TransactionName" {
+		if txnName, ok := value.(string); ok {
+			s.context.span.SetTransactionName(txnName)
+		}
+	} else {
+		s.context.span.AddEndArgs(tagName, value)
+	}
 	return s
 }
 

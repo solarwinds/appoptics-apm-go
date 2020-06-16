@@ -19,8 +19,6 @@ var otAOMap = map[string]string{
 	string(ext.DBInstance):  "Database",
 	string(ext.DBStatement): "Query",
 	string(ext.DBType):      "Flavor",
-
-	string("resource.name"): "TransactionName",
 }
 
 func translateTagName(key string) string {
@@ -28,12 +26,4 @@ func translateTagName(key string) string {
 		return k
 	}
 	return key
-}
-
-func translateTags(tags map[string]interface{}) map[string]interface{} {
-	ret := make(map[string]interface{})
-	for k, v := range tags {
-		ret[translateTagName(k)] = v
-	}
-	return ret
 }
