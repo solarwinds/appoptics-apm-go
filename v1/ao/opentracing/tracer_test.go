@@ -34,6 +34,7 @@ func testTransactionName(t *testing.T, tagName, txnName string) {
 	span := tr.StartSpan("op")
 	assert.NotNil(t, span)
 	span.SetTag(tagName, txnName)
+	span.SetTag("http.url", "http://app.com/myURL/123/456")
 	span.Finish()
 
 	r.Close(2)
