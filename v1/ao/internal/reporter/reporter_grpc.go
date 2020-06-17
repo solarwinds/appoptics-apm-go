@@ -264,7 +264,7 @@ func getProxyCertPath() string {
 	return config.GetProxyCertPath()
 }
 
-// initializes a new GRPC reporter from scratch (called once on program startup)
+// initializes a new GRPC reporter from scratch (called once on program startup).
 //
 // returns	GRPC reporter object
 func newGRPCReporter() reporter {
