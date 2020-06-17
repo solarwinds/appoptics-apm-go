@@ -20,7 +20,7 @@ var otAOMap = map[string]string{
 	string(ext.DBStatement): "Query",
 	string(ext.DBType):      "Flavor",
 
-	"TransactionName": "resource.name",
+	"resource.name": "TransactionName",
 }
 
 func translateTagName(key string) string {
