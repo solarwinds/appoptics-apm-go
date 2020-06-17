@@ -8,9 +8,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/http"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/opentelemetry"
+	"go.opentelemetry.io/otel/api/trace"
 	"golang.org/x/net/context"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
+	otgrpc "go.opentelemetry.io/otel/plugin/grpctrace"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -84,9 +88,15 @@ func tracingContext(ctx context.Context, serverName string, methodName string, s
 	signature := ""
 	md, ok := metadata.FromIncomingContext(ctx)
 	if ok {
-		xtID = getFirstValFromMd(md, ao.HTTPHeaderName)
-		opt = getFirstValFromMd(md, ao.HTTPHeaderXTraceOptions)
-		signature = getFirstValFromMd(md, ao.HTTPHeaderXTraceOptionsSignature)
+		xtID = getFirstValFromMd(md, http.XTraceHeader)
+		opt = getFirstValFromMd(md, http.XTraceOptionsHeader)
+		signature = getFirstValFromMd(md, http.XTraceOptionsSignatureHeader)
+	}
+
+	// try OT span context if X-Trace ID is not found
+	if xtID == "" {
+		_, spanCtx := otgrpc.Extract(ctx, &md)
+		xtID = opentelemetry.OTSpanContext2MdStr(spanCtx)
 	}
 
 	t := ao.NewTraceWithOptions(serverName, ao.SpanOptions{
@@ -187,6 +197,19 @@ func StreamServerInterceptor(serverName string) grpc.StreamServerInterceptor {
 	}
 }
 
+func injectOTSpanContext(ctx context.Context, aoSpan ao.Span) context.Context {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if ok {
+		// convert AO span to OT span and inject it into the context
+		otSpan := opentelemetry.Wrapper(aoSpan)
+		ctx = trace.ContextWithSpan(ctx, otSpan)
+		mdCopy := md.Copy()
+		otgrpc.Inject(ctx, &mdCopy)
+		ctx = metadata.NewOutgoingContext(ctx, mdCopy)
+	}
+	return ctx
+}
+
 // UnaryClientInterceptor returns an interceptor that traces a unary RPC from a gRPC client to a server using
 // AppOptics, by propagating the distributed trace's context from client to server using gRPC metadata.
 func UnaryClientInterceptor(target string, serviceName string) grpc.UnaryClientInterceptor {
@@ -203,8 +226,11 @@ func UnaryClientInterceptor(target string, serviceName string) grpc.UnaryClientI
 		defer span.End()
 		xtID := span.MetadataString()
 		if len(xtID) > 0 {
-			ctx = metadata.AppendToOutgoingContext(ctx, ao.HTTPHeaderName, xtID)
+			ctx = metadata.AppendToOutgoingContext(ctx, http.XTraceHeader, xtID)
 		}
+
+		ctx = injectOTSpanContext(ctx, span)
+
 		err := invoker(ctx, method, req, resp, cc, opts...)
 		if err != nil {
 			span.Error(getErrClass(err), err.Error())
@@ -224,8 +250,11 @@ func StreamClientInterceptor(target string, serviceName string) grpc.StreamClien
 		xtID := span.MetadataString()
 		// lg.Debug("stream client interceptor", "x-trace", xtID)
 		if len(xtID) > 0 {
-			ctx = metadata.AppendToOutgoingContext(ctx, ao.HTTPHeaderName, xtID)
+			ctx = metadata.AppendToOutgoingContext(ctx, http.XTraceHeader, xtID)
 		}
+
+		ctx = injectOTSpanContext(ctx, span)
+
 		clientStream, err := streamer(ctx, desc, cc, method, opts...)
 		if err != nil {
 			closeSpan(span, err)

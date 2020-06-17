@@ -46,6 +46,7 @@ func (t *Tracer) startSpanWithOptions(operationName string, opts ot.StartSpanOpt
 			if refCtx.span == nil { // referenced spanContext created by Extract()
 				var span ao.Span
 				if refCtx.sampled {
+					// TODO: explicitly set span start time
 					span = ao.NewTraceFromID(operationName, refCtx.remoteMD, func() ao.KVMap {
 						return translateTags(opts.Tags)
 					})

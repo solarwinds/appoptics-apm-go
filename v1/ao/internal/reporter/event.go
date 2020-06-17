@@ -16,8 +16,9 @@ import (
 )
 
 type event struct {
-	metadata oboeMetadata
-	bbuf     *bson.Buffer
+	metadata          oboeMetadata
+	TimestampOverride bool // the timestamp is provided by the user
+	bbuf              *bson.Buffer
 }
 
 // Label is a required event attribute.

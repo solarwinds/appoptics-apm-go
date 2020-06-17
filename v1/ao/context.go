@@ -4,10 +4,10 @@ package ao
 
 import "context"
 
-type contextKeyT interface{}
+type ContextKeyT interface{}
 
-var contextKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.Trace")
-var contextSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.Span")
+var contextKey = ContextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.Trace")
+var contextSpanKey = ContextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.Span")
 
 // NewContext returns a copy of the parent context and associates it with a Trace.
 func NewContext(ctx context.Context, t Trace) context.Context {

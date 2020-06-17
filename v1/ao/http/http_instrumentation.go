@@ -2,7 +2,7 @@
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 // AppOptics HTTP instrumentation for Go
 
-package ao
+package http
 
 import (
 	"context"
@@ -14,29 +14,41 @@ import (
 	"strings"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/opentelemetry"
+	"go.opentelemetry.io/otel/api/global"
+	"go.opentelemetry.io/otel/api/propagation"
+	"go.opentelemetry.io/otel/api/trace"
 )
 
 const (
-	// HTTPHeaderName is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
+	// XTraceHeader is a constant for the HTTP header used by AppOptics ("X-Trace") to propagate
 	// the distributed tracing context across HTTP requests.
-	HTTPHeaderName = "X-Trace"
-	// HTTPHeaderXTraceOptions is a constant for the HTTP header to propagate X-Trace-Options
+	XTraceHeader = "X-Trace"
+	// Deprecated: use XTraceHeader
+	HTTPHeaderName = XTraceHeader
+	// XTraceOptionsHeader is a constant for the HTTP header to propagate X-Trace-Options
 	// values. It's for trigger trace requests and may be used for other purposes in the future.
-	HTTPHeaderXTraceOptions = reporter.HTTPHeaderXTraceOptions
-	// HTTPHeaderXTraceOptionsSignature is a constant for the HTTP headers to propagate
+	XTraceOptionsHeader = reporter.HTTPHeaderXTraceOptions
+	// Deprecated: use XTraceOptionsHeader
+	HTTPHeaderXTraceOptions = XTraceOptionsHeader
+	// XTraceOptionsSignatureHeader is a constant for the HTTP headers to propagate
 	// X-Trace-Options-Signature values. It contains the response codes for X-Trace-Options
-	HTTPHeaderXTraceOptionsSignature = reporter.HTTPHeaderXTraceOptionsSignature
+	XTraceOptionsSignatureHeader = reporter.HTTPHeaderXTraceOptionsSignature
+	// Deprecated: use XTraceOptionsSignatureHeader
+	HTTPHeaderXTraceOptionsSignature = XTraceOptionsSignatureHeader
 	httpHandlerSpanName              = "http.HandlerFunc"
 )
 
 // key used for HTTP span to indicate a new context
-var httpSpanKey = contextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.HTTPSpan")
+var httpSpanKey = ao.ContextKeyT("github.com/appoptics/appoptics-apm-go/v1/ao.HTTPSpan")
 
-// HTTPHandler wraps an http.HandlerFunc with entry / exit events,
+// Handler wraps an http.HandlerFunc with entry / exit events,
 // returning a new handler that can be used in its place.
-//   http.HandleFunc("/path", ao.HTTPHandler(myHandler))
-func HTTPHandler(handler func(http.ResponseWriter, *http.Request), opts ...SpanOpt) func(http.ResponseWriter, *http.Request) {
+//   http.HandleFunc("/path", ao.Handler(myHandler))
+func Handler(handler func(http.ResponseWriter, *http.Request),
+	opts ...ao.SpanOpt) func(http.ResponseWriter, *http.Request) {
 	// At wrap time (when binding handler to router): get name of wrapped handler func
 	var endArgs []interface{}
 	if f := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()); f != nil {
@@ -48,7 +60,7 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request), opts ...SpanO
 	}
 	// return wrapped HTTP request handler
 	return func(w http.ResponseWriter, r *http.Request) {
-		if Closed() {
+		if ao.Closed() {
 			handler(w, r)
 			return
 		}
@@ -77,8 +89,8 @@ func HTTPHandler(handler func(http.ResponseWriter, *http.Request), opts ...SpanO
 //       defer tr.End()
 //       // ...
 //   }
-func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request, opts ...SpanOpt) (Trace, http.ResponseWriter,
-	*http.Request) {
+func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *http.Request,
+	opts ...ao.SpanOpt) (ao.Trace, http.ResponseWriter, *http.Request) {
 
 	// determine if this is a new context, if so set flag isNewContext to start a new HTTP Span
 	isNewContext := false
@@ -91,7 +103,7 @@ func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *htt
 	t := traceFromHTTPRequest(spanName, r, isNewContext, opts...)
 
 	// Associate the trace with http.Request to expose it to the handler
-	r = r.WithContext(NewContext(r.Context(), t))
+	r = r.WithContext(ao.NewContext(r.Context(), t))
 
 	wrapper := newResponseWriter(w, t) // wrap writer with response-observing writer
 	for k, v := range t.HTTPRspHeaders() {
@@ -101,16 +113,19 @@ func TraceFromHTTPRequestResponse(spanName string, w http.ResponseWriter, r *htt
 	return t, wrapper, r
 }
 
-// HTTPResponseWriter observes an http.ResponseWriter when WriteHeader() or Write() is called to
+// ResponseWriter observes an http.ResponseWriter when WriteHeader() or Write() is called to
 // check the status code and response headers.
-type HTTPResponseWriter struct {
+type ResponseWriter struct {
 	Writer      http.ResponseWriter
-	t           Trace
+	t           ao.Trace
 	StatusCode  int
 	WroteHeader bool
 }
 
-func (w *HTTPResponseWriter) Write(p []byte) (n int, err error) {
+// Deprecated: use ResponseWriter
+type HTTPResponseWriter = ResponseWriter
+
+func (w *ResponseWriter) Write(p []byte) (n int, err error) {
 	if !w.WroteHeader {
 		w.WriteHeader(w.StatusCode)
 	}
@@ -118,18 +133,18 @@ func (w *HTTPResponseWriter) Write(p []byte) (n int, err error) {
 }
 
 // Header implements the http.ResponseWriter interface.
-func (w *HTTPResponseWriter) Header() http.Header { return w.Writer.Header() }
+func (w *ResponseWriter) Header() http.Header { return w.Writer.Header() }
 
 // WriteHeader implements the http.ResponseWriter interface.
-func (w *HTTPResponseWriter) WriteHeader(status int) {
-	w.StatusCode = status                // observe HTTP status code
-	md := w.Header().Get(HTTPHeaderName) // check response for downstream metadata
-	if w.t.IsReporting() {               // set trace exit metadata in X-Trace header
+func (w *ResponseWriter) WriteHeader(status int) {
+	w.StatusCode = status              // observe HTTP status code
+	md := w.Header().Get(XTraceHeader) // check response for downstream metadata
+	if w.t.IsReporting() {             // set trace exit metadata in X-Trace header
 		// if downstream response headers mention a different span, add edge to it
 		if md != "" && md != w.t.ExitMetadata() {
-			w.t.AddEndArgs(keyEdge, md)
+			w.t.AddEndArgs(ao.KeyEdge, md)
 		}
-		w.Header().Set(HTTPHeaderName, w.t.ExitMetadata()) // replace downstream MD with ours
+		w.Header().Set(XTraceHeader, w.t.ExitMetadata()) // replace downstream MD with ours
 	}
 	w.WroteHeader = true
 	w.Writer.WriteHeader(status)
@@ -137,44 +152,54 @@ func (w *HTTPResponseWriter) WriteHeader(status int) {
 
 // newResponseWriter observes the HTTP Status code of an HTTP response, returning a
 // wrapped http.ResponseWriter and a pointer to an int containing the status.
-func newResponseWriter(writer http.ResponseWriter, t Trace) *HTTPResponseWriter {
-	w := &HTTPResponseWriter{Writer: writer, t: t, StatusCode: http.StatusOK}
-	t.AddEndArgs(keyStatus, &w.StatusCode)
+func newResponseWriter(writer http.ResponseWriter, t ao.Trace) *ResponseWriter {
+	w := &ResponseWriter{Writer: writer, t: t, StatusCode: http.StatusOK}
+	t.AddEndArgs(ao.KeyStatus, &w.StatusCode)
 	// add exit event metadata to X-Trace header
 	if t.IsReporting() {
 		// add/replace response header metadata with this trace's
-		w.Header().Set(HTTPHeaderName, t.ExitMetadata())
+		w.Header().Set(XTraceHeader, t.ExitMetadata())
 	}
 	return w
 }
 
 // traceFromHTTPRequest returns a Trace, given an http.Request. If a distributed trace is described
 // in the "X-Trace" header, this context will be continued.
-func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, opts ...SpanOpt) Trace {
-	so := &SpanOptions{}
+func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, opts ...ao.SpanOpt) ao.Trace {
+	so := &ao.SpanOptions{}
 	for _, f := range opts {
 		f(so)
 	}
 
+	mdStr := r.Header.Get(XTraceHeader)
+	// Get OT trace context
+	if mdStr == "" {
+		ctx := propagation.ExtractHTTP(context.Background(), global.Propagators(), r.Header)
+		otSpanContext := trace.RemoteSpanContextFromContext(ctx)
+		mdStr = opentelemetry.OTSpanContext2MdStr(otSpanContext)
+	}
+
 	// start trace, passing in metadata header
-	t := NewTraceWithOptions(spanName, SpanOptions{
-		false,
-		reporter.ContextOptions{
-			MdStr:                  r.Header.Get(HTTPHeaderName),
+	t := ao.NewTraceWithOptions(spanName, ao.SpanOptions{
+		WithBackTrace: false,
+		StartTime:     time.Time{},
+		EndTime:       time.Time{},
+		ContextOptions: reporter.ContextOptions{
+			MdStr:                  mdStr,
 			URL:                    r.URL.EscapedPath(),
-			XTraceOptions:          r.Header.Get(HTTPHeaderXTraceOptions),
-			XTraceOptionsSignature: r.Header.Get(HTTPHeaderXTraceOptionsSignature),
-			CB: func() KVMap {
-				kvs := KVMap{
-					keyMethod:      r.Method,
-					keyHTTPHost:    r.Host,
-					keyURL:         r.URL.EscapedPath(),
-					keyRemoteHost:  r.RemoteAddr,
-					keyQueryString: r.URL.RawQuery,
+			XTraceOptions:          r.Header.Get(XTraceOptionsHeader),
+			XTraceOptionsSignature: r.Header.Get(XTraceOptionsSignatureHeader),
+			CB: func() ao.KVMap {
+				kvs := ao.KVMap{
+					ao.KeyMethod:      r.Method,
+					ao.KeyHTTPHost:    r.Host,
+					ao.KeyURL:         r.URL.EscapedPath(),
+					ao.KeyRemoteHost:  r.RemoteAddr,
+					ao.KeyQueryString: r.URL.RawQuery,
 				}
 
 				if so.WithBackTrace {
-					kvs[KeyBackTrace] = string(debug.Stack())
+					kvs[ao.KeyBackTrace] = string(debug.Stack())
 				}
 
 				return kvs
@@ -197,6 +222,6 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 	}
 
 	// update incoming metadata in request headers for any downstream readers
-	r.Header.Set(HTTPHeaderName, t.MetadataString())
+	r.Header.Set(XTraceHeader, t.MetadataString())
 	return t
 }

@@ -13,7 +13,7 @@ import (
 	_ "net/http/pprof"
 	"time"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao"
+	aohttp "github.com/appoptics/appoptics-apm-go/v1/ao/http"
 )
 
 var startTime = time.Now()
@@ -36,8 +36,8 @@ func increasinglySlowHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/slow", ao.HTTPHandler(slowHandler))
-	http.HandleFunc("/slowly", ao.HTTPHandler(increasinglySlowHandler))
+	http.HandleFunc("/slow", aohttp.Handler(slowHandler))
+	http.HandleFunc("/slowly", aohttp.Handler(increasinglySlowHandler))
 	http.ListenAndServe(addr, nil)
 }
 

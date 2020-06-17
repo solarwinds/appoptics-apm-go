@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
+	http2 "github.com/appoptics/appoptics-apm-go/v1/ao/http"
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,8 +19,8 @@ const (
 
 func tracer() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		t, w, _ := ao.TraceFromHTTPRequestResponse(ginSpanName, c.Writer, c.Request)
-		c.Writer = &ginResponseWriter{w.(*ao.HTTPResponseWriter), c.Writer}
+		t, w, _ := http2.TraceFromHTTPRequestResponse(ginSpanName, c.Writer, c.Request)
+		c.Writer = &ginResponseWriter{w.(*http2.ResponseWriter), c.Writer}
 		t.SetTransactionName(c.HandlerName())
 		defer t.End()
 		// create a context.Context and bind it to the gin.Context
@@ -32,7 +33,7 @@ func tracer() gin.HandlerFunc {
 // ginResponseWriter satisfies the gin.ResponseWriter interface
 type ginResponseWriter struct {
 	// handles Write, WriteHeader, Header (by calling wrapped gin writer)
-	*ao.HTTPResponseWriter
+	*http2.ResponseWriter
 	// handles all other gin.ResponseWriter methods
 	ginWriter gin.ResponseWriter
 }
