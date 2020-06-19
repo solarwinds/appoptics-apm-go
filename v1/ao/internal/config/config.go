@@ -121,6 +121,8 @@ type Config struct {
 	ProxyCertPath string `yaml:"ProxyCertPath" env:"APPOPTICS_PROXY_CERT_PATH"`
 	// Report runtime metrics or not
 	RuntimeMetrics bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
+	// AWS Lambda, etc.
+	Serverless bool `yaml:"Serverless" env:"APPOPTICS_SERVERLESS"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -836,6 +838,13 @@ func (c *Config) GetRuntimeMetrics() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.RuntimeMetrics
+}
+
+// GetServerless returns the serverless flag
+func (c *Config) GetServerless() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.Serverless
 }
 
 // GetTransactionFiltering returns the transaction filtering config

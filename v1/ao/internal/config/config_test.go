@@ -150,6 +150,7 @@ func TestConfigInit(t *testing.T) {
 		Proxy:              "",
 		ProxyCertPath:      "",
 		RuntimeMetrics:     true,
+		Serverless:         false,
 	}
 	assert.Equal(t, c, &defaultC)
 }
@@ -194,6 +195,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_PROXY=http://usr/pwd@internal.proxy:3306",
 		"APPOPTICS_PROXY_CERT_PATH=./proxy.pem",
 		"APPOPTICS_RUNTIME_METRICS=true",
+		"APPOPTICS_SERVERLESS=true",
 	}
 	SetEnvs(envs)
 
@@ -233,6 +235,7 @@ func TestEnvsLoading(t *testing.T) {
 		Proxy:              "http://usr/pwd@internal.proxy:3306",
 		ProxyCertPath:      "./proxy.pem",
 		RuntimeMetrics:     true,
+		Serverless:         true,
 	}
 
 	c := NewConfig()
@@ -281,6 +284,7 @@ func TestYamlConfig(t *testing.T) {
 		Proxy:              "http://usr:pwd@internal.proxy:3306",
 		ProxyCertPath:      "./proxy.pem",
 		RuntimeMetrics:     true,
+		Serverless:         true,
 	}
 
 	out, err := yaml.Marshal(&yamlConfig)
@@ -312,6 +316,7 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_MAX_REQUEST_BYTES=4096000",
 		"APPOPTICS_DISABLED=false",
 		"APPOPTICS_SQL_SANITIZE=3",
+		"APPOPTICS_SERVERLESS=false",
 	}
 	ClearEnvs()
 	SetEnvs(envs)
@@ -357,6 +362,7 @@ func TestYamlConfig(t *testing.T) {
 		Proxy:              "http://usr:pwd@internal.proxy:3306",
 		ProxyCertPath:      "./proxy.pem",
 		RuntimeMetrics:     true,
+		Serverless:         false,
 	}
 
 	c = NewConfig()
