@@ -91,12 +91,17 @@ func init() {
 }
 
 func initReporter() {
-	r := config.GetReporterType()
+	var rt string
+
 	if config.GetDisabled() {
 		log.Warning("AppOptics APM agent is disabled.")
-		r = "none"
+		rt = "none"
+	} else if config.GetServerless() {
+		rt = "log"
+	} else {
+		rt = config.GetReporterType()
 	}
-	setGlobalReporter(r)
+	setGlobalReporter(rt)
 }
 
 func setGlobalReporter(reporterType string) {
@@ -112,6 +117,8 @@ func setGlobalReporter(reporterType string) {
 		globalReporter = newGRPCReporter()
 	case "udp":
 		globalReporter = udpNewReporter()
+	case "log":
+		globalReporter = newLogReporter()
 	case "none":
 		globalReporter = newNullReporter()
 
