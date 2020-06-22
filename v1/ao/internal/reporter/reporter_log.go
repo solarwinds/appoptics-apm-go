@@ -10,8 +10,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-func newLogReporter() reporter {
+func newLogReporter(host string, service string) reporter {
 	return &logReporter{
+		host:          host,
+		service:       service,
 		dest:          os.Stderr,
 		customMetrics: metrics.NewMeasurements(true, grpcMetricIntervalDefault, 500),
 	}

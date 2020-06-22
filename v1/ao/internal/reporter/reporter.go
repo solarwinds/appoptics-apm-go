@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
+	"os"
 	"strings"
 	"time"
 
@@ -118,7 +119,7 @@ func setGlobalReporter(reporterType string) {
 	case "udp":
 		globalReporter = udpNewReporter()
 	case "log":
-		globalReporter = newLogReporter()
+		globalReporter = newLogReporter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda")
 	case "none":
 		globalReporter = newNullReporter()
 
