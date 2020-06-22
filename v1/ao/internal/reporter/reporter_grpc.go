@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -233,6 +234,8 @@ type grpcReporter struct {
 	// The flag to indicate gracefully stopping the reporter. It should be accessed atomically.
 	// A (default) zero value means shutdown abruptly.
 	gracefully int32
+	// the log writer for AWS Lambda
+	lr io.Writer
 }
 
 // gRPC reporter errors
@@ -317,6 +320,9 @@ func newGRPCReporter() reporter {
 		done: make(chan struct{}),
 	}
 
+	if config.GetServerless() {
+		r.lr = newLogWriter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda")
+	}
 	r.start()
 
 	log.Warningf("The reporter (%v, v%v, go%v) is initialized. Waiting for the dynamic settings.",
@@ -337,16 +343,17 @@ func (r *grpcReporter) setGracefully(flag bool) {
 }
 
 func (r *grpcReporter) start() {
-	// start up the host observer
-	host.Start()
-	// start up long-running goroutine eventSender() which listens on the events message channel
-	// and reports incoming events to the collector using GRPC
-	go r.eventSender()
+	if !config.GetServerless() {
+		// start up the host observer
+		host.Start()
+		// start up long-running goroutine eventSender() which listens on the events message channel
+		// and reports incoming events to the collector using GRPC
+		go r.eventSender()
 
-	// start up long-running goroutine statusSender() which listens on the status message channel
-	// and reports incoming events to the collector using GRPC
-	go r.statusSender()
-
+		// start up long-running goroutine statusSender() which listens on the status message channel
+		// and reports incoming events to the collector using GRPC
+		go r.statusSender()
+	}
 	// start up long-running goroutine periodicTasks() which kicks off periodic tasks like
 	// collectMetrics() and getSettings()
 	if !periodicTasksDisabled {
@@ -655,6 +662,12 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 		return err
 	}
 
+	if r.lr != nil {
+		_, err := r.lr.Write((*e).bbuf.GetBuf())
+		return err
+
+	}
+
 	select {
 	case r.eventMessages <- (*e).bbuf.GetBuf():
 		r.conn.queueStats.TotalEventsAdd(int64(1))
@@ -927,12 +940,18 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 		return err
 	}
 
+	if r.lr != nil {
+		_, err := r.lr.Write((*e).bbuf.GetBuf())
+		return err
+	}
+
 	select {
 	case r.statusMessages <- (*e).bbuf.GetBuf():
 		return nil
 	default:
 		return errors.New("status message queue is full")
 	}
+
 }
 
 // long-running goroutine that listens on the status message channel, collects all messages

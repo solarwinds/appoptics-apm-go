@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
-	"os"
 	"strings"
 	"time"
 
@@ -97,8 +96,6 @@ func initReporter() {
 	if config.GetDisabled() {
 		log.Warning("AppOptics APM agent is disabled.")
 		rt = "none"
-	} else if config.GetServerless() {
-		rt = "log"
 	} else {
 		rt = config.GetReporterType()
 	}
@@ -118,8 +115,6 @@ func setGlobalReporter(reporterType string) {
 		globalReporter = newGRPCReporter()
 	case "udp":
 		globalReporter = udpNewReporter()
-	case "log":
-		globalReporter = newLogReporter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda")
 	case "none":
 		globalReporter = newNullReporter()
 
