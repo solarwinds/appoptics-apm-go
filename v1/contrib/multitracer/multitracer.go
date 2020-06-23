@@ -1,5 +1,9 @@
 // Package multitracer provides a way to run more than one OpenTracing tracers, by multiplexing calls across
-// multiple Tracer, Span, and SpanContext implementations.
+// multiple Tracer, Span, and SpanContext implementations. The goal is to support a user sending data to
+// two tracing vendors simultaneously (e.g., AppOptics and another implementation).
+//
+// Currently, baggage propagation is not supported, and the two tracers must use distinct HTTP header
+// names, so as not to clobber each other.
 package multitracer
 
 import (
