@@ -3,10 +3,13 @@
 package opentracing
 
 import (
+	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	ot "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 	"github.com/opentracing/opentracing-go/log"
 )
 
@@ -199,14 +202,42 @@ func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
 	s.Lock()
 	defer s.Unlock()
 	// if transaction name is passed, set on the span
-	if tagName := translateTagName(key); tagName == "TransactionName" {
+	tagName := translateTagName(key)
+	switch tagName {
+	case "TransactionName":
 		if txnName, ok := value.(string); ok {
 			s.context.span.SetTransactionName(txnName)
 		}
-	} else {
+	case string(ext.Error):
+		s.setErrorTag(value)
+	default:
 		s.context.span.AddEndArgs(tagName, value)
 	}
 	return s
+}
+
+// setErrorTag passes an OT error to the AO span.Error method.
+func (s *spanImpl) setErrorTag(value interface{}) {
+	switch v := value.(type) {
+	case bool:
+		// OpenTracing spec defines bool value
+		if v {
+			s.context.span.Error(string(ext.Error), "true")
+		}
+	case error:
+		// handle error if provided
+		s.context.span.Err(v)
+	case string:
+		// error string provided
+		s.context.span.Error(string(ext.Error), v)
+	case fmt.Stringer:
+		s.context.span.Error(string(ext.Error), v.String())
+	case nil:
+		// no error, ignore
+	default:
+		// an unknown error type, assume an error
+		s.context.span.Error(string(ext.Error), reflect.TypeOf(v).String())
+	}
 }
 
 // LogEvent logs a event to the span.

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"runtime/debug"
 	"sync"
 
@@ -347,7 +348,7 @@ func (s *span) Err(err error) {
 	if err == nil {
 		return
 	}
-	s.Error("error", err.Error())
+	s.Error(reflect.TypeOf(err).String(), err.Error())
 }
 
 // span satisfies the Extent interface and consolidates common reporting routines used by
