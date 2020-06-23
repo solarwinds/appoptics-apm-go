@@ -39,6 +39,8 @@ type reporter interface {
 	// CustomIncrementMetric submits a incremental measurement to the reporter. The measurements
 	// will be collected in the background and reported periodically.
 	CustomIncrementMetric(name string, opts metrics.MetricOptions) error
+	// Flush flush the events buffer to stderr. Currently it's used for AWS Lambda only
+	Flush() error
 }
 
 // KVs from getSettingsResult arguments
@@ -80,6 +82,7 @@ func (r *nullReporter) CustomSummaryMetric(name string, value float64, opts metr
 func (r *nullReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
 	return nil
 }
+func (r *nullReporter) Flush() error { return nil }
 
 // init() is called only once on program startup. Here we create the reporter
 // that will be used throughout the runtime of the app. Default is 'ssl' but
@@ -126,6 +129,11 @@ func WaitForReady(ctx context.Context) bool {
 	// globalReporter is not protected by a mutex as currently it's only modified
 	// from the init() function.
 	return globalReporter.WaitForReady(ctx)
+}
+
+// Flush flush the events buffer to stderr. Currently it's used for AWS Lambda only
+func Flush() error {
+	return globalReporter.Flush()
 }
 
 // Shutdown flushes the metrics and stops the reporter. It blocked until the reporter

@@ -28,6 +28,10 @@ func WaitForReady(ctx context.Context) bool {
 	return reporter.WaitForReady(ctx)
 }
 
+func flushAgent() error {
+	return reporter.Flush()
+}
+
 // Shutdown flush the metrics and stops the agent. The call will block until the agent
 // flushes and is successfully shutdown or the context is canceled. It returns nil
 // for successful shutdown and or error when the context is canceled or the agent

@@ -175,6 +175,7 @@ func (t *aoTrace) End(args ...interface{}) {
 	if t.ok() {
 		t.AddEndArgs(args...)
 		t.reportExit()
+		flushAgent()
 	}
 }
 
@@ -189,6 +190,7 @@ func (t *aoTrace) EndCallback(cb func() KVMap) {
 			t.AddEndArgs(args...)
 		}
 		t.reportExit()
+		flushAgent()
 	}
 }
 

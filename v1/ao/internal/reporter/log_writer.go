@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	"github.com/pkg/errors"
 )
 
@@ -17,12 +16,20 @@ const (
 	metricWT WriteType = "m"
 )
 
-func newLogWriter(host string, service string, wt WriteType) io.Writer {
+type FlushWriter interface {
+	io.Writer
+	Flush() error
+}
+
+func newLogWriter(host string, service string, wt WriteType, syncWrite bool) FlushWriter {
 	return &logWriter{
+		syncWrite: syncWrite,
 		wt:      wt,
-		host:    host,
-		service: service,
 		dest:    os.Stderr,
+		msg: ServerlessMessage{
+			Host: host,
+			Service: service,
+		},
 	}
 }
 
@@ -32,35 +39,43 @@ type ServerlessMessage struct {
 	Data    []string `json:"ao-data"`
 }
 
+// logWriter writes the byte slices to a bytes buffer and flush the buffer when
+// the trace ends. Note that it's for AWS Lambda only so there is no need to keep
+// it concurrent-safe.
 type logWriter struct {
-	wt WriteType
-	host          string
-	service       string
-	dest          io.Writer
-	customMetrics *metrics.Measurements
+	syncWrite bool
+	wt        WriteType
+	dest      io.Writer
+	msg       ServerlessMessage
 }
 
-func (lr *logWriter) encode(bytes []byte) ([]byte, error) {
-	msg := ServerlessMessage{
-		Host:    lr.host,
-		Service: lr.service,
-		Data:    []string{string(lr.wt) + ":" + base64.StdEncoding.EncodeToString(bytes)},
-	}
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return nil, errors.Wrap(err, "error encoding message")
-	}
-	return data, nil
+func (lr *logWriter) encode(bytes []byte) {
+	lr.msg.Data = append(lr.msg.Data, string(lr.wt) + ":" + base64.StdEncoding.EncodeToString(bytes))
 }
 
 func (lr *logWriter) Write(bytes []byte) (int, error) {
-	data, err := lr.encode(bytes)
+	lr.encode(bytes)
+	if lr.syncWrite {
+		lr.Flush()
+	}
+	return len(bytes), nil
+}
+
+func (lr *logWriter) Flush() error {
+	if len(lr.msg.Data) == 0 {
+		return errors.New("nothing to flush")
+	}
+
+	data, err := json.Marshal(lr.msg)
 	if err != nil {
-		return 0, errors.Wrap(err, "write to log reporter failed")
+		return errors.Wrap(err, "error marshaling message")
 	}
-	if n, err := lr.dest.Write(data); err != nil {
-		return 0, errors.Wrap(err, "write to log reporter failed")
-	} else {
-		return n, nil
+	lr.msg.Data = []string{}
+
+	data = append(data, "\n"...)
+
+	if _, err := lr.dest.Write(data); err != nil {
+		return errors.Wrap(err, "write to log reporter failed")
 	}
+	return nil
 }

@@ -237,9 +237,9 @@ type grpcReporter struct {
 
 	serverless bool
 	// the event writer for AWS Lambda
-	lr io.Writer
+	lr FlushWriter
 	// the metrics writer for AWS lambda
-	mr io.Writer
+	mr FlushWriter
 }
 
 // gRPC reporter errors
@@ -326,8 +326,8 @@ func newGRPCReporter() reporter {
 	}
 
 	if r.serverless {
-		r.lr = newLogWriter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda", eventWT)
-		r.mr = newLogWriter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda", metricWT)
+		r.lr = newLogWriter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda", eventWT, false)
+		r.mr = newLogWriter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda", metricWT, false)
 	}
 
 	r.start()
@@ -335,6 +335,10 @@ func newGRPCReporter() reporter {
 	log.Warningf("The reporter (%v, v%v, go%v) is initialized. Waiting for the dynamic settings.",
 		r.done, utils.Version(), utils.GoVersion())
 	return r
+}
+
+func (r *grpcReporter) Flush() error {
+	return r.lr.Flush()
 }
 
 func (r *grpcReporter) isGracefully() bool {
@@ -839,6 +843,9 @@ func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 			if _, err := r.mr.Write(msg); err != nil {
 				log.Warningf("sendMetrics: %s", err)
 			}
+		}
+		if err := r.mr.Flush(); err != nil {
+			log.Warningf("sendMetrics: %s", err)
 		}
 		return
 	}

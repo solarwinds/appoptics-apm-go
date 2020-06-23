@@ -103,3 +103,5 @@ func (r *udpReporter) CustomSummaryMetric(name string, value float64, opts metri
 func (r *udpReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
 	return nil
 }
+
+func (r *udpReporter) Flush() error { return nil }
