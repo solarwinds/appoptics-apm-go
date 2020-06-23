@@ -89,10 +89,28 @@ func TestSetErrorTags(t *testing.T) {
 					assert.Equal(t, tc.errorClass, n.Map["ErrorClass"])
 					assert.Equal(t, tc.errorMsg, n.Map["ErrorMsg"])
 				}},
-				{"op", "exit"}: {Edges: g.Edges{{"op", "error"}}, Callback: func(n g.Node) {
-
-				}},
+				{"op", "exit"}: {Edges: g.Edges{{"op", "error"}}, Callback: func(n g.Node) {}},
 			})
+		})
+	}
+
+	// test a couple of cases where no error is reported
+	for _, tc := range []struct{ errorTagVal interface{} }{
+		{false},
+		{nil},
+	} {
+		r := reporter.SetTestReporter() // set up test reporter
+		tr := NewTracer()
+
+		span := tr.StartSpan("op")
+		assert.NotNil(t, span)
+		span.SetTag("error", tc.errorTagVal)
+		span.Finish()
+
+		r.Close(2)
+		g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+			{"op", "entry"}: {},
+			{"op", "exit"}:  {Edges: g.Edges{{"op", "entry"}}, Callback: func(n g.Node) {}},
 		})
 	}
 }
