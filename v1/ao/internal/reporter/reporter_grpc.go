@@ -234,8 +234,12 @@ type grpcReporter struct {
 	// The flag to indicate gracefully stopping the reporter. It should be accessed atomically.
 	// A (default) zero value means shutdown abruptly.
 	gracefully int32
-	// the log writer for AWS Lambda
+
+	serverless bool
+	// the event writer for AWS Lambda
 	lr io.Writer
+	// the metrics writer for AWS lambda
+	mr io.Writer
 }
 
 // gRPC reporter errors
@@ -318,11 +322,14 @@ func newGRPCReporter() reporter {
 
 		cond: sync.NewCond(&sync.Mutex{}),
 		done: make(chan struct{}),
+		serverless: config.GetServerless(),
 	}
 
-	if config.GetServerless() {
-		r.lr = newLogWriter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda")
+	if r.serverless {
+		r.lr = newLogWriter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda", eventWT)
+		r.mr = newLogWriter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda", metricWT)
 	}
+
 	r.start()
 
 	log.Warningf("The reporter (%v, v%v, go%v) is initialized. Waiting for the dynamic settings.",
@@ -343,7 +350,7 @@ func (r *grpcReporter) setGracefully(flag bool) {
 }
 
 func (r *grpcReporter) start() {
-	if !config.GetServerless() {
+	if !r.serverless {
 		// start up the host observer
 		host.Start()
 		// start up long-running goroutine eventSender() which listens on the events message channel
@@ -662,7 +669,7 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 		return err
 	}
 
-	if r.lr != nil {
+	if r.serverless {
 		_, err := r.lr.Write((*e).bbuf.GetBuf())
 		return err
 
@@ -827,6 +834,15 @@ func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 		return
 	}
 
+	if r.serverless {
+		for _, msg := range msgs {
+			if _, err := r.mr.Write(msg); err != nil {
+				log.Warningf("sendMetrics: %s", err)
+			}
+		}
+		return
+	}
+
 	method := newPostMetricsMethod(r.serviceKey, msgs)
 
 	err := r.conn.InvokeRPC(r.done, method)
@@ -940,7 +956,7 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 		return err
 	}
 
-	if r.lr != nil {
+	if r.serverless {
 		_, err := r.lr.Write((*e).bbuf.GetBuf())
 		return err
 	}

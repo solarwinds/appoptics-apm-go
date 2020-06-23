@@ -37,6 +37,7 @@ const TestServiceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4f
 var _ = func() (_ struct{}) {
 	periodicTasksDisabled = true
 
+	os.Clearenv()
 	os.Setenv("APPOPTICS_SERVICE_KEY", TestServiceKey)
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 

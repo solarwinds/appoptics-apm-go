@@ -10,8 +10,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-func newLogWriter(host string, service string) io.Writer {
+type WriteType string
+
+const (
+	eventWT WriteType = "e"
+	metricWT WriteType = "m"
+)
+
+func newLogWriter(host string, service string, wt WriteType) io.Writer {
 	return &logWriter{
+		wt:      wt,
 		host:    host,
 		service: service,
 		dest:    os.Stderr,
@@ -25,6 +33,7 @@ type ServerlessMessage struct {
 }
 
 type logWriter struct {
+	wt WriteType
 	host          string
 	service       string
 	dest          io.Writer
@@ -35,7 +44,7 @@ func (lr *logWriter) encode(bytes []byte) ([]byte, error) {
 	msg := ServerlessMessage{
 		Host:    lr.host,
 		Service: lr.service,
-		Data:    []string{"e:" + base64.StdEncoding.EncodeToString(bytes)},
+		Data:    []string{string(lr.wt) + ":" + base64.StdEncoding.EncodeToString(bytes)},
 	}
 	data, err := json.Marshal(msg)
 	if err != nil {

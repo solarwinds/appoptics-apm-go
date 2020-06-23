@@ -7,6 +7,9 @@ examples:
 vet: 
 	@go vet -composites=false ./... && echo "Go vet analysis passed."
 
+clean:
+	@go clean -testcache ./...
+
 sure: test examples vet
 
-.PHONY: test examples vet
+.PHONY: test examples vet clean
