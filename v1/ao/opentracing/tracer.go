@@ -226,7 +226,7 @@ func (s *spanImpl) setErrorTag(value interface{}) {
 		}
 	case error:
 		// handle error if provided
-		s.context.span.Err(v)
+		s.context.span.Error(reflect.TypeOf(v).String(), v.Error())
 	case string:
 		// error string provided
 		s.context.span.Error(string(ext.Error), v)
