@@ -484,7 +484,7 @@ func addRuntimeMetrics(bbuf *bson.Buffer, index *int) {
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
-func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
+func BuildBuiltinMetricsMessage(m *Measurements, qs *EventQueueStats,
 	rcs map[string]*RateCounts, runtimeMetrics bool) []byte {
 	bbuf := bson.NewBuffer()
 
@@ -501,11 +501,13 @@ func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
 	addRequestCounters(bbuf, &index, rcs)
 
 	// Queue states
-	addMetricsValue(bbuf, &index, "NumSent", qs.numSent)
-	addMetricsValue(bbuf, &index, "NumOverflowed", qs.numOverflowed)
-	addMetricsValue(bbuf, &index, "NumFailed", qs.numFailed)
-	addMetricsValue(bbuf, &index, "TotalEvents", qs.totalEvents)
-	addMetricsValue(bbuf, &index, "QueueLargest", qs.queueLargest)
+	if qs != nil {
+		addMetricsValue(bbuf, &index, "NumSent", qs.numSent)
+		addMetricsValue(bbuf, &index, "NumOverflowed", qs.numOverflowed)
+		addMetricsValue(bbuf, &index, "NumFailed", qs.numFailed)
+		addMetricsValue(bbuf, &index, "TotalEvents", qs.totalEvents)
+		addMetricsValue(bbuf, &index, "QueueLargest", qs.queueLargest)
+	}
 
 	addHostMetrics(bbuf, &index)
 
@@ -895,8 +897,8 @@ func (s *EventQueueStats) SetQueueLargest(count int64) {
 }
 
 // CopyAndReset returns a copy of its current values and reset itself.
-func (s *EventQueueStats) CopyAndReset() EventQueueStats {
-	c := EventQueueStats{}
+func (s *EventQueueStats) CopyAndReset() *EventQueueStats {
+	c := &EventQueueStats{}
 
 	c.numSent = atomic.SwapInt64(&s.numSent, 0)
 	c.numFailed = atomic.SwapInt64(&s.numFailed, 0)

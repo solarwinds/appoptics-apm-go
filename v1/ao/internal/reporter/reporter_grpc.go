@@ -271,10 +271,48 @@ func getProxyCertPath() string {
 	return config.GetProxyCertPath()
 }
 
+func newServerlessReporter() reporter {
+	// construct the reporter object which handles two connections
+	r := &grpcReporter{
+		httpMetrics:   metrics.NewMeasurements(false, 0, 200),
+		customMetrics: metrics.NewMeasurements(true, 0, 500),
+
+		cond:       sync.NewCond(&sync.Mutex{}),
+		done:       make(chan struct{}),
+		serverless: true,
+	}
+
+	funcName := os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
+	serviceName := "AWSLambda"
+	r.lr = newLogWriter(funcName, serviceName, eventWT, false, os.Stderr, 1e6)
+	r.mr = newLogWriter(funcName, serviceName, metricWT, false, os.Stderr, 1e6)
+
+	updateSetting(int32(TYPE_DEFAULT),
+		"",
+		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
+		1000000, 120,
+		argsToMap(2.000000, 1.000000, 20.000000, 1.000000, 6.000000, 0.100000, 60, -1, []byte("")))
+
+	if !r.isReady() && hasDefaultSetting() {
+		r.cond.L.Lock()
+		r.setReady(true)
+		log.Warningf("The reporter (%v, v%v, go%v) for Lambda is ready.",
+			r.done, utils.Version(), utils.GoVersion())
+		r.cond.Broadcast()
+		r.cond.L.Unlock()
+	}
+
+	return r
+}
+
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
 func newGRPCReporter() reporter {
+	if config.GetServerless() {
+		return newServerlessReporter()
+	}
+
 	// collector address override
 	addr := config.GetCollector()
 
@@ -322,14 +360,7 @@ func newGRPCReporter() reporter {
 
 		cond:       sync.NewCond(&sync.Mutex{}),
 		done:       make(chan struct{}),
-		serverless: config.GetServerless(),
-	}
-
-	if r.serverless {
-		funcName := os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
-		serviceName := "AWSLambda"
-		r.lr = newLogWriter(funcName, serviceName, eventWT, false, os.Stderr, 1e6)
-		r.mr = newLogWriter(funcName, serviceName, metricWT, false, os.Stderr, 1e6)
+		serverless: false,
 	}
 
 	r.start()
@@ -339,7 +370,20 @@ func newGRPCReporter() reporter {
 	return r
 }
 
+func (r *grpcReporter) sendServerlessMetrics() {
+	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(0),
+		nil, FlushRateCounts(), config.GetRuntimeMetrics())
+
+	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(0))
+
+	r.sendMetrics([][]byte{builtin, custom})
+}
+
 func (r *grpcReporter) Flush() error {
+	if !r.serverless {
+		return errors.New("not in serverless mode")
+	}
+	r.sendServerlessMetrics()
 	return r.lr.Flush()
 }
 
@@ -356,17 +400,16 @@ func (r *grpcReporter) setGracefully(flag bool) {
 }
 
 func (r *grpcReporter) start() {
-	if !r.serverless {
-		// start up the host observer
-		host.Start()
-		// start up long-running goroutine eventSender() which listens on the events message channel
-		// and reports incoming events to the collector using GRPC
-		go r.eventSender()
+	// start up the host observer
+	host.Start()
+	// start up long-running goroutine eventSender() which listens on the events message channel
+	// and reports incoming events to the collector using GRPC
+	go r.eventSender()
 
-		// start up long-running goroutine statusSender() which listens on the status message channel
-		// and reports incoming events to the collector using GRPC
-		go r.statusSender()
-	}
+	// start up long-running goroutine statusSender() which listens on the status message channel
+	// and reports incoming events to the collector using GRPC
+	go r.statusSender()
+
 	// start up long-running goroutine periodicTasks() which kicks off periodic tasks like
 	// collectMetrics() and getSettings()
 	if !periodicTasksDisabled {
@@ -388,6 +431,12 @@ func (r *grpcReporter) ShutdownNow() error {
 // Shutdown closes the reporter by close the `done` channel. All long-running goroutines
 // monitor the channel `done` in the reporter and close themselves when the channel is closed.
 func (r *grpcReporter) Shutdown(ctx context.Context) error {
+	if r.serverless {
+		close(r.done)
+		r.setReady(false)
+		return nil
+	}
+
 	var err error
 
 	select {
@@ -1029,6 +1078,11 @@ func (r *grpcReporter) reportSpan(span metrics.SpanMessage) error {
 	if r.Closed() {
 		return ErrReporterIsClosed
 	}
+	if r.serverless {
+		span.Process(r.httpMetrics)
+		return nil
+	}
+
 	select {
 	case r.spanMessages <- span:
 		return nil

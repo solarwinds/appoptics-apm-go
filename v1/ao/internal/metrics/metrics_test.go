@@ -369,7 +369,7 @@ func TestAddHistogramToBSON(t *testing.T) {
 
 func TestGenerateMetricsMessage(t *testing.T) {
 	testMetrics := NewMeasurements(false, 15, metricsTransactionsMaxDefault)
-	bbuf := bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, EventQueueStats{},
+	bbuf := bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, &EventQueueStats{},
 		map[string]*RateCounts{ // requested, sampled, limited, traced, through
 			RCRegular:             {10, 2, 5, 5, 1},
 			RCRelaxedTriggerTrace: {3, 0, 1, 2, 0},
@@ -459,7 +459,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		}
 	}
 
-	m = bsonToMap(bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, EventQueueStats{},
+	m = bsonToMap(bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, &EventQueueStats{},
 		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}}, true)))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
@@ -486,7 +486,7 @@ func TestEventQueueStats(t *testing.T) {
 	original := es
 	swapped := es.CopyAndReset()
 	assert.Equal(t, EventQueueStats{}, es)
-	assert.Equal(t, original, swapped)
+	assert.Equal(t, original, *swapped)
 }
 
 func TestRateCounts(t *testing.T) {
