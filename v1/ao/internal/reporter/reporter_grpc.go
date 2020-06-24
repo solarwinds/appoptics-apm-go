@@ -320,14 +320,16 @@ func newGRPCReporter() reporter {
 		httpMetrics:    metrics.NewMeasurements(false, grpcMetricIntervalDefault, 200),
 		customMetrics:  metrics.NewMeasurements(true, grpcMetricIntervalDefault, 500), // TODO configurable
 
-		cond: sync.NewCond(&sync.Mutex{}),
-		done: make(chan struct{}),
+		cond:       sync.NewCond(&sync.Mutex{}),
+		done:       make(chan struct{}),
 		serverless: config.GetServerless(),
 	}
 
 	if r.serverless {
-		r.lr = newLogWriter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda", eventWT, false)
-		r.mr = newLogWriter(os.Getenv("AWS_LAMBDA_FUNCTION_NAME"), "AWSLambda", metricWT, false)
+		funcName := os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
+		serviceName := "AWSLambda"
+		r.lr = newLogWriter(funcName, serviceName, eventWT, false, os.Stderr, 1e6)
+		r.mr = newLogWriter(funcName, serviceName, metricWT, false, os.Stderr, 1e6)
 	}
 
 	r.start()
