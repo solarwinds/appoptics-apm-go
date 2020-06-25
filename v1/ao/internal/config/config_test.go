@@ -14,7 +14,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/yaml.v2"
+    "gopkg.in/yaml.v2"
 )
 
 const TestServiceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go"
@@ -60,8 +60,10 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsTrustedPath, "test.crt")
 	os.Setenv(envAppOpticsCollectorUDP, "hello.udp")
 	os.Setenv(envAppOpticsDisabled, "invalidValue")
+	os.Setenv(envAppOpticsServerless, "true")
 
 	c.Load()
+	assert.Equal(t, c.GetServerless(), true)
 	assert.Equal(t, ToServiceKey(key1), c.GetServiceKey())
 	assert.Equal(t, "test", c.GetHostAlias())
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))

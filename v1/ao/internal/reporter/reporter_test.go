@@ -802,3 +802,21 @@ func TestServerless(t *testing.T) {
 	assert.Equal(t, 2, metricCnt)
 	assert.Equal(t, 1, evtCnt)
 }
+
+func TestServerlessShutdown(t *testing.T) {
+	serverless := os.Getenv("APPOPTICS_SERVERLESS")
+	defer func() { os.Setenv("APPOPTICS_SERVERLESS", serverless) }()
+
+	os.Setenv("APPOPTICS_SERVERLESS", "true")
+	config.Load()
+
+	globalReporter = newServerlessReporter(os.Stderr)
+	r := globalReporter.(*grpcReporter)
+	assert.Nil(t, r.ShutdownNow())
+}
+
+func TestFlush(t *testing.T) {
+	globalReporter = newGRPCReporter()
+	r := globalReporter.(*grpcReporter)
+	assert.Error(t, r.Flush())
+}

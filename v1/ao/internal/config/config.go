@@ -24,7 +24,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
+    "gopkg.in/yaml.v2"
 )
 
 const (
@@ -54,6 +54,7 @@ const (
 	envAppOpticsMaxReqBytes         = "APPOPTICS_MAX_REQUEST_BYTES"
 	envAppOpticsDisabled            = "APPOPTICS_DISABLED"
 	EnvAppOpticsConfigFile          = "APPOPTICS_CONFIG_FILE"
+	envAppOpticsServerless          = "APPOPTICS_SERVERLESS"
 )
 
 // Errors
