@@ -271,7 +271,7 @@ func getProxyCertPath() string {
 	return config.GetProxyCertPath()
 }
 
-func newServerlessReporter() reporter {
+func newServerlessReporter(writer io.Writer) reporter {
 	// construct the reporter object which handles two connections
 	r := &grpcReporter{
 		httpMetrics:   metrics.NewMeasurements(false, 0, 200),
@@ -284,8 +284,8 @@ func newServerlessReporter() reporter {
 
 	funcName := os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
 	serviceName := "AWSLambda"
-	r.lr = newLogWriter(funcName, serviceName, eventWT, false, os.Stderr, 1e6)
-	r.mr = newLogWriter(funcName, serviceName, metricWT, false, os.Stderr, 1e6)
+	r.lr = newLogWriter(funcName, serviceName, eventWT, false, writer, 1e6)
+	r.mr = newLogWriter(funcName, serviceName, metricWT, false, writer, 1e6)
 
 	updateSetting(int32(TYPE_DEFAULT),
 		"",
@@ -310,7 +310,7 @@ func newServerlessReporter() reporter {
 // returns	GRPC reporter object
 func newGRPCReporter() reporter {
 	if config.GetServerless() {
-		return newServerlessReporter()
+		return newServerlessReporter(os.Stderr)
 	}
 
 	// collector address override

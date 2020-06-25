@@ -4,6 +4,8 @@ package reporter
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net"
 	"os"
@@ -760,4 +762,43 @@ func TestHttpProxy(t *testing.T) {
 
 func TestHttpsProxy(t *testing.T) {
 	testProxy(t, "https://usr:pwd@localhost:12345")
+}
+
+func TestServerless(t *testing.T) {
+	serverless := os.Getenv("APPOPTICS_SERVERLESS")
+	defer func() { os.Setenv("APPOPTICS_SERVERLESS", serverless) }()
+
+	os.Setenv("APPOPTICS_SERVERLESS", "true")
+	config.Load()
+
+	var sb utils.SafeBuffer
+	globalReporter = newServerlessReporter(&sb)
+	r := globalReporter.(*grpcReporter)
+
+	ctx := newTestContext(t)
+	ev1, err := ctx.newEvent(LabelInfo, "layer1")
+	assert.NoError(t, err)
+	assert.NoError(t, r.reportEvent(ctx, ev1))
+	assert.Nil(t, r.Flush())
+	arr := strings.Split(strings.TrimRight(sb.String(), "\n"), "\n")
+	evtCnt := 0
+	metricCnt := 0
+	for _, s := range arr {
+		sm := &ServerlessMessage{}
+		assert.Nil(t, json.Unmarshal([]byte(s), sm))
+		assert.NotZero(t, len(sm.Data), sm)
+		for _, s := range sm.Data {
+			if strings.HasPrefix(s, "m:") {
+				metricCnt++
+			} else if strings.HasPrefix(s, "e:") {
+				evtCnt++
+				evtByte, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(s, "e:"))
+				assert.Nil(t, err)
+				evt := string(evtByte)
+				assert.Contains(t, evt, "layer1")
+			}
+		}
+	}
+	assert.Equal(t, 2, metricCnt)
+	assert.Equal(t, 1, evtCnt)
 }
