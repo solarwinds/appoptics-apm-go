@@ -61,9 +61,11 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsCollectorUDP, "hello.udp")
 	os.Setenv(envAppOpticsDisabled, "invalidValue")
 	os.Setenv(envAppOpticsServerless, "true")
+	os.Setenv(envAppOpticsServerlessServiceName, "AWSLambda")
 
 	c.Load()
 	assert.Equal(t, c.GetServerless(), true)
+	assert.Equal(t, "AWSLambda", c.GetServerlessServiceName())
 	assert.Equal(t, ToServiceKey(key1), c.GetServiceKey())
 	assert.Equal(t, "test", c.GetHostAlias())
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
@@ -144,15 +146,16 @@ func TestConfigInit(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		SQLSanitize:        0,
-		Disabled:           false,
-		Ec2MetadataTimeout: 1000,
-		DebugLevel:         "warn",
-		TriggerTrace:       true,
-		Proxy:              "",
-		ProxyCertPath:      "",
-		RuntimeMetrics:     true,
-		Serverless:         false,
+		SQLSanitize:           0,
+		Disabled:              false,
+		Ec2MetadataTimeout:    1000,
+		DebugLevel:            "warn",
+		TriggerTrace:          true,
+		Proxy:                 "",
+		ProxyCertPath:         "",
+		RuntimeMetrics:        true,
+		Serverless:            false,
+		ServerlessServiceName: "AWSLambda",
 	}
 	assert.Equal(t, c, &defaultC)
 }
@@ -198,6 +201,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_PROXY_CERT_PATH=./proxy.pem",
 		"APPOPTICS_RUNTIME_METRICS=true",
 		"APPOPTICS_SERVERLESS=true",
+		"APPOPTICS_SERVICE_NAME=LambdaTest",
 	}
 	SetEnvs(envs)
 
@@ -229,15 +233,16 @@ func TestEnvsLoading(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		SQLSanitize:        0,
-		Disabled:           false,
-		Ec2MetadataTimeout: 2000,
-		DebugLevel:         "warn",
-		TriggerTrace:       false,
-		Proxy:              "http://usr/pwd@internal.proxy:3306",
-		ProxyCertPath:      "./proxy.pem",
-		RuntimeMetrics:     true,
-		Serverless:         true,
+		SQLSanitize:           0,
+		Disabled:              false,
+		Ec2MetadataTimeout:    2000,
+		DebugLevel:            "warn",
+		TriggerTrace:          false,
+		Proxy:                 "http://usr/pwd@internal.proxy:3306",
+		ProxyCertPath:         "./proxy.pem",
+		RuntimeMetrics:        true,
+		Serverless:            true,
+		ServerlessServiceName: "LambdaTest",
 	}
 
 	c := NewConfig()
@@ -278,15 +283,16 @@ func TestYamlConfig(t *testing.T) {
 			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
-		SQLSanitize:        2,
-		Disabled:           false,
-		Ec2MetadataTimeout: 1500,
-		DebugLevel:         "info",
-		TriggerTrace:       false,
-		Proxy:              "http://usr:pwd@internal.proxy:3306",
-		ProxyCertPath:      "./proxy.pem",
-		RuntimeMetrics:     true,
-		Serverless:         true,
+		SQLSanitize:           2,
+		Disabled:              false,
+		Ec2MetadataTimeout:    1500,
+		DebugLevel:            "info",
+		TriggerTrace:          false,
+		Proxy:                 "http://usr:pwd@internal.proxy:3306",
+		ProxyCertPath:         "./proxy.pem",
+		RuntimeMetrics:        true,
+		Serverless:            true,
+		ServerlessServiceName: "LambdaTest",
 	}
 
 	out, err := yaml.Marshal(&yamlConfig)
@@ -319,6 +325,7 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_DISABLED=false",
 		"APPOPTICS_SQL_SANITIZE=3",
 		"APPOPTICS_SERVERLESS=false",
+		"APPOPTICS_SERVICE_NAME=LambdaEnv",
 	}
 	ClearEnvs()
 	SetEnvs(envs)
@@ -356,15 +363,16 @@ func TestYamlConfig(t *testing.T) {
 			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
-		SQLSanitize:        3,
-		Disabled:           false,
-		Ec2MetadataTimeout: 1500,
-		DebugLevel:         "info",
-		TriggerTrace:       false,
-		Proxy:              "http://usr:pwd@internal.proxy:3306",
-		ProxyCertPath:      "./proxy.pem",
-		RuntimeMetrics:     true,
-		Serverless:         false,
+		SQLSanitize:           3,
+		Disabled:              false,
+		Ec2MetadataTimeout:    1500,
+		DebugLevel:            "info",
+		TriggerTrace:          false,
+		Proxy:                 "http://usr:pwd@internal.proxy:3306",
+		ProxyCertPath:         "./proxy.pem",
+		RuntimeMetrics:        true,
+		Serverless:            false,
+		ServerlessServiceName: "LambdaEnv",
 	}
 
 	c = NewConfig()

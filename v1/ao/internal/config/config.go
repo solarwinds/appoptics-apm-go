@@ -40,21 +40,22 @@ const (
 
 // The environment variables
 const (
-	envAppOpticsCollector           = "APPOPTICS_COLLECTOR"
-	envAppOpticsServiceKey          = "APPOPTICS_SERVICE_KEY"
-	envAppOpticsTrustedPath         = "APPOPTICS_TRUSTEDPATH"
-	envAppOpticsCollectorUDP        = "APPOPTICS_COLLECTOR_UDP"
-	envAppOpticsReporter            = "APPOPTICS_REPORTER"
-	envAppOpticsTracingMode         = "APPOPTICS_TRACING_MODE"
-	envAppOpticsSampleRate          = "APPOPTICS_SAMPLE_RATE"
-	envAppOpticsPrependDomain       = "APPOPTICS_PREPEND_DOMAIN"
-	envAppOpticsHostnameAlias       = "APPOPTICS_HOSTNAME_ALIAS"
-	envAppOpticsHistogramPrecision  = "APPOPTICS_HISTOGRAM_PRECISION"
-	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
-	envAppOpticsMaxReqBytes         = "APPOPTICS_MAX_REQUEST_BYTES"
-	envAppOpticsDisabled            = "APPOPTICS_DISABLED"
-	EnvAppOpticsConfigFile          = "APPOPTICS_CONFIG_FILE"
-	envAppOpticsServerless          = "APPOPTICS_SERVERLESS"
+	envAppOpticsCollector             = "APPOPTICS_COLLECTOR"
+	envAppOpticsServiceKey            = "APPOPTICS_SERVICE_KEY"
+	envAppOpticsTrustedPath           = "APPOPTICS_TRUSTEDPATH"
+	envAppOpticsCollectorUDP          = "APPOPTICS_COLLECTOR_UDP"
+	envAppOpticsReporter              = "APPOPTICS_REPORTER"
+	envAppOpticsTracingMode           = "APPOPTICS_TRACING_MODE"
+	envAppOpticsSampleRate            = "APPOPTICS_SAMPLE_RATE"
+	envAppOpticsPrependDomain         = "APPOPTICS_PREPEND_DOMAIN"
+	envAppOpticsHostnameAlias         = "APPOPTICS_HOSTNAME_ALIAS"
+	envAppOpticsHistogramPrecision    = "APPOPTICS_HISTOGRAM_PRECISION"
+	envAppOpticsEventsFlushInterval   = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
+	envAppOpticsMaxReqBytes           = "APPOPTICS_MAX_REQUEST_BYTES"
+	envAppOpticsDisabled              = "APPOPTICS_DISABLED"
+	EnvAppOpticsConfigFile            = "APPOPTICS_CONFIG_FILE"
+	envAppOpticsServerless            = "APPOPTICS_SERVERLESS"
+	envAppOpticsServerlessServiceName = "APPOPTICS_SERVICE_NAME"
 )
 
 // Errors
@@ -123,7 +124,8 @@ type Config struct {
 	// Report runtime metrics or not
 	RuntimeMetrics bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
 	// AWS Lambda, etc.
-	Serverless bool `yaml:"Serverless" env:"APPOPTICS_SERVERLESS"`
+	Serverless            bool   `yaml:"Serverless" env:"APPOPTICS_SERVERLESS"`
+	ServerlessServiceName string `yaml:"ServerlessServiceName" env:"APPOPTICS_SERVICE_NAME" default:"AWSLambda"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -846,6 +848,13 @@ func (c *Config) GetServerless() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.Serverless
+}
+
+// GetServerlessServiceName returns the service name for the AWS Lambda function
+func (c *Config) GetServerlessServiceName() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.ServerlessServiceName
 }
 
 // GetTransactionFiltering returns the transaction filtering config

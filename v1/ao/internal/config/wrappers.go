@@ -65,6 +65,8 @@ var GetRuntimeMetrics = conf.GetRuntimeMetrics
 
 var GetServerless = conf.GetServerless
 
+var GetServerlessServiceName = conf.GetServerlessServiceName
+
 // GetTransactionFiltering is a wrapper to the method of the global config
 var GetTransactionFiltering = conf.GetTransactionFiltering
 

@@ -283,7 +283,7 @@ func newServerlessReporter(writer io.Writer) reporter {
 	}
 
 	funcName := os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
-	serviceName := "AWSLambda"
+	serviceName := config.GetServerlessServiceName()
 	r.lr = newLogWriter(funcName, serviceName, eventWT, false, writer, 1e6)
 	r.mr = newLogWriter(funcName, serviceName, metricWT, false, writer, 1e6)
 
