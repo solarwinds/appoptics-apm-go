@@ -290,7 +290,7 @@ func newServerlessReporter(writer io.Writer) reporter {
 	updateSetting(int32(TYPE_DEFAULT),
 		"",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		1000000, 120,
+		int64(config.GetSampleRate()), 120,
 		argsToMap(2.000000, 1.000000, 20.000000, 1.000000, 6.000000, 0.100000, 60, -1, []byte("")))
 
 	if !r.isReady() && hasDefaultSetting() {
