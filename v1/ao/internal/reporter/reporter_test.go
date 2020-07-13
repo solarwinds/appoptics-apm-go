@@ -779,6 +779,10 @@ func TestServerless(t *testing.T) {
 	ev1, err := ctx.newEvent(LabelInfo, "layer1")
 	assert.NoError(t, err)
 	assert.NoError(t, r.reportEvent(ctx, ev1))
+
+	ReportSpan(&metrics.HTTPSpanMessage{})
+	IncrementMetric("custom_metric", metrics.MetricOptions{Count: 1})
+
 	assert.Nil(t, r.Flush())
 	arr := strings.Split(strings.TrimRight(sb.String(), "\n"), "\n")
 	evtCnt := 0

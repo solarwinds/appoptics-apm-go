@@ -360,6 +360,10 @@ func addRequestCounters(bbuf *bson.Buffer, index *int, rcs map[string]*RateCount
 
 // BuildMessage creates and encodes the custom metrics message.
 func BuildMessage(m *Measurements) []byte {
+	if m == nil {
+		return nil
+	}
+
 	bbuf := bson.NewBuffer()
 	if m.IsCustom {
 		bbuf.AppendBool("IsCustom", m.IsCustom)
@@ -395,6 +399,11 @@ func (m *Measurements) Cap() int32 {
 func (m *Measurements) CopyAndReset(flushInterval int32) *Measurements {
 	m.Lock()
 	defer m.Unlock()
+
+	if len(m.m) == 0 {
+		m.FlushInterval = flushInterval
+		return nil
+	}
 
 	clone := m.Clone()
 	m.m = make(map[string]*Measurement)
@@ -486,6 +495,10 @@ func addRuntimeMetrics(bbuf *bson.Buffer, index *int) {
 // return				metrics message in BSON format
 func BuildBuiltinMetricsMessage(m *Measurements, qs *EventQueueStats,
 	rcs map[string]*RateCounts, runtimeMetrics bool) []byte {
+	if m == nil {
+		return nil
+	}
+
 	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)

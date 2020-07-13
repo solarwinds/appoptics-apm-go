@@ -379,12 +379,19 @@ func newGRPCReporter() reporter {
 }
 
 func (r *grpcReporter) sendServerlessMetrics() {
+	var messages [][]byte
+
 	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(0),
 		nil, FlushRateCounts(), config.GetRuntimeMetrics())
-
+	if builtin != nil {
+		messages = append(messages, builtin)
+	}
 	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(0))
+	if custom != nil {
+		messages = append(messages, custom)
+	}
 
-	r.sendMetrics([][]byte{builtin, custom})
+	r.sendMetrics(messages)
 }
 
 func (r *grpcReporter) Flush() error {
@@ -880,13 +887,21 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	defer func() { collectReady <- true }()
 
 	i := atomic.LoadInt32(&r.collectMetricInterval)
+
+	var messages [][]byte
 	// generate a new metrics message
 	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(i),
 		r.conn.queueStats.CopyAndReset(), FlushRateCounts(), config.GetRuntimeMetrics())
+	if builtin != nil {
+		messages = append(messages, builtin)
+	}
 
 	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i))
+	if custom != nil {
+		messages = append(messages, custom)
+	}
 
-	r.sendMetrics([][]byte{builtin, custom})
+	r.sendMetrics(messages)
 }
 
 // listens on the metrics message channel, collects all messages on that channel and
