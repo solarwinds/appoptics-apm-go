@@ -119,6 +119,8 @@ func (r *TestReporter) Flush() error {
 	return nil
 }
 
+func (r *TestReporter) SetRequestID(id string) {}
+
 func (r *TestReporter) resultWriter() {
 	var numBufs int
 	for {

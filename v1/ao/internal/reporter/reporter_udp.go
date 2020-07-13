@@ -104,4 +104,5 @@ func (r *udpReporter) CustomIncrementMetric(name string, opts metrics.MetricOpti
 	return nil
 }
 
-func (r *udpReporter) Flush() error { return nil }
+func (r *udpReporter) Flush() error        { return nil }
+func (r *udpReporter) SetRequestID(string) {}

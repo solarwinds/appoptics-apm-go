@@ -305,6 +305,14 @@ func newServerlessReporter(writer io.Writer) reporter {
 	return r
 }
 
+func (r *grpcReporter) SetRequestID(id string) {
+	if !r.serverless {
+		return
+	}
+	r.lr.SetRequestID(id)
+	r.mr.SetRequestID(id)
+}
+
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
