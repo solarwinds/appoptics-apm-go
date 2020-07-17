@@ -12,25 +12,55 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 )
 
+type wrapper interface {
+	before(context.Context, json.RawMessage)
+	after(interface{}, error)
+}
+
+type traceWrapper struct {
+	trace ao.Trace
+}
+
+func (w *traceWrapper) before(ctx context.Context, msg json.RawMessage) {
+	lc, _ := lambdacontext.FromContext(ctx)
+	awsRequestID := "not_found"
+	if lc != nil {
+		awsRequestID = lc.AwsRequestID
+	}
+
+	w.trace = ao.NewTraceWithOptions("aws_lambda",
+		ao.SpanOptions{
+			ContextOptions: ao.ContextOptions{
+				LambdaRequestID: awsRequestID,
+			},
+		},
+	)
+}
+
+func (w *traceWrapper) after(result interface{}, err error) {
+	if err != nil {
+		w.trace.Err(err)
+	}
+	w.trace.End()
+}
+
 // HandlerWrapper wraps the AWS Lambda handler and do the instrumentation. It
 // returns a new handler and can be passed into lambda.Start()
 func HandlerWrapper(handlerFunc interface{}) interface{} {
-	handlerType := reflect.TypeOf(handlerFunc)
-	if err := checkSignature(handlerType); err != nil {
-		// Does not wrap an invalid handler
+	return handlerWrapper(handlerFunc, &traceWrapper{})
+}
+
+func handlerWrapper(handlerFunc interface{}, w wrapper) interface{} {
+	if err := checkSignature(reflect.TypeOf(handlerFunc)); err != nil {
+		// Does not wrap an invalid handler but let lambda.Start() reject it later
 		return handlerFunc
 	}
 
 	return func(ctx context.Context, msg json.RawMessage) (interface{}, error) {
-		lc, _ := lambdacontext.FromContext(ctx)
-		defer ao.NewTraceWithOptions("aws_lambda",
-			ao.SpanOptions{
-				ContextOptions: ao.ContextOptions{
-					LambdaRequestID: lc.AwsRequestID,
-				},
-			},
-		).End()
+		w.before(ctx, msg)
 		result, err := callHandler(ctx, msg, handlerFunc)
+		w.after(result, err)
+
 		return result, err
 	}
 }
@@ -40,8 +70,9 @@ func callHandler(ctx context.Context, msg json.RawMessage, handler interface{}) 
 	if err != nil {
 		return nil, err
 	}
-	handlerType := reflect.TypeOf(handler)
 
+	handlerType := reflect.TypeOf(handler)
+	// the arguments to call the handler
 	var args []reflect.Value
 
 	if handlerType.NumIn() == 1 {
@@ -78,15 +109,12 @@ func unmarshalEvent(ev json.RawMessage, handlerType reflect.Type) (reflect.Value
 		return reflect.ValueOf(nil), nil
 	}
 
-	messageType := handlerType.In(handlerType.NumIn() - 1)
-	contextType := reflect.TypeOf((*context.Context)(nil)).Elem()
-	firstArgType := handlerType.In(0)
-
-	if handlerType.NumIn() == 1 && firstArgType.Implements(contextType) {
+	if handlerType.NumIn() == 1 &&
+		handlerType.In(0).Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) {
 		return reflect.ValueOf(nil), nil
 	}
 
-	newMessage := reflect.New(messageType)
+	newMessage := reflect.New(handlerType.In(handlerType.NumIn() - 1))
 	err := json.Unmarshal(ev, newMessage.Interface())
 	if err != nil {
 		return reflect.ValueOf(nil), err
@@ -95,31 +123,30 @@ func unmarshalEvent(ev json.RawMessage, handlerType reflect.Type) (reflect.Value
 }
 
 func checkSignature(handler reflect.Type) error {
+	// check type
 	if handler.Kind() != reflect.Func {
 		return fmt.Errorf("handler kind %s is not %s", handler.Kind(), reflect.Func)
 	}
 
+	// check parameters
 	if handler.NumIn() > 2 {
 		return fmt.Errorf("handler takes too many arguments: %d", handler.NumIn())
 	}
 
 	if handler.NumIn() == 2 {
-		contextType := reflect.TypeOf((*context.Context)(nil)).Elem()
-		firstArgType := handler.In(0)
-		if !firstArgType.Implements(contextType) {
+		if !handler.In(0).Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) {
 			return errors.New("context should be the first argument")
 		}
 	}
 
-	errorType := reflect.TypeOf((*error)(nil)).Elem()
-
+	// check return values
 	if handler.NumOut() > 2 {
 		return fmt.Errorf("handler returns too many values: %d", handler.NumOut())
 	}
 
 	if handler.NumOut() > 0 {
 		rt := handler.Out(handler.NumOut() - 1)
-		if !rt.Implements(errorType) {
+		if !rt.Implements(reflect.TypeOf((*error)(nil)).Elem()) {
 			return errors.New("handler should return error as the last value")
 		}
 	}
