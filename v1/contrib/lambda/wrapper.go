@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"runtime"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/pkg/errors"
@@ -13,15 +15,15 @@ import (
 )
 
 type wrapper interface {
-	before(context.Context, json.RawMessage)
-	after(interface{}, error)
+	before(context.Context, json.RawMessage) context.Context
+	after(interface{}, error, []interface{})
 }
 
 type traceWrapper struct {
 	trace ao.Trace
 }
 
-func (w *traceWrapper) before(ctx context.Context, msg json.RawMessage) {
+func (w *traceWrapper) before(ctx context.Context, msg json.RawMessage) context.Context {
 	lc, _ := lambdacontext.FromContext(ctx)
 	awsRequestID := "not_found"
 	if lc != nil {
@@ -35,13 +37,19 @@ func (w *traceWrapper) before(ctx context.Context, msg json.RawMessage) {
 			},
 		},
 	)
+	return ao.NewContext(ctx, w.trace)
 }
 
-func (w *traceWrapper) after(result interface{}, err error) {
+func (w *traceWrapper) after(result interface{}, err error, endArgs []interface{}) {
 	if err != nil {
 		w.trace.Err(err)
 	}
-	w.trace.End()
+	defer w.trace.End(endArgs)
+
+	if panicErr := recover(); panicErr != nil {
+		w.trace.Error("panic", fmt.Sprintf("%v", panicErr))
+		panic(panicErr) // re-raise the panic
+	}
 }
 
 // HandlerWrapper wraps the AWS Lambda handler and do the instrumentation. It
@@ -56,10 +64,25 @@ func handlerWrapper(handlerFunc interface{}, w wrapper) interface{} {
 		return handlerFunc
 	}
 
+	var endArgs []interface{}
+	if f := runtime.FuncForPC(reflect.ValueOf(handlerFunc).Pointer()); f != nil {
+		// e.g. "main.slowHandler", "github.com/appoptics/appoptics-apm-go/v1/ao_test.handler404"
+		fname := f.Name()
+		if s := strings.SplitN(fname[strings.LastIndex(fname, "/")+1:], ".", 2); len(s) == 2 {
+			endArgs = append(endArgs, "Controller", s[0], "Action", s[1])
+		}
+	}
+
 	return func(ctx context.Context, msg json.RawMessage) (interface{}, error) {
-		w.before(ctx, msg)
-		result, err := callHandler(ctx, msg, handlerFunc)
-		w.after(result, err)
+		var result interface{}
+		var err error
+
+		ctx = w.before(ctx, msg)
+		defer func() {
+			w.after(result, err, endArgs)
+		}()
+
+		result, err = callHandler(ctx, msg, handlerFunc)
 
 		return result, err
 	}
