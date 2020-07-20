@@ -16,7 +16,7 @@ import (
 
 type wrapper interface {
 	before(context.Context, json.RawMessage) context.Context
-	after(interface{}, error, []interface{})
+	after(interface{}, error, ...interface{})
 }
 
 type traceWrapper struct {
@@ -40,11 +40,11 @@ func (w *traceWrapper) before(ctx context.Context, msg json.RawMessage) context.
 	return ao.NewContext(ctx, w.trace)
 }
 
-func (w *traceWrapper) after(result interface{}, err error, endArgs []interface{}) {
+func (w *traceWrapper) after(result interface{}, err error, endArgs ...interface{}) {
 	if err != nil {
 		w.trace.Err(err)
 	}
-	defer w.trace.End(endArgs)
+	defer w.trace.End(endArgs...)
 
 	if panicErr := recover(); panicErr != nil {
 		w.trace.Error("panic", fmt.Sprintf("%v", panicErr))
@@ -79,7 +79,7 @@ func handlerWrapper(handlerFunc interface{}, w wrapper) interface{} {
 
 		ctx = w.before(ctx, msg)
 		defer func() {
-			w.after(result, err, endArgs)
+			w.after(result, err, endArgs...)
 		}()
 
 		result, err = callHandler(ctx, msg, handlerFunc)

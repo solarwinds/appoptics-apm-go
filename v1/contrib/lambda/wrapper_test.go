@@ -27,7 +27,7 @@ func (d *dumbWrapper) before(ctx context.Context, msg json.RawMessage) context.C
 	return ctx
 }
 
-func (d *dumbWrapper) after(interface{}, error, []interface{}) {
+func (d *dumbWrapper) after(interface{}, error, ...interface{}) {
 	d.afterIsCalled = true
 }
 
