@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"os"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -114,6 +115,11 @@ func (lr *logWriter) flush() error {
 	if _, err := lr.dest.Write(data); err != nil {
 		return errors.Wrap(err, "write to log reporter failed")
 	}
+
+	if file, ok := lr.dest.(*os.File); ok {
+		file.Sync()
+	}
+
 	return nil
 }
 
