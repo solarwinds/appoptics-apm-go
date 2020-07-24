@@ -386,7 +386,7 @@ func (r *grpcReporter) sendServerlessMetrics() {
 	if builtin != nil {
 		messages = append(messages, builtin)
 	}
-	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(0))
+	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(0), true)
 	if custom != nil {
 		messages = append(messages, custom)
 	}
@@ -896,7 +896,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 		messages = append(messages, builtin)
 	}
 
-	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i))
+	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i), false)
 	if custom != nil {
 		messages = append(messages, custom)
 	}

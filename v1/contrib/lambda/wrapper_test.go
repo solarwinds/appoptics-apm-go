@@ -22,12 +22,12 @@ type dumbWrapper struct {
 	afterIsCalled  bool
 }
 
-func (d *dumbWrapper) before(ctx context.Context, msg json.RawMessage) context.Context {
+func (d *dumbWrapper) Before(ctx context.Context, msg json.RawMessage) context.Context {
 	d.beforeIsCalled = true
 	return ctx
 }
 
-func (d *dumbWrapper) after(interface{}, error, ...interface{}) {
+func (d *dumbWrapper) After(interface{}, error, ...interface{}) {
 	d.afterIsCalled = true
 }
 
@@ -37,7 +37,7 @@ func TestWrapperInOut(t *testing.T) {
 	}
 
 	wr := &dumbWrapper{}
-	fnW := handlerWrapper(fn, wr)
+	fnW := HandlerWithWrapper(fn, wr)
 	fnWrapped := fnW.(func(ctx context.Context, message json.RawMessage) (interface{}, error))
 	inBytes, _ := json.Marshal(&TIn{Val: 23})
 	tOut, err := fnWrapped(context.Background(), inBytes)
@@ -53,7 +53,7 @@ func TestWrapperIn(t *testing.T) {
 	}
 
 	wr := &dumbWrapper{}
-	fnW := handlerWrapper(fn, wr)
+	fnW := HandlerWithWrapper(fn, wr)
 	fnWrapped := fnW.(func(ctx context.Context, message json.RawMessage) (interface{}, error))
 	inBytes, _ := json.Marshal(&TIn{Val: 23})
 	_, err := fnWrapped(context.Background(), inBytes)
@@ -68,7 +68,7 @@ func TestWrapperInValid(t *testing.T) {
 	}
 
 	wr := &dumbWrapper{}
-	fnW := handlerWrapper(fn, wr)
+	fnW := HandlerWithWrapper(fn, wr)
 	fnWrapped := fnW.(func(ctx context.Context, in *TIn, val int) (error, int))
 	err, _ := fnWrapped(context.Background(), &TIn{Val: 23}, 0)
 	assert.NotNil(t, err)

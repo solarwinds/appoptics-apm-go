@@ -14,16 +14,16 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 )
 
-type wrapper interface {
-	before(context.Context, json.RawMessage) context.Context
-	after(interface{}, error, ...interface{})
+type Wrapper interface {
+	Before(context.Context, json.RawMessage) context.Context
+	After(interface{}, error, ...interface{})
 }
 
 type traceWrapper struct {
 	trace ao.Trace
 }
 
-func (w *traceWrapper) before(ctx context.Context, msg json.RawMessage) context.Context {
+func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage) context.Context {
 	lc, _ := lambdacontext.FromContext(ctx)
 	awsRequestID := "not_found"
 	if lc != nil {
@@ -40,7 +40,7 @@ func (w *traceWrapper) before(ctx context.Context, msg json.RawMessage) context.
 	return ao.NewContext(ctx, w.trace)
 }
 
-func (w *traceWrapper) after(result interface{}, err error, endArgs ...interface{}) {
+func (w *traceWrapper) After(result interface{}, err error, endArgs ...interface{}) {
 	if err != nil {
 		w.trace.Err(err)
 	}
@@ -52,13 +52,13 @@ func (w *traceWrapper) after(result interface{}, err error, endArgs ...interface
 	}
 }
 
-// HandlerWrapper wraps the AWS Lambda handler and do the instrumentation. It
+// Wrap wraps the AWS Lambda handler and do the instrumentation. It
 // returns a new handler and can be passed into lambda.Start()
-func HandlerWrapper(handlerFunc interface{}) interface{} {
-	return handlerWrapper(handlerFunc, &traceWrapper{})
+func Wrap(handlerFunc interface{}) interface{} {
+	return HandlerWithWrapper(handlerFunc, &traceWrapper{})
 }
 
-func handlerWrapper(handlerFunc interface{}, w wrapper) interface{} {
+func HandlerWithWrapper(handlerFunc interface{}, w Wrapper) interface{} {
 	if err := checkSignature(reflect.TypeOf(handlerFunc)); err != nil {
 		// Does not wrap an invalid handler but let lambda.Start() reject it later
 		return handlerFunc
@@ -77,9 +77,9 @@ func handlerWrapper(handlerFunc interface{}, w wrapper) interface{} {
 		var result interface{}
 		var err error
 
-		ctx = w.before(ctx, msg)
+		ctx = w.Before(ctx, msg)
 		defer func() {
-			w.after(result, err, endArgs...)
+			w.After(result, err, endArgs...)
 		}()
 
 		result, err = callHandler(ctx, msg, handlerFunc)

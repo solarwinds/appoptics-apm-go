@@ -359,7 +359,7 @@ func addRequestCounters(bbuf *bson.Buffer, index *int, rcs map[string]*RateCount
 }
 
 // BuildMessage creates and encodes the custom metrics message.
-func BuildMessage(m *Measurements) []byte {
+func BuildMessage(m *Measurements, serverless bool) []byte {
 	if m == nil {
 		return nil
 	}
@@ -368,9 +368,13 @@ func BuildMessage(m *Measurements) []byte {
 	if m.IsCustom {
 		bbuf.AppendBool("IsCustom", m.IsCustom)
 	}
-	appendHostId(bbuf)
+
+	if !serverless {
+		appendHostId(bbuf)
+		bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
+	}
+
 	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
-	bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
 
 	start := bbuf.AppendStartArray("measurements")
 	index := 0

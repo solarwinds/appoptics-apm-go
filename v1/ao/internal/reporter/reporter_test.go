@@ -620,7 +620,7 @@ func TestCustomMetrics(t *testing.T) {
 		HostTag: true,
 		Tags:    map[string]string{"hi": "globe"},
 	})
-	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(grpcMetricIntervalDefault))
+	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(grpcMetricIntervalDefault), false)
 
 	bbuf := bson.WithBuf(custom)
 	mMap := mbson.M{}
