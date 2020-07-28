@@ -498,16 +498,19 @@ func addRuntimeMetrics(bbuf *bson.Buffer, index *int) {
 //
 // return				metrics message in BSON format
 func BuildBuiltinMetricsMessage(m *Measurements, qs *EventQueueStats,
-	rcs map[string]*RateCounts, runtimeMetrics bool) []byte {
+	rcs map[string]*RateCounts, runtimeMetrics bool, serverless bool) []byte {
 	if m == nil {
 		return nil
 	}
 
 	bbuf := bson.NewBuffer()
 
-	appendHostId(bbuf)
+	if !serverless {
+		appendHostId(bbuf)
+		bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
+	}
+
 	bbuf.AppendInt64("Timestamp_u", int64(time.Now().UnixNano()/1000))
-	bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
 
 	// measurements
 	// ==========================================
@@ -526,9 +529,11 @@ func BuildBuiltinMetricsMessage(m *Measurements, qs *EventQueueStats,
 		addMetricsValue(bbuf, &index, "QueueLargest", qs.queueLargest)
 	}
 
-	addHostMetrics(bbuf, &index)
+	if !serverless {
+		addHostMetrics(bbuf, &index)
+	}
 
-	if runtimeMetrics {
+	if runtimeMetrics && !serverless {
 		// runtime stats
 		addRuntimeMetrics(bbuf, &index)
 	}

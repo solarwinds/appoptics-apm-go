@@ -382,7 +382,7 @@ func (r *grpcReporter) sendServerlessMetrics() {
 	var messages [][]byte
 
 	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(0),
-		nil, FlushRateCounts(), config.GetRuntimeMetrics())
+		nil, FlushRateCounts(), false, true)
 	if builtin != nil {
 		messages = append(messages, builtin)
 	}
@@ -891,7 +891,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	var messages [][]byte
 	// generate a new metrics message
 	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(i),
-		r.conn.queueStats.CopyAndReset(), FlushRateCounts(), config.GetRuntimeMetrics())
+		r.conn.queueStats.CopyAndReset(), FlushRateCounts(), config.GetRuntimeMetrics(), false)
 	if builtin != nil {
 		messages = append(messages, builtin)
 	}

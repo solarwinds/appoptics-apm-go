@@ -373,7 +373,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 		map[string]*RateCounts{ // requested, sampled, limited, traced, through
 			RCRegular:             {10, 2, 5, 5, 1},
 			RCRelaxedTriggerTrace: {3, 0, 1, 2, 0},
-			RCStrictTriggerTrace:  {4, 0, 3, 1, 0}}, true))
+			RCStrictTriggerTrace:  {4, 0, 3, 1, 0}}, true, false))
 	m := bsonToMap(bbuf)
 
 	_, ok := m["Hostname"]
@@ -460,7 +460,7 @@ func TestGenerateMetricsMessage(t *testing.T) {
 	}
 
 	m = bsonToMap(bson.WithBuf(BuildBuiltinMetricsMessage(testMetrics, &EventQueueStats{},
-		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}}, true)))
+		map[string]*RateCounts{RCRegular: {}, RCRelaxedTriggerTrace: {}, RCStrictTriggerTrace: {}}, true, false)))
 
 	assert.NotNil(t, m["TransactionNameOverflow"])
 	assert.True(t, m["TransactionNameOverflow"].(bool))
