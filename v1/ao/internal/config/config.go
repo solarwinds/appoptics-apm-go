@@ -24,7 +24,7 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/pkg/errors"
-    "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 )
 
 const (
@@ -56,6 +56,8 @@ const (
 	EnvAppOpticsConfigFile            = "APPOPTICS_CONFIG_FILE"
 	envAppOpticsServerless            = "APPOPTICS_SERVERLESS"
 	envAppOpticsServerlessServiceName = "APPOPTICS_SERVICE_NAME"
+	envAppOpticsTokenBucketCap        = "APPOPTICS_TOKEN_BUCKET_CAPACITY"
+	envAppOpticsTokenBucketRate       = "APPOPTICS_TOKEN_BUCKET_RATE"
 )
 
 // Errors
@@ -126,6 +128,8 @@ type Config struct {
 	// AWS Lambda, etc.
 	Serverless            bool   `yaml:"Serverless" env:"APPOPTICS_SERVERLESS"`
 	ServerlessServiceName string `yaml:"ServerlessServiceName" env:"APPOPTICS_SERVICE_NAME" default:"AWSLambda"`
+	TokenBucketCap        int    `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"16"`
+	TokenBucketRate       int    `yaml:"TockenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"8"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -855,6 +859,20 @@ func (c *Config) GetServerlessServiceName() string {
 	c.RLock()
 	defer c.RUnlock()
 	return c.ServerlessServiceName
+}
+
+// GetTokenBucketCap returns the token bucket capacity
+func (c *Config) GetTokenBucketCap() int {
+	c.RLock()
+	defer c.RUnlock()
+	return c.TokenBucketCap
+}
+
+// GetTokenBucketRate returns the token bucket rate
+func (c *Config) GetTokenBucketRate() int {
+	c.RLock()
+	defer c.RUnlock()
+	return c.TokenBucketRate
 }
 
 // GetTransactionFiltering returns the transaction filtering config

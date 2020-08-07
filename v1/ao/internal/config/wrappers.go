@@ -67,6 +67,9 @@ var GetServerless = conf.GetServerless
 
 var GetServerlessServiceName = conf.GetServerlessServiceName
 
+var GetTokenBucketCap = conf.GetTokenBucketCap
+var GetTokenBucketRate = conf.GetTokenBucketRate
+
 // GetTransactionFiltering is a wrapper to the method of the global config
 var GetTransactionFiltering = conf.GetTransactionFiltering
 

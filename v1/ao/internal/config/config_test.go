@@ -14,7 +14,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
-    "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 )
 
 const TestServiceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go"
@@ -62,10 +62,14 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsDisabled, "invalidValue")
 	os.Setenv(envAppOpticsServerless, "true")
 	os.Setenv(envAppOpticsServerlessServiceName, "AWSLambda")
+	os.Setenv(envAppOpticsTokenBucketCap, "2")
+	os.Setenv(envAppOpticsTokenBucketRate, "1")
 
 	c.Load()
 	assert.Equal(t, c.GetServerless(), true)
 	assert.Equal(t, "AWSLambda", c.GetServerlessServiceName())
+	assert.Equal(t, 2, c.GetTokenBucketCap())
+	assert.Equal(t, 1, c.GetTokenBucketRate())
 	assert.Equal(t, ToServiceKey(key1), c.GetServiceKey())
 	assert.Equal(t, "test", c.GetHostAlias())
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
@@ -156,6 +160,8 @@ func TestConfigInit(t *testing.T) {
 		RuntimeMetrics:        true,
 		Serverless:            false,
 		ServerlessServiceName: "AWSLambda",
+		TokenBucketCap:        16,
+		TokenBucketRate:       8,
 	}
 	assert.Equal(t, c, &defaultC)
 }
@@ -202,6 +208,8 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_RUNTIME_METRICS=true",
 		"APPOPTICS_SERVERLESS=true",
 		"APPOPTICS_SERVICE_NAME=LambdaTest",
+		"APPOPTICS_TOKEN_BUCKET_CAPACITY=8",
+		"APPOPTICS_TOKEN_BUCKET_RATE=4",
 	}
 	SetEnvs(envs)
 
@@ -243,6 +251,8 @@ func TestEnvsLoading(t *testing.T) {
 		RuntimeMetrics:        true,
 		Serverless:            true,
 		ServerlessServiceName: "LambdaTest",
+		TokenBucketCap:        8,
+		TokenBucketRate:       4,
 	}
 
 	c := NewConfig()
@@ -293,6 +303,8 @@ func TestYamlConfig(t *testing.T) {
 		RuntimeMetrics:        true,
 		Serverless:            true,
 		ServerlessServiceName: "LambdaTest",
+		TokenBucketCap:        10,
+		TokenBucketRate:       5,
 	}
 
 	out, err := yaml.Marshal(&yamlConfig)
@@ -326,6 +338,8 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_SQL_SANITIZE=3",
 		"APPOPTICS_SERVERLESS=false",
 		"APPOPTICS_SERVICE_NAME=LambdaEnv",
+		"APPOPTICS_TOKEN_BUCKET_CAPACITY=8",
+		"APPOPTICS_TOKEN_BUCKET_RATE=4",
 	}
 	ClearEnvs()
 	SetEnvs(envs)
@@ -373,6 +387,8 @@ func TestYamlConfig(t *testing.T) {
 		RuntimeMetrics:        true,
 		Serverless:            false,
 		ServerlessServiceName: "LambdaEnv",
+		TokenBucketCap:        8,
+		TokenBucketRate:       4,
 	}
 
 	c = NewConfig()
