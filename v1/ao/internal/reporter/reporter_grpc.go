@@ -291,7 +291,7 @@ func newServerlessReporter(writer io.Writer) reporter {
 		"",
 		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
 		int64(config.GetSampleRate()), 120,
-		argsToMap(2.000000, 1.000000, 20.000000, 1.000000, 6.000000, 0.100000, 60, -1, []byte("")))
+		argsToMap(float64(config.GetTokenBucketCap()), float64(config.GetTokenBucketRate()), 20.000000, 1.000000, 6.000000, 0.100000, 60, -1, []byte("")))
 
 	if !r.isReady() && hasDefaultSetting() {
 		r.cond.L.Lock()
@@ -317,7 +317,10 @@ func (r *grpcReporter) SetRequestID(id string) {
 //
 // returns	GRPC reporter object
 func newGRPCReporter() reporter {
-	if config.GetServerless() {
+	_, hasLambdaFunctionName := os.LookupEnv("AWS_LAMBDA_FUNCTION_NAME")
+	_, hasLambdaTaskRoot := os.LookupEnv("LAMBDA_TASK_ROOT")
+
+	if hasLambdaFunctionName && hasLambdaTaskRoot {
 		return newServerlessReporter(os.Stderr)
 	}
 

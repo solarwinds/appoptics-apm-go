@@ -54,7 +54,6 @@ const (
 	envAppOpticsMaxReqBytes           = "APPOPTICS_MAX_REQUEST_BYTES"
 	envAppOpticsDisabled              = "APPOPTICS_DISABLED"
 	EnvAppOpticsConfigFile            = "APPOPTICS_CONFIG_FILE"
-	envAppOpticsServerless            = "APPOPTICS_SERVERLESS"
 	envAppOpticsServerlessServiceName = "APPOPTICS_SERVICE_NAME"
 	envAppOpticsTokenBucketCap        = "APPOPTICS_TOKEN_BUCKET_CAPACITY"
 	envAppOpticsTokenBucketRate       = "APPOPTICS_TOKEN_BUCKET_RATE"
@@ -126,7 +125,6 @@ type Config struct {
 	// Report runtime metrics or not
 	RuntimeMetrics bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
 	// AWS Lambda, etc.
-	Serverless            bool   `yaml:"Serverless" env:"APPOPTICS_SERVERLESS"`
 	ServerlessServiceName string `yaml:"ServerlessServiceName" env:"APPOPTICS_SERVICE_NAME" default:"AWSLambda"`
 	TokenBucketCap        int    `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"16"`
 	TokenBucketRate       int    `yaml:"TockenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"8"`
@@ -845,13 +843,6 @@ func (c *Config) GetRuntimeMetrics() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.RuntimeMetrics
-}
-
-// GetServerless returns the serverless flag
-func (c *Config) GetServerless() bool {
-	c.RLock()
-	defer c.RUnlock()
-	return c.Serverless
 }
 
 // GetServerlessServiceName returns the service name for the AWS Lambda function

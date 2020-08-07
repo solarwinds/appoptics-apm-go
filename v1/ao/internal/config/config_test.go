@@ -60,13 +60,11 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsTrustedPath, "test.crt")
 	os.Setenv(envAppOpticsCollectorUDP, "hello.udp")
 	os.Setenv(envAppOpticsDisabled, "invalidValue")
-	os.Setenv(envAppOpticsServerless, "true")
 	os.Setenv(envAppOpticsServerlessServiceName, "AWSLambda")
 	os.Setenv(envAppOpticsTokenBucketCap, "2")
 	os.Setenv(envAppOpticsTokenBucketRate, "1")
 
 	c.Load()
-	assert.Equal(t, c.GetServerless(), true)
 	assert.Equal(t, "AWSLambda", c.GetServerlessServiceName())
 	assert.Equal(t, 2, c.GetTokenBucketCap())
 	assert.Equal(t, 1, c.GetTokenBucketRate())
@@ -158,7 +156,6 @@ func TestConfigInit(t *testing.T) {
 		Proxy:                 "",
 		ProxyCertPath:         "",
 		RuntimeMetrics:        true,
-		Serverless:            false,
 		ServerlessServiceName: "AWSLambda",
 		TokenBucketCap:        16,
 		TokenBucketRate:       8,
@@ -206,7 +203,6 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_PROXY=http://usr/pwd@internal.proxy:3306",
 		"APPOPTICS_PROXY_CERT_PATH=./proxy.pem",
 		"APPOPTICS_RUNTIME_METRICS=true",
-		"APPOPTICS_SERVERLESS=true",
 		"APPOPTICS_SERVICE_NAME=LambdaTest",
 		"APPOPTICS_TOKEN_BUCKET_CAPACITY=8",
 		"APPOPTICS_TOKEN_BUCKET_RATE=4",
@@ -249,7 +245,6 @@ func TestEnvsLoading(t *testing.T) {
 		Proxy:                 "http://usr/pwd@internal.proxy:3306",
 		ProxyCertPath:         "./proxy.pem",
 		RuntimeMetrics:        true,
-		Serverless:            true,
 		ServerlessServiceName: "LambdaTest",
 		TokenBucketCap:        8,
 		TokenBucketRate:       4,
@@ -301,7 +296,6 @@ func TestYamlConfig(t *testing.T) {
 		Proxy:                 "http://usr:pwd@internal.proxy:3306",
 		ProxyCertPath:         "./proxy.pem",
 		RuntimeMetrics:        true,
-		Serverless:            true,
 		ServerlessServiceName: "LambdaTest",
 		TokenBucketCap:        10,
 		TokenBucketRate:       5,
@@ -336,7 +330,6 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_MAX_REQUEST_BYTES=4096000",
 		"APPOPTICS_DISABLED=false",
 		"APPOPTICS_SQL_SANITIZE=3",
-		"APPOPTICS_SERVERLESS=false",
 		"APPOPTICS_SERVICE_NAME=LambdaEnv",
 		"APPOPTICS_TOKEN_BUCKET_CAPACITY=8",
 		"APPOPTICS_TOKEN_BUCKET_RATE=4",
@@ -385,7 +378,6 @@ func TestYamlConfig(t *testing.T) {
 		Proxy:                 "http://usr:pwd@internal.proxy:3306",
 		ProxyCertPath:         "./proxy.pem",
 		RuntimeMetrics:        true,
-		Serverless:            false,
 		ServerlessServiceName: "LambdaEnv",
 		TokenBucketCap:        8,
 		TokenBucketRate:       4,
