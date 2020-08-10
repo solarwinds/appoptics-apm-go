@@ -14,6 +14,10 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 )
 
+const (
+	AOHTTPHeader = "x-trace"
+)
+
 type Wrapper interface {
 	Before(context.Context, json.RawMessage) context.Context
 	After(interface{}, error, ...interface{})
@@ -23,6 +27,23 @@ type traceWrapper struct {
 	trace ao.Trace
 }
 
+type eventHeaders struct {
+	Headers map[string]string `json:"headers"`
+}
+
+func (w *traceWrapper) getTraceContext(ctx context.Context, msg json.RawMessage) string {
+	evt := &eventHeaders{}
+	err := json.Unmarshal(msg, &evt)
+	if err == nil {
+		for k, v := range evt.Headers {
+			if strings.ToLower(k) == AOHTTPHeader {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
 func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage) context.Context {
 	lc, _ := lambdacontext.FromContext(ctx)
 	awsRequestID := "not_found"
@@ -30,9 +51,11 @@ func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage) context.
 		awsRequestID = lc.AwsRequestID
 	}
 
+	mdStr := w.getTraceContext(ctx, msg)
 	w.trace = ao.NewTraceWithOptions("aws_lambda",
 		ao.SpanOptions{
 			ContextOptions: ao.ContextOptions{
+				MdStr:           mdStr,
 				LambdaRequestID: awsRequestID,
 			},
 		},
