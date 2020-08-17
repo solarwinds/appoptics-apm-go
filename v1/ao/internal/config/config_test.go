@@ -65,7 +65,6 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsTokenBucketRate, "1")
 
 	c.Load()
-	assert.Equal(t, "AWSLambda", c.GetServerlessServiceName())
 	assert.Equal(t, 2, c.GetTokenBucketCap())
 	assert.Equal(t, 1, c.GetTokenBucketRate())
 	assert.Equal(t, ToServiceKey(key1), c.GetServiceKey())
@@ -148,17 +147,16 @@ func TestConfigInit(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		SQLSanitize:           0,
-		Disabled:              false,
-		Ec2MetadataTimeout:    1000,
-		DebugLevel:            "warn",
-		TriggerTrace:          true,
-		Proxy:                 "",
-		ProxyCertPath:         "",
-		RuntimeMetrics:        true,
-		ServerlessServiceName: "AWSLambda",
-		TokenBucketCap:        16,
-		TokenBucketRate:       8,
+		SQLSanitize:        0,
+		Disabled:           false,
+		Ec2MetadataTimeout: 1000,
+		DebugLevel:         "warn",
+		TriggerTrace:       true,
+		Proxy:              "",
+		ProxyCertPath:      "",
+		RuntimeMetrics:     true,
+		TokenBucketCap:     16,
+		TokenBucketRate:    8,
 	}
 	assert.Equal(t, c, &defaultC)
 }
@@ -237,17 +235,16 @@ func TestEnvsLoading(t *testing.T) {
 			RetryLogThreshold:       10,
 			MaxRetries:              20,
 		},
-		SQLSanitize:           0,
-		Disabled:              false,
-		Ec2MetadataTimeout:    2000,
-		DebugLevel:            "warn",
-		TriggerTrace:          false,
-		Proxy:                 "http://usr/pwd@internal.proxy:3306",
-		ProxyCertPath:         "./proxy.pem",
-		RuntimeMetrics:        true,
-		ServerlessServiceName: "LambdaTest",
-		TokenBucketCap:        8,
-		TokenBucketRate:       4,
+		SQLSanitize:        0,
+		Disabled:           false,
+		Ec2MetadataTimeout: 2000,
+		DebugLevel:         "warn",
+		TriggerTrace:       false,
+		Proxy:              "http://usr/pwd@internal.proxy:3306",
+		ProxyCertPath:      "./proxy.pem",
+		RuntimeMetrics:     true,
+		TokenBucketCap:     8,
+		TokenBucketRate:    4,
 	}
 
 	c := NewConfig()
@@ -288,17 +285,16 @@ func TestYamlConfig(t *testing.T) {
 			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
-		SQLSanitize:           2,
-		Disabled:              false,
-		Ec2MetadataTimeout:    1500,
-		DebugLevel:            "info",
-		TriggerTrace:          false,
-		Proxy:                 "http://usr:pwd@internal.proxy:3306",
-		ProxyCertPath:         "./proxy.pem",
-		RuntimeMetrics:        true,
-		ServerlessServiceName: "LambdaTest",
-		TokenBucketCap:        10,
-		TokenBucketRate:       5,
+		SQLSanitize:        2,
+		Disabled:           false,
+		Ec2MetadataTimeout: 1500,
+		DebugLevel:         "info",
+		TriggerTrace:       false,
+		Proxy:              "http://usr:pwd@internal.proxy:3306",
+		ProxyCertPath:      "./proxy.pem",
+		RuntimeMetrics:     true,
+		TokenBucketCap:     10,
+		TokenBucketRate:    5,
 	}
 
 	out, err := yaml.Marshal(&yamlConfig)
@@ -370,17 +366,16 @@ func TestYamlConfig(t *testing.T) {
 			{"url", `\s+\d+\s+`, nil, "disabled"},
 			{"url", "", []string{".jpg"}, "disabled"},
 		},
-		SQLSanitize:           3,
-		Disabled:              false,
-		Ec2MetadataTimeout:    1500,
-		DebugLevel:            "info",
-		TriggerTrace:          false,
-		Proxy:                 "http://usr:pwd@internal.proxy:3306",
-		ProxyCertPath:         "./proxy.pem",
-		RuntimeMetrics:        true,
-		ServerlessServiceName: "LambdaEnv",
-		TokenBucketCap:        8,
-		TokenBucketRate:       4,
+		SQLSanitize:        3,
+		Disabled:           false,
+		Ec2MetadataTimeout: 1500,
+		DebugLevel:         "info",
+		TriggerTrace:       false,
+		Proxy:              "http://usr:pwd@internal.proxy:3306",
+		ProxyCertPath:      "./proxy.pem",
+		RuntimeMetrics:     true,
+		TokenBucketCap:     8,
+		TokenBucketRate:    4,
 	}
 
 	c = NewConfig()

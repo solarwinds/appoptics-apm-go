@@ -282,10 +282,8 @@ func newServerlessReporter(writer io.Writer) reporter {
 		serverless: true,
 	}
 
-	funcName := os.Getenv("AWS_LAMBDA_FUNCTION_NAME")
-	serviceName := config.GetServerlessServiceName()
-	r.lr = newLogWriter(funcName, serviceName, eventWT, false, writer, 1e6)
-	r.mr = newLogWriter(funcName, serviceName, metricWT, false, writer, 1e6)
+	r.lr = newLogWriter(false, writer, 1e6)
+	r.mr = r.lr
 
 	updateSetting(int32(TYPE_DEFAULT),
 		"",
@@ -303,14 +301,6 @@ func newServerlessReporter(writer io.Writer) reporter {
 	}
 
 	return r
-}
-
-func (r *grpcReporter) SetRequestID(id string) {
-	if !r.serverless {
-		return
-	}
-	r.lr.SetRequestID(id)
-	r.mr.SetRequestID(id)
 }
 
 // initializes a new GRPC reporter from scratch (called once on program startup)
@@ -743,7 +733,7 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 	}
 
 	if r.serverless {
-		_, err := r.lr.Write((*e).bbuf.GetBuf())
+		_, err := r.lr.Write(EventWT, (*e).bbuf.GetBuf())
 		return err
 
 	}
@@ -917,12 +907,9 @@ func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 
 	if r.serverless {
 		for _, msg := range msgs {
-			if _, err := r.mr.Write(msg); err != nil {
+			if _, err := r.mr.Write(MetricWT, msg); err != nil {
 				log.Warningf("sendMetrics: %s", err)
 			}
-		}
-		if err := r.mr.Flush(); err != nil {
-			log.Warningf("sendMetrics: %s", err)
 		}
 		return
 	}
@@ -1041,7 +1028,7 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 	}
 
 	if r.serverless {
-		_, err := r.lr.Write((*e).bbuf.GetBuf())
+		_, err := r.lr.Write(EventWT, (*e).bbuf.GetBuf())
 		return err
 	}
 

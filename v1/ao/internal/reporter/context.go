@@ -77,8 +77,6 @@ type ContextOptions struct {
 	XTraceOptionsSignature string
 	// CB is the callback function to produce the KVs.
 	CB func() KVMap
-	// LambdaRequestID is the request id of the lambda request
-	LambdaRequestID string
 }
 
 // ValidMetadata checks if a metadata string is valid.
@@ -498,9 +496,6 @@ func tsInScope(tsStr string) (string, error) {
 // function returns, calling cb if provided for additional KV pairs.
 func NewContext(layer string, reportEntry bool, opts ContextOptions,
 	cb func() KVMap) (ctx Context, ok bool, headers map[string]string) {
-	if opts.LambdaRequestID != "" {
-		globalReporter.SetRequestID(opts.LambdaRequestID)
-	}
 
 	traced := false
 	addCtxEdge := false

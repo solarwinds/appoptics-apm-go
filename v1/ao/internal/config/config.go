@@ -123,11 +123,9 @@ type Config struct {
 	// Cert path for the HTTP/HTTPS proxy
 	ProxyCertPath string `yaml:"ProxyCertPath" env:"APPOPTICS_PROXY_CERT_PATH"`
 	// Report runtime metrics or not
-	RuntimeMetrics bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
-	// AWS Lambda, etc.
-	ServerlessServiceName string `yaml:"ServerlessServiceName" env:"APPOPTICS_SERVICE_NAME" default:"AWSLambda"`
-	TokenBucketCap        int    `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"16"`
-	TokenBucketRate       int    `yaml:"TockenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"8"`
+	RuntimeMetrics  bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
+	TokenBucketCap  int  `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"16"`
+	TokenBucketRate int  `yaml:"TockenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"8"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -843,13 +841,6 @@ func (c *Config) GetRuntimeMetrics() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.RuntimeMetrics
-}
-
-// GetServerlessServiceName returns the service name for the AWS Lambda function
-func (c *Config) GetServerlessServiceName() string {
-	c.RLock()
-	defer c.RUnlock()
-	return c.ServerlessServiceName
 }
 
 // GetTokenBucketCap returns the token bucket capacity

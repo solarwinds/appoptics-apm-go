@@ -41,8 +41,6 @@ type reporter interface {
 	CustomIncrementMetric(name string, opts metrics.MetricOptions) error
 	// Flush flush the events buffer to stderr. Currently it's used for AWS Lambda only
 	Flush() error
-	// SetRequestID sets the Lambda request ID (for AWS Lambda only)
-	SetRequestID(id string)
 }
 
 // KVs from getSettingsResult arguments
@@ -84,8 +82,7 @@ func (r *nullReporter) CustomSummaryMetric(name string, value float64, opts metr
 func (r *nullReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
 	return nil
 }
-func (r *nullReporter) Flush() error           { return nil }
-func (r *nullReporter) SetRequestID(id string) {}
+func (r *nullReporter) Flush() error { return nil }
 
 // init() is called only once on program startup. Here we create the reporter
 // that will be used throughout the runtime of the app. Default is 'ssl' but

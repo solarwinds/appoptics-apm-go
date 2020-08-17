@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/pkg/errors"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
@@ -45,18 +44,11 @@ func (w *traceWrapper) getTraceContext(ctx context.Context, msg json.RawMessage)
 }
 
 func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage) context.Context {
-	lc, _ := lambdacontext.FromContext(ctx)
-	awsRequestID := "not_found"
-	if lc != nil {
-		awsRequestID = lc.AwsRequestID
-	}
-
 	mdStr := w.getTraceContext(ctx, msg)
 	w.trace = ao.NewTraceWithOptions("aws_lambda",
 		ao.SpanOptions{
 			ContextOptions: ao.ContextOptions{
-				MdStr:           mdStr,
-				LambdaRequestID: awsRequestID,
+				MdStr: mdStr,
 			},
 		},
 	)

@@ -3,6 +3,7 @@ package reporter
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -10,45 +11,32 @@ import (
 	"github.com/pkg/errors"
 )
 
-// WriteType denotes the type of the buffer being written, which is either an event
-// or a metric.
-type WriteType string
-
-const (
-	eventWT  WriteType = "e"
-	metricWT WriteType = "m"
-)
-
 // FlushWriter offers an interface to write a byte slice to a specific destination.
 // The caller needs to flush the buffer explicitly in async mode, while for sync
 // mode, a flush is implicitly called after a write.
 type FlushWriter interface {
-	io.Writer
+	Write(t WriteType, bytes []byte) (int, error)
 	Flush() error
-	SetRequestID(string)
 }
 
-func newLogWriter(host string, service string, wt WriteType, syncWrite bool, dest io.Writer, maxChunkSize int) FlushWriter {
+func newLogWriter(syncWrite bool, dest io.Writer, maxChunkSize int) FlushWriter {
 	return &logWriter{
 		mu:           &sync.Mutex{},
 		syncWrite:    syncWrite,
-		wt:           wt,
 		dest:         dest,
 		maxChunkSize: maxChunkSize,
-		msg: ServerlessMessage{
-			Host:    host,
-			Service: service,
-		},
 	}
+}
+
+type LogData struct {
+	Events  []string `json:"events,omitempty"`
+	Metrics []string `json:"metrics,omitempty"`
 }
 
 // ServerlessMessage denotes the message to be written to AWS CloudWatch. The
 // forwarder will decode the message and sent the messages to the AO collector.
 type ServerlessMessage struct {
-	Host      string   `json:"ao-host"`
-	Service   string   `json:"ao-service"`
-	Data      []string `json:"ao-data"`
-	RequestID string   `json:"request-id"`
+	Data LogData `json:"ao-data"`
 }
 
 // logWriter writes the byte slices to a bytes buffer and flush the buffer when
@@ -57,18 +45,24 @@ type ServerlessMessage struct {
 type logWriter struct {
 	mu           *sync.Mutex
 	syncWrite    bool
-	wt           WriteType
 	dest         io.Writer
 	maxChunkSize int
 	chunkSize    int
 	msg          ServerlessMessage
 }
 
+type WriteType int
+
+const (
+	EventWT = iota
+	MetricWT
+)
+
 func (lr *logWriter) encode(bytes []byte) string {
-	return string(lr.wt) + ":" + base64.StdEncoding.EncodeToString(bytes)
+	return base64.StdEncoding.EncodeToString(bytes)
 }
 
-func (lr *logWriter) Write(bytes []byte) (int, error) {
+func (lr *logWriter) Write(t WriteType, bytes []byte) (int, error) {
 	lr.mu.Lock()
 	defer lr.mu.Unlock()
 
@@ -81,12 +75,17 @@ func (lr *logWriter) Write(bytes []byte) (int, error) {
 		lr.flush()
 	}
 
-	lr.msg.Data = append(lr.msg.Data, encoded)
+	if t == EventWT {
+		lr.msg.Data.Events = append(lr.msg.Data.Events, encoded)
+	} else if t == MetricWT {
+		lr.msg.Data.Metrics = append(lr.msg.Data.Metrics, encoded)
+	} else {
+		return 0, fmt.Errorf("invalid write type: %v", t)
+	}
 
+	lr.chunkSize += len(encoded)
 	if lr.syncWrite {
 		lr.flush()
-	} else {
-		lr.chunkSize += len(encoded)
 	}
 
 	return len(bytes), nil
@@ -99,7 +98,7 @@ func (lr *logWriter) Flush() error {
 }
 
 func (lr *logWriter) flush() error {
-	if len(lr.msg.Data) == 0 {
+	if lr.chunkSize == 0 {
 		return errors.New("nothing to flush")
 	}
 
@@ -107,7 +106,8 @@ func (lr *logWriter) flush() error {
 	if err != nil {
 		return errors.Wrap(err, "error marshaling message")
 	}
-	lr.msg.Data = []string{}
+	lr.msg.Data.Events = []string{}
+	lr.msg.Data.Metrics = []string{}
 	lr.chunkSize = 0
 
 	data = append(data, "\n"...)
@@ -121,11 +121,4 @@ func (lr *logWriter) flush() error {
 	}
 
 	return nil
-}
-
-func (lr *logWriter) SetRequestID(id string) {
-	lr.mu.Lock()
-	defer lr.mu.Unlock()
-
-	lr.msg.RequestID = id
 }

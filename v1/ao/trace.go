@@ -152,10 +152,9 @@ func NewTraceFromIDForURL(spanName, mdStr string, url string, cb func() KVMap) T
 	return NewTraceWithOptions(spanName, SpanOptions{
 		false,
 		ContextOptions{
-			MdStr:           mdStr,
-			URL:             url,
-			CB:              cb,
-			LambdaRequestID: "",
+			MdStr: mdStr,
+			URL:   url,
+			CB:    cb,
 		},
 	})
 }

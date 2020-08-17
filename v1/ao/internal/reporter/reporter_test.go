@@ -790,17 +790,15 @@ func TestServerless(t *testing.T) {
 	for _, s := range arr {
 		sm := &ServerlessMessage{}
 		assert.Nil(t, json.Unmarshal([]byte(s), sm))
-		assert.NotZero(t, len(sm.Data), sm)
-		for _, s := range sm.Data {
-			if strings.HasPrefix(s, "m:") {
-				metricCnt++
-			} else if strings.HasPrefix(s, "e:") {
-				evtCnt++
-				evtByte, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(s, "e:"))
-				assert.Nil(t, err)
-				evt := string(evtByte)
-				assert.Contains(t, evt, "layer1")
-			}
+
+		metricCnt += len(sm.Data.Metrics)
+		evtCnt += len(sm.Data.Events)
+
+		for _, s := range sm.Data.Events {
+			evtByte, err := base64.StdEncoding.DecodeString(s)
+			assert.Nil(t, err)
+			evt := string(evtByte)
+			assert.Contains(t, evt, "layer1")
 		}
 	}
 	assert.Equal(t, 2, metricCnt)

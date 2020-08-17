@@ -63,8 +63,6 @@ var GetProxyCertPath = conf.GetProxyCertPath
 // GetRuntimeMetrics is a wrapper to the method of the global config
 var GetRuntimeMetrics = conf.GetRuntimeMetrics
 
-var GetServerlessServiceName = conf.GetServerlessServiceName
-
 var GetTokenBucketCap = conf.GetTokenBucketCap
 var GetTokenBucketRate = conf.GetTokenBucketRate
 
