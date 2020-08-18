@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/pkg/errors"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
@@ -18,8 +19,8 @@ const (
 )
 
 type Wrapper interface {
-	Before(context.Context, json.RawMessage) context.Context
-	After(interface{}, error, ...interface{})
+	Before(context.Context, json.RawMessage, ...interface{}) context.Context
+	After(interface{}, error, ...interface{}) interface{}
 }
 
 type traceWrapper struct {
@@ -43,28 +44,56 @@ func (w *traceWrapper) getTraceContext(ctx context.Context, msg json.RawMessage)
 	return ""
 }
 
-func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage) context.Context {
+func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage, args ...interface{}) context.Context {
 	mdStr := w.getTraceContext(ctx, msg)
+
+	lc, ok := lambdacontext.FromContext(ctx)
+	if ok {
+		args = append(args, "AwsRequestID", lc.AwsRequestID)
+		args = append(args, "InvokedFunctionArn", lc.InvokedFunctionArn)
+		args = append(args, "FunctionName", lambdacontext.FunctionName)
+		args = append(args, "FunctionVersion", lambdacontext.FunctionVersion)
+	}
+
+	cb := func() ao.KVMap {
+		m := ao.KVMap{}
+		for i := 0; i < len(args)-1; i += 2 {
+			if k, ok := args[i].(string); ok {
+				m[k] = args[i+1]
+			}
+		}
+		return m
+	}
+
 	w.trace = ao.NewTraceWithOptions("aws_lambda",
 		ao.SpanOptions{
 			ContextOptions: ao.ContextOptions{
 				MdStr: mdStr,
+				CB:    cb,
 			},
 		},
 	)
 	return ao.NewContext(ctx, w.trace)
 }
 
-func (w *traceWrapper) After(result interface{}, err error, endArgs ...interface{}) {
+func (w *traceWrapper) After(result interface{}, err error, endArgs ...interface{}) interface{} {
 	if err != nil {
 		w.trace.Err(err)
 	}
 	defer w.trace.End(endArgs...)
 
-	if panicErr := recover(); panicErr != nil {
-		w.trace.Error("panic", fmt.Sprintf("%v", panicErr))
-		panic(panicErr) // re-raise the panic
-	}
+	defer func() {
+		if panicErr := recover(); panicErr != nil {
+			w.trace.Error("panic", fmt.Sprintf("%v", panicErr))
+			panic(panicErr) // re-raise the panic
+		}
+	}()
+
+	return w.injectTraceContext(result, w.trace.ExitMetadata())
+}
+
+func (w *traceWrapper) injectTraceContext(result interface{}, mdStr string) interface{} {
+	return result // TODO
 }
 
 // Wrap wraps the AWS Lambda handler and do the instrumentation. It
@@ -79,6 +108,7 @@ func HandlerWithWrapper(handlerFunc interface{}, w Wrapper) interface{} {
 		return handlerFunc
 	}
 
+	coldStart := true
 	var endArgs []interface{}
 	if f := runtime.FuncForPC(reflect.ValueOf(handlerFunc).Pointer()); f != nil {
 		// e.g. "main.slowHandler", "github.com/appoptics/appoptics-apm-go/v1/ao_test.handler404"
@@ -88,18 +118,16 @@ func HandlerWithWrapper(handlerFunc interface{}, w Wrapper) interface{} {
 		}
 	}
 
-	return func(ctx context.Context, msg json.RawMessage) (interface{}, error) {
-		var result interface{}
-		var err error
-
-		ctx = w.Before(ctx, msg)
+	return func(ctx context.Context, msg json.RawMessage) (res interface{}, err error) {
+		ctx = w.Before(ctx, msg, "ColdStart", coldStart)
 		defer func() {
-			w.After(result, err, endArgs...)
+			res = w.After(res, err, endArgs...)
 		}()
 
-		result, err = callHandler(ctx, msg, handlerFunc)
+		res, err = callHandler(ctx, msg, handlerFunc)
+		coldStart = false
 
-		return result, err
+		return res, err
 	}
 }
 

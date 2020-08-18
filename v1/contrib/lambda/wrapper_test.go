@@ -22,13 +22,14 @@ type dumbWrapper struct {
 	afterIsCalled  bool
 }
 
-func (d *dumbWrapper) Before(ctx context.Context, msg json.RawMessage) context.Context {
+func (d *dumbWrapper) Before(ctx context.Context, msg json.RawMessage, args ...interface{}) context.Context {
 	d.beforeIsCalled = true
 	return ctx
 }
 
-func (d *dumbWrapper) After(interface{}, error, ...interface{}) {
+func (d *dumbWrapper) After(interface{}, error, ...interface{}) interface{} {
 	d.afterIsCalled = true
+	return nil
 }
 
 func TestWrapperInOut(t *testing.T) {
