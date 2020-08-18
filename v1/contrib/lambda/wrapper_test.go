@@ -27,9 +27,9 @@ func (d *dumbWrapper) Before(ctx context.Context, msg json.RawMessage, args ...i
 	return ctx
 }
 
-func (d *dumbWrapper) After(interface{}, error, ...interface{}) interface{} {
+func (d *dumbWrapper) After(res interface{}, err *typedError, args ...interface{}) interface{} {
 	d.afterIsCalled = true
-	return nil
+	return res
 }
 
 func TestWrapperInOut(t *testing.T) {

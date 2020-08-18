@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/pkg/errors"
 
@@ -20,7 +21,7 @@ const (
 
 type Wrapper interface {
 	Before(context.Context, json.RawMessage, ...interface{}) context.Context
-	After(interface{}, error, ...interface{}) interface{}
+	After(interface{}, *typedError, ...interface{}) interface{}
 }
 
 type traceWrapper struct {
@@ -28,24 +29,32 @@ type traceWrapper struct {
 }
 
 type eventHeaders struct {
-	Headers map[string]string `json:"headers"`
+	Headers    map[string]string `json:"headers"`
+	HTTPMethod string            `json:"httpMethod"`
 }
 
-func (w *traceWrapper) getTraceContext(ctx context.Context, msg json.RawMessage) string {
+func (w *traceWrapper) getRequestContext(ctx context.Context, msg json.RawMessage) (string, string) {
 	evt := &eventHeaders{}
 	err := json.Unmarshal(msg, &evt)
+
+	var method string
+	var mdStr string
 	if err == nil {
+		method = evt.HTTPMethod
 		for k, v := range evt.Headers {
 			if strings.ToLower(k) == AOHTTPHeader {
-				return v
+				mdStr = v
+				break
 			}
 		}
 	}
-	return ""
+	return mdStr, method
 }
 
 func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage, args ...interface{}) context.Context {
-	mdStr := w.getTraceContext(ctx, msg)
+	mdStr, method := w.getRequestContext(ctx, msg)
+
+	args = append(args, "Method", method)
 
 	lc, ok := lambdacontext.FromContext(ctx)
 	if ok {
@@ -76,19 +85,20 @@ func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage, args ...
 	return ao.NewContext(ctx, w.trace)
 }
 
-func (w *traceWrapper) After(result interface{}, err error, endArgs ...interface{}) interface{} {
+type typedError struct {
+	typ string
+	err error
+}
+
+func (w *traceWrapper) After(result interface{}, err *typedError, endArgs ...interface{}) interface{} {
 	if err != nil {
-		w.trace.Err(err)
+		w.trace.Error(err.typ, err.err.Error())
 	}
+	if gwRsp, ok := result.(events.APIGatewayProxyResponse); ok {
+		endArgs = append(endArgs, "Status", gwRsp.StatusCode)
+	}
+
 	defer w.trace.End(endArgs...)
-
-	defer func() {
-		if panicErr := recover(); panicErr != nil {
-			w.trace.Error("panic", fmt.Sprintf("%v", panicErr))
-			panic(panicErr) // re-raise the panic
-		}
-	}()
-
 	return w.injectTraceContext(result, w.trace.ExitMetadata())
 }
 
@@ -121,7 +131,19 @@ func HandlerWithWrapper(handlerFunc interface{}, w Wrapper) interface{} {
 	return func(ctx context.Context, msg json.RawMessage) (res interface{}, err error) {
 		ctx = w.Before(ctx, msg, "ColdStart", coldStart)
 		defer func() {
-			res = w.After(res, err, endArgs...)
+			var panicErr interface{}
+			var te *typedError
+
+			if panicErr = recover(); panicErr != nil {
+				te = &typedError{typ: "panic", err: fmt.Errorf("%v", panicErr)}
+			} else if err != nil {
+				te = &typedError{typ: "error", err: err}
+			}
+
+			res = w.After(res, te, endArgs...)
+			if panicErr != nil {
+				panic(panicErr)
+			}
 		}()
 
 		res, err = callHandler(ctx, msg, handlerFunc)
