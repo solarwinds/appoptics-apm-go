@@ -102,8 +102,46 @@ func (w *traceWrapper) After(result interface{}, err *typedError, endArgs ...int
 	return w.injectTraceContext(result, w.trace.ExitMetadata())
 }
 
-func (w *traceWrapper) injectTraceContext(result interface{}, mdStr string) interface{} {
-	return result // TODO
+func (w *traceWrapper) injectTraceContext(result interface{}, mdStr string) (res interface{}) {
+	defer func() {
+		if err := recover(); err != nil {
+			res = result
+		}
+	}()
+
+	if gwRsp, ok := result.(events.APIGatewayProxyResponse); !ok {
+		return result
+	} else {
+		if gwRsp.Headers != nil {
+			gwRsp.Headers[AOHTTPHeader] = mdStr
+			return result
+		}
+	}
+
+	rVal := reflect.Indirect(reflect.ValueOf(result))
+	rType := rVal.Type()
+	if rVal.Kind() != reflect.Struct {
+		return result
+	}
+
+	newResult := reflect.New(rType).Elem()
+
+	for i := 0; i < newResult.NumField(); i++ {
+		fieldVal := reflect.Indirect(newResult.Field(i))
+		fieldType := newResult.Type().Field(i)
+
+		fieldVal.Set(rVal.Field(i))
+		if fieldType.Name == "Headers" &&
+			fieldType.Type.Kind() == reflect.Map &&
+			fieldType.Type.Elem().Kind() == reflect.String &&
+			fieldType.Type.Key().Kind() == reflect.String &&
+			fieldVal.CanSet() {
+			traceContextMap := map[string]string{AOHTTPHeader: mdStr}
+			fieldVal.Set(reflect.Indirect(reflect.ValueOf(traceContextMap)))
+		}
+	}
+
+	return newResult.Interface()
 }
 
 // Wrap wraps the AWS Lambda handler and do the instrumentation. It
