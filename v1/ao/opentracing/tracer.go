@@ -5,6 +5,7 @@ package opentracing
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"sync"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
@@ -48,28 +49,33 @@ func (t *Tracer) startSpanWithOptions(operationName string, opts ot.StartSpanOpt
 		case ot.ChildOfRef, ot.FollowsFromRef:
 			refCtx := ref.ReferencedContext.(spanContext)
 			if refCtx.span == nil { // referenced spanContext created by Extract()
-				var span ao.Span
+				var aoTrace ao.Trace
 				if refCtx.sampled {
-					span = ao.NewTraceFromID(operationName, refCtx.remoteMD, nil)
+					aoTrace = ao.NewTraceFromID(operationName, refCtx.remoteMD, nil)
 				} else {
-					span = ao.NewNullTrace()
+					aoTrace = ao.NewNullTrace()
 				}
 				newSpan = &spanImpl{tracer: t, context: spanContext{
-					span:    span,
+					trace:   aoTrace,
+					span:    aoTrace,
 					sampled: refCtx.sampled,
 					baggage: refCtx.baggage,
 				},
 				}
 			} else {
 				// referenced spanContext was in-process
-				newSpan = &spanImpl{tracer: t, context: spanContext{span: refCtx.span.BeginSpan(operationName)}}
+				newSpan = &spanImpl{tracer: t, context: spanContext{
+					trace: refCtx.trace,
+					span:  refCtx.span.BeginSpan(operationName),
+				}}
 			}
 		}
 	}
 
 	// otherwise, no parent span found, so make new trace and return as span
 	if newSpan == nil {
-		newSpan = &spanImpl{tracer: t, context: spanContext{span: ao.NewTrace(operationName)}}
+		aoTrace := ao.NewTrace(operationName)
+		newSpan = &spanImpl{tracer: t, context: spanContext{trace: aoTrace, span: aoTrace}}
 	}
 
 	// add tags, if provided in span options
@@ -82,8 +88,9 @@ func (t *Tracer) startSpanWithOptions(operationName string, opts ot.StartSpanOpt
 
 type spanContext struct {
 	// 1. spanContext created by StartSpanWithOptions
-	span ao.Span
 	// 2. spanContext created by Extract()
+	trace    ao.Trace
+	span     ao.Span
 	remoteMD string
 	sampled  bool
 
@@ -134,7 +141,7 @@ func (c spanContext) WithBaggageItem(key, val string) spanContext {
 		newBaggage[key] = val
 	}
 	// Use positional parameters so the compiler will help catch new fields.
-	return spanContext{c.span, c.remoteMD, c.sampled, newBaggage}
+	return spanContext{c.trace, c.span, c.remoteMD, c.sampled, newBaggage}
 }
 
 // BaggageItem returns the baggage item with the provided key.
@@ -207,6 +214,31 @@ func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
 	case "TransactionName":
 		if txnName, ok := value.(string); ok {
 			s.context.span.SetTransactionName(txnName)
+		}
+	case "Method":
+		if method, ok := value.(string); ok {
+			s.context.trace.SetMethod(method)
+		}
+	case "Status":
+		switch v := value.(type) {
+		case int:
+			s.context.trace.SetStatus(v)
+		case string:
+			i, err := strconv.Atoi(v)
+			if err == nil {
+				s.context.trace.SetStatus(i)
+			}
+		}
+	case "URL":
+		s.context.span.AddEndArgs(tagName, value)
+		if url, ok := value.(string); ok {
+			if strings.StartsWith(url, "/") {
+				s.context.trace.SetPath(url)
+			} else {
+				if u, err := url.ParseRequestURI(url); err != nil {
+					s.context.trace.SetPath(u.EscapedPath())
+				}
+			}
 		}
 	case string(ext.Error):
 		s.setErrorTag(value)
