@@ -239,7 +239,7 @@ func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
 			if strings.HasPrefix(urlValue, "/") {
 				s.context.trace.SetPath(urlValue)
 			} else {
-				if u, err := url.ParseRequestURI(urlValue); err != nil {
+				if u, err := url.ParseRequestURI(urlValue); err == nil {
 					s.context.trace.SetPath(u.EscapedPath())
 				}
 			}
