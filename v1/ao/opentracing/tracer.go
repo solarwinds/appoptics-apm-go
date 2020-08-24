@@ -4,8 +4,10 @@ package opentracing
 
 import (
 	"fmt"
+	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
@@ -216,10 +218,12 @@ func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
 			s.context.span.SetTransactionName(txnName)
 		}
 	case "Method":
+		s.context.span.AddEndArgs(tagName, value)
 		if method, ok := value.(string); ok {
 			s.context.trace.SetMethod(method)
 		}
 	case "Status":
+		s.context.span.AddEndArgs(tagName, value)
 		switch v := value.(type) {
 		case int:
 			s.context.trace.SetStatus(v)
@@ -231,11 +235,11 @@ func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
 		}
 	case "URL":
 		s.context.span.AddEndArgs(tagName, value)
-		if url, ok := value.(string); ok {
-			if strings.StartsWith(url, "/") {
-				s.context.trace.SetPath(url)
+		if urlValue, ok := value.(string); ok {
+			if strings.HasPrefix(urlValue, "/") {
+				s.context.trace.SetPath(urlValue)
 			} else {
-				if u, err := url.ParseRequestURI(url); err != nil {
+				if u, err := url.ParseRequestURI(urlValue); err != nil {
 					s.context.trace.SetPath(u.EscapedPath())
 				}
 			}
