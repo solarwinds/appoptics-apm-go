@@ -59,4 +59,4 @@ jobs:
           gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/metrics/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
 
       - uses: codecov/codecov-action@v1
-        if: matrix.goversion == '1.15'
+        if: matrix.goversion == '1.14'
