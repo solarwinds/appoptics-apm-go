@@ -34,7 +34,23 @@ func (m *MultiTracer) StartSpan(operationName string, opts ...ot.StartSpanOption
 		Spans:       make([]ot.Span, len(m.Tracers)),
 	}
 	for i, t := range m.Tracers {
-		ret.Spans[i] = t.StartSpan(operationName, opts...)
+		// look for ot.StartSpanOptions with a MultiSpanContext in an ot.SpanReference
+		tracerSpecificOpts := []ot.StartSpanOption{}
+		for _, opt := range opts {
+			switch o := opt.(type) {
+			case ot.SpanReference:
+				// pull out tracer-specific SpanContext from MultiSpanContext
+				refCtx := o.ReferencedContext.(*MultiSpanContext)
+				tracerSpecificReference := ot.SpanReference{
+					Type:              o.Type,
+					ReferencedContext: refCtx.SpanContexts[i],
+				}
+				tracerSpecificOpts = append(tracerSpecificOpts, tracerSpecificReference)
+			case ot.StartTime, ot.Tags, ot.Tag:
+				tracerSpecificOpts = append(tracerSpecificOpts, opt)
+			}
+		}
+		ret.Spans[i] = t.StartSpan(operationName, tracerSpecificOpts...)
 	}
 	return ret
 }
@@ -45,9 +61,21 @@ func (m *MultiTracer) Inject(sm ot.SpanContext, format interface{}, carrier inte
 	if !ok {
 		return ot.ErrInvalidSpanContext
 	}
+	errs := make([]error, len(m.Tracers))
 	for i, t := range m.Tracers {
-		// XXX drops Inject error in child tracers
-		_ = t.Inject(sc.SpanContexts[i], format, carrier)
+		errs[i] = t.Inject(sc.SpanContexts[i], format, carrier)
+	}
+
+	// if every tracer returned an error, then also return the first error.
+	var allErrors = true
+	for _, err := range errs {
+		if err == nil {
+			allErrors = false
+			break
+		}
+	}
+	if allErrors {
+		return errs[0]
 	}
 	return nil
 }
@@ -58,9 +86,21 @@ func (m *MultiTracer) Extract(format interface{}, carrier interface{}) (ot.SpanC
 		multiTracer:  m,
 		SpanContexts: make([]ot.SpanContext, len(m.Tracers)),
 	}
+	errs := make([]error, len(m.Tracers))
 	for i, t := range m.Tracers {
-		// XXX drops Extract error in child tracers
-		ret.SpanContexts[i], _ = t.Extract(format, carrier)
+		ret.SpanContexts[i], errs[i] = t.Extract(format, carrier)
+	}
+
+	// if every tracer returned an error, then also return the first error.
+	var allErrors = true
+	for _, err := range errs {
+		if err == nil {
+			allErrors = false
+			break
+		}
+	}
+	if allErrors {
+		return nil, errs[0]
 	}
 	return ret, nil
 }
