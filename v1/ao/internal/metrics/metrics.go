@@ -498,17 +498,15 @@ func addRuntimeMetrics(bbuf *bson.Buffer, index *int) {
 //
 // return				metrics message in BSON format
 func BuildBuiltinMetricsMessage(m *Measurements, qs *EventQueueStats,
-	rcs map[string]*RateCounts, runtimeMetrics bool, serverless bool) []byte {
+	rcs map[string]*RateCounts, runtimeMetrics bool) []byte {
 	if m == nil {
 		return nil
 	}
 
 	bbuf := bson.NewBuffer()
 
-	if !serverless {
-		appendHostId(bbuf)
-		bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
-	}
+	appendHostId(bbuf)
+	bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
 
 	bbuf.AppendInt64("Timestamp_u", int64(time.Now().UnixNano()/1000))
 
@@ -529,11 +527,9 @@ func BuildBuiltinMetricsMessage(m *Measurements, qs *EventQueueStats,
 		addMetricsValue(bbuf, &index, "QueueLargest", qs.queueLargest)
 	}
 
-	if !serverless {
-		addHostMetrics(bbuf, &index)
-	}
+	addHostMetrics(bbuf, &index)
 
-	if runtimeMetrics && !serverless {
+	if runtimeMetrics {
 		// runtime stats
 		addRuntimeMetrics(bbuf, &index)
 	}
@@ -929,4 +925,19 @@ func (s *EventQueueStats) CopyAndReset() *EventQueueStats {
 	c.queueLargest = atomic.SwapInt64(&s.queueLargest, 0)
 
 	return c
+}
+
+func BuildServerlessMessage(span HTTPSpanMessage) []byte {
+	bbuf := bson.NewBuffer()
+
+	bbuf.AppendInt64("Duration", int64(span.Duration/time.Microsecond))
+	bbuf.AppendBool("HasError", span.HasError)
+	bbuf.AppendBool("IsHTTPSpan", true)
+	bbuf.AppendString("Method", span.Method)
+	bbuf.AppendInt("Status", span.Status)
+	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
+	bbuf.AppendString("TransactionName", span.Transaction)
+
+	bbuf.Finish()
+	return bbuf.GetBuf()
 }

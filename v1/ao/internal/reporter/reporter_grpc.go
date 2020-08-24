@@ -240,6 +240,8 @@ type grpcReporter struct {
 	lr FlushWriter
 	// the metrics writer for AWS lambda
 	mr FlushWriter
+	// the http span
+	span metrics.HTTPSpanMessage
 }
 
 // gRPC reporter errors
@@ -274,7 +276,6 @@ func getProxyCertPath() string {
 func newServerlessReporter(writer io.Writer) reporter {
 	// construct the reporter object which handles two connections
 	r := &grpcReporter{
-		httpMetrics:   metrics.NewMeasurements(false, 0, 200),
 		customMetrics: metrics.NewMeasurements(true, 0, 500),
 
 		cond:       sync.NewCond(&sync.Mutex{}),
@@ -373,12 +374,11 @@ func newGRPCReporter() reporter {
 
 func (r *grpcReporter) sendServerlessMetrics() {
 	var messages [][]byte
-
-	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(0),
-		nil, FlushRateCounts(), false, true)
-	if builtin != nil {
-		messages = append(messages, builtin)
+	inbound := metrics.BuildServerlessMessage(r.span)
+	if inbound != nil {
+		messages = append(messages, inbound)
 	}
+
 	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(0), true)
 	if custom != nil {
 		messages = append(messages, custom)
@@ -884,7 +884,7 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	var messages [][]byte
 	// generate a new metrics message
 	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(i),
-		r.conn.queueStats.CopyAndReset(), FlushRateCounts(), config.GetRuntimeMetrics(), false)
+		r.conn.queueStats.CopyAndReset(), FlushRateCounts(), config.GetRuntimeMetrics())
 	if builtin != nil {
 		messages = append(messages, builtin)
 	}
@@ -1092,7 +1092,9 @@ func (r *grpcReporter) reportSpan(span metrics.SpanMessage) error {
 		return ErrReporterIsClosed
 	}
 	if r.serverless {
-		span.Process(r.httpMetrics)
+		if httpSpan, ok := span.(*metrics.HTTPSpanMessage); ok {
+			r.span = *httpSpan
+		}
 		return nil
 	}
 

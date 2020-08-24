@@ -82,6 +82,7 @@ func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage, args ...
 			},
 		},
 	)
+	w.trace.SetMethod(method)
 	return ao.NewContext(ctx, w.trace)
 }
 
