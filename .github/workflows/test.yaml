@@ -1,0 +1,62 @@
+name: test
+
+on:
+  pull_request: null
+  push:
+    branches:
+      - master
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goversion: ['1.12', '1.13', '1.14']
+    name: Go ${{ matrix.goversion }} tests
+    env:
+      GO15VENDOREXPERIMENT: 1
+      APPOPTICS_DEBUG_LEVEL: 1
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.goversion }}
+      - name: Install dependencies
+        run: |
+          go get golang.org/x/tools/cmd/cover
+          go get github.com/mattn/goveralls
+          go get github.com/wadey/gocovmerge
+          go get -t -v ./...
+
+      - name: Run tests
+        working-directory: ./v1
+        run: |
+          pushd ao
+          go build -v github.com/appoptics/appoptics-apm-go/v1/ao github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter github.com/appoptics/appoptics-apm-go/v1/ao/internal/log github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics github.com/appoptics/appoptics-apm-go/v1/ao/internal/config github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
+          go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson,github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config,github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
+          pushd internal/reporter/
+          go test -v -race -covermode=atomic -coverprofile=cov.out
+          popd
+          pushd internal/metrics/
+          go test -v -race -covermode=atomic -coverprofile=cov.out
+          popd
+          pushd internal/log/
+          go test -v -race -covermode=atomic -coverprofile=cov.out
+          popd
+          pushd internal/config/
+          go test -v -race -covermode=atomic -coverprofile=cov.out
+          popd
+          pushd internal/host/
+          go test -v -race -covermode=atomic -coverprofile=cov.out
+          popd
+          pushd opentracing
+          go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson,github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config,github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
+          popd
+          popd
+          pushd contrib/aogrpc
+          go test -v -race -covermode=atomic -coverprofile=cov.out
+          popd
+          gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/metrics/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
+
+      - uses: codecov/codecov-action@v1
+        if: matrix.goversion == '1.15'
