@@ -128,7 +128,7 @@ func TestHTTPSpanMetrics(t *testing.T) {
 	span.SetTag("http.status_code", "503")
 	span.Finish()
 
-	r.Close(2)
+	r.Close(3)
 	g.AssertGraph(t, r.EventBufs, 3, g.AssertNodeMap{
 		{"op", "entry"}: {},
 		{"op", "error"}: {Edges: g.Edges{{"op", "entry"}}, Callback: func(n g.Node) {
@@ -146,4 +146,32 @@ func TestHTTPSpanMetrics(t *testing.T) {
 	assert.Equal(t, 503, m.Status)
 	assert.Equal(t, "PUT", m.Method)
 	assert.True(t, m.HasError)
+
+	// test another span with no transaction name set and integer status_code
+	{
+		r := reporter.SetTestReporter()
+		tr := NewTracer()
+
+		span := tr.StartSpan("op")
+		assert.NotNil(t, span)
+		span.SetTag("http.method", "PUT").
+			SetTag("http.url", "http://domain/path/to/my/request").
+			SetTag("http.status_code", 503).
+			Finish()
+
+		r.Close(2)
+		g.AssertGraph(t, r.EventBufs, 2, g.AssertNodeMap{
+			{"op", "entry"}: {},
+			{"op", "exit"}:  {Edges: g.Edges{{"op", "entry"}}, Callback: func(n g.Node) {}},
+		})
+
+		require.Len(t, r.SpanMessages, 1)
+		m, ok := r.SpanMessages[0].(*metrics.HTTPSpanMessage)
+		assert.True(t, ok)
+		assert.Equal(t, "/path/to", m.Transaction)
+		assert.Equal(t, "/path/to/my/request", m.Path)
+		assert.Equal(t, 503, m.Status)
+		assert.Equal(t, "PUT", m.Method)
+		assert.True(t, m.HasError)
+	}
 }
