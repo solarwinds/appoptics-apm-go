@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -234,14 +233,6 @@ type grpcReporter struct {
 	// The flag to indicate gracefully stopping the reporter. It should be accessed atomically.
 	// A (default) zero value means shutdown abruptly.
 	gracefully int32
-
-	serverless bool
-	// the event writer for AWS Lambda
-	lr FlushWriter
-	// the metrics writer for AWS lambda
-	mr FlushWriter
-	// the http span
-	span metrics.HTTPSpanMessage
 }
 
 // gRPC reporter errors
@@ -249,20 +240,6 @@ var (
 	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed reporter")
 	ErrShutdownTimeout        = errors.New("Shutdown timeout")
 	ErrReporterIsClosed       = errors.New("the reporter is closed")
-)
-
-const (
-	fullTextInvalidServiceKey = `AppOptics agent is disabled. Check errors below.
-
-	    **No valid service key (defined as token:service_name) is found.** 
-	
-	Please check AppOptics dashboard for your token and use a valid service name.
-	A valid service name should be shorter than 256 characters and contain only 
-	valid characters: [a-z0-9.:_-]. 
-
-	Also note that the agent may convert the service name by removing invalid 
-	characters and replacing spaces with hyphens, so the finalized service key 
-	may be different from your setting.`
 )
 
 func getProxy() string {
@@ -273,48 +250,10 @@ func getProxyCertPath() string {
 	return config.GetProxyCertPath()
 }
 
-func newServerlessReporter(writer io.Writer) reporter {
-	// construct the reporter object which handles two connections
-	r := &grpcReporter{
-		customMetrics: metrics.NewMeasurements(true, 0, 500),
-
-		cond:       sync.NewCond(&sync.Mutex{}),
-		done:       make(chan struct{}),
-		serverless: true,
-	}
-
-	r.lr = newLogWriter(false, writer, 1e6)
-	r.mr = r.lr
-
-	updateSetting(int32(TYPE_DEFAULT),
-		"",
-		[]byte("OVERRIDE,SAMPLE_START,SAMPLE_THROUGH_ALWAYS"),
-		int64(config.GetSampleRate()), 120,
-		argsToMap(float64(config.GetTokenBucketCap()), float64(config.GetTokenBucketRate()), 20.000000, 1.000000, 6.000000, 0.100000, 60, -1, []byte("")))
-
-	if !r.isReady() && hasDefaultSetting() {
-		r.cond.L.Lock()
-		r.setReady(true)
-		log.Warningf("The reporter (%v, v%v, go%v) for Lambda is ready.",
-			r.done, utils.Version(), utils.GoVersion())
-		r.cond.Broadcast()
-		r.cond.L.Unlock()
-	}
-
-	return r
-}
-
 // initializes a new GRPC reporter from scratch (called once on program startup)
 //
 // returns	GRPC reporter object
 func newGRPCReporter() reporter {
-	_, hasLambdaFunctionName := os.LookupEnv("AWS_LAMBDA_FUNCTION_NAME")
-	_, hasLambdaTaskRoot := os.LookupEnv("LAMBDA_TASK_ROOT")
-
-	if hasLambdaFunctionName && hasLambdaTaskRoot {
-		return newServerlessReporter(os.Stderr)
-	}
-
 	// collector address override
 	addr := config.GetCollector()
 
@@ -344,7 +283,6 @@ func newGRPCReporter() reporter {
 		return &nullReporter{}
 	}
 
-	// construct the reporter object which handles two connections
 	r := &grpcReporter{
 		conn: grpcConn,
 
@@ -360,9 +298,8 @@ func newGRPCReporter() reporter {
 		httpMetrics:    metrics.NewMeasurements(false, grpcMetricIntervalDefault, 200),
 		customMetrics:  metrics.NewMeasurements(true, grpcMetricIntervalDefault, 500), // TODO configurable
 
-		cond:       sync.NewCond(&sync.Mutex{}),
-		done:       make(chan struct{}),
-		serverless: false,
+		cond: sync.NewCond(&sync.Mutex{}),
+		done: make(chan struct{}),
 	}
 
 	r.start()
@@ -372,27 +309,8 @@ func newGRPCReporter() reporter {
 	return r
 }
 
-func (r *grpcReporter) sendServerlessMetrics() {
-	var messages [][]byte
-	inbound := metrics.BuildServerlessMessage(r.span)
-	if inbound != nil {
-		messages = append(messages, inbound)
-	}
-
-	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(0), true)
-	if custom != nil {
-		messages = append(messages, custom)
-	}
-
-	r.sendMetrics(messages)
-}
-
 func (r *grpcReporter) Flush() error {
-	if !r.serverless {
-		return errors.New("not in serverless mode")
-	}
-	r.sendServerlessMetrics()
-	return r.lr.Flush()
+	return nil
 }
 
 func (r *grpcReporter) isGracefully() bool {
@@ -439,12 +357,6 @@ func (r *grpcReporter) ShutdownNow() error {
 // Shutdown closes the reporter by close the `done` channel. All long-running goroutines
 // monitor the channel `done` in the reporter and close themselves when the channel is closed.
 func (r *grpcReporter) Shutdown(ctx context.Context) error {
-	if r.serverless {
-		close(r.done)
-		r.setReady(false)
-		return nil
-	}
-
 	var err error
 
 	select {
@@ -732,12 +644,6 @@ func (r *grpcReporter) reportEvent(ctx *oboeContext, e *event) error {
 		return err
 	}
 
-	if r.serverless {
-		_, err := r.lr.Write(EventWT, (*e).bbuf.GetBuf())
-		return err
-
-	}
-
 	select {
 	case r.eventMessages <- (*e).bbuf.GetBuf():
 		r.conn.queueStats.TotalEventsAdd(int64(1))
@@ -905,15 +811,6 @@ func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 		return
 	}
 
-	if r.serverless {
-		for _, msg := range msgs {
-			if _, err := r.mr.Write(MetricWT, msg); err != nil {
-				log.Warningf("sendMetrics: %s", err)
-			}
-		}
-		return
-	}
-
 	method := newPostMetricsMethod(r.serviceKey, msgs)
 
 	err := r.conn.InvokeRPC(r.done, method)
@@ -1027,11 +924,6 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 		return err
 	}
 
-	if r.serverless {
-		_, err := r.lr.Write(EventWT, (*e).bbuf.GetBuf())
-		return err
-	}
-
 	select {
 	case r.statusMessages <- (*e).bbuf.GetBuf():
 		return nil
@@ -1090,12 +982,6 @@ func (r *grpcReporter) statusSender() {
 func (r *grpcReporter) reportSpan(span metrics.SpanMessage) error {
 	if r.Closed() {
 		return ErrReporterIsClosed
-	}
-	if r.serverless {
-		if httpSpan, ok := span.(*metrics.HTTPSpanMessage); ok {
-			r.span = *httpSpan
-		}
-		return nil
 	}
 
 	select {

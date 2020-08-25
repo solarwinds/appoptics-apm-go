@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
+	"os"
 	"strings"
 	"time"
 
@@ -105,10 +106,19 @@ func initReporter() {
 	setGlobalReporter(rt)
 }
 
+func isServerlessMode() bool {
+	return os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" && os.Getenv("LAMBDA_TASK_ROOT") != ""
+}
+
 func setGlobalReporter(reporterType string) {
 	// Close the previous reporter
 	if globalReporter != nil {
 		globalReporter.ShutdownNow()
+	}
+
+	if isServerlessMode() {
+		globalReporter = newServerlessReporter(os.Stderr)
+		return
 	}
 
 	switch strings.ToLower(reporterType) {
