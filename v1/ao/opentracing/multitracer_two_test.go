@@ -14,13 +14,37 @@ import (
 	"github.com/opentracing/opentracing-go/harness"
 )
 
-// This test sets up AO and the OT "BasicTracer" side by side
+// This test sets up AO Tracer and the OT "BasicTracer" side by side
+func TestMultiTracerAOBasicTracerAPICheck(t *testing.T) {
+	_ = reporter.SetTestReporter(reporter.TestReporterDisableDefaultSetting(true)) // set up test reporter
+	multiTracer := &mt.MultiTracer{
+		Tracers: []opentracing.Tracer{
+			NewTracer(),
+			bt.NewWithOptions(bt.Options{
+				Recorder:     bt.NewInMemoryRecorder(),
+				ShouldSample: func(traceID uint64) bool { return true }, // always sample
+			}),
+		}}
+
+	harness.RunAPIChecks(t, func() (tracer opentracing.Tracer, closer func()) {
+		return multiTracer, nil
+	},
+		harness.CheckBaggageValues(false),
+		harness.CheckInject(true),
+		harness.CheckExtract(true),
+		harness.UseProbe(&multiApiCheckProbe{
+			mt:     multiTracer,
+			probes: []harness.APICheckProbe{apiCheckProbe{}, nil},
+		}),
+	)
+}
+
+// This test sets up the OT "BasicTracer" wrapped in a MultiTracer
 func TestMultiTracerBasicTracerAPICheck(t *testing.T) {
 	_ = reporter.SetTestReporter(reporter.TestReporterDisableDefaultSetting(true)) // set up test reporter
 	harness.RunAPIChecks(t, func() (tracer opentracing.Tracer, closer func()) {
 		return &mt.MultiTracer{
 			Tracers: []opentracing.Tracer{
-				NewTracer(),
 				bt.NewWithOptions(bt.Options{
 					Recorder:     bt.NewInMemoryRecorder(),
 					ShouldSample: func(traceID uint64) bool { return true }, // always sample
@@ -29,5 +53,6 @@ func TestMultiTracerBasicTracerAPICheck(t *testing.T) {
 	},
 		harness.CheckBaggageValues(false),
 		harness.CheckInject(true),
+		harness.CheckExtract(true),
 	)
 }
