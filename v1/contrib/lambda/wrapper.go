@@ -19,8 +19,11 @@ const (
 	AOHTTPHeader = "x-trace"
 )
 
+// Wrapper offers the ability to be called before and after a handler is executed.
 type Wrapper interface {
+	// Before is called before the real handler is called.
 	Before(context.Context, json.RawMessage, ...interface{}) context.Context
+	// After is called after the real handler is called.
 	After(interface{}, *typedError, ...interface{}) interface{}
 }
 
@@ -92,11 +95,17 @@ type typedError struct {
 }
 
 func (w *traceWrapper) After(result interface{}, err *typedError, endArgs ...interface{}) interface{} {
+	statusCode := 0
+
 	if err != nil {
 		w.trace.Error(err.typ, err.err.Error())
+		statusCode = 500
 	}
 	if gwRsp, ok := result.(events.APIGatewayProxyResponse); ok {
-		endArgs = append(endArgs, "Status", gwRsp.StatusCode)
+		statusCode = gwRsp.StatusCode
+	}
+	if statusCode != 0 {
+		endArgs = append(endArgs, "Status", statusCode)
 	}
 
 	defer w.trace.End(endArgs...)
@@ -151,6 +160,7 @@ func Wrap(handlerFunc interface{}) interface{} {
 	return HandlerWithWrapper(handlerFunc, &traceWrapper{})
 }
 
+// HandlerWithWrapper wraps a function with the wrapper and returns the wrapped function.
 func HandlerWithWrapper(handlerFunc interface{}, w Wrapper) interface{} {
 	if err := checkSignature(reflect.TypeOf(handlerFunc)); err != nil {
 		// Does not wrap an invalid handler but let lambda.Start() reject it later

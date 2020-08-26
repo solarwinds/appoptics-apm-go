@@ -710,7 +710,7 @@ func (s *HTTPSpanMessage) produceTagsList() []map[string]string {
 func (s *HTTPSpanMessage) processMeasurements(tagsList []map[string]string,
 	m *Measurements) (error, []map[string]string) {
 	name := "TransactionResponseTime"
-	duration := float64(s.Duration)
+	duration := float64(s.Duration / time.Microsecond)
 
 	if tagsList == nil {
 		tagsList = s.produceTagsList()
@@ -932,7 +932,7 @@ func BuildServerlessMessage(span HTTPSpanMessage) []byte {
 
 	bbuf.AppendInt64("Duration", int64(span.Duration/time.Microsecond))
 	bbuf.AppendBool("HasError", span.HasError)
-	bbuf.AppendBool("IsHTTPSpan", true)
+	bbuf.AppendBool("IsHTTPSpan", span.Method != "")
 	bbuf.AppendString("Method", span.Method)
 	bbuf.AppendInt("Status", span.Status)
 	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
