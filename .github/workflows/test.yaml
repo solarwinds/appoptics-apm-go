@@ -50,7 +50,7 @@ jobs:
           go test -v -race -covermode=atomic -coverprofile=cov.out
           popd
           pushd opentracing
-          go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson,github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config,github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
+          go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson,github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics,github.com/appoptics/appoptics-apm-go/v1/ao/opentracing,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config,github.com/appoptics/appoptics-apm-go/v1/ao/internal/host,github.com/appoptics/appoptics-apm-go/v1/contrib/multitracer
           popd
           popd
           pushd contrib/aogrpc
