@@ -124,8 +124,8 @@ type Config struct {
 	ProxyCertPath string `yaml:"ProxyCertPath" env:"APPOPTICS_PROXY_CERT_PATH"`
 	// Report runtime metrics or not
 	RuntimeMetrics  bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
-	TokenBucketCap  int  `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"16"`
-	TokenBucketRate int  `yaml:"TockenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"8"`
+	TokenBucketCap  int  `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"1"`
+	TokenBucketRate int  `yaml:"TockenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"1"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
