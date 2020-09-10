@@ -61,12 +61,12 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsCollectorUDP, "hello.udp")
 	os.Setenv(envAppOpticsDisabled, "invalidValue")
 	os.Setenv(envAppOpticsServerlessServiceName, "AWSLambda")
-	os.Setenv(envAppOpticsTokenBucketCap, "2")
-	os.Setenv(envAppOpticsTokenBucketRate, "1")
+	os.Setenv(envAppOpticsTokenBucketCap, "2.0")
+	os.Setenv(envAppOpticsTokenBucketRate, "1.0")
 
 	c.Load()
-	assert.Equal(t, 2, c.GetTokenBucketCap())
-	assert.Equal(t, 1, c.GetTokenBucketRate())
+	assert.Equal(t, 2.0, c.GetTokenBucketCap())
+	assert.Equal(t, 1.0, c.GetTokenBucketRate())
 	assert.Equal(t, ToServiceKey(key1), c.GetServiceKey())
 	assert.Equal(t, "test", c.GetHostAlias())
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
@@ -155,8 +155,8 @@ func TestConfigInit(t *testing.T) {
 		Proxy:              "",
 		ProxyCertPath:      "",
 		RuntimeMetrics:     true,
-		TokenBucketCap:     16,
-		TokenBucketRate:    8,
+		TokenBucketCap:     8,
+		TokenBucketRate:    0.17,
 	}
 	assert.Equal(t, c, &defaultC)
 }
@@ -293,8 +293,8 @@ func TestYamlConfig(t *testing.T) {
 		Proxy:              "http://usr:pwd@internal.proxy:3306",
 		ProxyCertPath:      "./proxy.pem",
 		RuntimeMetrics:     true,
-		TokenBucketCap:     10,
-		TokenBucketRate:    5,
+		TokenBucketCap:     1.1,
+		TokenBucketRate:    2.2,
 	}
 
 	out, err := yaml.Marshal(&yamlConfig)

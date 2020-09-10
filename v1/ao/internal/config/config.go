@@ -123,9 +123,9 @@ type Config struct {
 	// Cert path for the HTTP/HTTPS proxy
 	ProxyCertPath string `yaml:"ProxyCertPath" env:"APPOPTICS_PROXY_CERT_PATH"`
 	// Report runtime metrics or not
-	RuntimeMetrics  bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
-	TokenBucketCap  int  `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"1"`
-	TokenBucketRate int  `yaml:"TockenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"1"`
+	RuntimeMetrics  bool    `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
+	TokenBucketCap  float64 `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"8"`
+	TokenBucketRate float64 `yaml:"TokenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"0.17"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -367,6 +367,18 @@ func (c *Config) validate() error {
 	if _, valid := log.ToLogLevel(c.DebugLevel); !valid {
 		log.Warning(InvalidEnv("DebugLevel", c.DebugLevel))
 		c.DebugLevel = getFieldDefaultValue(c, "DebugLevel")
+	}
+
+	if valid := IsValidTokenBucketCap(c.TokenBucketCap); !valid {
+		log.Warning(InvalidEnv("TokenBucketCap", fmt.Sprintf("%f", c.TokenBucketCap)))
+		cp, _ := strconv.ParseFloat(getFieldDefaultValue(c, "TokenBucketCap"), 64)
+		c.TokenBucketCap = cp
+	}
+
+	if valid := IsValidTokenBucketRate(c.TokenBucketRate); !valid {
+		log.Warning(InvalidEnv("TokenBucketRate", fmt.Sprintf("%f", c.TokenBucketRate)))
+		rate, _ := strconv.ParseFloat(getFieldDefaultValue(c, "TokenBucketRate"), 64)
+		c.TokenBucketRate = rate
 	}
 
 	return c.ReporterProperties.validate()
@@ -844,14 +856,14 @@ func (c *Config) GetRuntimeMetrics() bool {
 }
 
 // GetTokenBucketCap returns the token bucket capacity
-func (c *Config) GetTokenBucketCap() int {
+func (c *Config) GetTokenBucketCap() float64 {
 	c.RLock()
 	defer c.RUnlock()
 	return c.TokenBucketCap
 }
 
 // GetTokenBucketRate returns the token bucket rate
-func (c *Config) GetTokenBucketRate() int {
+func (c *Config) GetTokenBucketRate() float64 {
 	c.RLock()
 	defer c.RUnlock()
 	return c.TokenBucketRate
