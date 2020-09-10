@@ -329,6 +329,11 @@ const (
 	may be different from your setting.`
 )
 
+// IsServerlessMode checks if the agent should run on serverless mode.
+func IsServerlessMode() bool {
+	return os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" && os.Getenv("LAMBDA_TASK_ROOT") != ""
+}
+
 func (c *Config) validate() error {
 	if ok := IsValidHost(c.Collector); !ok {
 		log.Info(InvalidEnv("Collector", c.Collector))
@@ -336,8 +341,10 @@ func (c *Config) validate() error {
 	}
 
 	c.ServiceKey = ToServiceKey(c.ServiceKey)
-	if ok := IsValidServiceKey(c.ServiceKey); !ok {
-		return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("service key: \"%s\"", c.ServiceKey))
+	if !IsServerlessMode() {
+		if ok := IsValidServiceKey(c.ServiceKey); !ok {
+			return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("service key: \"%s\"", c.ServiceKey))
+		}
 	}
 
 	if ok := IsValidFile(c.TrustedPath); !ok {
