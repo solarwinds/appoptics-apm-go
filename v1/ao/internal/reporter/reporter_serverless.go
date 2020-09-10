@@ -23,7 +23,7 @@ func newServerlessReporter(writer io.Writer) reporter {
 		customMetrics: metrics.NewMeasurements(true, 0, 500),
 	}
 
-	r.logWriter = newLogWriter(false, writer, 1e6)
+	r.logWriter = newLogWriter(false, writer, 260_000)
 
 	updateSetting(int32(TYPE_DEFAULT),
 		"",
