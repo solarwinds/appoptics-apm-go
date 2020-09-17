@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
 	"strings"
@@ -61,10 +62,14 @@ func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage, args ...
 
 	lc, ok := lambdacontext.FromContext(ctx)
 	if ok {
+		args = append(args, "Spec", "aws-lambda")
 		args = append(args, "AwsRequestID", lc.AwsRequestID)
 		args = append(args, "InvokedFunctionArn", lc.InvokedFunctionArn)
 		args = append(args, "FunctionName", lambdacontext.FunctionName)
 		args = append(args, "FunctionVersion", lambdacontext.FunctionVersion)
+		args = append(args, "AWSRegion", os.Getenv("AWS_REGION"))
+		args = append(args, "FunctionMemorySizeMB", lambdacontext.MemoryLimitInMB)
+		args = append(args, "LogStreamName", lambdacontext.LogStreamName)
 	}
 
 	cb := func() ao.KVMap {
@@ -77,7 +82,7 @@ func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage, args ...
 		return m
 	}
 
-	w.trace = ao.NewTraceWithOptions("aws_lambda",
+	w.trace = ao.NewTraceWithOptions("aws_lambda_go",
 		ao.SpanOptions{
 			ContextOptions: ao.ContextOptions{
 				MdStr: mdStr,
@@ -85,6 +90,7 @@ func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage, args ...
 			},
 		},
 	)
+	w.trace.SetTransactionName(method + "." + lambdacontext.FunctionName)
 	w.trace.SetMethod(method)
 	return ao.NewContext(ctx, w.trace)
 }
@@ -167,7 +173,7 @@ func HandlerWithWrapper(handlerFunc interface{}, w Wrapper) interface{} {
 		return handlerFunc
 	}
 
-	coldStart := true
+	invocationCount := 1
 	var endArgs []interface{}
 	if f := runtime.FuncForPC(reflect.ValueOf(handlerFunc).Pointer()); f != nil {
 		// e.g. "main.slowHandler", "github.com/appoptics/appoptics-apm-go/v1/ao_test.handler404"
@@ -178,7 +184,7 @@ func HandlerWithWrapper(handlerFunc interface{}, w Wrapper) interface{} {
 	}
 
 	return func(ctx context.Context, msg json.RawMessage) (res interface{}, err error) {
-		ctx = w.Before(ctx, msg, "ColdStart", coldStart)
+		ctx = w.Before(ctx, msg, "InvocationCount", invocationCount)
 		defer func() {
 			var panicErr interface{}
 			var te *typedError
@@ -196,7 +202,7 @@ func HandlerWithWrapper(handlerFunc interface{}, w Wrapper) interface{} {
 		}()
 
 		res, err = callHandler(ctx, msg, handlerFunc)
-		coldStart = false
+		invocationCount++
 
 		return res, err
 	}
