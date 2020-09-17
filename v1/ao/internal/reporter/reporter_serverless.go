@@ -108,7 +108,7 @@ func (sr *serverlessReporter) CustomIncrementMetric(name string, opts metrics.Me
 
 func (sr *serverlessReporter) sendServerlessMetrics() {
 	var messages [][]byte
-	inbound := metrics.BuildServerlessMessage(sr.span)
+	inbound := metrics.BuildServerlessMessage(sr.span, FlushRateCounts())
 	if inbound != nil {
 		messages = append(messages, inbound)
 	}

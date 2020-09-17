@@ -927,7 +927,7 @@ func (s *EventQueueStats) CopyAndReset() *EventQueueStats {
 	return c
 }
 
-func BuildServerlessMessage(span HTTPSpanMessage) []byte {
+func BuildServerlessMessage(span HTTPSpanMessage, rcs map[string]*RateCounts) []byte {
 	bbuf := bson.NewBuffer()
 
 	bbuf.AppendInt64("Duration", int64(span.Duration/time.Microsecond))
@@ -937,6 +937,50 @@ func BuildServerlessMessage(span HTTPSpanMessage) []byte {
 	bbuf.AppendInt("Status", span.Status)
 	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
 	bbuf.AppendString("TransactionName", span.Transaction)
+
+	// add request counters
+	start := bbuf.AppendStartArray("TraceDecision")
+
+	var sampled, limited, traced, through, ttTraced int64
+
+	for _, rc := range rcs {
+		// requested += rc.requested
+		sampled += rc.sampled
+		limited += rc.limited
+		traced += rc.traced
+		through += rc.through
+	}
+
+	if relaxed, ok := rcs[RCRelaxedTriggerTrace]; ok {
+		ttTraced += relaxed.Traced()
+	}
+	if strict, ok := rcs[RCStrictTriggerTrace]; ok {
+		ttTraced += strict.Traced()
+	}
+
+	var i int = 0
+	if sampled != 0 {
+		bbuf.AppendString(strconv.Itoa(i), "Sample")
+		i++
+	}
+	if traced != 0 {
+		bbuf.AppendString(strconv.Itoa(i), "Trace")
+		i++
+	}
+	if limited != 0 {
+		bbuf.AppendString(strconv.Itoa(i), "TokenBucketExhaustion")
+		i++
+	}
+	if through != 0 {
+		bbuf.AppendString(strconv.Itoa(i), "ThroughTrace")
+		i++
+	}
+	if ttTraced != 0 {
+		bbuf.AppendString(strconv.Itoa(i), "Triggered")
+		i++
+	}
+
+	bbuf.AppendFinishObject(start)
 
 	bbuf.Finish()
 	return bbuf.GetBuf()
