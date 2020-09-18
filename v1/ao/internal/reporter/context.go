@@ -588,6 +588,9 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 
 			kvs["SampleRate"] = decision.rate
 			kvs["SampleSource"] = decision.source
+			kvs["TokenBucketCapacity"] = decision.bucketCap
+			kvs["TokenBucketRate"] = decision.bucketRate
+
 			if tMode.Enabled() && !traced {
 				kvs["TriggeredTrace"] = true
 			}
