@@ -100,6 +100,8 @@ func initReporter() {
 	if config.GetDisabled() {
 		log.Warning("AppOptics APM agent is disabled.")
 		rt = "none"
+	} else if config.IsServerlessMode() {
+		rt = "serverless"
 	} else {
 		rt = config.GetReporterType()
 	}
@@ -112,11 +114,6 @@ func setGlobalReporter(reporterType string) {
 		globalReporter.ShutdownNow()
 	}
 
-	if config.IsServerlessMode() {
-		globalReporter = newServerlessReporter(os.Stderr)
-		return
-	}
-
 	switch strings.ToLower(reporterType) {
 	case "ssl":
 		fallthrough // using fallthrough since the SSL reporter (gRPC) is our default reporter
@@ -126,7 +123,8 @@ func setGlobalReporter(reporterType string) {
 		globalReporter = udpNewReporter()
 	case "none":
 		globalReporter = newNullReporter()
-
+	case "serverless":
+		globalReporter = newServerlessReporter(os.Stderr)
 	}
 }
 
