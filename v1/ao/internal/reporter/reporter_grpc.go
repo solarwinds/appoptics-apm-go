@@ -1223,6 +1223,7 @@ func newHostID(id host.ID) *collector.HostID {
 	gid.MacAddresses = id.MAC()
 	gid.HerokuDynoID = id.HerokuId()
 	gid.AzAppServiceInstanceID = id.AzureAppInstId()
+	gid.HostType = collector.HostType_PERSISTENT
 
 	return gid
 }
