@@ -46,15 +46,7 @@ func (w *traceWrapper) getRequestContext(ctx context.Context, msg json.RawMessag
 	var method string
 	var mdStr string
 
-	if json.Unmarshal(msg, evtv1) == nil {
-		method = evtv1.HTTPMethod
-		headers = evtv1.Headers
-		args = append(args, "Spec", "aws-lambda:ws")
-		args = append(args, "HTTPMethod", method)
-		args = append(args, "URL", evtv1.Path)
-		args = append(args, "APIGatewayResourceID", evtv1.RequestContext.ResourceID)
-		args = append(args, "APIGatewayStage", evtv1.RequestContext.Stage)
-	} else if json.Unmarshal(msg, evtv2) == nil {
+	if json.Unmarshal(msg, evtv2) == nil && evtv2.Version == "2.0" {
 		method = evtv2.RequestContext.HTTP.Method
 		headers = evtv2.Headers
 		args = append(args, "Spec", "aws-lambda:ws")
@@ -62,6 +54,14 @@ func (w *traceWrapper) getRequestContext(ctx context.Context, msg json.RawMessag
 		args = append(args, "URL", evtv2.RequestContext.HTTP.Path)
 		args = append(args, "APIGatewayResourceID", evtv2.RouteKey)
 		args = append(args, "APIGatewayStage", evtv2.RequestContext.Stage)
+	} else if json.Unmarshal(msg, evtv1) == nil {
+		method = evtv1.HTTPMethod
+		headers = evtv1.Headers
+		args = append(args, "Spec", "aws-lambda:ws")
+		args = append(args, "HTTPMethod", method)
+		args = append(args, "URL", evtv1.Path)
+		args = append(args, "APIGatewayResourceID", evtv1.RequestContext.ResourceID)
+		args = append(args, "APIGatewayStage", evtv1.RequestContext.Stage)
 	} else if json.Unmarshal(msg, evt) == nil {
 		method = evt.HTTPMethod
 		headers = evt.Headers
