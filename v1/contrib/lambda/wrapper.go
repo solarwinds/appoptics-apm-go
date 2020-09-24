@@ -123,7 +123,8 @@ func (w *traceWrapper) Before(ctx context.Context, msg json.RawMessage, args ...
 		},
 	)
 	w.mdStr = mdStr
-	w.trace.SetTransactionName(method + "." + lambdacontext.FunctionName)
+	txnName := strings.TrimLeft(method+"."+lambdacontext.FunctionName, ".")
+	w.trace.SetTransactionName(txnName)
 	w.trace.SetMethod(method)
 	return ao.NewContext(ctx, w.trace)
 }
