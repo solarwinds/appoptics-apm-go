@@ -34,8 +34,8 @@ type traceWrapper struct {
 }
 
 type eventHeaders struct {
-	Headers    map[string]string `json:"headers"`
-	HTTPMethod string            `json:"httpMethod"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	HTTPMethod string            `json:"httpMethod,omitempty"`
 }
 
 func (w *traceWrapper) getRequestContext(ctx context.Context, msg json.RawMessage, args ...interface{}) (string, string, []interface{}) {
@@ -45,11 +45,11 @@ func (w *traceWrapper) getRequestContext(ctx context.Context, msg json.RawMessag
 	var headers map[string]string
 	var method string
 	var mdStr string
+	var host string
 
 	if json.Unmarshal(msg, evtv2) == nil && evtv2.Version == "2.0" {
 		method = evtv2.RequestContext.HTTP.Method
 		headers = evtv2.Headers
-		args = append(args, "Spec", "aws-lambda:ws")
 		args = append(args, "HTTPMethod", method)
 		args = append(args, "URL", evtv2.RequestContext.HTTP.Path)
 		args = append(args, "APIGatewayResourceID", evtv2.RouteKey)
@@ -57,7 +57,6 @@ func (w *traceWrapper) getRequestContext(ctx context.Context, msg json.RawMessag
 	} else if json.Unmarshal(msg, evtv1) == nil {
 		method = evtv1.HTTPMethod
 		headers = evtv1.Headers
-		args = append(args, "Spec", "aws-lambda:ws")
 		args = append(args, "HTTPMethod", method)
 		args = append(args, "URL", evtv1.Path)
 		args = append(args, "APIGatewayResourceID", evtv1.RequestContext.ResourceID)
@@ -65,7 +64,6 @@ func (w *traceWrapper) getRequestContext(ctx context.Context, msg json.RawMessag
 	} else if json.Unmarshal(msg, evt) == nil {
 		method = evt.HTTPMethod
 		headers = evt.Headers
-		args = append(args, "Spec", "aws-lambda")
 		args = append(args, "Method", method)
 	}
 
@@ -76,6 +74,7 @@ func (w *traceWrapper) getRequestContext(ctx context.Context, msg json.RawMessag
 			case AOHTTPHeader:
 				mdStr = v
 			case "host":
+				host = v
 				args = append(args, "HTTP-Host", v)
 			case "x-forwarded-for":
 				args = append(args, "Forwarded-For", v)
@@ -85,6 +84,12 @@ func (w *traceWrapper) getRequestContext(ctx context.Context, msg json.RawMessag
 				args = append(args, "Forwarded-Port", v)
 			}
 		}
+	}
+
+	if method != "" && host != "" {
+		args = append(args, "Spec", "aws-lambda:ws")
+	} else {
+		args = append(args, "Spec", "aws-lambda")
 	}
 
 	return mdStr, method, args
@@ -141,10 +146,13 @@ func (w *traceWrapper) After(result interface{}, err *typedError, endArgs ...int
 		w.trace.Error(err.typ, err.err.Error())
 		statusCode = 500
 	}
-	if gwRsp, ok := result.(events.APIGatewayProxyResponse); ok {
-		statusCode = gwRsp.StatusCode
-	} else if gwRsp, ok := result.(events.APIGatewayV2HTTPResponse); ok {
-		statusCode = gwRsp.StatusCode
+
+	if statusCode == 0 {
+		if gwRsp, ok := result.(events.APIGatewayProxyResponse); ok {
+			statusCode = gwRsp.StatusCode
+		} else if gwRsp, ok := result.(events.APIGatewayV2HTTPResponse); ok {
+			statusCode = gwRsp.StatusCode
+		}
 	}
 
 	if statusCode != 0 {
