@@ -31,6 +31,10 @@ jobs:
       - name: Run tests
         working-directory: ./v1
         run: |
+          pushd ao/internal/reporter
+          ./certgen.sh
+          popd
+
           pushd ao
           go build -v github.com/appoptics/appoptics-apm-go/v1/ao github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter github.com/appoptics/appoptics-apm-go/v1/ao/internal/log github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics github.com/appoptics/appoptics-apm-go/v1/ao/internal/config github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
           go test -v -race -covermode=atomic -coverprofile=cov.out -coverpkg github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter,github.com/appoptics/appoptics-apm-go/v1/ao/internal/log,github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson,github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics,github.com/appoptics/appoptics-apm-go/v1/ao,github.com/appoptics/appoptics-apm-go/v1/ao/internal/config,github.com/appoptics/appoptics-apm-go/v1/ao/internal/host
@@ -57,6 +61,9 @@ jobs:
           go test -v -race -covermode=atomic -coverprofile=cov.out
           popd
           gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/metrics/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
+          pushd ao/internal/reporter
+          rm for_test.crt for_test.key
+          popd
 
       - uses: codecov/codecov-action@v1
         if: matrix.goversion == '1.14'

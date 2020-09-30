@@ -15,6 +15,6 @@ examples:
 vet: 
 	@go vet -composites=false ./... && echo "Go vet analysis passed."
 
-sure: certgen test removecert examples vet
+sure: test examples vet
 
-.PHONY: test examples vet
+.PHONY: certgen test removecert examples vet
