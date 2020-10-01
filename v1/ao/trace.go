@@ -133,6 +133,10 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 		layerSpan:      layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
 		httpRspHeaders: make(map[string]string),
 	}
+
+	if opts.TransactionName != "" {
+		t.SetTransactionName(opts.TransactionName)
+	}
 	t.SetStartTime(time.Now())
 	t.SetHTTPRspHeaders(headers)
 	return t
@@ -150,8 +154,8 @@ func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromIDForURL(spanName, mdStr string, url string, cb func() KVMap) Trace {
 	return NewTraceWithOptions(spanName, SpanOptions{
-		false,
-		ContextOptions{
+		WithBackTrace: false,
+		ContextOptions: ContextOptions{
 			MdStr: mdStr,
 			URL:   url,
 			CB:    cb,

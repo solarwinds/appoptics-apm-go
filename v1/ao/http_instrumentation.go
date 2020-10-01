@@ -158,8 +158,8 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 
 	// start trace, passing in metadata header
 	t := NewTraceWithOptions(spanName, SpanOptions{
-		false,
-		reporter.ContextOptions{
+		WithBackTrace: false,
+		ContextOptions: reporter.ContextOptions{
 			MdStr:                  r.Header.Get(HTTPHeaderName),
 			URL:                    r.URL.EscapedPath(),
 			XTraceOptions:          r.Header.Get(HTTPHeaderXTraceOptions),

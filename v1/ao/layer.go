@@ -131,6 +131,7 @@ type SpanOptions struct {
 	WithBackTrace bool
 
 	ContextOptions
+	TransactionName string
 }
 
 // SpanOpt defines the function type that changes the SpanOptions
