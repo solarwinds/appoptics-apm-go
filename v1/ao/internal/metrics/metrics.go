@@ -33,7 +33,7 @@ const (
 
 // Special transaction names
 const (
-	UnknownTransactionName       = "unknown"
+	CustomTransactionNamePrefix  = "custom"
 	OtherTransactionName         = "other"
 	MetricIDSeparator            = "&"
 	TagsKVSeparator              = ":"
@@ -642,11 +642,6 @@ func GetTransactionFromPath(path string) string {
 func (s *HTTPSpanMessage) Process(m *Measurements) {
 	// always add to overall histogram
 	recordHistogram(metricsHTTPHistograms, "", s.Duration)
-
-	if s.Transaction == UnknownTransactionName {
-		s.processMeasurements(nil, m)
-		return
-	}
 
 	// only record the transaction-specific histogram and measurements if we are still within the limit
 	// otherwise report it as an 'other' measurement

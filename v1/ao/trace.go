@@ -3,6 +3,7 @@
 package ao
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -326,16 +327,14 @@ func (t *aoTrace) finalizeTxnName(controller string, action string) {
 	}
 
 	if t.httpSpan.span.Transaction == "" {
-		t.httpSpan.span.Transaction = metrics.UnknownTransactionName
+		t.httpSpan.span.Transaction = fmt.Sprintf("%s-%s", metrics.CustomTransactionNamePrefix, t.layerName())
 	}
 	t.prependDomainToTxnName()
 }
 
 // prependDomainToTxnName prepends the domain to the transaction name if APPOPTICS_PREPEND_DOMAIN = true
 func (t *aoTrace) prependDomainToTxnName() {
-	if !config.GetPrependDomain() ||
-		t.httpSpan.span.Transaction == metrics.UnknownTransactionName ||
-		t.httpSpan.span.Host == "" {
+	if !config.GetPrependDomain() || t.httpSpan.span.Host == "" {
 		return
 	}
 	if strings.HasSuffix(t.httpSpan.span.Host, "/") ||
