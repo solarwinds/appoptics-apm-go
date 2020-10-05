@@ -3,6 +3,7 @@
 package ao
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -108,7 +109,7 @@ func NewTrace(spanName string) Trace {
 
 // NewTraceWithOptions creates a new trace with the provided options
 func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
-	if Closed() {
+	if Closed() || spanName == "" {
 		return NewNullTrace()
 	}
 
@@ -133,6 +134,10 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 		layerSpan:      layerSpan{span: span{aoCtx: ctx, labeler: spanLabeler{spanName}}},
 		httpRspHeaders: make(map[string]string),
 	}
+
+	if opts.TransactionName != "" {
+		t.SetTransactionName(opts.TransactionName)
+	}
 	t.SetStartTime(time.Now())
 	t.SetHTTPRspHeaders(headers)
 	return t
@@ -150,8 +155,8 @@ func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromIDForURL(spanName, mdStr string, url string, cb func() KVMap) Trace {
 	return NewTraceWithOptions(spanName, SpanOptions{
-		false,
-		ContextOptions{
+		WithBackTrace: false,
+		ContextOptions: ContextOptions{
 			MdStr: mdStr,
 			URL:   url,
 			CB:    cb,
@@ -322,16 +327,14 @@ func (t *aoTrace) finalizeTxnName(controller string, action string) {
 	}
 
 	if t.httpSpan.span.Transaction == "" {
-		t.httpSpan.span.Transaction = metrics.UnknownTransactionName
+		t.httpSpan.span.Transaction = fmt.Sprintf("%s-%s", metrics.CustomTransactionNamePrefix, t.layerName())
 	}
 	t.prependDomainToTxnName()
 }
 
 // prependDomainToTxnName prepends the domain to the transaction name if APPOPTICS_PREPEND_DOMAIN = true
 func (t *aoTrace) prependDomainToTxnName() {
-	if !config.GetPrependDomain() ||
-		t.httpSpan.span.Transaction == metrics.UnknownTransactionName ||
-		t.httpSpan.span.Host == "" {
+	if !config.GetPrependDomain() || t.httpSpan.span.Host == "" {
 		return
 	}
 	if strings.HasSuffix(t.httpSpan.span.Host, "/") ||

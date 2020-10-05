@@ -131,6 +131,7 @@ type SpanOptions struct {
 	WithBackTrace bool
 
 	ContextOptions
+	TransactionName string
 }
 
 // SpanOpt defines the function type that changes the SpanOptions
@@ -432,6 +433,10 @@ func (l spanLabeler) layerName() string          { return l.name }
 func (l spanLabeler) setName(name string)        { l.name = name }
 
 func newSpan(aoCtx reporter.Context, spanName string, parent Span, args ...interface{}) Span {
+	if spanName == "" {
+		return nullSpan{}
+	}
+
 	ll := spanLabeler{spanName}
 	if err := aoCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
 		return nullSpan{}
