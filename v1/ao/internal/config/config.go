@@ -57,6 +57,7 @@ const (
 	envAppOpticsServerlessServiceName = "APPOPTICS_SERVICE_NAME"
 	envAppOpticsTokenBucketCap        = "APPOPTICS_TOKEN_BUCKET_CAPACITY"
 	envAppOpticsTokenBucketRate       = "APPOPTICS_TOKEN_BUCKET_RATE"
+	envAppOpticsTransactionName       = "APPOPTICS_TRANSACTION_NAME"
 )
 
 // Errors
@@ -126,6 +127,8 @@ type Config struct {
 	RuntimeMetrics  bool    `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
 	TokenBucketCap  float64 `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"8"`
 	TokenBucketRate float64 `yaml:"TokenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"0.17"`
+	// The user-defined transaction name. It's only available in the AWS Lambda environment.
+	TransactionName string `yaml:"TransactionName" env:"APPOPTICS_TRANSACTION_NAME"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -881,6 +884,14 @@ func (c *Config) GetTransactionFiltering() []TransactionFilter {
 	c.RLock()
 	defer c.RUnlock()
 	return c.TransactionSettings
+}
+
+// GetTransactionName returns the user-defined transaction name. It's only available
+// in the AWS Lambda environment.
+func (c *Config) GetTransactionName() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.TransactionName
 }
 
 // GetSQLSanitize returns the SQL sanitization level.

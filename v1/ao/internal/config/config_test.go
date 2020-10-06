@@ -63,6 +63,7 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsServerlessServiceName, "AWSLambda")
 	os.Setenv(envAppOpticsTokenBucketCap, "2.0")
 	os.Setenv(envAppOpticsTokenBucketRate, "1.0")
+	os.Setenv(envAppOpticsTransactionName, "my-transaction-name")
 
 	c.Load()
 	assert.Equal(t, 2.0, c.GetTokenBucketCap())
@@ -72,6 +73,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
 	assert.Equal(t, "hello.udp", c.GetCollectorUDP())
 	assert.Equal(t, false, c.GetDisabled())
+	assert.Equal(t, "my-transaction-name", c.GetTransactionName())
 }
 
 func TestConfig_HasLocalSamplingConfig(t *testing.T) {
@@ -204,6 +206,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_SERVICE_NAME=LambdaTest",
 		"APPOPTICS_TOKEN_BUCKET_CAPACITY=8",
 		"APPOPTICS_TOKEN_BUCKET_RATE=4",
+		"APPOPTICS_TRANSACTION_NAME=my-transaction-name",
 	}
 	SetEnvs(envs)
 
@@ -245,6 +248,7 @@ func TestEnvsLoading(t *testing.T) {
 		RuntimeMetrics:     true,
 		TokenBucketCap:     8,
 		TokenBucketRate:    4,
+		TransactionName:    "my-transaction-name",
 	}
 
 	c := NewConfig()
@@ -295,6 +299,7 @@ func TestYamlConfig(t *testing.T) {
 		RuntimeMetrics:     true,
 		TokenBucketCap:     1.1,
 		TokenBucketRate:    2.2,
+		TransactionName:    "my-transaction-name",
 	}
 
 	out, err := yaml.Marshal(&yamlConfig)
@@ -329,6 +334,7 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_SERVICE_NAME=LambdaEnv",
 		"APPOPTICS_TOKEN_BUCKET_CAPACITY=8",
 		"APPOPTICS_TOKEN_BUCKET_RATE=4",
+		"APPOPTICS_TRANSACTION_NAME=transaction-name-from-env",
 	}
 	ClearEnvs()
 	SetEnvs(envs)
@@ -376,6 +382,7 @@ func TestYamlConfig(t *testing.T) {
 		RuntimeMetrics:     true,
 		TokenBucketCap:     8,
 		TokenBucketRate:    4,
+		TransactionName:    "transaction-name-from-env",
 	}
 
 	c = NewConfig()
