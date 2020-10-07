@@ -39,13 +39,21 @@ const (
 	keyController      = "Controller"
 	keyAction          = "Action"
 	keyTransactionName = "TransactionName"
-	keyMethod          = "Method"
+	keyHTTPMethod      = "HTTPMethod"
 	keyHTTPHost        = "HTTP-Host"
 	keyURL             = "URL"
 	keyRemoteHost      = "Remote-Host"
 	keyQueryString     = "Query-String"
 	keyRemoteStatus    = "RemoteStatus"
 	keyContentLength   = "ContentLength"
+	keyProto           = "Proto"
+	keyPort            = "Port"
+	keyClientIP        = "ClientIP"
+	keyForwardedFor    = "Forwarded-For"
+	keyForwardedHost   = "Forwarded-Host"
+	keyForwardedProto  = "Forwarded-Proto"
+	keyForwardedPort   = "Forwarded-Port"
+	keyRequestOrigURI  = "Request-Orig-URI"
 )
 
 // Span is used to measure a span of time associated with an activity

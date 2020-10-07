@@ -121,6 +121,8 @@ type Config struct {
 	ProxyCertPath string `yaml:"ProxyCertPath" env:"APPOPTICS_PROXY_CERT_PATH"`
 	// Report runtime metrics or not
 	RuntimeMetrics bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
+	// ReportQueryString indicates if the query string should be reported as part of the URL
+	ReportQueryString bool `yaml:"ReportQueryString" env:"APPOPTICS_REPORT_QUERY_STRING" default:"true"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -836,6 +838,13 @@ func (c *Config) GetRuntimeMetrics() bool {
 	c.RLock()
 	defer c.RUnlock()
 	return c.RuntimeMetrics
+}
+
+// GetReportQueryString returns the ReportQueryString flag
+func (c *Config) GetReportQueryString() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.ReportQueryString
 }
 
 // GetTransactionFiltering returns the transaction filtering config

@@ -107,7 +107,7 @@ func TestHTTPHandler404(t *testing.T) {
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
-			assert.Equal(t, "GET", n.Map["Method"])
+			assert.Equal(t, "GET", n.Map["HTTPMethod"])
 			assert.Equal(t, "testq", n.Map["Query-String"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
@@ -133,7 +133,7 @@ func TestHTTPHandler200(t *testing.T) {
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "/hello%20world/one/two/three", n.Map["URL"])
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
-			assert.Equal(t, "GET", n.Map["Method"])
+			assert.Equal(t, "GET", n.Map["HTTPMethod"])
 			assert.Equal(t, "testq", n.Map["Query-String"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
@@ -437,7 +437,7 @@ func assertHTTPRequestGraph(t *testing.T, bufs [][]byte, resp *http.Response, ur
 			assert.Equal(t, "/test", n.Map["URL"])
 			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
 			assert.Equal(t, "qs=1", n.Map["Query-String"])
-			assert.Equal(t, method, n.Map["Method"])
+			assert.Equal(t, method, n.Map["HTTPMethod"])
 		}},
 		{"myHandler", "exit"}: {Edges: g.Edges{{"DBx", "exit"}, {"myHandler", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, status, n.Map["Status"])
@@ -481,7 +481,7 @@ func assertHTTPRequestPanic(t *testing.T, bufs [][]byte, resp *http.Response, ur
 			assert.Equal(t, "/test", n.Map["URL"])
 			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
 			assert.Equal(t, "qs=1", n.Map["Query-String"])
-			assert.Equal(t, method, n.Map["Method"])
+			assert.Equal(t, method, n.Map["HTTPMethod"])
 		}},
 		{"http.HandlerFunc", "error"}: {Edges: g.Edges{{"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, "panic", n.Map["ErrorClass"])
@@ -572,7 +572,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 			assert.Equal(t, "/test", n.Map["URL"])
 			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
 			assert.Equal(t, "qs=1", n.Map["Query-String"])
-			assert.Equal(t, "GET", n.Map["Method"])
+			assert.Equal(t, "GET", n.Map["HTTPMethod"])
 		}},
 		{"http.HandlerFunc", "exit"}: {Edges: g.Edges{{"myHandler", "exit"}, {"http.HandlerFunc", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, 403, n.Map["Status"])
@@ -583,7 +583,7 @@ func TestDoubleWrappedHTTPRequest(t *testing.T) {
 			assert.Equal(t, "/test", n.Map["URL"])
 			assert.Equal(t, fmt.Sprintf("127.0.0.1:%d", port), n.Map["HTTP-Host"])
 			assert.Equal(t, "qs=1", n.Map["Query-String"])
-			assert.Equal(t, "GET", n.Map["Method"])
+			assert.Equal(t, "GET", n.Map["HTTPMethod"])
 		}},
 		{"myHandler", "exit"}: {Edges: g.Edges{{"DBx", "exit"}, {"myHandler", "entry"}}, Callback: func(n g.Node) {
 			assert.Equal(t, 403, n.Map["Status"])
@@ -824,7 +824,7 @@ func TestHTTPHandlerOpts(t *testing.T) {
 		{"http.HandlerFunc", "entry"}: {Edges: g.Edges{}, Callback: func(n g.Node) {
 			assert.Equal(t, "/hello", n.Map["URL"])
 			assert.Equal(t, "test.com", n.Map["HTTP-Host"])
-			assert.Equal(t, "GET", n.Map["Method"])
+			assert.Equal(t, "GET", n.Map["HTTPMethod"])
 			assert.Equal(t, "testq", n.Map["Query-String"])
 			assert.NotNil(t, n.Map[ao.KeyBackTrace])
 		}},
