@@ -173,17 +173,16 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 		WithBackTrace: false,
 		ContextOptions: reporter.ContextOptions{
 			MdStr:                  r.Header.Get(HTTPHeaderName),
-			URL:                    urlStr,
+			URL:                    r.URL.EscapedPath(),
 			XTraceOptions:          r.Header.Get(HTTPHeaderXTraceOptions),
 			XTraceOptionsSignature: r.Header.Get(HTTPHeaderXTraceOptionsSignature),
 			CB: func() KVMap {
 				kvs := KVMap{
-					keySpec:        "ws",
-					keyHTTPMethod:  r.Method,
-					keyHTTPHost:    r.Host,
-					keyURL:         r.URL.EscapedPath(),
-					keyRemoteHost:  r.RemoteAddr,
-					keyQueryString: r.URL.RawQuery, // TODO remove this KV?
+					keySpec:       "ws",
+					keyHTTPMethod: r.Method,
+					keyHTTPHost:   r.Host,
+					keyURL:        urlStr,
+					keyRemoteHost: r.RemoteAddr,
 				}
 
 				optionalKVs := map[string]string{
