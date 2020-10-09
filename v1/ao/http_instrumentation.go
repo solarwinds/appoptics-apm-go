@@ -8,12 +8,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
 	"runtime"
 	"runtime/debug"
 	"strings"
 	"time"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
 
@@ -156,6 +158,16 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 		f(so)
 	}
 
+	urlStr := r.URL.RequestURI()
+	origURL := r.RequestURI
+	if !config.GetReportQueryString() {
+		urlStr = r.URL.EscapedPath()
+		u, err := url.Parse(origURL)
+		if err == nil {
+			origURL = u.EscapedPath()
+		}
+	}
+
 	// start trace, passing in metadata header
 	t := NewTraceWithOptions(spanName, SpanOptions{
 		WithBackTrace: false,
@@ -166,11 +178,28 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 			XTraceOptionsSignature: r.Header.Get(HTTPHeaderXTraceOptionsSignature),
 			CB: func() KVMap {
 				kvs := KVMap{
-					keyMethod:      r.Method,
-					keyHTTPHost:    r.Host,
-					keyURL:         r.URL.EscapedPath(),
-					keyRemoteHost:  r.RemoteAddr,
-					keyQueryString: r.URL.RawQuery,
+					keySpec:       "ws",
+					keyHTTPMethod: r.Method,
+					keyHTTPHost:   r.Host,
+					keyURL:        urlStr,
+					keyRemoteHost: r.RemoteAddr,
+				}
+
+				optionalKVs := map[string]string{
+					keyProto:          r.URL.Scheme,
+					keyPort:           r.URL.Port(),
+					keyClientIP:       r.RemoteAddr,
+					keyForwardedFor:   r.Header.Get("X-Forwarded-For"),
+					keyForwardedHost:  r.Header.Get("X-Forwarded-Host"),
+					keyForwardedProto: r.Header.Get("X-Forwarded-Proto"),
+					keyForwardedPort:  r.Header.Get("X-Forwarded-Port"),
+					keyRequestOrigURI: origURL,
+				}
+
+				for k, v := range optionalKVs {
+					if v != "" {
+						kvs[k] = v
+					}
 				}
 
 				if so.WithBackTrace {
