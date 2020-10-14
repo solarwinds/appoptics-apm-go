@@ -927,12 +927,14 @@ func (s *EventQueueStats) CopyAndReset() *EventQueueStats {
 	return c
 }
 
-func BuildServerlessMessage(span HTTPSpanMessage, rcs map[string]*RateCounts) []byte {
+func BuildServerlessMessage(span HTTPSpanMessage, rcs map[string]*RateCounts, rate int, source int) []byte {
 	bbuf := bson.NewBuffer()
 
 	bbuf.AppendInt64("Duration", int64(span.Duration/time.Microsecond))
 	bbuf.AppendBool("HasError", span.HasError)
 	bbuf.AppendBool("IsHTTPSpan", span.Method != "")
+	bbuf.AppendInt("SampleRate", rate)
+	bbuf.AppendInt("SampleSource", source)
 	bbuf.AppendString("Method", span.Method)
 	bbuf.AppendInt("Status", span.Status)
 	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
