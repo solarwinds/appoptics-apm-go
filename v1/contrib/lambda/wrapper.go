@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -141,9 +142,14 @@ type typedError struct {
 
 func (w *traceWrapper) After(result interface{}, err *typedError, endArgs ...interface{}) interface{} {
 	statusCode := 0
+	errType := ""
+	errClass := ""
+	errMsg := ""
 
 	if err != nil {
-		w.trace.Error(err.typ, err.err.Error())
+		errType = err.typ
+		errClass = "error"
+		errMsg = err.err.Error()
 		statusCode = 500
 	}
 
@@ -153,10 +159,20 @@ func (w *traceWrapper) After(result interface{}, err *typedError, endArgs ...int
 		} else if gwRsp, ok := result.(events.APIGatewayV2HTTPResponse); ok {
 			statusCode = gwRsp.StatusCode
 		}
+		if statusCode/100 == 5 {
+			errClass = "HTTP Error"
+			errMsg = strconv.Itoa(statusCode)
+			errType = "status"
+		}
 	}
 
 	if statusCode != 0 {
 		endArgs = append(endArgs, "Status", statusCode)
+		if statusCode/100 == 5 {
+			endArgs = append(endArgs, "ErrorClass", errClass)
+			endArgs = append(endArgs, "ErrorType", errType)
+			endArgs = append(endArgs, "ErrorMsg", errMsg)
+		}
 	}
 
 	defer w.trace.End(endArgs...)
@@ -244,7 +260,7 @@ func HandlerWithWrapper(handlerFunc interface{}, w Wrapper) interface{} {
 			var te *typedError
 
 			if panicErr = recover(); panicErr != nil {
-				te = &typedError{typ: "panic", err: fmt.Errorf("%v", panicErr)}
+				te = &typedError{typ: "exception", err: fmt.Errorf("%v", panicErr)}
 			} else if err != nil {
 				te = &typedError{typ: "error", err: err}
 			}

@@ -29,6 +29,7 @@ const (
 	keyEdge            = "Edge"
 	keySpec            = "Spec"
 	keyErrorClass      = "ErrorClass"
+	keyErrorType       = "ErrorType"
 	keyErrorMsg        = "ErrorMsg"
 	keyAsync           = "Async"
 	keyLanguage        = "Language"
@@ -336,6 +337,7 @@ func (s *span) Error(class, msg string) {
 	if s.ok() {
 		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
 			keySpec, "error",
+			keyErrorType, "exception",
 			keyErrorClass, class,
 			keyErrorMsg, msg,
 			KeyBackTrace, string(debug.Stack()))
