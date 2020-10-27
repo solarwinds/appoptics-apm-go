@@ -124,12 +124,12 @@ type Config struct {
 	// Cert path for the HTTP/HTTPS proxy
 	ProxyCertPath string `yaml:"ProxyCertPath" env:"APPOPTICS_PROXY_CERT_PATH"`
 	// Report runtime metrics or not
-	RuntimeMetrics  bool    `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
-  // ReportQueryString indicates if the query string should be reported as part of the URL
-	ReportQueryString bool `yaml:"ReportQueryString" env:"APPOPTICS_REPORT_QUERY_STRING" default:"true"`
-	TokenBucketCap  float64 `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"8"`
-  TokenBucketRate float64 `yaml:"TokenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"0.17"`
-  // The user-defined transaction name. It's only available in the AWS Lambda environment.
+	RuntimeMetrics bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
+	// ReportQueryString indicates if the query string should be reported as part of the URL
+	ReportQueryString bool    `yaml:"ReportQueryString" env:"APPOPTICS_REPORT_QUERY_STRING" default:"true"`
+	TokenBucketCap    float64 `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"8"`
+	TokenBucketRate   float64 `yaml:"TokenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"0.17"`
+	// The user-defined transaction name. It's only available in the AWS Lambda environment.
 	TransactionName string `yaml:"TransactionName" env:"APPOPTICS_TRANSACTION_NAME"`
 }
 
@@ -879,6 +879,7 @@ func (c *Config) GetTokenBucketRate() float64 {
 	c.RLock()
 	defer c.RUnlock()
 	return c.TokenBucketRate
+}
 
 // GetReportQueryString returns the ReportQueryString flag
 func (c *Config) GetReportQueryString() bool {
