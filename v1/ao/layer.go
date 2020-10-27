@@ -40,13 +40,21 @@ const (
 	keyController      = "Controller"
 	keyAction          = "Action"
 	keyTransactionName = "TransactionName"
-	keyMethod          = "Method"
+	keyHTTPMethod      = "HTTPMethod"
 	keyHTTPHost        = "HTTP-Host"
 	keyURL             = "URL"
 	keyRemoteHost      = "Remote-Host"
 	keyQueryString     = "Query-String"
 	keyRemoteStatus    = "RemoteStatus"
 	keyContentLength   = "ContentLength"
+	keyProto           = "Proto"
+	keyPort            = "Port"
+	keyClientIP        = "ClientIP"
+	keyForwardedFor    = "Forwarded-For"
+	keyForwardedHost   = "Forwarded-Host"
+	keyForwardedProto  = "Forwarded-Proto"
+	keyForwardedPort   = "Forwarded-Port"
+	keyRequestOrigURI  = "Request-Orig-URI"
 )
 
 // Span is used to measure a span of time associated with an activity
@@ -132,6 +140,7 @@ type SpanOptions struct {
 	WithBackTrace bool
 
 	ContextOptions
+	TransactionName string
 }
 
 // SpanOpt defines the function type that changes the SpanOptions
@@ -434,6 +443,10 @@ func (l spanLabeler) layerName() string          { return l.name }
 func (l spanLabeler) setName(name string)        { l.name = name }
 
 func newSpan(aoCtx reporter.Context, spanName string, parent Span, args ...interface{}) Span {
+	if spanName == "" {
+		return nullSpan{}
+	}
+
 	ll := spanLabeler{spanName}
 	if err := aoCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
 		return nullSpan{}

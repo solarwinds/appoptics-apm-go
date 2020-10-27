@@ -159,6 +159,7 @@ func TestConfigInit(t *testing.T) {
 		RuntimeMetrics:     true,
 		TokenBucketCap:     8,
 		TokenBucketRate:    0.17,
+		ReportQueryString:  true,
 	}
 	assert.Equal(t, c, &defaultC)
 }
@@ -207,6 +208,7 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_TOKEN_BUCKET_CAPACITY=8",
 		"APPOPTICS_TOKEN_BUCKET_RATE=4",
 		"APPOPTICS_TRANSACTION_NAME=my-transaction-name",
+		"APPOPTICS_REPORT_QUERY_STRING=false",
 	}
 	SetEnvs(envs)
 
@@ -249,6 +251,7 @@ func TestEnvsLoading(t *testing.T) {
 		TokenBucketCap:     8,
 		TokenBucketRate:    4,
 		TransactionName:    "my-transaction-name",
+		ReportQueryString:  false,
 	}
 
 	c := NewConfig()
@@ -300,6 +303,7 @@ func TestYamlConfig(t *testing.T) {
 		TokenBucketCap:     1.1,
 		TokenBucketRate:    2.2,
 		TransactionName:    "my-transaction-name",
+		ReportQueryString:  true,
 	}
 
 	out, err := yaml.Marshal(&yamlConfig)
@@ -335,6 +339,7 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_TOKEN_BUCKET_CAPACITY=8",
 		"APPOPTICS_TOKEN_BUCKET_RATE=4",
 		"APPOPTICS_TRANSACTION_NAME=transaction-name-from-env",
+		"APPOPTICS_REPORT_QUERY_STRING=false",
 	}
 	ClearEnvs()
 	SetEnvs(envs)
@@ -383,6 +388,7 @@ func TestYamlConfig(t *testing.T) {
 		TokenBucketCap:     8,
 		TokenBucketRate:    4,
 		TransactionName:    "transaction-name-from-env",
+		ReportQueryString:  false,
 	}
 
 	c = NewConfig()

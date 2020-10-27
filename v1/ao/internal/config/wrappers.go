@@ -65,6 +65,7 @@ var GetRuntimeMetrics = conf.GetRuntimeMetrics
 
 var GetTokenBucketCap = conf.GetTokenBucketCap
 var GetTokenBucketRate = conf.GetTokenBucketRate
+var GetReportQueryString = conf.GetReportQueryString
 
 // GetTransactionFiltering is a wrapper to the method of the global config
 var GetTransactionFiltering = conf.GetTransactionFiltering
