@@ -314,7 +314,7 @@ func TestYamlConfig(t *testing.T) {
 
 	// Test with config file
 	ClearEnvs()
-	os.Setenv(EnvAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
+	os.Setenv(envAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
 
 	c := NewConfig()
 	assert.Equal(t, &yamlConfig, c)

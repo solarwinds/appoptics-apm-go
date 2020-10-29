@@ -53,7 +53,7 @@ const (
 	envAppOpticsEventsFlushInterval   = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
 	envAppOpticsMaxReqBytes           = "APPOPTICS_MAX_REQUEST_BYTES"
 	envAppOpticsDisabled              = "APPOPTICS_DISABLED"
-	EnvAppOpticsConfigFile            = "APPOPTICS_CONFIG_FILE"
+	envAppOpticsConfigFile            = "APPOPTICS_CONFIG_FILE"
 	envAppOpticsServerlessServiceName = "APPOPTICS_SERVICE_NAME"
 	envAppOpticsTokenBucketCap        = "APPOPTICS_TOKEN_BUCKET_CAPACITY"
 	envAppOpticsTokenBucketRate       = "APPOPTICS_TOKEN_BUCKET_RATE"
@@ -644,7 +644,7 @@ func getValPtr(val reflect.Value) reflect.Value {
 
 // getConfigPath returns the absolute path of the config file.
 func (c *Config) getConfigPath() string {
-	path, ok := os.LookupEnv(EnvAppOpticsConfigFile)
+	path, ok := os.LookupEnv(envAppOpticsConfigFile)
 	if ok {
 		if abs, err := filepath.Abs(path); err == nil {
 			return abs

@@ -941,7 +941,6 @@ func BuildServerlessMessage(span HTTPSpanMessage, rcs map[string]*RateCounts, ra
 	var sampled, limited, traced, through, ttTraced int64
 
 	for _, rc := range rcs {
-		// requested += rc.requested
 		sampled += rc.sampled
 		limited += rc.limited
 		traced += rc.traced
