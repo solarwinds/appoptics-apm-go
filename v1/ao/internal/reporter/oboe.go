@@ -162,13 +162,17 @@ func sendInitMessage() {
 
 func (b *tokenBucket) count(sampled, hasMetadata, rateLimit bool) bool {
 	b.RequestedInc()
+
 	if hasMetadata {
 		b.ThroughInc()
+	} else {
+		b.SampledInc()
 	}
+
 	if !sampled {
 		return sampled
 	}
-	b.SampledInc()
+
 	if rateLimit {
 		if ok := b.consume(1); !ok {
 			b.LimitedInc()
