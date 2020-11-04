@@ -114,6 +114,11 @@ func SetTestReporter(options ...TestReporterOption) *TestReporter {
 	return r
 }
 
+func (r *TestReporter) Flush() error {
+	// do nothing
+	return nil
+}
+
 func (r *TestReporter) resultWriter() {
 	var numBufs int
 	for {

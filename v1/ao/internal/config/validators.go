@@ -106,6 +106,14 @@ func IsValidSampleRate(rate int) bool {
 	return rate >= MinSampleRate && rate <= MaxSampleRate
 }
 
+func IsValidTokenBucketRate(rate float64) bool {
+	return rate >= 0 && rate <= 4
+}
+
+func IsValidTokenBucketCap(cap float64) bool {
+	return cap >= 0 && cap <= 8
+}
+
 // NormalizeTracingMode converts an old-style tracing mode (always/never) to a
 // new-style tracing mode (enabled/disabled).
 func NormalizeTracingMode(m TracingMode) TracingMode {

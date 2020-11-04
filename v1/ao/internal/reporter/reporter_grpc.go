@@ -242,20 +242,6 @@ var (
 	ErrReporterIsClosed       = errors.New("the reporter is closed")
 )
 
-const (
-	fullTextInvalidServiceKey = `AppOptics agent is disabled. Check errors below.
-
-	    **No valid service key (defined as token:service_name) is found.** 
-	
-	Please check AppOptics dashboard for your token and use a valid service name.
-	A valid service name should be shorter than 256 characters and contain only 
-	valid characters: [a-z0-9.:_-]. 
-
-	Also note that the agent may convert the service name by removing invalid 
-	characters and replacing spaces with hyphens, so the finalized service key 
-	may be different from your setting.`
-)
-
 func getProxy() string {
 	return config.GetProxy()
 }
@@ -297,7 +283,6 @@ func newGRPCReporter() reporter {
 		return &nullReporter{}
 	}
 
-	// construct the reporter object which handles two connections
 	r := &grpcReporter{
 		conn: grpcConn,
 
@@ -322,6 +307,10 @@ func newGRPCReporter() reporter {
 	log.Warningf("The reporter (%v, v%v, go%v) is initialized. Waiting for the dynamic settings.",
 		r.done, utils.Version(), utils.GoVersion())
 	return r
+}
+
+func (r *grpcReporter) Flush() error {
+	return nil
 }
 
 func (r *grpcReporter) isGracefully() bool {
@@ -797,13 +786,21 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	defer func() { collectReady <- true }()
 
 	i := atomic.LoadInt32(&r.collectMetricInterval)
+
+	var messages [][]byte
 	// generate a new metrics message
 	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(i),
 		r.conn.queueStats.CopyAndReset(), FlushRateCounts(), config.GetRuntimeMetrics())
+	if builtin != nil {
+		messages = append(messages, builtin)
+	}
 
-	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i))
+	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i), false)
+	if custom != nil {
+		messages = append(messages, custom)
+	}
 
-	r.sendMetrics([][]byte{builtin, custom})
+	r.sendMetrics(messages)
 }
 
 // listens on the metrics message channel, collects all messages on that channel and
@@ -933,6 +930,7 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 	default:
 		return errors.New("status message queue is full")
 	}
+
 }
 
 // long-running goroutine that listens on the status message channel, collects all messages
@@ -985,6 +983,7 @@ func (r *grpcReporter) reportSpan(span metrics.SpanMessage) error {
 	if r.Closed() {
 		return ErrReporterIsClosed
 	}
+
 	select {
 	case r.spanMessages <- span:
 		return nil
@@ -1224,6 +1223,7 @@ func newHostID(id host.ID) *collector.HostID {
 	gid.MacAddresses = id.MAC()
 	gid.HerokuDynoID = id.HerokuId()
 	gid.AzAppServiceInstanceID = id.AzureAppInstId()
+	gid.HostType = collector.HostType_PERSISTENT
 
 	return gid
 }

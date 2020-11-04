@@ -496,6 +496,7 @@ func tsInScope(tsStr string) (string, error) {
 // function returns, calling cb if provided for additional KV pairs.
 func NewContext(layer string, reportEntry bool, opts ContextOptions,
 	cb func() KVMap) (ctx Context, ok bool, headers map[string]string) {
+
 	traced := false
 	addCtxEdge := false
 
@@ -587,6 +588,9 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 
 			kvs["SampleRate"] = decision.rate
 			kvs["SampleSource"] = decision.source
+			kvs["TokenBucketCapacity"] = fmt.Sprintf("%f", decision.bucketCap)
+			kvs["TokenBucketRate"] = fmt.Sprintf("%f", decision.bucketRate)
+
 			if tMode.Enabled() && !traced {
 				kvs["TriggeredTrace"] = true
 			}

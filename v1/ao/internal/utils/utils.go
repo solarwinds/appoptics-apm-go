@@ -148,3 +148,9 @@ func (b *SafeBuffer) Reset() {
 	defer b.Unlock()
 	b.buf.Reset()
 }
+
+func (b *SafeBuffer) Len() int {
+	b.Lock()
+	defer b.Unlock()
+	return b.buf.Len()
+}

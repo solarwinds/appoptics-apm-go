@@ -214,6 +214,8 @@ type SampleDecision struct {
 	// the entire service.
 	enabled       bool
 	xTraceOptsRsp string
+	bucketCap     float64
+	bucketRate    float64
 }
 
 type TriggerTraceMode int
@@ -278,7 +280,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 	if usingTestReporter {
 		if r, ok := globalReporter.(*TestReporter); ok {
 			if !r.UseSettings {
-				return SampleDecision{r.ShouldTrace, 0, SAMPLE_SOURCE_NONE, true, ttEmpty} // trace tests
+				return SampleDecision{r.ShouldTrace, 0, SAMPLE_SOURCE_NONE, true, ttEmpty, 0, 0} // trace tests
 			}
 		}
 	}
@@ -286,7 +288,7 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 	var setting *oboeSettings
 	var ok bool
 	if setting, ok = getSetting(layer); !ok {
-		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, ttSettingsNotAvailable}
+		return SampleDecision{false, 0, SAMPLE_SOURCE_NONE, false, ttSettingsNotAvailable, 0, 0}
 	}
 
 	retval := false
@@ -321,7 +323,8 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 				rsp = ttTriggerTracingDisabled
 			}
 		}
-		return SampleDecision{ret, -1, SAMPLE_SOURCE_UNSET, flags.Enabled(), rsp}
+		ttCap, ttRate := getTokenBucketSetting(setting, triggerTrace)
+		return SampleDecision{ret, -1, SAMPLE_SOURCE_UNSET, flags.Enabled(), rsp, ttRate, ttCap}
 	}
 
 	if !traced {
@@ -347,7 +350,32 @@ func oboeSampleRequest(layer string, traced bool, url string, triggerTrace Trigg
 	if triggerTrace.Requested() {
 		rsp = ttIgnored
 	}
-	return SampleDecision{retval, sampleRate, source, flags.Enabled(), rsp}
+
+	ttCap, ttRate := getTokenBucketSetting(setting, ModeTriggerTraceNotPresent)
+
+	return SampleDecision{retval, sampleRate, source, flags.Enabled(), rsp, ttCap, ttRate}
+}
+
+func getTokenBucketSetting(setting *oboeSettings, ttMode TriggerTraceMode) (float64, float64) {
+	var ttCap float64
+	var ttRate float64
+
+	switch ttMode {
+	case ModeRelaxedTriggerTrace:
+		ttCap = setting.triggerTraceRelaxedBucket.capacity
+		ttRate = setting.triggerTraceRelaxedBucket.ratePerSec
+		break
+	case ModeStrictTriggerTrace:
+		ttCap = setting.triggerTraceStrictBucket.capacity
+		ttRate = setting.triggerTraceStrictBucket.ratePerSec
+		break
+	default:
+	case ModeTriggerTraceNotPresent, ModeInvalidTriggerTrace:
+		ttCap = setting.bucket.capacity
+		ttRate = setting.bucket.ratePerSec
+		break
+	}
+	return ttCap, ttRate
 }
 
 func bytesToFloat64(b []byte) (float64, error) {

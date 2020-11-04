@@ -63,10 +63,14 @@ var GetProxyCertPath = conf.GetProxyCertPath
 // GetRuntimeMetrics is a wrapper to the method of the global config
 var GetRuntimeMetrics = conf.GetRuntimeMetrics
 
+var GetTokenBucketCap = conf.GetTokenBucketCap
+var GetTokenBucketRate = conf.GetTokenBucketRate
 var GetReportQueryString = conf.GetReportQueryString
 
 // GetTransactionFiltering is a wrapper to the method of the global config
 var GetTransactionFiltering = conf.GetTransactionFiltering
+
+var GetTransactionName = conf.GetTransactionName
 
 // GetSQLSanitize is a wrapper to method GetSQLSanitize of the global variable config.
 var GetSQLSanitize = conf.GetSQLSanitize

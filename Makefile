@@ -12,12 +12,18 @@ test: certgen runtest removecert
 examples:
 	@cd examples && go test -race -timeout 1m -short ./... && echo "All examples passed."
 
-vet: 
+CONTRIB = v1/contrib
+contrib: $(CONTRIB)/*
+	@for dir in $^ ; do \
+		cd $$dir && go test -race -timeout 1m -short ./... && cd ~-; \
+	done && echo "Contrib tests passed"
+
+vet:
 	@go vet -composites=false ./... && echo "Go vet analysis passed."
 
 clean:
 	@go clean -testcache ./...
 
-sure: clean test examples vet
+sure: clean test examples contrib vet
 
-.PHONY: certgen test removecert examples vet clean
+.PHONY: certgen test removecert examples vet contrib clean

@@ -20,7 +20,7 @@ func toBool(s string) (bool, error) {
 	} else if s == "no" || s == "false" || s == "disabled" {
 		return false, nil
 	}
-	return false, errors.New("cannot convert input to bool")
+	return false, fmt.Errorf("cannot convert %s to bool", s)
 }
 
 // c must be a pointer to a struct object
@@ -84,6 +84,14 @@ func stringToValue(s string, typ reflect.Type) reflect.Value {
 		val, err = strconv.ParseInt(s, 10, 64)
 		if err != nil {
 			log.Warningf("Ignore invalid int64 value: %s", s)
+		}
+	case reflect.Float64:
+		if s == "" {
+			s = "0"
+		}
+		val, err = strconv.ParseFloat(s, 64)
+		if err != nil {
+			log.Warningf("Ignore invalid float64 value: %s", s)
 		}
 	case reflect.String:
 		val = s

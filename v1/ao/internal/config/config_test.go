@@ -60,13 +60,20 @@ func TestLoadConfig(t *testing.T) {
 	os.Setenv(envAppOpticsTrustedPath, "test.crt")
 	os.Setenv(envAppOpticsCollectorUDP, "hello.udp")
 	os.Setenv(envAppOpticsDisabled, "invalidValue")
+	os.Setenv(envAppOpticsServerlessServiceName, "AWSLambda")
+	os.Setenv(envAppOpticsTokenBucketCap, "2.0")
+	os.Setenv(envAppOpticsTokenBucketRate, "1.0")
+	os.Setenv(envAppOpticsTransactionName, "my-transaction-name")
 
 	c.Load()
+	assert.Equal(t, 2.0, c.GetTokenBucketCap())
+	assert.Equal(t, 1.0, c.GetTokenBucketRate())
 	assert.Equal(t, ToServiceKey(key1), c.GetServiceKey())
 	assert.Equal(t, "test", c.GetHostAlias())
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
 	assert.Equal(t, "hello.udp", c.GetCollectorUDP())
 	assert.Equal(t, false, c.GetDisabled())
+	assert.Equal(t, "my-transaction-name", c.GetTransactionName())
 }
 
 func TestConfig_HasLocalSamplingConfig(t *testing.T) {
@@ -150,6 +157,8 @@ func TestConfigInit(t *testing.T) {
 		Proxy:              "",
 		ProxyCertPath:      "",
 		RuntimeMetrics:     true,
+		TokenBucketCap:     8,
+		TokenBucketRate:    0.17,
 		ReportQueryString:  true,
 	}
 	assert.Equal(t, c, &defaultC)
@@ -195,6 +204,10 @@ func TestEnvsLoading(t *testing.T) {
 		"APPOPTICS_PROXY=http://usr/pwd@internal.proxy:3306",
 		"APPOPTICS_PROXY_CERT_PATH=./proxy.pem",
 		"APPOPTICS_RUNTIME_METRICS=true",
+		"APPOPTICS_SERVICE_NAME=LambdaTest",
+		"APPOPTICS_TOKEN_BUCKET_CAPACITY=8",
+		"APPOPTICS_TOKEN_BUCKET_RATE=4",
+		"APPOPTICS_TRANSACTION_NAME=my-transaction-name",
 		"APPOPTICS_REPORT_QUERY_STRING=false",
 	}
 	SetEnvs(envs)
@@ -235,6 +248,9 @@ func TestEnvsLoading(t *testing.T) {
 		Proxy:              "http://usr/pwd@internal.proxy:3306",
 		ProxyCertPath:      "./proxy.pem",
 		RuntimeMetrics:     true,
+		TokenBucketCap:     8,
+		TokenBucketRate:    4,
+		TransactionName:    "my-transaction-name",
 		ReportQueryString:  false,
 	}
 
@@ -284,6 +300,9 @@ func TestYamlConfig(t *testing.T) {
 		Proxy:              "http://usr:pwd@internal.proxy:3306",
 		ProxyCertPath:      "./proxy.pem",
 		RuntimeMetrics:     true,
+		TokenBucketCap:     1.1,
+		TokenBucketRate:    2.2,
+		TransactionName:    "my-transaction-name",
 		ReportQueryString:  true,
 	}
 
@@ -295,7 +314,7 @@ func TestYamlConfig(t *testing.T) {
 
 	// Test with config file
 	ClearEnvs()
-	os.Setenv(EnvAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
+	os.Setenv(envAppOpticsConfigFile, "/tmp/appoptics-config.yaml")
 
 	c := NewConfig()
 	assert.Equal(t, &yamlConfig, c)
@@ -316,6 +335,10 @@ func TestYamlConfig(t *testing.T) {
 		"APPOPTICS_MAX_REQUEST_BYTES=4096000",
 		"APPOPTICS_DISABLED=false",
 		"APPOPTICS_SQL_SANITIZE=3",
+		"APPOPTICS_SERVICE_NAME=LambdaEnv",
+		"APPOPTICS_TOKEN_BUCKET_CAPACITY=8",
+		"APPOPTICS_TOKEN_BUCKET_RATE=4",
+		"APPOPTICS_TRANSACTION_NAME=transaction-name-from-env",
 		"APPOPTICS_REPORT_QUERY_STRING=false",
 	}
 	ClearEnvs()
@@ -362,6 +385,9 @@ func TestYamlConfig(t *testing.T) {
 		Proxy:              "http://usr:pwd@internal.proxy:3306",
 		ProxyCertPath:      "./proxy.pem",
 		RuntimeMetrics:     true,
+		TokenBucketCap:     8,
+		TokenBucketRate:    4,
+		TransactionName:    "transaction-name-from-env",
 		ReportQueryString:  false,
 	}
 

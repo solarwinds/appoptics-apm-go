@@ -37,6 +37,7 @@ const TestServiceKey = "ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4f
 var _ = func() (_ struct{}) {
 	periodicTasksDisabled = true
 
+	os.Clearenv()
 	os.Setenv("APPOPTICS_SERVICE_KEY", TestServiceKey)
 	os.Setenv("APPOPTICS_DEBUG_LEVEL", "debug")
 
@@ -617,7 +618,7 @@ func TestCustomMetrics(t *testing.T) {
 		HostTag: true,
 		Tags:    map[string]string{"hi": "globe"},
 	})
-	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(grpcMetricIntervalDefault))
+	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(grpcMetricIntervalDefault), false)
 
 	bbuf := bson.WithBuf(custom)
 	mMap := mbson.M{}
@@ -759,4 +760,10 @@ func TestHttpProxy(t *testing.T) {
 
 func TestHttpsProxy(t *testing.T) {
 	testProxy(t, "https://usr:pwd@localhost:12345")
+}
+
+func TestFlush(t *testing.T) {
+	globalReporter = newGRPCReporter()
+	r := globalReporter.(*grpcReporter)
+	assert.NoError(t, r.Flush())
 }

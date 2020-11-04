@@ -359,14 +359,22 @@ func addRequestCounters(bbuf *bson.Buffer, index *int, rcs map[string]*RateCount
 }
 
 // BuildMessage creates and encodes the custom metrics message.
-func BuildMessage(m *Measurements) []byte {
+func BuildMessage(m *Measurements, serverless bool) []byte {
+	if m == nil {
+		return nil
+	}
+
 	bbuf := bson.NewBuffer()
 	if m.IsCustom {
 		bbuf.AppendBool("IsCustom", m.IsCustom)
 	}
-	appendHostId(bbuf)
+
+	if !serverless {
+		appendHostId(bbuf)
+		bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
+	}
+
 	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
-	bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
 
 	start := bbuf.AppendStartArray("measurements")
 	index := 0
@@ -395,6 +403,11 @@ func (m *Measurements) Cap() int32 {
 func (m *Measurements) CopyAndReset(flushInterval int32) *Measurements {
 	m.Lock()
 	defer m.Unlock()
+
+	if len(m.m) == 0 {
+		m.FlushInterval = flushInterval
+		return nil
+	}
 
 	clone := m.Clone()
 	m.m = make(map[string]*Measurement)
@@ -484,13 +497,18 @@ func addRuntimeMetrics(bbuf *bson.Buffer, index *int) {
 // metricsFlushInterval	current metrics flush interval
 //
 // return				metrics message in BSON format
-func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
+func BuildBuiltinMetricsMessage(m *Measurements, qs *EventQueueStats,
 	rcs map[string]*RateCounts, runtimeMetrics bool) []byte {
+	if m == nil {
+		return nil
+	}
+
 	bbuf := bson.NewBuffer()
 
 	appendHostId(bbuf)
-	bbuf.AppendInt64("Timestamp_u", int64(time.Now().UnixNano()/1000))
 	bbuf.AppendInt32("MetricsFlushInterval", m.FlushInterval)
+
+	bbuf.AppendInt64("Timestamp_u", int64(time.Now().UnixNano()/1000))
 
 	// measurements
 	// ==========================================
@@ -501,11 +519,13 @@ func BuildBuiltinMetricsMessage(m *Measurements, qs EventQueueStats,
 	addRequestCounters(bbuf, &index, rcs)
 
 	// Queue states
-	addMetricsValue(bbuf, &index, "NumSent", qs.numSent)
-	addMetricsValue(bbuf, &index, "NumOverflowed", qs.numOverflowed)
-	addMetricsValue(bbuf, &index, "NumFailed", qs.numFailed)
-	addMetricsValue(bbuf, &index, "TotalEvents", qs.totalEvents)
-	addMetricsValue(bbuf, &index, "QueueLargest", qs.queueLargest)
+	if qs != nil {
+		addMetricsValue(bbuf, &index, "NumSent", qs.numSent)
+		addMetricsValue(bbuf, &index, "NumOverflowed", qs.numOverflowed)
+		addMetricsValue(bbuf, &index, "NumFailed", qs.numFailed)
+		addMetricsValue(bbuf, &index, "TotalEvents", qs.totalEvents)
+		addMetricsValue(bbuf, &index, "QueueLargest", qs.queueLargest)
+	}
 
 	addHostMetrics(bbuf, &index)
 
@@ -685,7 +705,7 @@ func (s *HTTPSpanMessage) produceTagsList() []map[string]string {
 func (s *HTTPSpanMessage) processMeasurements(tagsList []map[string]string,
 	m *Measurements) (error, []map[string]string) {
 	name := "TransactionResponseTime"
-	duration := float64(s.Duration)
+	duration := float64(s.Duration / time.Microsecond)
 
 	if tagsList == nil {
 		tagsList = s.produceTagsList()
@@ -890,8 +910,8 @@ func (s *EventQueueStats) SetQueueLargest(count int64) {
 }
 
 // CopyAndReset returns a copy of its current values and reset itself.
-func (s *EventQueueStats) CopyAndReset() EventQueueStats {
-	c := EventQueueStats{}
+func (s *EventQueueStats) CopyAndReset() *EventQueueStats {
+	c := &EventQueueStats{}
 
 	c.numSent = atomic.SwapInt64(&s.numSent, 0)
 	c.numFailed = atomic.SwapInt64(&s.numFailed, 0)
@@ -900,4 +920,64 @@ func (s *EventQueueStats) CopyAndReset() EventQueueStats {
 	c.queueLargest = atomic.SwapInt64(&s.queueLargest, 0)
 
 	return c
+}
+
+func BuildServerlessMessage(span HTTPSpanMessage, rcs map[string]*RateCounts, rate int, source int) []byte {
+	bbuf := bson.NewBuffer()
+
+	bbuf.AppendInt64("Duration", int64(span.Duration/time.Microsecond))
+	bbuf.AppendBool("HasError", span.HasError)
+	bbuf.AppendBool("IsHTTPSpan", span.Method != "")
+	bbuf.AppendInt("SampleRate", rate)
+	bbuf.AppendInt("SampleSource", source)
+	bbuf.AppendString("Method", span.Method)
+	bbuf.AppendInt("Status", span.Status)
+	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
+	bbuf.AppendString("TransactionName", span.Transaction)
+
+	// add request counters
+	start := bbuf.AppendStartArray("TraceDecision")
+
+	var sampled, limited, traced, through, ttTraced int64
+
+	for _, rc := range rcs {
+		sampled += rc.sampled
+		limited += rc.limited
+		traced += rc.traced
+		through += rc.through
+	}
+
+	if relaxed, ok := rcs[RCRelaxedTriggerTrace]; ok {
+		ttTraced += relaxed.Traced()
+	}
+	if strict, ok := rcs[RCStrictTriggerTrace]; ok {
+		ttTraced += strict.Traced()
+	}
+
+	var i int = 0
+	if sampled != 0 {
+		bbuf.AppendString(strconv.Itoa(i), "Sample")
+		i++
+	}
+	if traced != 0 {
+		bbuf.AppendString(strconv.Itoa(i), "Trace")
+		i++
+	}
+	if limited != 0 {
+		bbuf.AppendString(strconv.Itoa(i), "TokenBucketExhaustion")
+		i++
+	}
+	if through != 0 {
+		bbuf.AppendString(strconv.Itoa(i), "ThroughTrace")
+		i++
+	}
+	if ttTraced != 0 {
+		bbuf.AppendString(strconv.Itoa(i), "Triggered")
+		i++
+	}
+
+	bbuf.AppendFinishObject(start)
+
+	bbuf.Finish()
+	return bbuf.GetBuf()
 }

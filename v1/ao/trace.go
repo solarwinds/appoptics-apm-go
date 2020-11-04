@@ -180,6 +180,7 @@ func (t *aoTrace) End(args ...interface{}) {
 	if t.ok() {
 		t.AddEndArgs(args...)
 		t.reportExit()
+		flushAgent()
 	}
 }
 
@@ -194,6 +195,7 @@ func (t *aoTrace) EndCallback(cb func() KVMap) {
 			t.AddEndArgs(args...)
 		}
 		t.reportExit()
+		flushAgent()
 	}
 }
 
@@ -235,7 +237,7 @@ func (t *aoTrace) reportExit() {
 			return
 		}
 
-		// if this is an HTTP trace, record a new span
+		// record a new span
 		if !t.httpSpan.start.IsZero() && t.aoCtx.GetEnabled() {
 			t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)
 			t.recordHTTPSpan()
@@ -316,6 +318,10 @@ func (t *aoTrace) finalizeTxnName(controller string, action string) {
 	// The precedence:
 	// custom transaction name > framework specific transaction naming > controller.action > 1st and 2nd segment of Path
 	customTxnName := t.aoCtx.GetTransactionName()
+	if config.IsServerlessMode() && config.GetTransactionName() != "" {
+		customTxnName = config.GetTransactionName()
+	}
+
 	if customTxnName != "" {
 		t.httpSpan.span.Transaction = customTxnName
 	} else if t.httpSpan.controller != "" && t.httpSpan.action != "" {
