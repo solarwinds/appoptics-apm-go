@@ -536,6 +536,8 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		}
 	}()
 
+	continuedTrace := false
+
 	if opts.MdStr != "" {
 		var err error
 		if ctx, err = newContextFromMetadataString(opts.MdStr); err != nil {
@@ -545,6 +547,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		} else if ctx.IsSampled() {
 			traced = true
 			addCtxEdge = true
+			continuedTrace = true
 		} else {
 			setting, has := getSetting(layer)
 			if !has {
@@ -586,8 +589,11 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 				kvs[k] = v
 			}
 
-			kvs["SampleRate"] = decision.rate
-			kvs["SampleSource"] = decision.source
+			if !continuedTrace {
+				kvs["SampleRate"] = decision.rate
+				kvs["SampleSource"] = decision.source
+			}
+
 			kvs["TokenBucketCapacity"] = fmt.Sprintf("%f", decision.bucketCap)
 			kvs["TokenBucketRate"] = fmt.Sprintf("%f", decision.bucketRate)
 
