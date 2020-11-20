@@ -159,5 +159,9 @@ func MaskServiceKey(validKey string) string {
 	tk = tk[0:4] + strings.Repeat(mask,
 		utf8.RuneCountInString(tk)-hLen-tLen) + tk[len(tk)-4:]
 
-	return tk + sep + s[1]
+	masked := tk + sep
+	if len(s) >= 2 {
+		masked += s[1]
+	}
+	return masked
 }
