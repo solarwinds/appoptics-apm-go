@@ -88,7 +88,7 @@ func IsValidFile(file string) bool {
 // IsValidReporterType checks if the reporter type is valid.
 func IsValidReporterType(t string) bool {
 	t = strings.ToLower(strings.TrimSpace(t))
-	return t == "ssl" || t == "udp"
+	return t == "ssl" || t == "udp" || t == "serverless"
 }
 
 // IsValidEc2MetadataTimeout checks if the timeout is within the designated range
