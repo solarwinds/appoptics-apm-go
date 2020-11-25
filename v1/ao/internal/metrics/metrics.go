@@ -927,13 +927,17 @@ func BuildServerlessMessage(span HTTPSpanMessage, rcs map[string]*RateCounts, ra
 
 	bbuf.AppendInt64("Duration", int64(span.Duration/time.Microsecond))
 	bbuf.AppendBool("HasError", span.HasError)
-	bbuf.AppendBool("IsHTTPSpan", span.Method != "")
 	bbuf.AppendInt("SampleRate", rate)
 	bbuf.AppendInt("SampleSource", source)
-	bbuf.AppendString("Method", span.Method)
-	bbuf.AppendInt("Status", span.Status)
 	bbuf.AppendInt64("Timestamp_u", time.Now().UnixNano()/1000)
 	bbuf.AppendString("TransactionName", span.Transaction)
+
+	if span.Method != "" {
+		bbuf.AppendString("Method", span.Method)
+	}
+	if span.Status != 0 {
+		bbuf.AppendInt("Status", span.Status)
+	}
 
 	// add request counters
 	start := bbuf.AppendStartArray("TraceDecision")
