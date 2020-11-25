@@ -36,6 +36,8 @@ const (
 	maxConfigFileSize = 1024 * 1024
 	// the default collector url
 	defaultSSLCollector = "collector.appoptics.com:443"
+	maxTokenBucketCapacity = 8
+	maxTokenBucketRate =4
 )
 
 // The environment variables
@@ -392,14 +394,20 @@ func (c *Config) validate() error {
 
 	if valid := IsValidTokenBucketCap(c.TokenBucketCap); !valid {
 		log.Warning(InvalidEnv("TokenBucketCap", fmt.Sprintf("%f", c.TokenBucketCap)))
-		cp, _ := strconv.ParseFloat(getFieldDefaultValue(c, "TokenBucketCap"), 64)
-		c.TokenBucketCap = cp
+		if c.TokenBucketCap < 0 {
+			c.TokenBucketCap = 0;
+		} else {
+			c.TokenBucketCap = maxTokenBucketCapacity
+		}
 	}
 
 	if valid := IsValidTokenBucketRate(c.TokenBucketRate); !valid {
 		log.Warning(InvalidEnv("TokenBucketRate", fmt.Sprintf("%f", c.TokenBucketRate)))
-		rate, _ := strconv.ParseFloat(getFieldDefaultValue(c, "TokenBucketRate"), 64)
-		c.TokenBucketRate = rate
+		if c.TokenBucketRate < 0 {
+			c.TokenBucketRate = 0
+		} else {
+			c.TokenBucketRate = maxTokenBucketRate
+		}
 	}
 
 	return c.ReporterProperties.validate()
@@ -571,7 +579,7 @@ func initStruct(c interface{}) interface{} {
 			initStruct(getValPtr(cVal.Field(i)).Interface())
 		} else {
 			tagVal := getFieldDefaultValue(c, field.Name)
-			defaultVal := stringToValue(tagVal, field.Type)
+			defaultVal, _ := stringToValue(tagVal, field.Type)
 
 			resetMethod := fmt.Sprintf("%s%s", "Reset", field.Name)
 			var prefix string
