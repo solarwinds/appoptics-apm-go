@@ -385,12 +385,20 @@ func (c *Config) validate() error {
 
 	if valid := IsValidTokenBucketCap(c.TokenBucketCap); !valid {
 		log.Warning(InvalidEnv("TokenBucketCap", fmt.Sprintf("%f", c.TokenBucketCap)))
-		c.TokenBucketCap = maxTokenBucketCapacity
+		if c.TokenBucketCap < 0 {
+			c.TokenBucketCap = 0;
+		} else {
+			c.TokenBucketCap = maxTokenBucketCapacity
+		}
 	}
 
 	if valid := IsValidTokenBucketRate(c.TokenBucketRate); !valid {
 		log.Warning(InvalidEnv("TokenBucketRate", fmt.Sprintf("%f", c.TokenBucketRate)))
-		c.TokenBucketRate = maxTokenBucketRate
+		if c.TokenBucketRate < 0 {
+			c.TokenBucketRate = 0
+		} else {
+			c.TokenBucketRate = maxTokenBucketRate
+		}
 	}
 
 	return c.ReporterProperties.validate()
