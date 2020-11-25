@@ -96,12 +96,9 @@ func init() {
 
 func initReporter() {
 	var rt string
-
 	if config.GetDisabled() {
 		log.Warning("AppOptics APM agent is disabled.")
 		rt = "none"
-	} else if config.IsServerlessMode() {
-		rt = "serverless"
 	} else {
 		rt = config.GetReporterType()
 	}

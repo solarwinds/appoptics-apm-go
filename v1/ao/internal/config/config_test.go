@@ -73,7 +73,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "test.crt", filepath.Base(c.GetTrustedPath()))
 	assert.Equal(t, "hello.udp", c.GetCollectorUDP())
 	assert.Equal(t, false, c.GetDisabled())
-	assert.Equal(t, "my-transaction-name", c.GetTransactionName())
+	assert.Equal(t, "", c.GetTransactionName()) // ignore it in non-lambda mode
 }
 
 func TestConfig_HasLocalSamplingConfig(t *testing.T) {
@@ -250,7 +250,7 @@ func TestEnvsLoading(t *testing.T) {
 		RuntimeMetrics:     true,
 		TokenBucketCap:     8,
 		TokenBucketRate:    4,
-		TransactionName:    "my-transaction-name",
+		TransactionName:    "",
 		ReportQueryString:  false,
 	}
 
@@ -302,7 +302,7 @@ func TestYamlConfig(t *testing.T) {
 		RuntimeMetrics:     true,
 		TokenBucketCap:     1.1,
 		TokenBucketRate:    2.2,
-		TransactionName:    "my-transaction-name",
+		TransactionName:    "",
 		ReportQueryString:  true,
 	}
 
@@ -387,7 +387,7 @@ func TestYamlConfig(t *testing.T) {
 		RuntimeMetrics:     true,
 		TokenBucketCap:     8,
 		TokenBucketRate:    4,
-		TransactionName:    "transaction-name-from-env",
+		TransactionName:    "",
 		ReportQueryString:  false,
 	}
 
@@ -545,4 +545,27 @@ func TestTransactionFilter_UnmarshalYAML(t *testing.T) {
 			assert.Equal(t, testCase.filter, filter, fmt.Sprintf("Case #%d", idx))
 		}
 	}
+}
+
+func TestTransactionName(t *testing.T) {
+	ClearEnvs()
+
+	envs := []string{
+		"APPOPTICS_SERVICE_KEY=ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
+		"APPOPTICS_TRANSACTION_NAME=test_name",
+	}
+	SetEnvs(envs)
+	c := NewConfig()
+	assert.Equal(t, c.TransactionName, "")
+
+	ClearEnvs()
+
+	envs = []string{
+		"APPOPTICS_SERVICE_KEY=ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
+		"APPOPTICS_TRANSACTION_NAME=test_name",
+		"APPOPTICS_REPORTER=serverless",
+	}
+	SetEnvs(envs)
+	c = NewConfig()
+	assert.Equal(t, c.TransactionName, "test_name")
 }
