@@ -180,6 +180,38 @@ func SetEnvs(kvs []string) {
 	}
 }
 
+func TestTokenBucketConfigOverRange(t *testing.T) {
+	ClearEnvs()
+
+	envs := []string{
+		"APPOPTICS_SERVICE_KEY=ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
+		"APPOPTICS_TOKEN_BUCKET_CAPACITY=10",
+		"APPOPTICS_TOKEN_BUCKET_RATE=10",
+	}
+	SetEnvs(envs)
+
+	c := NewConfig()
+
+	assert.Equal(t, c.TokenBucketCap, 8.0)
+	assert.Equal(t, c.TokenBucketRate, 4.0)
+}
+
+func TestTokenBucketConfigInvalidValue(t *testing.T) {
+	ClearEnvs()
+
+	envs := []string{
+		"APPOPTICS_SERVICE_KEY=ae38315f6116585d64d82ec2455aa3ec61e02fee25d286f74ace9e4fea189217:go",
+		"APPOPTICS_TOKEN_BUCKET_CAPACITY=hello",
+		"APPOPTICS_TOKEN_BUCKET_RATE=hi",
+	}
+	SetEnvs(envs)
+
+	c := NewConfig()
+
+	assert.Equal(t, c.TokenBucketCap, 8.0)
+	assert.Equal(t, c.TokenBucketRate, 0.17)
+}
+
 func TestEnvsLoading(t *testing.T) {
 	ClearEnvs()
 
