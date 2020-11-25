@@ -55,13 +55,16 @@ func loadEnvsInternal(c interface{}) {
 				continue
 			}
 
-			setField(c, "Set", field, stringToValue(envVal, fieldV.Type()))
+			val, err := stringToValue(envVal, fieldV.Type())
+			if err == nil {
+				setField(c, "Set", field, val)
+			}
 		}
 	}
 }
 
 // stringToValue converts a string to a value of the type specified by typ.
-func stringToValue(s string, typ reflect.Type) reflect.Value {
+func stringToValue(s string, typ reflect.Type) (reflect.Value, error) {
 	s = strings.TrimSpace(s)
 
 	var val interface{}
@@ -105,7 +108,7 @@ func stringToValue(s string, typ reflect.Type) reflect.Value {
 		}
 	case reflect.Slice:
 		if s == "" {
-			return reflect.Zero(typ)
+			return reflect.Zero(typ), nil
 		} else {
 			panic(fmt.Sprintf("Slice with non-empty value is not supported"))
 		}
@@ -114,5 +117,5 @@ func stringToValue(s string, typ reflect.Type) reflect.Value {
 		panic(fmt.Sprintf("Unsupported kind: %v, val: %s", kind, s))
 	}
 	// convert to the target type as `typ` may be a user defined type
-	return reflect.ValueOf(val).Convert(typ)
+	return reflect.ValueOf(val).Convert(typ), err
 }
