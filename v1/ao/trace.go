@@ -318,7 +318,7 @@ func (t *aoTrace) finalizeTxnName(controller string, action string) {
 	// The precedence:
 	// custom transaction name > framework specific transaction naming > controller.action > 1st and 2nd segment of Path
 	customTxnName := t.aoCtx.GetTransactionName()
-	if config.IsServerlessMode() && config.GetTransactionName() != "" {
+	if config.GetTransactionName() != "" {
 		customTxnName = config.GetTransactionName()
 	}
 

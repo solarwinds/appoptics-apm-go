@@ -336,8 +336,8 @@ const (
 	may be different from your setting.`
 )
 
-// IsServerlessMode checks if the agent should run on serverless mode.
-func IsServerlessMode() bool {
+// hasLambdaEnv checks if the AWS Lambda env var is set.
+func hasLambdaEnv() bool {
 	return os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" && os.Getenv("LAMBDA_TASK_ROOT") != ""
 }
 
@@ -345,13 +345,6 @@ func (c *Config) validate() error {
 	if ok := IsValidHost(c.Collector); !ok {
 		log.Info(InvalidEnv("Collector", c.Collector))
 		c.Collector = getFieldDefaultValue(c, "Collector")
-	}
-
-	c.ServiceKey = ToServiceKey(c.ServiceKey)
-	if !IsServerlessMode() {
-		if ok := IsValidServiceKey(c.ServiceKey); !ok {
-			return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("service key: \"%s\"", c.ServiceKey))
-		}
 	}
 
 	if ok := IsValidFile(c.TrustedPath); !ok {
@@ -365,10 +358,26 @@ func (c *Config) validate() error {
 		c.Ec2MetadataTimeout = t
 	}
 
-	c.ReporterType = strings.ToLower(strings.TrimSpace(c.ReporterType))
+	if hasLambdaEnv() {
+		c.ReporterType = reporterTypeServerless
+	} else {
+		c.ReporterType = strings.ToLower(strings.TrimSpace(c.ReporterType))
+	}
 	if ok := IsValidReporterType(c.ReporterType); !ok {
 		log.Info(InvalidEnv("ReporterType", c.ReporterType))
 		c.ReporterType = getFieldDefaultValue(c, "ReporterType")
+	}
+
+	if c.TransactionName != "" && c.ReporterType != reporterTypeServerless {
+		log.Info(InvalidEnv("TransactionName", c.TransactionName))
+		c.TransactionName = getFieldDefaultValue(c, "TransactionName")
+	}
+
+	if c.ReporterType != reporterTypeServerless {
+		c.ServiceKey = ToServiceKey(c.ServiceKey)
+		if ok := IsValidServiceKey(c.ServiceKey); !ok {
+			return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("service key: \"%s\"", c.ServiceKey))
+		}
 	}
 
 	c.Sampling.validate()

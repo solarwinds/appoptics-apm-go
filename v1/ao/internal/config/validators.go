@@ -33,6 +33,13 @@ const (
 	invalidCharReplacer = ""
 )
 
+// reporter types
+const (
+	reporterTypeSSL = "ssl"
+	reporterTypeUDP = "udp"
+	reporterTypeServerless = "serverless"
+)
+
 var (
 	// IsValidServiceKey verifies if the service key is a valid one.
 	// A valid service key is something like 'service_token:service_name'.
@@ -88,7 +95,7 @@ func IsValidFile(file string) bool {
 // IsValidReporterType checks if the reporter type is valid.
 func IsValidReporterType(t string) bool {
 	t = strings.ToLower(strings.TrimSpace(t))
-	return t == "ssl" || t == "udp" || t == "serverless"
+	return t == reporterTypeSSL || t == reporterTypeUDP || t == reporterTypeServerless
 }
 
 // IsValidEc2MetadataTimeout checks if the timeout is within the designated range
