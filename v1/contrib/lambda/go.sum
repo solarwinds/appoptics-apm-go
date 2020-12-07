@@ -4,6 +4,8 @@ github.com/OneOfOne/xxhash v1.2.2 h1:KMrpdQIwFcEqXDklaen+P1axHaj9BSKzvpUUfnHldSE
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/appoptics/appoptics-apm-go v1.13.4 h1:G57a97iPfrQMWDGpPi8AUCElzf3F/D+p6XgIBNGakt8=
 github.com/appoptics/appoptics-apm-go v1.13.4/go.mod h1:sbxFpLzXXzG/a+ZU10W3W8mJo2dLw9C1PLby4dlGBLI=
+github.com/appoptics/appoptics-apm-go v1.14.0 h1:+gT3Q5m3J9A/Booqtq7H1VTQPOU7XWNVg0eBb/9D6gY=
+github.com/appoptics/appoptics-apm-go v1.14.0/go.mod h1:tcgXDiBIdXhyw+nQ2rUe41BIpNiQAZlP/eGA1t/adVg=
 github.com/aws/aws-lambda-go v1.20.0 h1:ZSweJx/Hy9BoIDXKBEh16vbHH0t0dehnF8MKpMiOWc0=
 github.com/aws/aws-lambda-go v1.20.0/go.mod h1:jJmlefzPfGnckuHdXX7/80O3BvUUi12XOkbv4w9SGLU=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
