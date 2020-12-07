@@ -352,7 +352,7 @@ const (
 
 // error classes
 const (
-	ErrClassHTTPError = "HTTP Error"
+	ErrClassHTTPError = "http error"
 	ErrClassError = "error"
 )
 
