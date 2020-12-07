@@ -72,7 +72,7 @@ func TestTokenBucket(t *testing.T) {
 			perConsumerRate := newTokenBucket(15, 1)
 			for i := 0; i < iters; i++ {
 				sampled := perConsumerRate.consume(1)
-				ok := b.count(sampled, i%2 == 0, true)
+				ok := b.count(sampled, false, true)
 				if ok {
 					// t.Logf("### OK   id %02d now %v last %v tokens %v", id, time.Now(), b.last, b.available)
 					atomic.AddInt64(&allowed, 1)
@@ -93,8 +93,8 @@ func TestTokenBucket(t *testing.T) {
 		(allowed == 19 && dropped == 481 && c.Limited() == 231 && c.Traced() == 19) ||
 		(allowed == 18 && dropped == 482 && c.Limited() == 232 && c.Traced() == 18))
 	assert.Equal(t, int64(500), c.Requested())
-	assert.Equal(t, int64(250), c.Sampled())
-	assert.Equal(t, int64(250), c.Through())
+	assert.Equal(t, int64(500), c.Sampled())
+	assert.Equal(t, int64(0), c.Through())
 }
 
 func TestTokenBucketTime(t *testing.T) {
@@ -246,7 +246,7 @@ func TestSampleFlags(t *testing.T) {
 	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.False(t, ok)
-	assert.EqualValues(t, 1, c.Through())
+	assert.EqualValues(t, 0, c.Through())
 
 	resetSettings()
 	updateSetting(int32(TYPE_DEFAULT), "",
@@ -261,7 +261,7 @@ func TestSampleFlags(t *testing.T) {
 	assert.EqualValues(t, 0, c.Through())
 	ok, _, _, _ = shouldTraceRequest(testLayer, true)
 	assert.False(t, ok)
-	assert.EqualValues(t, 1, c.Through())
+	assert.EqualValues(t, 0, c.Through())
 
 	// Transaction filtering
 	urls.loadConfig([]config.TransactionFilter{
