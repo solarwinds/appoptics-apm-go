@@ -434,7 +434,7 @@ func TestInvokeRPC(t *testing.T) {
 		client:      nil,
 		connection:  nil,
 		address:     "test-addr",
-		certificate: []byte(grpcCertDefault),
+		certificate: nil,
 		queueStats:  &metrics.EventQueueStats{},
 		backoff: func(retries int, wait func(d time.Duration)) error {
 			if retries > grpcMaxRetries {

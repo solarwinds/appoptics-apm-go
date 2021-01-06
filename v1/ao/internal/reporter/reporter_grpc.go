@@ -41,33 +41,6 @@ import (
 const (
 	grpcReporterVersion = "2"
 
-	// default certificate used to verify the collector endpoint,
-	// can be overridden via APPOPTICS_TRUSTEDPATH
-	grpcCertDefault = `-----BEGIN CERTIFICATE-----
-MIID8TCCAtmgAwIBAgIJAMoDz7Npas2/MA0GCSqGSIb3DQEBCwUAMIGOMQswCQYD
-VQQGEwJVUzETMBEGA1UECAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNU2FuIEZyYW5j
-aXNjbzEVMBMGA1UECgwMTGlicmF0byBJbmMuMRUwEwYDVQQDDAxBcHBPcHRpY3Mg
-Q0ExJDAiBgkqhkiG9w0BCQEWFXN1cHBvcnRAYXBwb3B0aWNzLmNvbTAeFw0xNzA5
-MTUyMjAxMzlaFw0yNzA5MTMyMjAxMzlaMIGOMQswCQYDVQQGEwJVUzETMBEGA1UE
-CAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNU2FuIEZyYW5jaXNjbzEVMBMGA1UECgwM
-TGlicmF0byBJbmMuMRUwEwYDVQQDDAxBcHBPcHRpY3MgQ0ExJDAiBgkqhkiG9w0B
-CQEWFXN1cHBvcnRAYXBwb3B0aWNzLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEP
-ADCCAQoCggEBAOxO0wsGba3iI4r3L5BMST0rAO/gGaUhpQre6nRwVTmPCnLw1bmn
-GdiFgYv/oRRwU+VieumHSQqoOmyFrg+ajGmvUDp2WqQ0It+XhcbaHFiAp2H7+mLf
-cUH6S43/em0WUxZHeRzRupRDyO1bX6Hh2jgxykivlFrn5HCIQD5Hx1/SaZoW9v2n
-oATCbgFOiPW6kU/AVs4R0VBujon13HCehVelNKkazrAEBT1i6RvdOB6aQQ32seW+
-gLV5yVWSPEJvA9ZJqad/nQ8EQUMSSlVN191WOjp4bGpkJE1svs7NmM+Oja50W56l
-qOH5eWermr/8qWjdPlDJ+I0VkgN0UyHVuRECAwEAAaNQME4wHQYDVR0OBBYEFOuL
-KDTFhRQXwlBRxhPqhukrNYeRMB8GA1UdIwQYMBaAFOuLKDTFhRQXwlBRxhPqhukr
-NYeRMAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAJQtH446NZhjusy6
-iCyvmnD95ybfNPDpjHmNx5n9Y6w9n+9y1o3732HUJE+WjvbLS3h1o7wujGKMcRJn
-7I7eTDd26ZhLvnh5/AitYjdxrtUkQDgyxwLFJKhZu0ik2vXqj0fL961/quJL8Gyp
-hNj3Nf7WMohQMSohEmCCX2sHyZGVGYmQHs5omAtkH/NNySqmsWNcpgd3M0aPDRBZ
-5VFreOSGKBTJnoLNqods/S9RV0by84hm3j6aQ/tMDIVE9VCJtrE6evzC0MWyVFwR
-ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
-7tsqAxw=
------END CERTIFICATE-----`
-
 	// These are hard-coded parameters for the gRPC reporter. Any of them become
 	// configurable in future versions will be moved to package config.
 	// TODO: use time.Time
@@ -173,7 +146,7 @@ func newGrpcConnection(name string, target string, opts ...GrpcConnOpt) (*grpcCo
 		client:      nil,
 		connection:  nil,
 		address:     target,
-		certificate: []byte(grpcCertDefault),
+		certificate: nil,
 		queueStats:  &metrics.EventQueueStats{},
 		backoff:     DefaultBackoff,
 		Dialer:      &DefaultDialer{},
@@ -1124,9 +1097,9 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			// gRPC handles the reconnection automatically.
 			failsNum++
 			if failsNum == grpcRetryLogThreshold {
-				log.Warningf("[%s] invocation error: %v.", m, err)
+				log.Warningf("[%s] invocation error: %v. addr=%v", m, err, c.address)
 			} else {
-				log.Debugf("[%s] (%v) invocation error: %v.", m, failsNum, err)
+				log.Debugf("[%s] (%v) invocation error: %v. addr=%v", m, failsNum, err, c.address)
 			}
 		} else {
 			if failsNum >= grpcRetryLogThreshold {
@@ -1260,10 +1233,14 @@ type DefaultDialer struct{}
 // Dial issues the connection to the remote address with attributes provided by
 // the grpcConnection.
 func (d *DefaultDialer) Dial(p DialParams) (*grpc.ClientConn, error) {
-	certPool := x509.NewCertPool()
+	var certPool *x509.CertPool
+	// cert override
+	if p.Certificate != nil {
+		certPool = x509.NewCertPool()
 
-	if ok := certPool.AppendCertsFromPEM(p.Certificate); !ok {
-		return nil, errors.New("unable to append the certificate to pool")
+		if ok := certPool.AppendCertsFromPEM(p.Certificate); !ok {
+			return nil, errors.New("unable to append the certificate to pool")
+		}
 	}
 
 	// trim port from server name used for TLS verification
