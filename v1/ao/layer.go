@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
@@ -75,7 +76,7 @@ type Span interface {
 	// End ends a Span, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
 
-	EndWithTime(end time.Time, args  ...interface{})
+	EndWithTime(end time.Time, args ...interface{})
 
 	// AddEndArgs adds additional KV pairs that will be serialized (and
 	// dereferenced, for pointer values) at the end of this trace's span.
@@ -243,6 +244,10 @@ func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profil
 	return s.BeginSpan(profileName, args)
 }
 
+func (s *span) EndWithTime(end time.Time, args ...interface{}) {
+	s.End(args)
+}
+
 // End a profiled block or method.
 func (s *span) End(args ...interface{}) {
 	if s.ok() {
@@ -386,7 +391,7 @@ func (s nullSpan) BeginSpanWithOptions(spanName string, opts SpanOptions, args .
 }
 func (s nullSpan) BeginProfile(name string, args ...interface{}) Profile { return nullSpan{} }
 func (s nullSpan) End(args ...interface{})                               {}
-func (s nullSpan) EndWithTime(end time.Time, args ...interface{})		 {}
+func (s nullSpan) EndWithTime(end time.Time, args ...interface{})        {}
 func (s nullSpan) AddEndArgs(args ...interface{})                        {}
 func (s nullSpan) Error(class, msg string)                               {}
 func (s nullSpan) Err(err error)                                         {}
