@@ -87,7 +87,7 @@ type ContextOptions = reporter.ContextOptions
 type traceHTTPSpan struct {
 	span       metrics.HTTPSpanMessage
 	start      time.Time
-	end		   time.Time
+	end        *time.Time
 	controller string
 	action     string
 }
@@ -181,9 +181,9 @@ func (t *aoTrace) End(args ...interface{}) {
 	t.EndWithTime(nil, args)
 }
 
-func (t *aoTrace) EndWithTime(end time.Time, args ...interface{}) {
+func (t *aoTrace) EndWithTime(end *time.Time, args ...interface{}) {
 	if t.ok() {
-		if (end != nil) {
+		if end != nil {
 			t.SetEndTime(end)
 		}
 		t.AddEndArgs(args...)
@@ -212,7 +212,7 @@ func (t *aoTrace) SetStartTime(start time.Time) {
 	t.httpSpan.start = start
 }
 
-func (t *aoTrace) SetEndTime(end time.Time) {
+func (t *aoTrace) SetEndTime(end *time.Time) {
 	t.httpSpan.end = end
 }
 
@@ -251,9 +251,11 @@ func (t *aoTrace) reportExit() {
 
 		// record a new span
 		if !t.httpSpan.start.IsZero() && t.aoCtx.GetEnabled() {
-			end := t.httpSpan.end
-			if (end == nil) {
+			var end time.Time
+			if t.httpSpan.end == nil {
 				end = time.Now()
+			} else {
+				end = *(t.httpSpan.end)
 			}
 			t.httpSpan.span.Duration = end.Sub(t.httpSpan.start)
 			t.recordHTTPSpan()
