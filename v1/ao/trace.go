@@ -178,14 +178,16 @@ func GetTransactionName(ctx context.Context) string {
 // End reports the exit event for the span name that was used when calling NewTrace().
 // No more events should be reported from this trace.
 func (t *aoTrace) End(args ...interface{}) {
-	t.EndWithTime(nil, args)
+	if t.ok() {
+		t.AddEndArgs(args...)
+		t.reportExit()
+		flushAgent()
+	}
 }
 
-func (t *aoTrace) EndWithTime(end *time.Time, args ...interface{}) {
+func (t *aoTrace) EndWithTime(end time.Time, args ...interface{}) {
 	if t.ok() {
-		if end != nil {
-			t.SetEndTime(end)
-		}
+		t.SetEndTime(&end)
 		t.AddEndArgs(args...)
 		t.reportExit()
 		flushAgent()
