@@ -87,6 +87,7 @@ type ContextOptions = reporter.ContextOptions
 type traceHTTPSpan struct {
 	span       metrics.HTTPSpanMessage
 	start      time.Time
+	end		   time.Time
 	controller string
 	action     string
 }
@@ -177,7 +178,14 @@ func GetTransactionName(ctx context.Context) string {
 // End reports the exit event for the span name that was used when calling NewTrace().
 // No more events should be reported from this trace.
 func (t *aoTrace) End(args ...interface{}) {
+	t.EndWithTime(nil, args)
+}
+
+func (t *aoTrace) EndWithTime(end time.Time, args ...interface{}) {
 	if t.ok() {
+		if (end != nil) {
+			t.SetEndTime(end)
+		}
 		t.AddEndArgs(args...)
 		t.reportExit()
 		flushAgent()
@@ -202,6 +210,10 @@ func (t *aoTrace) EndCallback(cb func() KVMap) {
 // SetStartTime sets the start time of a trace
 func (t *aoTrace) SetStartTime(start time.Time) {
 	t.httpSpan.start = start
+}
+
+func (t *aoTrace) SetEndTime(end time.Time) {
+	t.httpSpan.end = end
 }
 
 // SetMethod sets the request's HTTP method, if any
@@ -239,7 +251,11 @@ func (t *aoTrace) reportExit() {
 
 		// record a new span
 		if !t.httpSpan.start.IsZero() && t.aoCtx.GetEnabled() {
-			t.httpSpan.span.Duration = time.Now().Sub(t.httpSpan.start)
+			end := t.httpSpan.end
+			if (end == nil) {
+				end = time.Now()
+			}
+			t.httpSpan.span.Duration = end.Sub(t.httpSpan.start)
 			t.recordHTTPSpan()
 		}
 

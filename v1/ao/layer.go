@@ -74,6 +74,9 @@ type Span interface {
 	BeginProfile(profileName string, args ...interface{}) Profile
 	// End ends a Span, optionally reporting KV pairs provided by args.
 	End(args ...interface{})
+
+	EndWithTime(end time.Time, args  ...interface{})
+
 	// AddEndArgs adds additional KV pairs that will be serialized (and
 	// dereferenced, for pointer values) at the end of this trace's span.
 	AddEndArgs(args ...interface{})
@@ -84,8 +87,6 @@ type Span interface {
 	// InfoWithOptions reports a new info event with the KVs and options provided
 	InfoWithOptions(opts SpanOptions, args ...interface{})
 
-	// ErrorWithOpts reports an error with customized options
-	ErrorWithOpts(opts... ErrOpt)
 	// Error reports details about an error (along with a stack trace) for this Span.
 	Error(class, msg string)
 	// Err reports details about error err (along with a stack trace) for this Span.
@@ -343,84 +344,16 @@ func (s *span) GetTransactionName() string {
 	return s.aoCtx.GetTransactionName()
 }
 
-type ErrType string
-
-const (
-	ErrTypeException = "exception"
-	ErrTypeStatus = "status"
-)
-
-// error classes
-const (
-	ErrClassHTTPError = "http error"
-	ErrClassError = "error"
-)
-
-type ErrOpts struct {
-	Type ErrType
-	Class string
-	Msg string
-	WithBackTrace bool
-}
-
-type ErrOpt func(*ErrOpts)
-
-func WithErrType(tp ErrType) ErrOpt {
-	return func(opts *ErrOpts) {
-		opts.Type = tp
-	}
-}
-
-func WithErrClass(c string) ErrOpt {
-	return func(opts *ErrOpts) {
-		opts.Class = c
-	}
-}
-
-func WithErrMsg(msg string) ErrOpt {
-	return func (opts *ErrOpts) {
-		opts.Msg = msg
-	}
-}
-
-func WithErrBackTrace(withBackTrace bool) ErrOpt {
-	return func(opts *ErrOpts) {
-		opts.WithBackTrace = withBackTrace
-	}
-}
-
-func (s *span) ErrorWithOpts(opts... ErrOpt) {
-	errOpts := &ErrOpts{
-		Type: "exception",
-		Class: "error",
-	}
-
-	for _, opt := range opts {
-		opt(errOpts)
-	}
-
-	var backTrace string
-	if errOpts.WithBackTrace {
-		backTrace = string(debug.Stack())
-	}
-
-	if errOpts.Type == ErrTypeStatus {
-		errOpts.Class = ErrClassHTTPError
-	}
-	
+// Error reports an error, distinguished by its class and message
+func (s *span) Error(class, msg string) {
 	if s.ok() {
 		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
 			keySpec, "error",
-			keyErrorType, errOpts.Type,
-			keyErrorClass, errOpts.Class,
-			keyErrorMsg, errOpts.Msg,
-			KeyBackTrace, backTrace)
+			keyErrorType, "exception",
+			keyErrorClass, class,
+			keyErrorMsg, msg,
+			KeyBackTrace, string(debug.Stack()))
 	}
-}
-
-// Error reports an error, distinguished by its class and message
-func (s *span) Error(class, msg string) {
-	s.ErrorWithOpts(WithErrType(ErrTypeException), WithErrClass(class), WithErrMsg(msg), WithErrBackTrace(true))
 }
 
 // Err reports the provided error type
@@ -453,9 +386,9 @@ func (s nullSpan) BeginSpanWithOptions(spanName string, opts SpanOptions, args .
 }
 func (s nullSpan) BeginProfile(name string, args ...interface{}) Profile { return nullSpan{} }
 func (s nullSpan) End(args ...interface{})                               {}
+func (s nullSpan) EndWithTime(end time.Time, args ...interface{})		 {}
 func (s nullSpan) AddEndArgs(args ...interface{})                        {}
 func (s nullSpan) Error(class, msg string)                               {}
-func (s nullSpan) ErrorWithOpts(opts... ErrOpt) {}
 func (s nullSpan) Err(err error)                                         {}
 func (s nullSpan) Info(args ...interface{})                              {}
 func (s nullSpan) InfoWithOptions(opts SpanOptions, args ...interface{}) {}
