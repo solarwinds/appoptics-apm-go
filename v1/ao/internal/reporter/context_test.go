@@ -328,3 +328,8 @@ func TestParseTriggerTraceFlag(t *testing.T) {
 	assert.EqualValues(t, ModeInvalidTriggerTrace, mode)
 	assert.NotNil(t, err)
 }
+
+func TestAllZeroTaskID(t *testing.T) {
+	var md oboeMetadata
+	assert.EqualValues(t, errInvalidTaskID, md.FromString("2B0000000000000000000000000000000000000000AB2198D447EA220300"))
+}

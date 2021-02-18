@@ -3,6 +3,7 @@
 package reporter
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
@@ -40,8 +41,21 @@ const HTTPHeaderXTraceOptions = "X-Trace-Options"
 const HTTPHeaderXTraceOptionsSignature = "X-Trace-Options-Signature"
 const HTTPHeaderXTraceOptionsResponse = "X-Trace-Options-Response"
 
+var (
+	errInvalidTaskID = errors.New("invalid task id")
+)
+
 // orchestras tune to the oboe.
 type oboeIDs struct{ taskID, opID []byte }
+
+func (ids oboeIDs) validate() error {
+	allZeroTaskID := make([]byte, oboeMaxTaskIDLen)
+	if bytes.Compare(allZeroTaskID, ids.taskID) != 0 {
+		return nil
+	} else {
+		return errInvalidTaskID
+	}
+}
 
 type oboeMetadata struct {
 	version uint8
@@ -250,7 +264,11 @@ func (md *oboeMetadata) FromString(buf string) error {
 		return errors.New("md.FromString: hex not valid")
 	}
 	ubuf = ubuf[:ret] // truncate buffer to fit decoded bytes
-	return md.Unpack(ubuf)
+	err = md.Unpack(ubuf)
+	if err != nil {
+		return err
+	}
+	return md.ids.validate()
 }
 
 func (md *oboeMetadata) ToString() (string, error) {
