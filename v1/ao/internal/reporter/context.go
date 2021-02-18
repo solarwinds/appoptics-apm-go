@@ -45,11 +45,13 @@ var (
 	errInvalidTaskID = errors.New("invalid task id")
 )
 
+// All-zero slice to validate the task ID, do not modify it
+var allZeroTaskID = make([]byte, oboeMaxTaskIDLen)
+
 // orchestras tune to the oboe.
 type oboeIDs struct{ taskID, opID []byte }
 
 func (ids oboeIDs) validate() error {
-	allZeroTaskID := make([]byte, oboeMaxTaskIDLen)
 	if bytes.Compare(allZeroTaskID, ids.taskID) != 0 {
 		return nil
 	} else {
