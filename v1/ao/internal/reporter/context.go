@@ -9,6 +9,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -124,11 +125,29 @@ func (md *oboeMetadata) SetRandom() error {
 	if md == nil {
 		return errors.New("md.SetRandom: nil md")
 	}
-	_, err := randReader.Read(md.ids.taskID)
-	if err != nil {
+
+	if err := md.SetRandomTaskID(randReader); err != nil {
 		return err
 	}
-	_, err = randReader.Read(md.ids.opID)
+	return md.SetRandomOpID()
+}
+
+// SetRandomTaskID randomize the task ID. It will retry if the random reader returns
+// an error or produced task ID is all-zero, which rarely happens though.
+func (md *oboeMetadata) SetRandomTaskID(rand io.Reader) (err error) {
+	retried := 0
+	for retried < 2 {
+		if _, err = rand.Read(md.ids.taskID); err != nil {
+			break
+		}
+
+		if err = md.ids.validate(); err != nil {
+			retried++
+			continue
+		}
+		break
+	}
+
 	return err
 }
 
