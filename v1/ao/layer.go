@@ -260,7 +260,7 @@ func (s *span) EndWithTime(end time.Time, args ...interface{}) {
 		for _, edge := range s.childEdges { // add Edge KV for each joined child
 			args = append(args, keyEdge, edge)
 		}
-		_ = s.aoCtx.ReportEventWithTs(s.exitLabel(), s.layerName(), &end, args...)
+		_ = s.aoCtx.ReportEventWithTs(s.exitLabel(), s.layerName(), end, args...)
 		s.childEdges = nil // clear child edge list
 		s.endArgs = nil
 		s.ended = true

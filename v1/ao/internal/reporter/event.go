@@ -18,7 +18,7 @@ import (
 
 type event struct {
 	metadata   oboeMetadata
-	explicitTs *time.Time
+	explicitTs time.Time
 	bbuf       *bson.Buffer
 }
 
@@ -365,7 +365,7 @@ func (e *event) ReportStatus(c *oboeContext) error { return e.ReportUsing(c, glo
 // Report event using Context interface
 func (e *event) ReportContext(c Context, addCtxEdge bool, args ...interface{}) error {
 	if ctx, ok := c.(*oboeContext); ok {
-		return ctx.report(e, addCtxEdge, nil, args...)
+		return ctx.report(e, addCtxEdge, time.Time{}, args...)
 	}
 	return nil
 }

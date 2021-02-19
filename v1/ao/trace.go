@@ -87,7 +87,7 @@ type ContextOptions = reporter.ContextOptions
 type traceHTTPSpan struct {
 	span       metrics.HTTPSpanMessage
 	start      time.Time
-	end        *time.Time
+	end        time.Time
 	controller string
 	action     string
 }
@@ -148,17 +148,17 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
-	return NewTraceFromIDWithTs(spanName, mdStr, nil, cb)
+	return NewTraceFromIDWithTs(spanName, mdStr, time.Time{}, cb)
 }
 
-func NewTraceFromIDWithTs(spanName, mdStr string, explicitTs *time.Time, cb func() KVMap) Trace {
+func NewTraceFromIDWithTs(spanName, mdStr string, explicitTs time.Time, cb func() KVMap) Trace {
 	return NewTraceFromIDForURL(spanName, mdStr, "", explicitTs, cb)
 }
 
 // NewTraceFromIDForURL creates a new Trace for the provided URL to report to AppOptics,
 // provided an incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
-func NewTraceFromIDForURL(spanName, mdStr string, url string, explicitTs *time.Time, cb func() KVMap) Trace {
+func NewTraceFromIDForURL(spanName, mdStr string, url string, explicitTs time.Time, cb func() KVMap) Trace {
 	return NewTraceWithOptions(spanName, SpanOptions{
 		WithBackTrace: false,
 		ContextOptions: ContextOptions{
@@ -192,7 +192,7 @@ func (t *aoTrace) End(args ...interface{}) {
 
 func (t *aoTrace) EndWithTime(end time.Time, args ...interface{}) {
 	if t.ok() {
-		t.SetEndTime(&end)
+		t.SetEndTime(end)
 		t.AddEndArgs(args...)
 		t.reportExit()
 		flushAgent()
@@ -219,7 +219,7 @@ func (t *aoTrace) SetStartTime(start time.Time) {
 	t.httpSpan.start = start
 }
 
-func (t *aoTrace) SetEndTime(end *time.Time) {
+func (t *aoTrace) SetEndTime(end time.Time) {
 	t.httpSpan.end = end
 }
 
@@ -259,10 +259,10 @@ func (t *aoTrace) reportExit() {
 		// record a new span
 		if !t.httpSpan.start.IsZero() && t.aoCtx.GetEnabled() {
 			var end time.Time
-			if t.httpSpan.end == nil {
+			if t.httpSpan.end.IsZero() {
 				end = time.Now()
 			} else {
-				end = *(t.httpSpan.end)
+				end = t.httpSpan.end
 			}
 			t.httpSpan.span.Duration = end.Sub(t.httpSpan.start)
 			t.recordHTTPSpan()

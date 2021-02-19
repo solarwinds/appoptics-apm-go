@@ -178,10 +178,10 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	}
 
 	var us int64
-	if e.explicitTs != nil {
-		us = (*e.explicitTs).UnixNano() / 1000
-	} else {
+	if e.explicitTs.IsZero() {
 		us = time.Now().UnixNano() / 1000
+	} else {
+		us = e.explicitTs.UnixNano() / 1000
 	}
 
 	e.AddInt64("Timestamp_u", us)
