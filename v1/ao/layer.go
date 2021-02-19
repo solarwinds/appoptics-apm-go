@@ -244,12 +244,12 @@ func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profil
 	return s.BeginSpan(profileName, args)
 }
 
-func (s *span) EndWithTime(end time.Time, args ...interface{}) {
-	s.End(args)
+func (s *span) End(args ...interface{}) {
+	s.End(nil, args)
 }
 
 // End a profiled block or method.
-func (s *span) End(args ...interface{}) {
+func (s *span) EndWithTime(end time.Time, args ...interface{}) {
 	if s.ok() {
 		s.lock.Lock()
 		defer s.lock.Unlock()
@@ -260,7 +260,7 @@ func (s *span) End(args ...interface{}) {
 		for _, edge := range s.childEdges { // add Edge KV for each joined child
 			args = append(args, keyEdge, edge)
 		}
-		_ = s.aoCtx.ReportEvent(s.exitLabel(), s.layerName(), args...)
+		_ = s.aoCtx.ReportEventWithTs(s.exitLabel(), s.layerName(), &end, args...)
 		s.childEdges = nil // clear child edge list
 		s.endArgs = nil
 		s.ended = true

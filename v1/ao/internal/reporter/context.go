@@ -73,10 +73,12 @@ type ContextOptions struct {
 	URL string
 	// XTraceOptions represents the X-Trace-Options header.
 	XTraceOptions string
+	// CB is the callback function to produce the KVs.
 	// XTraceOptionsSignature represents the X-Trace-Options-Signature header.
 	XTraceOptionsSignature string
-	// CB is the callback function to produce the KVs.
-	CB func() KVMap
+
+	ExplicitTs *time.Time
+	CB         func() KVMap
 }
 
 // ValidMetadata checks if a metadata string is valid.
@@ -281,6 +283,7 @@ func (md *oboeMetadata) isSampled() bool {
 // A Context is an oboe context that may or not be tracing.
 type Context interface {
 	ReportEvent(label Label, layer string, args ...interface{}) error
+	ReportEventWithTs(label Label, layer string, ts *time.Time, args ...interface{}) error
 	ReportEventMap(label Label, layer string, keys map[string]interface{}) error
 	Copy() Context
 	IsSampled() bool
@@ -307,6 +310,11 @@ type nullEvent struct{}
 func (e *nullContext) ReportEvent(label Label, layer string, args ...interface{}) error {
 	return nil
 }
+
+func (e *nullContext) ReportEventWithTs(label Label, layer string, explicitTs *time.Time, args ...interface{}) error {
+	return nil
+}
+
 func (e *nullContext) ReportEventMap(label Label, layer string, keys map[string]interface{}) error {
 	return nil
 }
@@ -602,7 +610,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			if _, ok = ctx.(*oboeContext); !ok {
 				return &nullContext{}, false, headers
 			}
-			if err := ctx.(*oboeContext).reportEventMap(LabelEntry, layer, addCtxEdge, kvs); err != nil {
+			if err := ctx.(*oboeContext).reportEventMapWithTs(LabelEntry, layer, addCtxEdge, opts.ExplicitTs, kvs); err != nil {
 				return &nullContext{}, false, headers
 			}
 		}
@@ -679,32 +687,46 @@ func (ctx *oboeContext) ReportEventMap(label Label, layer string, keys map[strin
 	return ctx.reportEventMap(label, layer, true, keys)
 }
 
-func (ctx *oboeContext) reportEventMap(label Label, layer string, addCtxEdge bool, keys map[string]interface{}) error {
+func (ctx *oboeContext) reportEventMapWithTs(label Label, layer string, addCtxEdge bool, explicitTs *time.Time, keys map[string]interface{}) error {
 	var args []interface{}
 	for k, v := range keys {
 		args = append(args, k)
 		args = append(args, v)
 	}
-	return ctx.reportEvent(label, layer, addCtxEdge, args...)
+	return ctx.reportEventWithTs(label, layer, addCtxEdge, explicitTs, args...)
+}
+
+func (ctx *oboeContext) reportEventMap(label Label, layer string, addCtxEdge bool, keys map[string]interface{}) error {
+	return ctx.reportEventMapWithTs(label, layer, addCtxEdge, nil, keys)
 }
 
 // Create and report an event using KVs from variadic args
 func (ctx *oboeContext) ReportEvent(label Label, layer string, args ...interface{}) error {
-	return ctx.reportEvent(label, layer, true, args...)
+	return ctx.reportEventWithTs(label, layer, true, nil, args...)
+}
+
+func (ctx *oboeContext) ReportEventWithTs(label Label, layer string, explicitTs *time.Time, args ...interface{}) error {
+	return ctx.reportEventWithTs(label, layer, true, explicitTs, args...)
+}
+
+func (ctx *oboeContext) reportEvent(label Label, layer string, addCtxEdge bool, args ...interface{}) error {
+	return ctx.reportEventWithTs(label, layer, addCtxEdge, nil, args)
 }
 
 // Create and report an event using KVs from variadic args
-func (ctx *oboeContext) reportEvent(label Label, layer string, addCtxEdge bool, args ...interface{}) error {
+func (ctx *oboeContext) reportEventWithTs(label Label, layer string, addCtxEdge bool, explicitTs *time.Time, args ...interface{}) error {
 	// create new event from context
 	e, err := ctx.newEvent(label, layer)
 	if err != nil { // error creating event (e.g. couldn't init random IDs)
 		return err
 	}
-	return ctx.report(e, addCtxEdge, args...)
+	fmt.Printf("Reporting!!! event %+v label %v layer %v args %v\n", e, label, layer, args)
+	e.explicitTs = explicitTs
+	return ctx.report(e, addCtxEdge, explicitTs, args...)
 }
 
 // report an event using KVs from variadic args
-func (ctx *oboeContext) report(e *event, addCtxEdge bool, args ...interface{}) error {
+func (ctx *oboeContext) report(e *event, addCtxEdge bool, explicitTs *time.Time, args ...interface{}) error {
 	for i := 0; i+1 < len(args); i += 2 {
 		if err := e.AddKV(args[i], args[i+1]); err != nil {
 			return err
@@ -713,6 +735,7 @@ func (ctx *oboeContext) report(e *event, addCtxEdge bool, args ...interface{}) e
 	if addCtxEdge {
 		e.AddEdge(ctx)
 	}
+	e.explicitTs = explicitTs
 	// report event
 	return e.Report(ctx)
 }

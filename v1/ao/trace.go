@@ -148,19 +148,24 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
-	return NewTraceFromIDForURL(spanName, mdStr, "", cb)
+	return NewTraceFromIDWithTs(spanName, mdStr, nil, cb)
+}
+
+func NewTraceFromIDWithTs(spanName, mdStr string, explicitTs *time.Time, cb func() KVMap) Trace {
+	return NewTraceFromIDForURL(spanName, mdStr, "", explicitTs, cb)
 }
 
 // NewTraceFromIDForURL creates a new Trace for the provided URL to report to AppOptics,
 // provided an incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
-func NewTraceFromIDForURL(spanName, mdStr string, url string, cb func() KVMap) Trace {
+func NewTraceFromIDForURL(spanName, mdStr string, url string, explicitTs *time.Time, cb func() KVMap) Trace {
 	return NewTraceWithOptions(spanName, SpanOptions{
 		WithBackTrace: false,
 		ContextOptions: ContextOptions{
-			MdStr: mdStr,
-			URL:   url,
-			CB:    cb,
+			MdStr:      mdStr,
+			URL:        url,
+			ExplicitTs: explicitTs,
+			CB:         cb,
 		},
 	})
 }
@@ -269,7 +274,7 @@ func (t *aoTrace) reportExit() {
 		if t.exitEvent != nil { // use exit event, if one was provided
 			t.exitEvent.ReportContext(t.aoCtx, true, t.endArgs...)
 		} else {
-			t.aoCtx.ReportEvent(reporter.LabelExit, t.layerName(), t.endArgs...)
+			t.aoCtx.ReportEventWithTs(reporter.LabelExit, t.layerName(), t.httpSpan.end, t.endArgs...)
 		}
 
 		t.childEdges = nil // clear child edge list
