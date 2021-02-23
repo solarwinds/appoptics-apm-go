@@ -74,6 +74,11 @@ type Trace interface {
 	SetHTTPRspHeaders(map[string]string)
 }
 
+type Overrides struct {
+	ExplicitTS    time.Time
+	ExplicitMdStr string
+}
+
 // KVMap is a map of additional key-value pairs to report along with the event data provided
 // to AppOptics. Certain key names (such as "Query" or "RemoteHost") are used by AppOptics to
 // provide details about program activity and distinguish between different types of spans.
@@ -97,6 +102,7 @@ type aoTrace struct {
 	exitEvent      reporter.Event
 	httpSpan       traceHTTPSpan
 	httpRspHeaders map[string]string
+	overrides      Overrides
 }
 
 func (t *aoTrace) aoContext() reporter.Context { return t.aoCtx }
@@ -148,24 +154,27 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
-	return NewTraceFromIDWithTs(spanName, mdStr, time.Time{}, cb)
+	return NewTraceFromIDForURL(spanName, mdStr, "", Overrides{}, cb)
 }
 
-func NewTraceFromIDWithTs(spanName, mdStr string, explicitTs time.Time, cb func() KVMap) Trace {
-	return NewTraceFromIDForURL(spanName, mdStr, "", explicitTs, cb)
+func NewTraceWithOverrides(spanName string, overrides Overrides, cb func() KVMap) Trace {
+	return NewTraceFromIDForURL(spanName, "", "", overrides, cb)
 }
 
 // NewTraceFromIDForURL creates a new Trace for the provided URL to report to AppOptics,
 // provided an incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
-func NewTraceFromIDForURL(spanName, mdStr string, url string, explicitTs time.Time, cb func() KVMap) Trace {
+func NewTraceFromIDForURL(spanName, mdStr string, url string, overrides Overrides, cb func() KVMap) Trace {
 	return NewTraceWithOptions(spanName, SpanOptions{
 		WithBackTrace: false,
 		ContextOptions: ContextOptions{
-			MdStr:      mdStr,
-			URL:        url,
-			ExplicitTs: explicitTs,
-			CB:         cb,
+			MdStr: mdStr,
+			URL:   url,
+			Overrides: reporter.Overrides{
+				ExplicitTS:    overrides.ExplicitTS,
+				ExplicitMdStr: overrides.ExplicitMdStr,
+			},
+			CB: cb,
 		},
 	})
 }
@@ -190,9 +199,9 @@ func (t *aoTrace) End(args ...interface{}) {
 	}
 }
 
-func (t *aoTrace) EndWithTime(end time.Time, args ...interface{}) {
+func (t *aoTrace) EndWithOverrides(overrides Overrides, args ...interface{}) {
 	if t.ok() {
-		t.SetEndTime(end)
+		t.overrides = overrides
 		t.AddEndArgs(args...)
 		t.reportExit()
 		flushAgent()
@@ -274,7 +283,10 @@ func (t *aoTrace) reportExit() {
 		if t.exitEvent != nil { // use exit event, if one was provided
 			t.exitEvent.ReportContext(t.aoCtx, true, t.endArgs...)
 		} else {
-			t.aoCtx.ReportEventWithTs(reporter.LabelExit, t.layerName(), t.httpSpan.end, t.endArgs...)
+			t.aoCtx.ReportEventWithOverrides(reporter.LabelExit, t.layerName(), reporter.Overrides{
+				ExplicitTS:    t.overrides.ExplicitTS,
+				ExplicitMdStr: t.overrides.ExplicitMdStr,
+			}, t.endArgs...)
 		}
 
 		t.childEdges = nil // clear child edge list

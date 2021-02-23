@@ -167,21 +167,25 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 		return errors.New("invalid context, event")
 	}
 
-	// The context metadata must have the same task_id as the event.
-	if !bytes.Equal(ctx.metadata.ids.taskID, e.metadata.ids.taskID) {
-		return errors.New("invalid event, different task_id from context")
-	}
+	if e.overrides.ExplicitMdStr == "" { //if it has a overrides, then do not validate
+		// The context metadata must have the same task_id as the event.
+		if !bytes.Equal(ctx.metadata.ids.taskID, e.metadata.ids.taskID) {
+			return errors.New("invalid event, different task_id from context")
+		}
 
-	// The context metadata must have a different op_id than the event.
-	if bytes.Equal(ctx.metadata.ids.opID, e.metadata.ids.opID) {
-		return errors.New("invalid event, same as context")
+		// The context metadata must have a different op_id than the event.
+		if bytes.Equal(ctx.metadata.ids.opID, e.metadata.ids.opID) {
+			return errors.New("invalid event, same as context")
+		}
+	} else {
+		e.metadata.FromString(e.overrides.ExplicitMdStr)
 	}
 
 	var us int64
-	if e.explicitTs.IsZero() {
+	if e.overrides.ExplicitTS.IsZero() {
 		us = time.Now().UnixNano() / 1000
 	} else {
-		us = e.explicitTs.UnixNano() / 1000
+		us = e.overrides.ExplicitTS.UnixNano() / 1000
 	}
 
 	e.AddInt64("Timestamp_u", us)

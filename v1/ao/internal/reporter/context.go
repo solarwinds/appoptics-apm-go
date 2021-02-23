@@ -65,6 +65,11 @@ type transactionContext struct {
 
 type KVMap map[string]interface{}
 
+type Overrides struct {
+	ExplicitTS    time.Time
+	ExplicitMdStr string
+}
+
 // ContextOptions defines the options of creating a context.
 type ContextOptions struct {
 	// MdStr is the string representation of the X-Trace ID.
@@ -76,9 +81,8 @@ type ContextOptions struct {
 	// CB is the callback function to produce the KVs.
 	// XTraceOptionsSignature represents the X-Trace-Options-Signature header.
 	XTraceOptionsSignature string
-
-	ExplicitTs time.Time
-	CB         func() KVMap
+	Overrides              Overrides
+	CB                     func() KVMap
 }
 
 // ValidMetadata checks if a metadata string is valid.
@@ -283,7 +287,7 @@ func (md *oboeMetadata) isSampled() bool {
 // A Context is an oboe context that may or not be tracing.
 type Context interface {
 	ReportEvent(label Label, layer string, args ...interface{}) error
-	ReportEventWithTs(label Label, layer string, ts time.Time, args ...interface{}) error
+	ReportEventWithOverrides(label Label, layer string, overrides Overrides, args ...interface{}) error
 	ReportEventMap(label Label, layer string, keys map[string]interface{}) error
 	Copy() Context
 	IsSampled() bool
@@ -311,7 +315,7 @@ func (e *nullContext) ReportEvent(label Label, layer string, args ...interface{}
 	return nil
 }
 
-func (e *nullContext) ReportEventWithTs(label Label, layer string, explicitTs time.Time, args ...interface{}) error {
+func (e *nullContext) ReportEventWithOverrides(label Label, layer string, overrides Overrides, args ...interface{}) error {
 	return nil
 }
 
@@ -507,6 +511,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 
 	traced := false
 	addCtxEdge := false
+	explicitTraceDecision := false
 
 	tMode, tKVs, tIgnoredKeys, authErr := parseTriggerTraceFlag(opts.XTraceOptions, opts.XTraceOptionsSignature)
 
@@ -549,10 +554,12 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 	if opts.MdStr != "" {
 		var err error
 		if ctx, err = newContextFromMetadataString(opts.MdStr); err != nil {
-			log.Debug("passed in x-trace seems invalid, ignoring")
+			log.Info("passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
-			log.Debug("passed in x-trace has wrong version, ignoring")
+			log.Info("passed in x-trace has wrong version, ignoring")
 		} else if ctx.IsSampled() {
+			ctx.MetadataString()
+			log.Info("passed in x-trace is sampled")
 			traced = true
 			addCtxEdge = true
 			continuedTrace = true
@@ -574,13 +581,32 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 
 			return ctx, true, headers
 		}
+	} else if opts.Overrides.ExplicitMdStr != "" {
+		var err error
+		if ctx, err = newContextFromMetadataString(opts.Overrides.ExplicitMdStr); err != nil {
+			log.Info("passed in x-trace seems invalid, ignoring")
+		} else if ctx.GetVersion() != xtrCurrentVersion {
+			log.Info("passed in x-trace has wrong version, ignoring")
+		} else if ctx.IsSampled() {
+			log.Info("passed in x-trace is sampled")
+			traced = true
+			explicitTraceDecision = true
+			//continuedTrace = false //TODO what if it really is continuing from another trace/ Have to handle
+		} else {
+			return ctx, true, headers
+		}
 	}
 
 	if !traced {
 		ctx = newContext(true)
 	}
 
-	decision := shouldTraceRequestWithURL(layer, traced, opts.URL, tMode)
+	var decision SampleDecision
+	if explicitTraceDecision {
+		decision = SampleDecision{trace: true}
+	} else {
+		decision = shouldTraceRequestWithURL(layer, traced, opts.URL, tMode)
+	}
 	ctx.SetEnabled(decision.enabled)
 
 	if decision.trace {
@@ -610,7 +636,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			if _, ok = ctx.(*oboeContext); !ok {
 				return &nullContext{}, false, headers
 			}
-			if err := ctx.(*oboeContext).reportEventMapWithTs(LabelEntry, layer, addCtxEdge, opts.ExplicitTs, kvs); err != nil {
+			if err := ctx.(*oboeContext).reportEventMapWithOverrides(LabelEntry, layer, addCtxEdge, opts.Overrides, kvs); err != nil {
 				return &nullContext{}, false, headers
 			}
 		}
@@ -623,6 +649,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 	SetHeaders(decision.xTraceOptsRsp)
 
 	return ctx, true, headers
+
 }
 
 func (ctx *oboeContext) Copy() Context {
@@ -664,11 +691,15 @@ func (ctx *oboeContext) GetTransactionName() string {
 }
 
 func (ctx *oboeContext) newEvent(label Label, layer string) (*event, error) {
-	return newEvent(&ctx.metadata, label, layer)
+	return newEvent(&ctx.metadata, label, layer, "")
+}
+
+func (ctx *oboeContext) newEventWithExplicitID(label Label, layer string, xTraceID string) (*event, error) {
+	return newEvent(&ctx.metadata, label, layer, xTraceID)
 }
 
 func (ctx *oboeContext) NewEvent(label Label, layer string, addCtxEdge bool) Event {
-	e, err := newEvent(&ctx.metadata, label, layer)
+	e, err := newEvent(&ctx.metadata, label, layer, "")
 	if err != nil {
 		return &nullEvent{}
 	}
@@ -687,46 +718,45 @@ func (ctx *oboeContext) ReportEventMap(label Label, layer string, keys map[strin
 	return ctx.reportEventMap(label, layer, true, keys)
 }
 
-func (ctx *oboeContext) reportEventMapWithTs(label Label, layer string, addCtxEdge bool, explicitTs time.Time, keys map[string]interface{}) error {
+func (ctx *oboeContext) reportEventMapWithOverrides(label Label, layer string, addCtxEdge bool, overrides Overrides, keys map[string]interface{}) error {
 	var args []interface{}
 	for k, v := range keys {
 		args = append(args, k)
 		args = append(args, v)
 	}
-	return ctx.reportEventWithTs(label, layer, addCtxEdge, explicitTs, args...)
+	return ctx.reportEventWithOverrides(label, layer, addCtxEdge, overrides, args...)
 }
 
 func (ctx *oboeContext) reportEventMap(label Label, layer string, addCtxEdge bool, keys map[string]interface{}) error {
-	return ctx.reportEventMapWithTs(label, layer, addCtxEdge, time.Time{}, keys)
+	return ctx.reportEventMapWithOverrides(label, layer, addCtxEdge, Overrides{}, keys)
 }
 
 // Create and report an event using KVs from variadic args
 func (ctx *oboeContext) ReportEvent(label Label, layer string, args ...interface{}) error {
-	return ctx.reportEventWithTs(label, layer, true, time.Time{}, args...)
+	return ctx.reportEventWithOverrides(label, layer, true, Overrides{}, args...)
 }
 
-func (ctx *oboeContext) ReportEventWithTs(label Label, layer string, explicitTs time.Time, args ...interface{}) error {
-	return ctx.reportEventWithTs(label, layer, true, explicitTs, args...)
+func (ctx *oboeContext) ReportEventWithOverrides(label Label, layer string, overrides Overrides, args ...interface{}) error {
+	return ctx.reportEventWithOverrides(label, layer, true, overrides, args...)
 }
 
 func (ctx *oboeContext) reportEvent(label Label, layer string, addCtxEdge bool, args ...interface{}) error {
-	return ctx.reportEventWithTs(label, layer, addCtxEdge, time.Time{}, args)
+	return ctx.reportEventWithOverrides(label, layer, addCtxEdge, Overrides{}, args)
 }
 
 // Create and report an event using KVs from variadic args
-func (ctx *oboeContext) reportEventWithTs(label Label, layer string, addCtxEdge bool, explicitTs time.Time, args ...interface{}) error {
+func (ctx *oboeContext) reportEventWithOverrides(label Label, layer string, addCtxEdge bool, overrides Overrides, args ...interface{}) error {
 	// create new event from context
-	e, err := ctx.newEvent(label, layer)
+	e, err := ctx.newEventWithExplicitID(label, layer, overrides.ExplicitMdStr)
 	if err != nil { // error creating event (e.g. couldn't init random IDs)
 		return err
 	}
-	fmt.Printf("Reporting!!! event %+v label %v layer %v args %v\n", e, label, layer, args)
-	e.explicitTs = explicitTs
-	return ctx.report(e, addCtxEdge, explicitTs, args...)
+
+	return ctx.report(e, addCtxEdge, overrides, args...)
 }
 
 // report an event using KVs from variadic args
-func (ctx *oboeContext) report(e *event, addCtxEdge bool, explicitTs time.Time, args ...interface{}) error {
+func (ctx *oboeContext) report(e *event, addCtxEdge bool, overrides Overrides, args ...interface{}) error {
 	for i := 0; i+1 < len(args); i += 2 {
 		if err := e.AddKV(args[i], args[i+1]); err != nil {
 			return err
@@ -734,8 +764,9 @@ func (ctx *oboeContext) report(e *event, addCtxEdge bool, explicitTs time.Time, 
 	}
 	if addCtxEdge {
 		e.AddEdge(ctx)
+		fmt.Printf("Adding edge to %v", ctx.metadata)
 	}
-	e.explicitTs = explicitTs
+	e.overrides = overrides
 	// report event
 	return e.Report(ctx)
 }
