@@ -350,7 +350,7 @@ func newContext(sampled bool) Context {
 	return ctx
 }
 
-func newContextFromMetadataString(mdstr string) (*oboeContext, error) {
+func NewContextFromMetadataString(mdstr string) (*oboeContext, error) {
 	ctx := &oboeContext{txCtx: &transactionContext{enabled: true}}
 	ctx.metadata.Init()
 	err := ctx.metadata.FromString(mdstr)
@@ -553,7 +553,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 
 	if opts.MdStr != "" {
 		var err error
-		if ctx, err = newContextFromMetadataString(opts.MdStr); err != nil {
+		if ctx, err = NewContextFromMetadataString(opts.MdStr); err != nil {
 			log.Info("passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
 			log.Info("passed in x-trace has wrong version, ignoring")
@@ -583,7 +583,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		}
 	} else if opts.Overrides.ExplicitMdStr != "" {
 		var err error
-		if ctx, err = newContextFromMetadataString(opts.Overrides.ExplicitMdStr); err != nil {
+		if ctx, err = NewContextFromMetadataString(opts.Overrides.ExplicitMdStr); err != nil {
 			log.Info("passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
 			log.Info("passed in x-trace has wrong version, ignoring")
@@ -762,9 +762,10 @@ func (ctx *oboeContext) report(e *event, addCtxEdge bool, overrides Overrides, a
 			return err
 		}
 	}
+	fmt.Printf("Reporting %+v\n", e)
 	if addCtxEdge {
 		e.AddEdge(ctx)
-		fmt.Printf("Adding edge to %v", ctx.metadata)
+		fmt.Printf("Adding edge to %v\n", ctx.metadata.opString())
 	}
 	e.overrides = overrides
 	// report event

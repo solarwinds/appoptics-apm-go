@@ -396,6 +396,10 @@ type span struct {
 type layerSpan struct{ span }   // satisfies Span
 type profileSpan struct{ span } // satisfies Profile
 type nullSpan struct{}          // a span that is not tracing; satisfies Span & Profile
+type contextSpan struct {
+	nullSpan
+	aoCtx reporter.Context
+}
 
 func (s nullSpan) BeginSpan(spanName string, args ...interface{}) Span { return nullSpan{} }
 func (s nullSpan) BeginSpanWithOptions(spanName string, opts SpanOptions, args ...interface{}) Span {
@@ -424,6 +428,9 @@ func (s nullSpan) SetAsync(bool)                                             {}
 func (s nullSpan) SetOperationName(string)                                   {}
 func (s nullSpan) SetTransactionName(string) error                           { return nil }
 func (s nullSpan) GetTransactionName() string                                { return "" }
+
+func (s contextSpan) aoContext() reporter.Context { return s.aoCtx }
+func (s contextSpan) ok() bool                    { return true }
 
 // is this span still valid (has it timed out, expired, not sampled)
 func (s *span) ok() bool {
@@ -473,6 +480,8 @@ func newSpan(aoCtx reporter.Context, spanName string, parent Span, overrides Ove
 	}
 
 	ll := spanLabeler{spanName}
+
+	//fmt.Printf("Starting new span with context %+v\n", aoCtx)
 	if err := aoCtx.ReportEventWithOverrides(ll.entryLabel(), ll.layerName(), reporter.Overrides{
 		ExplicitTS:    overrides.ExplicitTS,
 		ExplicitMdStr: overrides.ExplicitMdStr,
