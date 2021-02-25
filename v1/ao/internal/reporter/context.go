@@ -762,10 +762,9 @@ func (ctx *oboeContext) report(e *event, addCtxEdge bool, overrides Overrides, a
 			return err
 		}
 	}
-	fmt.Printf("Reporting %+v\n", e)
+
 	if addCtxEdge {
 		e.AddEdge(ctx)
-		fmt.Printf("Adding edge to %v\n", ctx.metadata.opString())
 	}
 	e.overrides = overrides
 	// report event

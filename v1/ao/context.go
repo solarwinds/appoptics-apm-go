@@ -4,7 +4,7 @@ package ao
 
 import (
 	"context"
-	"fmt"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
 
@@ -26,7 +26,7 @@ func newSpanContext(ctx context.Context, l Span) context.Context {
 func FromXTraceIDContext(ctx context.Context, xTraceID string) context.Context {
 	aoCtx, err := reporter.NewContextFromMetadataString(xTraceID)
 	if err != nil {
-		fmt.Printf("FAILED WITH from ID ctx %+v \n", err)
+		log.Warningf("xTrace ID %v is invalid \n", xTraceID)
 	}
 	return context.WithValue(ctx, contextSpanKey, contextSpan{aoCtx: aoCtx})
 }

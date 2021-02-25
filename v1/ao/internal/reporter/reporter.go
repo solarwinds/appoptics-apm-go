@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"os"
 	"strings"
@@ -195,9 +194,6 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 
 	// Update the context's op_id to that of the event
 	ctx.metadata.ids.setOpID(e.metadata.ids.opID)
-
-	fmt.Printf("\nPreparing event %+v \n ts %v \n", e, us)
-	//debug.PrintStack()
 
 	e.bbuf.Finish()
 	return nil
