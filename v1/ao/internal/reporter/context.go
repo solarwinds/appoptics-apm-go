@@ -583,6 +583,10 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		}
 	} else if opts.Overrides.ExplicitMdStr != "" {
 		var err error
+		//take note that the ctx here will be the same as the entry event
+		//we might consider randomizing the opID or the set it to zero in the future
+		//for now we will just disable the opID check in reporter.prepareEvent as the Op ID will be the same
+		//for context and entry event
 		if ctx, err = NewContextFromMetadataString(opts.Overrides.ExplicitMdStr); err != nil {
 			log.Info("passed in x-trace seems invalid, ignoring")
 		} else if ctx.GetVersion() != xtrCurrentVersion {
@@ -591,7 +595,6 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 			log.Info("passed in x-trace is sampled")
 			traced = true
 			explicitTraceDecision = true
-			//continuedTrace = false //TODO what if it really is continuing from another trace/ Have to handle
 		} else {
 			return ctx, true, headers
 		}

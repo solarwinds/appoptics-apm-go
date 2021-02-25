@@ -166,7 +166,10 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 		return errors.New("invalid context, event")
 	}
 
-	if e.overrides.ExplicitMdStr == "" { //if it has a overrides, then do not validate
+	// For now, disable the check if the entry event is using an explicit x-trace ID
+	// as the current logic in context.NewContext would use the same x-trace ID for
+	// context as the entry event. Therefore the opID is the same.
+	if e.overrides.ExplicitMdStr == "" {
 		// The context metadata must have the same task_id as the event.
 		if !bytes.Equal(ctx.metadata.ids.taskID, e.metadata.ids.taskID) {
 			return errors.New("invalid event, different task_id from context")
@@ -176,8 +179,6 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 		if bytes.Equal(ctx.metadata.ids.opID, e.metadata.ids.opID) {
 			return errors.New("invalid event, same as context")
 		}
-	} else {
-		e.metadata.FromString(e.overrides.ExplicitMdStr)
 	}
 
 	var us int64
