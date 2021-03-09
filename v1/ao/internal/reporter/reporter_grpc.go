@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	uatomic "go.uber.org/atomic"
 )
 
 const (
@@ -174,6 +175,7 @@ func newGrpcConnection(name string, target string, opts ...GrpcConnOpt) (*grpcCo
 		connection:  nil,
 		address:     target,
 		certificate: []byte(grpcCertDefault),
+		pingTicker:  time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second),
 		queueStats:  &metrics.EventQueueStats{},
 		backoff:     DefaultBackoff,
 		Dialer:      &DefaultDialer{},
@@ -209,7 +211,7 @@ type grpcReporter struct {
 	getSettingsInterval          int             // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int             // check interval for timed out settings in seconds
 
-	serviceKey string // service key
+	serviceKey  *uatomic.String // service key
 
 	eventMessages  chan []byte              // channel for event messages (sent from agent)
 	spanMessages   chan metrics.SpanMessage // channel for span messages (sent from agent)
@@ -290,7 +292,7 @@ func newGRPCReporter() reporter {
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
 		settingsTimeoutCheckInterval: grpcSettingsTimeoutCheckIntervalDefault,
 
-		serviceKey: config.GetServiceKey(),
+		serviceKey: uatomic.NewString(config.GetServiceKey()),
 
 		eventMessages:  make(chan []byte, 10000),
 		spanMessages:   make(chan metrics.SpanMessage, 10000),
@@ -311,6 +313,10 @@ func newGRPCReporter() reporter {
 
 func (r *grpcReporter) Flush() error {
 	return nil
+}
+
+func (r *grpcReporter) SetServiceKey(key string) {
+	r.serviceKey.Store(key)
 }
 
 func (r *grpcReporter) isGracefully() bool {
@@ -531,7 +537,6 @@ func (r *grpcReporter) periodicTasks() {
 	collectMetricsTicker := time.NewTimer(r.collectMetricsNextInterval())
 	getSettingsTicker := time.NewTimer(0)
 	settingsTimeoutCheckTicker := time.NewTimer(time.Duration(r.settingsTimeoutCheckInterval) * time.Second)
-	r.conn.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
 
 	defer func() {
 		collectMetricsTicker.Stop()
@@ -602,7 +607,7 @@ func (r *grpcReporter) periodicTasks() {
 			// set up ticker for next round
 			r.conn.resetPing()
 			go func() {
-				if r.conn.ping(r.done, r.serviceKey) == errInvalidServiceKey {
+				if r.conn.ping(r.done, r.serviceKey.Load()) == errInvalidServiceKey {
 					r.ShutdownNow()
 				}
 			}()
@@ -749,7 +754,7 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 		}
 
 		if len(messages) != 0 {
-			method := newPostEventsMethod(r.serviceKey, messages)
+			method := newPostEventsMethod(r.serviceKey.Load(), messages)
 			err := r.conn.InvokeRPC(r.done, method)
 
 			switch err {
@@ -811,7 +816,7 @@ func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 		return
 	}
 
-	method := newPostMetricsMethod(r.serviceKey, msgs)
+	method := newPostMetricsMethod(r.serviceKey.Load(), msgs)
 
 	err := r.conn.InvokeRPC(r.done, method)
 	switch err {
@@ -844,7 +849,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { ready <- true }()
 
-	method := newGetSettingsMethod(r.serviceKey)
+	method := newGetSettingsMethod(r.serviceKey.Load())
 	err := r.conn.InvokeRPC(r.done, method)
 
 	switch err {
@@ -958,7 +963,7 @@ func (r *grpcReporter) statusSender() {
 				done = true
 			}
 		}
-		method := newPostStatusMethod(r.serviceKey, messages)
+		method := newPostStatusMethod(r.serviceKey.Load(), messages)
 		err := r.conn.InvokeRPC(r.done, method)
 
 		switch err {
@@ -1102,7 +1107,12 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 				v := fmt.Sprintf("%d|%d", m.RequestSize(), c.maxReqBytes)
 				err = errors.Wrap(errRequestTooBig, v)
 			} else {
-				err = m.Call(ctx, c.client)
+				if m.ServiceKey() != "" {
+					err = m.Call(ctx, c.client)
+				} else {
+					err = nil
+					log.Infof("%s is skipped as no service key is assigned.", m.String())
+				}
 			}
 
 			code := status.Code(err)

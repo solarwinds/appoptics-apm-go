@@ -374,9 +374,13 @@ func (c *Config) validate() error {
 	}
 
 	if c.ReporterType != reporterTypeServerless {
-		c.ServiceKey = ToServiceKey(c.ServiceKey)
-		if ok := IsValidServiceKey(c.ServiceKey); !ok {
-			return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("service key: \"%s\"", c.ServiceKey))
+		if c.ServiceKey != "" {
+			c.ServiceKey = ToServiceKey(c.ServiceKey)
+			if ok := IsValidServiceKey(c.ServiceKey); !ok {
+				return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("service key: \"%s\"", c.ServiceKey))
+			}
+		} else {
+			log.Warning("Service key is not assigned.")
 		}
 	}
 

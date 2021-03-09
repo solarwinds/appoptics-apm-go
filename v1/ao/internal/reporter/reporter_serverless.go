@@ -140,3 +140,5 @@ func (sr *serverlessReporter) Flush() error {
 	sr.sendServerlessMetrics()
 	return sr.logWriter.Flush()
 }
+
+func (sr *serverlessReporter) SetServiceKey(string) {}

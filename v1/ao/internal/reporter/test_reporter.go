@@ -119,6 +119,10 @@ func (r *TestReporter) Flush() error {
 	return nil
 }
 
+func (r *TestReporter) SetServiceKey(key string) {
+	// do nothing
+}
+
 func (r *TestReporter) resultWriter() {
 	var numBufs int
 	for {

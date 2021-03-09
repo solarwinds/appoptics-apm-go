@@ -68,3 +68,8 @@ func GetLogLevel() string {
 func SetLogOutput(w io.Writer) {
 	log.SetOutput(w)
 }
+
+// SetServiceKey sets the service key of the agent
+func SetServiceKey(key string) {
+	reporter.SetServiceKey(key)
+}
