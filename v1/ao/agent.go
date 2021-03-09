@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"github.com/pkg/errors"
@@ -67,4 +68,23 @@ func GetLogLevel() string {
 // SetLogOutput sets the output destination for the internal logger.
 func SetLogOutput(w io.Writer) {
 	log.SetOutput(w)
+}
+
+type Option = config.Option
+
+// WithServiceKey defines a Config option for the service key.
+func WithServiceKey(key string) Option {
+	return config.WithServiceKey(key)
+}
+
+type Agent struct {
+	reporter reporter.Reporter
+}
+
+func NewAgent(opts ...Option) (*Agent, error) {
+	c := config.NewConfig(opts...)
+	agent := &Agent{
+		reporter: reporter.New(c),
+	}
+	return agent, nil
 }

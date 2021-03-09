@@ -252,7 +252,7 @@ func TestNewContextForURL(t *testing.T) {
 }
 
 func TestNewContextForURLTracingDisabled(t *testing.T) {
-	r := SetTestReporter(TestReporterDisableTracing()) // set up test reporter
+	r := SetTestReporter(TestReporterDisableTracing()) // set up test Reporter
 
 	// create a valid context even if tracing is disabled
 	ctx, ok, _ := NewContext("testLayer", false, ContextOptions{

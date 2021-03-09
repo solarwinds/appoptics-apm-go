@@ -9,7 +9,7 @@
 //   name and the default value via struct tags.
 // - add validation code to method `Config.validate()` (optional).
 // - add a method to retrieve the config value and a wrapper for the default
-//   global variable `conf` (see wrappers.go).
+//   global variable `GlobalConfig` (see wrappers.go).
 package config
 
 import (
@@ -60,6 +60,11 @@ const (
 	envAppOpticsTokenBucketCap        = "APPOPTICS_TOKEN_BUCKET_CAPACITY"
 	envAppOpticsTokenBucketRate       = "APPOPTICS_TOKEN_BUCKET_RATE"
 	envAppOpticsTransactionName       = "APPOPTICS_TRANSACTION_NAME"
+)
+
+const (
+	// EnvAppOpticsDisableAutoAgent explicitly disables the auto agent
+	EnvAppOpticsDisableAutoAgent = "APPOPTICS_DISABLE_AUTO_AGENT"
 )
 
 // Errors
@@ -182,6 +187,10 @@ var (
 	ErrTFInvalidTracing  = errors.New("invalid Tracing")
 	ErrTFInvalidRegExExt = errors.New("must set either RegEx or Extensions, but not both")
 )
+
+func AutoAgentEnabled() bool {
+	return os.Getenv(EnvAppOpticsDisableAutoAgent) == ""
+}
 
 // UnmarshalYAML is the customized unmarshal method for TransactionFilter
 func (f *TransactionFilter) UnmarshalYAML(unmarshal func(interface{}) error) error {

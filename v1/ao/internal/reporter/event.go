@@ -1,6 +1,6 @@
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
 
-// Package reporter provides a low-level API for creating and reporting events for
+// Package Reporter provides a low-level API for creating and reporting events for
 // distributed tracing with AppOptics.
 package reporter
 
@@ -345,7 +345,7 @@ func (e *event) AddKV(key, value interface{}) error {
 }
 
 // Reports event using specified Reporter
-func (e *event) ReportUsing(c *oboeContext, r reporter, channel reporterChannel) error {
+func (e *event) ReportUsing(c *oboeContext, r Reporter, channel reporterChannel) error {
 	if channel == EVENTS {
 		if e.metadata.isSampled() {
 			return r.reportEvent(c, e)

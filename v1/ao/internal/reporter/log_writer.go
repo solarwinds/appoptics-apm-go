@@ -113,7 +113,7 @@ func (lr *logWriter) flush() error {
 	data = append(data, "\n"...)
 
 	if _, err := lr.dest.Write(data); err != nil {
-		return errors.Wrap(err, "write to log reporter failed")
+		return errors.Wrap(err, "write to log Reporter failed")
 	}
 
 	if file, ok := lr.dest.(*os.File); ok {

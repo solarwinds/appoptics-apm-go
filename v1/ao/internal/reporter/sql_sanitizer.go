@@ -99,7 +99,9 @@ type SQLSanitizer struct {
 var sanitizers map[string]*SQLSanitizer
 
 func init() {
-	sanitizers = initSanitizersMap()
+	if config.AutoAgentEnabled() {
+		sanitizers = initSanitizersMap()
+	}
 }
 
 func initSanitizersMap() map[string]*SQLSanitizer {

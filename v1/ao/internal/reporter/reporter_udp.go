@@ -21,7 +21,7 @@ type udpReporter struct {
 	conn *net.UDPConn
 }
 
-func udpNewReporter() reporter {
+func udpNewReporter() Reporter {
 	var conn *net.UDPConn
 
 	// collector address override
@@ -35,7 +35,7 @@ func udpNewReporter() reporter {
 		conn, err = net.DialUDP("udp4", nil, serverAddr)
 	}
 	if err != nil {
-		log.Errorf("AppOptics failed to initialize UDP reporter: %v", err)
+		log.Errorf("AppOptics failed to initialize UDP Reporter: %v", err)
 		return &nullReporter{}
 	}
 
@@ -57,21 +57,21 @@ func (r *udpReporter) report(ctx *oboeContext, e *event) error {
 	return err
 }
 
-// Shutdown closes the UDP reporter TODO: not supported
+// Shutdown closes the UDP Reporter TODO: not supported
 func (r *udpReporter) Shutdown(ctx context.Context) error {
 	// return r.conn.Close()
 	return errors.New("not implemented")
 }
 
-// ShutdownNow closes the reporter immediately.
+// ShutdownNow closes the Reporter immediately.
 func (r *udpReporter) ShutdownNow() error { return nil }
 
-// Closed returns if the reporter is closed or not TODO: not supported
+// Closed returns if the Reporter is closed or not TODO: not supported
 func (r *udpReporter) Closed() bool {
 	return false
 }
 
-// WaitForReady waits until the reporter becomes ready or the context is canceled.
+// WaitForReady waits until the Reporter becomes ready or the context is canceled.
 func (r *udpReporter) WaitForReady(ctx context.Context) bool { return true }
 
 func (r *udpReporter) reportEvent(ctx *oboeContext, e *event) error {

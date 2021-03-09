@@ -18,7 +18,7 @@ type serverlessReporter struct {
 	span metrics.HTTPSpanMessage
 }
 
-func newServerlessReporter(writer io.Writer) reporter {
+func newServerlessReporter(writer io.Writer) Reporter {
 	r := &serverlessReporter{
 		customMetrics: metrics.NewMeasurements(true, 0, 500),
 	}
@@ -39,7 +39,7 @@ func newServerlessReporter(writer io.Writer) reporter {
 			-1,
 			[]byte("")))
 
-	log.Warningf("The reporter (v%v, go%v) for Lambda is ready.", utils.Version(), utils.GoVersion())
+	log.Warningf("The Reporter (v%v, go%v) for Lambda is ready.", utils.Version(), utils.GoVersion())
 
 	return r
 }
@@ -74,33 +74,33 @@ func (sr *serverlessReporter) reportSpan(span metrics.SpanMessage) error {
 	return nil
 }
 
-// Shutdown closes the reporter.
+// Shutdown closes the Reporter.
 func (sr *serverlessReporter) Shutdown(ctx context.Context) error {
 	return sr.ShutdownNow()
 }
 
-// ShutdownNow closes the reporter immediately
+// ShutdownNow closes the Reporter immediately
 func (sr *serverlessReporter) ShutdownNow() error {
 	return nil
 }
 
-// Closed returns if the reporter is already closed.
+// Closed returns if the Reporter is already closed.
 func (sr *serverlessReporter) Closed() bool {
 	return false
 }
 
-// WaitForReady waits until the reporter becomes ready or the context is canceled.
+// WaitForReady waits until the Reporter becomes ready or the context is canceled.
 func (sr *serverlessReporter) WaitForReady(context.Context) bool {
 	return true
 }
 
-// CustomSummaryMetric submits a summary type measurement to the reporter. The measurements
+// CustomSummaryMetric submits a summary type measurement to the Reporter. The measurements
 // will be collected in the background and reported periodically.
 func (sr *serverlessReporter) CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
 	return sr.customMetrics.Summary(name, value, opts)
 }
 
-// CustomIncrementMetric submits a incremental measurement to the reporter. The measurements
+// CustomIncrementMetric submits a incremental measurement to the Reporter. The measurements
 // will be collected in the background and reported periodically.
 func (sr *serverlessReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
 	return sr.customMetrics.Increment(name, opts)

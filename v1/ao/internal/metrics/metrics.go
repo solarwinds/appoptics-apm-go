@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/hdrhist"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
@@ -313,19 +314,23 @@ var metricsHTTPHistograms = &histograms{
 // TODO: use config package, and add validator (0-5)
 // initialize values according to env variables
 func init() {
-	pEnv := "APPOPTICS_HISTOGRAM_PRECISION"
-	precision := os.Getenv(pEnv)
-	if precision != "" {
-		log.Infof("Non-default APPOPTICS_HISTOGRAM_PRECISION: %s", precision)
-		if p, err := strconv.Atoi(precision); err == nil {
-			if p >= 0 && p <= 5 {
-				metricsHTTPHistograms.precision = p
+	if config.AutoAgentEnabled() {
+		pEnv := "APPOPTICS_HISTOGRAM_PRECISION"
+		precision := os.Getenv(pEnv)
+		if precision != "" {
+			log.Infof("Non-default APPOPTICS_HISTOGRAM_PRECISION: %s", precision)
+			if p, err := strconv.Atoi(precision); err == nil {
+				if p >= 0 && p <= 5 {
+					metricsHTTPHistograms.precision = p
+				} else {
+					log.Errorf("value of %v must be between 0 and 5: %v", pEnv, precision)
+				}
 			} else {
-				log.Errorf("value of %v must be between 0 and 5: %v", pEnv, precision)
+				log.Errorf("value of %v is not an int: %v", pEnv, precision)
 			}
-		} else {
-			log.Errorf("value of %v is not an int: %v", pEnv, precision)
 		}
+	} else {
+		log.Warning("AppOptics auto agent is disabled.")
 	}
 }
 

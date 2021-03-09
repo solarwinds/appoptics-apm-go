@@ -37,7 +37,7 @@ const (
 )
 
 var usingTestReporter = false
-var oldReporter reporter = &nullReporter{}
+var oldReporter Reporter = &nullReporter{}
 
 // TestReporterOption values may be passed to SetTestReporter.
 type TestReporterOption func(*TestReporter)
@@ -83,7 +83,7 @@ func TestReporterUseSettings(val bool) TestReporterOption {
 	return func(r *TestReporter) { r.UseSettings = val }
 }
 
-// SetTestReporter sets and returns a test reporter that captures raw event bytes
+// SetTestReporter sets and returns a test Reporter that captures raw event bytes
 // for making assertions about using the graphtest package.
 func SetTestReporter(options ...TestReporterOption) *TestReporter {
 	r := &TestReporter{
@@ -148,7 +148,7 @@ func (r *TestReporter) resultWriter() {
 	}
 }
 
-// Close stops the test reporter from listening for events; r.EventBufs will no longer be updated and any
+// Close stops the test Reporter from listening for events; r.EventBufs will no longer be updated and any
 // calls to WritePacket() will panic.
 func (r *TestReporter) Close(numBufs int) {
 	r.done <- numBufs
@@ -166,21 +166,21 @@ func (r *TestReporter) Close(numBufs int) {
 	}
 }
 
-// Shutdown closes the Test reporter TODO: not supported
+// Shutdown closes the Test Reporter TODO: not supported
 func (r *TestReporter) Shutdown(ctx context.Context) error {
 	// return r.conn.Close()
 	return errors.New("shutdown is not supported by TestReporter")
 }
 
-// ShutdownNow closes the Test reporter immediately
+// ShutdownNow closes the Test Reporter immediately
 func (r *TestReporter) ShutdownNow() error { return nil }
 
-// Closed returns if the reporter is closed or not TODO: not supported
+// Closed returns if the Reporter is closed or not TODO: not supported
 func (r *TestReporter) Closed() bool {
 	return false
 }
 
-// WaitForReady checks the state of the reporter and may wait for up to the specified
+// WaitForReady checks the state of the Reporter and may wait for up to the specified
 // duration until it becomes ready.
 func (r *TestReporter) WaitForReady(ctx context.Context) bool {
 	return true

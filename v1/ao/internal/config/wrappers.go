@@ -2,86 +2,88 @@
 
 package config
 
-import "github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+import (
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+)
 
-var conf = NewConfig()
+var GlobalConfig = NewConfig()
 
 // GetCollector is a wrapper to the method of the global config
-var GetCollector = conf.GetCollector
+var GetCollector = GlobalConfig.GetCollector
 
 // GetServiceKey is a wrapper to the method of the global config
-var GetServiceKey = conf.GetServiceKey
+var GetServiceKey = GlobalConfig.GetServiceKey
 
 // GetTrustedPath is a wrapper to the method of the global config
-var GetTrustedPath = conf.GetTrustedPath
+var GetTrustedPath = GlobalConfig.GetTrustedPath
 
 // GetReporterType is a wrapper to the method of the global config
-var GetReporterType = conf.GetReporterType
+var GetReporterType = GlobalConfig.GetReporterType
 
 // GetTracingMode is a wrapper to the method of the global config
-var GetTracingMode = conf.GetTracingMode
+var GetTracingMode = GlobalConfig.GetTracingMode
 
 // GetSampleRate is a wrapper to the method of the global config
-var GetSampleRate = conf.GetSampleRate
+var GetSampleRate = GlobalConfig.GetSampleRate
 
 // SamplingConfigured is a wrapper to the method of the global config
-var SamplingConfigured = conf.SamplingConfigured
+var SamplingConfigured = GlobalConfig.SamplingConfigured
 
 // GetCollectorUDP is a wrapper to the method of the global config
-var GetCollectorUDP = conf.GetCollectorUDP
+var GetCollectorUDP = GlobalConfig.GetCollectorUDP
 
 // GetPrependDomain is a wrapper to the method of the global config
-var GetPrependDomain = conf.GetPrependDomain
+var GetPrependDomain = GlobalConfig.GetPrependDomain
 
 // GetHostAlias is a wrapper to the method of the global config
-var GetHostAlias = conf.GetHostAlias
+var GetHostAlias = GlobalConfig.GetHostAlias
 
 // GetPrecision is a wrapper to the method of the global config
-var GetPrecision = conf.GetPrecision
+var GetPrecision = GlobalConfig.GetPrecision
 
 // GetDisabled is a wrapper to the method of the global config
-var GetDisabled = conf.GetDisabled
+var GetDisabled = GlobalConfig.GetDisabled
 
 // ReporterOpts is a wrapper to the method of the global config
-var ReporterOpts = conf.GetReporter
+var ReporterOpts = GlobalConfig.GetReporter
 
 // GetEc2MetadataTimeout is a wrapper to the method of the global config
-var GetEc2MetadataTimeout = conf.GetEc2MetadataTimeout
+var GetEc2MetadataTimeout = GlobalConfig.GetEc2MetadataTimeout
 
 // DebugLevel is a wrapper to the method of the global config
-var DebugLevel = conf.GetDebugLevel
+var DebugLevel = GlobalConfig.GetDebugLevel
 
 // GetTriggerTrace is a wrapper to the method of the global config
-var GetTriggerTrace = conf.GetTriggerTrace
+var GetTriggerTrace = GlobalConfig.GetTriggerTrace
 
 // GetProxy is a wrapper to the method of the global config
-var GetProxy = conf.GetProxy
+var GetProxy = GlobalConfig.GetProxy
 
 // GetProxyCertPath is a wrapper to the method of the global config
-var GetProxyCertPath = conf.GetProxyCertPath
+var GetProxyCertPath = GlobalConfig.GetProxyCertPath
 
 // GetRuntimeMetrics is a wrapper to the method of the global config
-var GetRuntimeMetrics = conf.GetRuntimeMetrics
+var GetRuntimeMetrics = GlobalConfig.GetRuntimeMetrics
 
-var GetTokenBucketCap = conf.GetTokenBucketCap
-var GetTokenBucketRate = conf.GetTokenBucketRate
-var GetReportQueryString = conf.GetReportQueryString
+var GetTokenBucketCap = GlobalConfig.GetTokenBucketCap
+var GetTokenBucketRate = GlobalConfig.GetTokenBucketRate
+var GetReportQueryString = GlobalConfig.GetReportQueryString
 
 // GetTransactionFiltering is a wrapper to the method of the global config
-var GetTransactionFiltering = conf.GetTransactionFiltering
+var GetTransactionFiltering = GlobalConfig.GetTransactionFiltering
 
-var GetTransactionName = conf.GetTransactionName
+var GetTransactionName = GlobalConfig.GetTransactionName
 
 // GetSQLSanitize is a wrapper to method GetSQLSanitize of the global variable config.
-var GetSQLSanitize = conf.GetSQLSanitize
+var GetSQLSanitize = GlobalConfig.GetSQLSanitize
 
 // Load reads the customized configurations
-var Load = conf.Load
+var Load = GlobalConfig.Load
 
-var GetDelta = conf.GetDelta
+var GetDelta = GlobalConfig.GetDelta
 
 func init() {
-	if !conf.GetDisabled() {
-		log.Warningf("Accepted config items: \n%s", conf.GetDelta())
+	if AutoAgentEnabled() && !GlobalConfig.GetDisabled() {
+		log.Warningf("Accepted config items: \n%s", GlobalConfig.GetDelta())
 	}
 }

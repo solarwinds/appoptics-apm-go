@@ -16,8 +16,10 @@ import (
 var urls *urlFilters
 
 func init() {
-	urls = newURLFilters()
-	urls.LoadConfig(config.GetTransactionFiltering())
+	if config.AutoAgentEnabled() {
+		urls = newURLFilters()
+		urls.LoadConfig(config.GetTransactionFiltering())
+	}
 }
 
 // ReloadURLsConfig reloads the configuration and build the transaction filtering

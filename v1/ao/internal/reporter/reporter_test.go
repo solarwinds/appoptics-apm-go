@@ -70,7 +70,7 @@ func TestReportEvent(t *testing.T) {
 	r.Close(1)
 	assert.Len(t, r.EventBufs, 1)
 
-	// re-report: shouldn't work (op IDs the same, reporter closed)
+	// re-report: shouldn't work (op IDs the same, Reporter closed)
 	assert.Error(t, r.reportEvent(ctx, ev))
 
 	g.AssertGraph(t, r.EventBufs, 1, g.AssertNodeMap{
@@ -209,24 +209,24 @@ func TestGRPCReporter(t *testing.T) {
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
 
-	// set gRPC reporter
+	// set gRPC Reporter
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
 	config.Load()
 	oldReporter := globalReporter
-	setGlobalReporter("ssl")
+	setGlobalReporter(New(config.GlobalConfig))
 
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
 	r := globalReporter.(*grpcReporter)
 
 	// Test WaitForReady
-	// The reporter is not ready when there is no default setting.
+	// The Reporter is not ready when there is no default setting.
 	ctxTm1, cancel1 := context.WithTimeout(context.Background(), 0)
 	defer cancel1()
 	assert.False(t, r.WaitForReady(ctxTm1))
 
-	// The reporter becomes ready after it has got the default setting.
+	// The Reporter becomes ready after it has got the default setting.
 	ready := make(chan bool, 1)
 	r.getSettings(ready)
 	ctxTm2, cancel2 := context.WithTimeout(context.Background(), time.Millisecond)
@@ -259,7 +259,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	// The reporter becomes not ready after the default setting has been deleted
+	// The Reporter becomes not ready after the default setting has been deleted
 	removeSetting("")
 	r.checkSettingsTimeout(make(chan bool, 1))
 
@@ -268,7 +268,7 @@ func TestGRPCReporter(t *testing.T) {
 	assert.False(t, r.WaitForReady(ctxTm3))
 	defer cancel3()
 
-	// stop test reporter
+	// stop test Reporter
 	server.Stop()
 	globalReporter = oldReporter
 
@@ -302,13 +302,13 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
 
-	// set gRPC reporter
+	// set gRPC Reporter
 	os.Setenv("APPOPTICS_COLLECTOR", addr)
 	os.Setenv("APPOPTICS_TRUSTEDPATH", testCertFile)
 	config.Load()
 	oldReporter := globalReporter
 	// numGo := runtime.NumGoroutine()
-	setGlobalReporter("ssl")
+	setGlobalReporter(New(config.GlobalConfig))
 
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
@@ -325,7 +325,7 @@ func TestShutdownGRPCReporter(t *testing.T) {
 	e := r.ShutdownNow()
 	assert.NotEqual(t, nil, e)
 
-	// stop test reporter
+	// stop test Reporter
 	server.Stop()
 	globalReporter = oldReporter
 	// fmt.Println(buf)
@@ -356,12 +356,12 @@ func TestInvalidKey(t *testing.T) {
 	server := StartTestGRPCServer(t, addr)
 	time.Sleep(100 * time.Millisecond)
 
-	// set gRPC reporter
+	// set gRPC Reporter
 	config.Load()
 	oldReporter := globalReporter
 
 	log.SetLevel(log.INFO)
-	setGlobalReporter("ssl")
+	setGlobalReporter(New(config.GlobalConfig))
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
 	r := globalReporter.(*grpcReporter)
@@ -371,7 +371,7 @@ func TestInvalidKey(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	// The agent reporter should be closed due to received INVALID_API_KEY from the collector
+	// The agent Reporter should be closed due to received INVALID_API_KEY from the collector
 	assert.Equal(t, true, r.Closed())
 
 	e := r.ShutdownNow()
@@ -384,7 +384,7 @@ func TestInvalidKey(t *testing.T) {
 
 	patterns := []string{
 		"rsp=INVALID_API_KEY",
-		"Shutting down the reporter",
+		"Shutting down the Reporter",
 		// "periodicTasks goroutine exiting",
 		"eventSender goroutine exiting",
 		"spanMessageAggregator goroutine exiting",
@@ -448,7 +448,7 @@ func TestInvokeRPC(t *testing.T) {
 	}
 	_ = c.connect()
 
-	// Test reporter exiting
+	// Test Reporter exiting
 	mockMethod := &mocks.Method{}
 	mockMethod.On("String").Return("mock")
 	mockMethod.On("Call", mock.Anything, mock.Anything).
@@ -570,7 +570,7 @@ func TestInitReporter(t *testing.T) {
 	// Test disable agent
 	os.Setenv("APPOPTICS_DISABLED", "true")
 	config.Load()
-	initReporter()
+	setGlobalReporter(New(config.GlobalConfig))
 	require.IsType(t, &nullReporter{}, globalReporter)
 
 	// Test enable agent
@@ -579,7 +579,7 @@ func TestInitReporter(t *testing.T) {
 	config.Load()
 	assert.False(t, config.GetDisabled())
 
-	initReporter()
+	setGlobalReporter(New(config.GlobalConfig))
 	require.IsType(t, &grpcReporter{}, globalReporter)
 }
 
@@ -674,19 +674,19 @@ func testProxy(t *testing.T, proxyUrl string) {
 	oldReporter := globalReporter
 	defer func() { globalReporter = oldReporter }()
 
-	setGlobalReporter("ssl")
+	setGlobalReporter(New(config.GlobalConfig))
 
 	require.IsType(t, &grpcReporter{}, globalReporter)
 
 	r := globalReporter.(*grpcReporter)
 
 	// Test WaitForReady
-	// The reporter is not ready when there is no default setting.
+	// The Reporter is not ready when there is no default setting.
 	ctxTm1, cancel1 := context.WithTimeout(context.Background(), 0)
 	defer cancel1()
 	assert.False(t, r.WaitForReady(ctxTm1))
 
-	// The reporter becomes ready after it has got the default setting.
+	// The Reporter becomes ready after it has got the default setting.
 	ready := make(chan bool, 1)
 	r.getSettings(ready)
 	ctxTm2, cancel2 := context.WithTimeout(context.Background(), time.Millisecond)
@@ -719,7 +719,7 @@ func testProxy(t *testing.T, proxyUrl string) {
 
 	time.Sleep(time.Second)
 
-	// The reporter becomes not ready after the default setting has been deleted
+	// The Reporter becomes not ready after the default setting has been deleted
 	removeSetting("")
 	r.checkSettingsTimeout(make(chan bool, 1))
 
@@ -728,7 +728,7 @@ func testProxy(t *testing.T, proxyUrl string) {
 	assert.False(t, r.WaitForReady(ctxTm3))
 	defer cancel3()
 
-	// stop test reporter
+	// stop test Reporter
 	server.Stop()
 
 	// assert data received

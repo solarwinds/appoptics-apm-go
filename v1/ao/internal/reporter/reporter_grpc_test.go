@@ -36,7 +36,7 @@ type TestGRPCServer struct {
 	grpcServer *grpc.Server
 	addr       string
 	// The mutex to protect the other fields, mainly the slices below as gRPC needs concurrency-safe
-	// Performance is not a concern for a testing reporter, so we are fine with a single mutex for all
+	// Performance is not a concern for a testing Reporter, so we are fine with a single mutex for all
 	// the fields.
 	mutex   sync.Mutex
 	events  []*pb.MessageRequest

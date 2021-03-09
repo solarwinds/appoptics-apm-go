@@ -68,7 +68,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 7tsqAxw=
 -----END CERTIFICATE-----`
 
-	// These are hard-coded parameters for the gRPC reporter. Any of them become
+	// These are hard-coded parameters for the gRPC Reporter. Any of them become
 	// configurable in future versions will be moved to package config.
 	// TODO: use time.Time
 	grpcMetricIntervalDefault               = 60               // default metrics flush interval in seconds
@@ -86,7 +86,7 @@ ftgwcxyEq5SkiR+6BCwdzAMqADV37TzXDHLjwSrMIrgLV5xZM20Kk6chxI5QAr/f
 
 type reporterChannel int
 
-// a channel the reporter is listening on for messages from the agent
+// a channel the Reporter is listening on for messages from the agent
 const (
 	EVENTS reporterChannel = iota
 	METRICS
@@ -218,28 +218,28 @@ type grpcReporter struct {
 	httpMetrics   *metrics.Measurements
 	customMetrics *metrics.Measurements
 
-	// The reporter is considered ready if there is a valid default setting for sampling.
+	// The Reporter is considered ready if there is a valid default setting for sampling.
 	// It should be accessed atomically.
 	ready int32
-	// The condition variable to notify those who are waiting for the reporter becomes ready
+	// The condition variable to notify those who are waiting for the Reporter becomes ready
 	cond *sync.Cond
 
-	// The reporter doesn't have a explicit field to record its state. This channel is used to notify all the
+	// The Reporter doesn't have a explicit field to record its state. This channel is used to notify all the
 	// long-running goroutines to stop themselves. All the goroutines will check this channel and close if the
 	// channel is closed.
 	// Don't send data into this channel, just close it by calling Shutdown().
 	done       chan struct{}
 	doneClosed sync.Once
-	// The flag to indicate gracefully stopping the reporter. It should be accessed atomically.
+	// The flag to indicate gracefully stopping the Reporter. It should be accessed atomically.
 	// A (default) zero value means shutdown abruptly.
 	gracefully int32
 }
 
-// gRPC reporter errors
+// gRPC Reporter errors
 var (
-	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed reporter")
+	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed Reporter")
 	ErrShutdownTimeout        = errors.New("Shutdown timeout")
-	ErrReporterIsClosed       = errors.New("the reporter is closed")
+	ErrReporterIsClosed       = errors.New("the Reporter is closed")
 )
 
 func getProxy() string {
@@ -250,10 +250,10 @@ func getProxyCertPath() string {
 	return config.GetProxyCertPath()
 }
 
-// initializes a new GRPC reporter from scratch (called once on program startup)
+// initializes a new GRPC Reporter from scratch (called once on program startup)
 //
-// returns	GRPC reporter object
-func newGRPCReporter() reporter {
+// returns	GRPC Reporter object
+func newGRPCReporter() Reporter {
 	// collector address override
 	addr := config.GetCollector()
 
@@ -279,7 +279,7 @@ func newGRPCReporter() reporter {
 	// create connection object for events client and metrics client
 	grpcConn, err1 := newGrpcConnection("AO gRPC channel", addr, opts...)
 	if err1 != nil {
-		log.Errorf("Failed to initialize gRPC reporter %v: %v", addr, err1)
+		log.Errorf("Failed to initialize gRPC Reporter %v: %v", addr, err1)
 		return &nullReporter{}
 	}
 
@@ -304,7 +304,7 @@ func newGRPCReporter() reporter {
 
 	r.start()
 
-	log.Warningf("The reporter (%v, v%v, go%v) is initialized. Waiting for the dynamic settings.",
+	log.Warningf("The Reporter (%v, v%v, go%v) is initialized. Waiting for the dynamic settings.",
 		r.done, utils.Version(), utils.GoVersion())
 	return r
 }
@@ -347,15 +347,15 @@ func (r *grpcReporter) start() {
 	go r.spanMessageAggregator()
 }
 
-// ShutdownNow stops the reporter immediately.
+// ShutdownNow stops the Reporter immediately.
 func (r *grpcReporter) ShutdownNow() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 0)
 	defer cancel()
 	return r.Shutdown(ctx)
 }
 
-// Shutdown closes the reporter by close the `done` channel. All long-running goroutines
-// monitor the channel `done` in the reporter and close themselves when the channel is closed.
+// Shutdown closes the Reporter by close the `done` channel. All long-running goroutines
+// monitor the channel `done` in the Reporter and close themselves when the channel is closed.
 func (r *grpcReporter) Shutdown(ctx context.Context) error {
 	var err error
 
@@ -364,7 +364,7 @@ func (r *grpcReporter) Shutdown(ctx context.Context) error {
 		err = ErrShutdownClosedReporter
 	default:
 		r.doneClosed.Do(func() {
-			log.Warningf("Shutting down the reporter: %v", r.done)
+			log.Warningf("Shutting down the Reporter: %v", r.done)
 
 			var g bool
 			if d, ddlSet := ctx.Deadline(); ddlSet {
@@ -405,12 +405,12 @@ func (r *grpcReporter) flushed() chan struct{} {
 	return c
 }
 
-// closeConns closes all the gRPC connections of a reporter
+// closeConns closes all the gRPC connections of a Reporter
 func (r *grpcReporter) closeConns() {
 	r.conn.Close()
 }
 
-// Closed return true if the reporter is already closed, or false otherwise.
+// Closed return true if the Reporter is already closed, or false otherwise.
 func (r *grpcReporter) Closed() bool {
 	select {
 	case <-r.done:
@@ -432,9 +432,9 @@ func (r *grpcReporter) isReady() bool {
 	return atomic.LoadInt32(&r.ready) == 1
 }
 
-// WaitForReady waits until the reporter becomes ready or the context is canceled.
+// WaitForReady waits until the Reporter becomes ready or the context is canceled.
 //
-// The reporter is still considered `not ready` if (in rare cases) the default
+// The Reporter is still considered `not ready` if (in rare cases) the default
 // setting is retrieved from the collector but expires after the TTL, and no new
 // setting is fetched.
 func (r *grpcReporter) WaitForReady(ctx context.Context) bool {
@@ -549,7 +549,7 @@ func (r *grpcReporter) periodicTasks() {
 	settingsTimeoutCheckReady <- true
 
 	for {
-		// Exit if the reporter's done channel is closed.
+		// Exit if the Reporter's done channel is closed.
 		select {
 		case <-r.done:
 			if !r.isGracefully() {
@@ -697,7 +697,7 @@ func (r *grpcReporter) eventSender() {
 		// events sending is too slow (or the events are generated too fast).
 		// We have to wait in this case.
 		//
-		// If the reporter is closing, we may have the last chance to send all
+		// If the Reporter is closing, we may have the last chance to send all
 		// the queued events.
 		if evtBucket.Full() {
 			c := evtBucket.Count()
@@ -731,7 +731,7 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 	var messages [][]byte
 
 	for {
-		// this will block until a message arrives or the reporter is closed
+		// this will block until a message arrives or the Reporter is closed
 		select {
 		case messages = <-batches:
 			if len(messages) == 0 {
@@ -824,13 +824,13 @@ func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 	}
 }
 
-// CustomSummaryMetric submits a summary type measurement to the reporter. The measurements
+// CustomSummaryMetric submits a summary type measurement to the Reporter. The measurements
 // will be collected in the background and reported periodically.
 func (r *grpcReporter) CustomSummaryMetric(name string, value float64, opts metrics.MetricOptions) error {
 	return r.customMetrics.Summary(name, value, opts)
 }
 
-// CustomIncrementMetric submits a incremental measurement to the reporter. The measurements
+// CustomIncrementMetric submits a incremental measurement to the Reporter. The measurements
 // will be collected in the background and reported periodically.
 func (r *grpcReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
 	return r.customMetrics.Increment(name, opts)
@@ -945,7 +945,7 @@ func (r *grpcReporter) statusSender() {
 		// this will block until a message arrives
 		case e := <-r.statusMessages:
 			messages = append(messages, e)
-		case <-r.done: // Exit if the reporter's done channel is closed.
+		case <-r.done: // Exit if the Reporter's done channel is closed.
 			return
 		}
 		// one message detected, see if there are more and get them all!
@@ -1029,8 +1029,8 @@ func (c *grpcConnection) ping(exit chan struct{}, key string) error {
 
 // possible errors while issuing an RPC call
 var (
-	// The collector notifies that the service key of this reporter is invalid.
-	// The reporter should be closed in this case.
+	// The collector notifies that the service key of this Reporter is invalid.
+	// The Reporter should be closed in this case.
 	errInvalidServiceKey = errors.New("invalid service key")
 
 	// Only a certain amount of retries are allowed. The message will be dropped
@@ -1044,8 +1044,8 @@ var (
 	// The destination returned by the collector is not valid.
 	errInvalidRedirectTarget = errors.New("redirection target is empty.")
 
-	// the operation or loop cannot continue as the reporter is exiting.
-	errReporterExiting = errors.New("reporter is exiting")
+	// the operation or loop cannot continue as the Reporter is exiting.
+	errReporterExiting = errors.New("Reporter is exiting")
 
 	// something might be wrong if we run into this error.
 	errShouldNotHappen = errors.New("this should not happen")
@@ -1066,7 +1066,7 @@ var (
 // automatically and transparently. It may give up after a certain times of
 // retries, so it is a best-effort service only.
 //
-// When an error is returned, it usually means a fatal error and the reporter
+// When an error is returned, it usually means a fatal error and the Reporter
 // may be shutdown.
 func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 	c.queueStats.SetQueueLargest(m.MessageLen())
@@ -1081,7 +1081,7 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 	printRPCMsg(m)
 
 	for {
-		// Fail-fast in case the reporter has been closed, avoid retrying in
+		// Fail-fast in case the Reporter has been closed, avoid retrying in
 		// this case.
 		select {
 		case <-exit:

@@ -14,7 +14,7 @@ func TestWrappers(t *testing.T) {
 	os.Unsetenv(envAppOpticsHistogramPrecision)
 	Load()
 
-	assert.NotEqual(t, nil, conf)
+	assert.NotEqual(t, nil, GlobalConfig)
 	assert.Equal(t, getFieldDefaultValue(&Config{}, "Collector"), GetCollector())
 	assert.Equal(t, ToInteger(getFieldDefaultValue(&Config{}, "Precision")), GetPrecision())
 
