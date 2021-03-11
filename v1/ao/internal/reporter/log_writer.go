@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/pkg/errors"
 )
 
@@ -68,6 +69,7 @@ func (lr *logWriter) Write(t WriteType, bytes []byte) (int, error) {
 
 	encoded := lr.encode(bytes)
 	if len(encoded) > lr.maxChunkSize {
+		log.Infof("oversize message dropped: size=%v, limit=%v", len(encoded), lr.maxChunkSize)
 		return 0, errors.New("message too big")
 	}
 
