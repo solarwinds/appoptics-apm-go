@@ -379,8 +379,6 @@ func (c *Config) validate() error {
 			if ok := IsValidServiceKey(c.ServiceKey); !ok {
 				return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("service key: \"%s\"", c.ServiceKey))
 			}
-		} else {
-			log.Warning("Service key is not assigned.")
 		}
 	}
 
