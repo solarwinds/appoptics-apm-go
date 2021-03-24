@@ -42,6 +42,8 @@ type reporter interface {
 	CustomIncrementMetric(name string, opts metrics.MetricOptions) error
 	// Flush flush the events buffer to stderr. Currently it's used for AWS Lambda only
 	Flush() error
+	// SetServiceKey attaches a service key to the reporter
+	SetServiceKey(key string)
 }
 
 // KVs from getSettingsResult arguments
@@ -84,6 +86,7 @@ func (r *nullReporter) CustomIncrementMetric(name string, opts metrics.MetricOpt
 	return nil
 }
 func (r *nullReporter) Flush() error { return nil }
+func (r *nullReporter) SetServiceKey(string) {}
 
 // init() is called only once on program startup. Here we create the reporter
 // that will be used throughout the runtime of the app. Default is 'ssl' but
@@ -265,4 +268,8 @@ func SummaryMetric(name string, value float64, opts metrics.MetricOptions) error
 // will be collected in the background and reported periodically.
 func IncrementMetric(name string, opts metrics.MetricOptions) error {
 	return globalReporter.CustomIncrementMetric(name, opts)
+}
+
+func SetServiceKey(key string) {
+	globalReporter.SetServiceKey(key)
 }
