@@ -44,6 +44,9 @@ type Method interface {
 
 	// RetryOnErr checks if the method allows retry
 	RetryOnErr(error) bool
+
+	// ServiceKey returns the service key attached to this method
+	ServiceKey() string
 }
 
 var (
@@ -136,6 +139,10 @@ func (pe *PostEventsMethod) RetryOnErr(err error) bool {
 	return true
 }
 
+func (pe *PostEventsMethod) ServiceKey() string {
+	return pe.serviceKey
+}
+
 // PostMetricsMethod is the struct for RPC method PostMetrics
 type PostMetricsMethod struct {
 	serviceKey string
@@ -220,6 +227,10 @@ func (pm *PostMetricsMethod) RetryOnErr(err error) bool {
 	return true
 }
 
+func (pm *PostMetricsMethod) ServiceKey() string {
+	return pm.serviceKey
+}
+
 // PostStatusMethod is the struct for RPC method PostStatus
 type PostStatusMethod struct {
 	serviceKey string
@@ -294,6 +305,10 @@ func (ps *PostStatusMethod) RetryOnErr(err error) bool {
 		return false
 	}
 	return true
+}
+
+func (ps *PostStatusMethod) ServiceKey() string {
+	return ps.serviceKey
 }
 
 // CallSummary returns a string representation for the RPC call result. It is
@@ -373,6 +388,10 @@ func (gs *GetSettingsMethod) RetryOnErr(err error) bool {
 	return true
 }
 
+func (gs *GetSettingsMethod) ServiceKey() string {
+	return gs.serviceKey
+}
+
 // PingMethod defines the RPC method `Ping`
 type PingMethod struct {
 	conn       string
@@ -442,6 +461,10 @@ func (p *PingMethod) CallSummary() string {
 // RetryOnErr denotes if this RPC method needs a retry on failure.
 func (p *PingMethod) RetryOnErr(err error) bool {
 	return false
+}
+
+func (p *PingMethod) ServiceKey() string {
+	return p.serviceKey
 }
 
 func resultRespStr(r *collector.MessageResult, err error) string {

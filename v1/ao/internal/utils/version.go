@@ -7,7 +7,7 @@ import (
 
 var (
 	// The AppOptics Go agent version
-	version = "1.13.1"
+	version = "1.15.0"
 
 	// The Go version
 	goVersion = strings.TrimPrefix(runtime.Version(), "go")

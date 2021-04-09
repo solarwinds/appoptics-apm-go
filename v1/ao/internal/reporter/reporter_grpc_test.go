@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strings"
 	"sync"
@@ -28,9 +27,8 @@ import (
 )
 
 var (
-	testKeyPath  = path.Join(os.Getenv("GOPATH"), "src/github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter")
-	testKeyFile  = path.Join(testKeyPath, "localhost.key")
-	testCertFile = path.Join(testKeyPath, "localhost.crt")
+	testKeyFile  = path.Join(".", "for_test.key")
+	testCertFile = path.Join(".", "for_test.crt")
 )
 
 type TestGRPCServer struct {

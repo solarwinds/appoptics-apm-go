@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	uatomic "go.uber.org/atomic"
 )
 
 const (
@@ -174,6 +175,7 @@ func newGrpcConnection(name string, target string, opts ...GrpcConnOpt) (*grpcCo
 		connection:  nil,
 		address:     target,
 		certificate: []byte(grpcCertDefault),
+		pingTicker:  time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second),
 		queueStats:  &metrics.EventQueueStats{},
 		backoff:     DefaultBackoff,
 		Dialer:      &DefaultDialer{},
@@ -209,7 +211,7 @@ type grpcReporter struct {
 	getSettingsInterval          int             // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int             // check interval for timed out settings in seconds
 
-	serviceKey string // service key
+	serviceKey  *uatomic.String // service key
 
 	eventMessages  chan []byte              // channel for event messages (sent from agent)
 	spanMessages   chan metrics.SpanMessage // channel for span messages (sent from agent)
@@ -240,20 +242,6 @@ var (
 	ErrShutdownClosedReporter = errors.New("trying to shutdown a closed reporter")
 	ErrShutdownTimeout        = errors.New("Shutdown timeout")
 	ErrReporterIsClosed       = errors.New("the reporter is closed")
-)
-
-const (
-	fullTextInvalidServiceKey = `AppOptics agent is disabled. Check errors below.
-
-	    **No valid service key (defined as token:service_name) is found.** 
-	
-	Please check AppOptics dashboard for your token and use a valid service name.
-	A valid service name should be shorter than 256 characters and contain only 
-	valid characters: [a-z0-9.:_-]. 
-
-	Also note that the agent may convert the service name by removing invalid 
-	characters and replacing spaces with hyphens, so the finalized service key 
-	may be different from your setting.`
 )
 
 func getProxy() string {
@@ -297,7 +285,6 @@ func newGRPCReporter() reporter {
 		return &nullReporter{}
 	}
 
-	// construct the reporter object which handles two connections
 	r := &grpcReporter{
 		conn: grpcConn,
 
@@ -305,7 +292,7 @@ func newGRPCReporter() reporter {
 		getSettingsInterval:          grpcGetSettingsIntervalDefault,
 		settingsTimeoutCheckInterval: grpcSettingsTimeoutCheckIntervalDefault,
 
-		serviceKey: config.GetServiceKey(),
+		serviceKey: uatomic.NewString(config.GetServiceKey()),
 
 		eventMessages:  make(chan []byte, 10000),
 		spanMessages:   make(chan metrics.SpanMessage, 10000),
@@ -322,6 +309,14 @@ func newGRPCReporter() reporter {
 	log.Warningf("The reporter (%v, v%v, go%v) is initialized. Waiting for the dynamic settings.",
 		r.done, utils.Version(), utils.GoVersion())
 	return r
+}
+
+func (r *grpcReporter) Flush() error {
+	return nil
+}
+
+func (r *grpcReporter) SetServiceKey(key string) {
+	r.serviceKey.Store(key)
 }
 
 func (r *grpcReporter) isGracefully() bool {
@@ -542,7 +537,6 @@ func (r *grpcReporter) periodicTasks() {
 	collectMetricsTicker := time.NewTimer(r.collectMetricsNextInterval())
 	getSettingsTicker := time.NewTimer(0)
 	settingsTimeoutCheckTicker := time.NewTimer(time.Duration(r.settingsTimeoutCheckInterval) * time.Second)
-	r.conn.pingTicker = time.NewTimer(time.Duration(grpcPingIntervalDefault) * time.Second)
 
 	defer func() {
 		collectMetricsTicker.Stop()
@@ -613,7 +607,7 @@ func (r *grpcReporter) periodicTasks() {
 			// set up ticker for next round
 			r.conn.resetPing()
 			go func() {
-				if r.conn.ping(r.done, r.serviceKey) == errInvalidServiceKey {
+				if r.conn.ping(r.done, r.serviceKey.Load()) == errInvalidServiceKey {
 					r.ShutdownNow()
 				}
 			}()
@@ -760,7 +754,7 @@ func (r *grpcReporter) eventBatchSender(batches <-chan [][]byte) {
 		}
 
 		if len(messages) != 0 {
-			method := newPostEventsMethod(r.serviceKey, messages)
+			method := newPostEventsMethod(r.serviceKey.Load(), messages)
 			err := r.conn.InvokeRPC(r.done, method)
 
 			switch err {
@@ -797,13 +791,21 @@ func (r *grpcReporter) collectMetrics(collectReady chan bool) {
 	defer func() { collectReady <- true }()
 
 	i := atomic.LoadInt32(&r.collectMetricInterval)
+
+	var messages [][]byte
 	// generate a new metrics message
 	builtin := metrics.BuildBuiltinMetricsMessage(r.httpMetrics.CopyAndReset(i),
 		r.conn.queueStats.CopyAndReset(), FlushRateCounts(), config.GetRuntimeMetrics())
+	if builtin != nil {
+		messages = append(messages, builtin)
+	}
 
-	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i))
+	custom := metrics.BuildMessage(r.customMetrics.CopyAndReset(i), false)
+	if custom != nil {
+		messages = append(messages, custom)
+	}
 
-	r.sendMetrics([][]byte{builtin, custom})
+	r.sendMetrics(messages)
 }
 
 // listens on the metrics message channel, collects all messages on that channel and
@@ -814,7 +816,7 @@ func (r *grpcReporter) sendMetrics(msgs [][]byte) {
 		return
 	}
 
-	method := newPostMetricsMethod(r.serviceKey, msgs)
+	method := newPostMetricsMethod(r.serviceKey.Load(), msgs)
 
 	err := r.conn.InvokeRPC(r.done, method)
 	switch err {
@@ -847,7 +849,7 @@ func (r *grpcReporter) getSettings(ready chan bool) {
 	// notify caller that this routine has terminated (defered to end of routine)
 	defer func() { ready <- true }()
 
-	method := newGetSettingsMethod(r.serviceKey)
+	method := newGetSettingsMethod(r.serviceKey.Load())
 	err := r.conn.InvokeRPC(r.done, method)
 
 	switch err {
@@ -933,6 +935,7 @@ func (r *grpcReporter) reportStatus(ctx *oboeContext, e *event) error {
 	default:
 		return errors.New("status message queue is full")
 	}
+
 }
 
 // long-running goroutine that listens on the status message channel, collects all messages
@@ -960,7 +963,7 @@ func (r *grpcReporter) statusSender() {
 				done = true
 			}
 		}
-		method := newPostStatusMethod(r.serviceKey, messages)
+		method := newPostStatusMethod(r.serviceKey.Load(), messages)
 		err := r.conn.InvokeRPC(r.done, method)
 
 		switch err {
@@ -985,6 +988,7 @@ func (r *grpcReporter) reportSpan(span metrics.SpanMessage) error {
 	if r.Closed() {
 		return ErrReporterIsClosed
 	}
+
 	select {
 	case r.spanMessages <- span:
 		return nil
@@ -1103,7 +1107,12 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 				v := fmt.Sprintf("%d|%d", m.RequestSize(), c.maxReqBytes)
 				err = errors.Wrap(errRequestTooBig, v)
 			} else {
-				err = m.Call(ctx, c.client)
+				if m.ServiceKey() != "" {
+					err = m.Call(ctx, c.client)
+				} else {
+					err = nil
+					log.Infof("%s is skipped as no service key is assigned.", m.String())
+				}
 			}
 
 			code := status.Code(err)
@@ -1224,6 +1233,7 @@ func newHostID(id host.ID) *collector.HostID {
 	gid.MacAddresses = id.MAC()
 	gid.HerokuDynoID = id.HerokuId()
 	gid.AzAppServiceInstanceID = id.AzureAppInstId()
+	gid.HostType = collector.HostType_PERSISTENT
 
 	return gid
 }

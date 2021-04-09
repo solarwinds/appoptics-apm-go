@@ -3,10 +3,16 @@
 package opentracing
 
 import (
+	"fmt"
+	"net/url"
+	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	ot "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 	"github.com/opentracing/opentracing-go/log"
 )
 
@@ -37,6 +43,7 @@ func (t *Tracer) StartSpan(operationName string, opts ...ot.StartSpanOption) ot.
 func (t *Tracer) startSpanWithOptions(operationName string, opts ot.StartSpanOptions) ot.Span {
 	// check if trace has already started (use Trace if there is no parent, Span otherwise)
 	// XXX handle StartTime
+	var newSpan ot.Span
 
 	for _, ref := range opts.References {
 		switch ref.Type {
@@ -44,36 +51,51 @@ func (t *Tracer) startSpanWithOptions(operationName string, opts ot.StartSpanOpt
 		case ot.ChildOfRef, ot.FollowsFromRef:
 			refCtx := ref.ReferencedContext.(spanContext)
 			if refCtx.span == nil { // referenced spanContext created by Extract()
-				var span ao.Span
+				var aoTrace ao.Trace
 				if refCtx.sampled {
 					// TODO: explicitly set span start time
 					span = ao.NewTraceFromID(operationName, refCtx.remoteMD, func() ao.KVMap {
 						return translateTags(opts.Tags)
 					})
 				} else {
-					span = ao.NewNullTrace()
+					aoTrace = ao.NewNullTrace()
 				}
-				return &spanImpl{tracer: t, context: spanContext{
-					span:    span,
+				newSpan = &spanImpl{tracer: t, context: spanContext{
+					trace:   aoTrace,
+					span:    aoTrace,
 					sampled: refCtx.sampled,
 					baggage: refCtx.baggage,
 				},
 				}
+			} else {
+				// referenced spanContext was in-process
+				newSpan = &spanImpl{tracer: t, context: spanContext{
+					trace: refCtx.trace,
+					span:  refCtx.span.BeginSpan(operationName),
+				}}
 			}
-			// referenced spanContext was in-process
-			return &spanImpl{tracer: t, context: spanContext{span: refCtx.span.BeginSpan(operationName)}}
 		}
 	}
 
 	// otherwise, no parent span found, so make new trace and return as span
-	newSpan := &spanImpl{tracer: t, context: spanContext{span: ao.NewTrace(operationName)}}
+	if newSpan == nil {
+		aoTrace := ao.NewTrace(operationName)
+		newSpan = &spanImpl{tracer: t, context: spanContext{trace: aoTrace, span: aoTrace}}
+	}
+
+	// add tags, if provided in span options
+	for k, v := range opts.Tags {
+		newSpan.SetTag(k, v)
+	}
+
 	return newSpan
 }
 
 type spanContext struct {
 	// 1. spanContext created by StartSpanWithOptions
-	span ao.Span
 	// 2. spanContext created by Extract()
+	trace    ao.Trace
+	span     ao.Span
 	remoteMD string
 	sampled  bool
 
@@ -124,7 +146,7 @@ func (c spanContext) WithBaggageItem(key, val string) spanContext {
 		newBaggage[key] = val
 	}
 	// Use positional parameters so the compiler will help catch new fields.
-	return spanContext{c.span, c.remoteMD, c.sampled, newBaggage}
+	return spanContext{c.trace, c.span, c.remoteMD, c.sampled, newBaggage}
 }
 
 // BaggageItem returns the baggage item with the provided key.
@@ -191,8 +213,70 @@ func (s *spanImpl) SetOperationName(operationName string) ot.Span {
 func (s *spanImpl) SetTag(key string, value interface{}) ot.Span {
 	s.Lock()
 	defer s.Unlock()
-	s.context.span.AddEndArgs(translateTagName(key), value)
+	// if transaction name is passed, set on the span
+	tagName := translateTagName(key)
+	switch tagName {
+	case "TransactionName":
+		if txnName, ok := value.(string); ok {
+			s.context.span.SetTransactionName(txnName)
+		}
+	case "Method":
+		s.context.span.AddEndArgs(tagName, value)
+		if method, ok := value.(string); ok {
+			s.context.trace.SetMethod(method)
+		}
+	case "Status":
+		s.context.span.AddEndArgs(tagName, value)
+		switch v := value.(type) {
+		case int:
+			s.context.trace.SetStatus(v)
+		case string:
+			i, err := strconv.Atoi(v)
+			if err == nil {
+				s.context.trace.SetStatus(i)
+			}
+		}
+	case "URL":
+		s.context.span.AddEndArgs(tagName, value)
+		if urlValue, ok := value.(string); ok {
+			if strings.HasPrefix(urlValue, "/") {
+				s.context.trace.SetPath(urlValue)
+			} else {
+				if u, err := url.ParseRequestURI(urlValue); err == nil {
+					s.context.trace.SetPath(u.EscapedPath())
+				}
+			}
+		}
+	case string(ext.Error):
+		s.setErrorTag(value)
+	default:
+		s.context.span.AddEndArgs(tagName, value)
+	}
 	return s
+}
+
+// setErrorTag passes an OT error to the AO span.Error method.
+func (s *spanImpl) setErrorTag(value interface{}) {
+	switch v := value.(type) {
+	case bool:
+		// OpenTracing spec defines bool value
+		if v {
+			s.context.span.Error(string(ext.Error), "true")
+		}
+	case error:
+		// handle error if provided
+		s.context.span.Error(reflect.TypeOf(v).String(), v.Error())
+	case string:
+		// error string provided
+		s.context.span.Error(string(ext.Error), v)
+	case fmt.Stringer:
+		s.context.span.Error(string(ext.Error), v.String())
+	case nil:
+		// no error, ignore
+	default:
+		// an unknown error type, assume an error
+		s.context.span.Error(string(ext.Error), reflect.TypeOf(v).String())
+	}
 }
 
 // LogEvent logs a event to the span.

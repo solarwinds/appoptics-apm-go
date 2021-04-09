@@ -30,6 +30,7 @@ const (
 	keyEdge            = "Edge"
 	keySpec            = "Spec"
 	keyErrorClass      = "ErrorClass"
+	keyErrorType       = "ErrorType"
 	keyErrorMsg        = "ErrorMsg"
 	keyAsync           = "Async"
 	keyLanguage        = "Language"
@@ -40,13 +41,21 @@ const (
 	keyController      = "Controller"
 	keyAction          = "Action"
 	keyTransactionName = "TransactionName"
-	keyMethod          = "Method"
+	keyHTTPMethod      = "HTTPMethod"
 	keyHTTPHost        = "HTTP-Host"
 	keyURL             = "URL"
 	keyRemoteHost      = "Remote-Host"
 	keyQueryString     = "Query-String"
 	keyRemoteStatus    = "RemoteStatus"
 	keyContentLength   = "ContentLength"
+	keyProto           = "Proto"
+	keyPort            = "Port"
+	keyClientIP        = "ClientIP"
+	keyForwardedFor    = "Forwarded-For"
+	keyForwardedHost   = "Forwarded-Host"
+	keyForwardedProto  = "Forwarded-Proto"
+	keyForwardedPort   = "Forwarded-Port"
+	keyRequestOrigURI  = "Request-Orig-URI"
 )
 
 // Span is used to measure a span of time associated with an activity
@@ -76,6 +85,8 @@ type Span interface {
 	// InfoWithOptions reports a new info event with the KVs and options provided
 	InfoWithOptions(opts SpanOptions, args ...interface{})
 
+	// ErrorWithOpts reports an error with customized options
+	ErrorWithOpts(opts... ErrOpt)
 	// Error reports details about an error (along with a stack trace) for this Span.
 	Error(class, msg string)
 	// Err reports details about error err (along with a stack trace) for this Span.
@@ -141,6 +152,7 @@ type SpanOptions struct {
 	StartTime     time.Time
 	EndTime       time.Time
 	ContextOptions
+	TransactionName string
 }
 
 // SpanOpt defines the function type that changes the SpanOptions
@@ -344,27 +356,91 @@ func (s *span) GetTransactionName() string {
 	return s.aoCtx.GetTransactionName()
 }
 
-// Error reports an error, distinguished by its class and message
-func (s *span) Error(class, msg string) {
-	s.ErrWithOptions(ErrorOptions{
-		Timestamp: time.Time{},
-		Class:     class,
-		Msg:       msg,
-	})
+type ErrType string
+
+const (
+	ErrTypeException = "exception"
+	ErrTypeStatus = "status"
+)
+
+// error classes
+const (
+	ErrClassHTTPError = "http error"
+	ErrClassError = "error"
+)
+
+type ErrOpts struct {
+	Type ErrType
+	Class string
+	Msg string
+	WithBackTrace bool
 }
 
-func (s *span) ErrWithOptions(opts ErrorOptions) {
+type ErrOpt func(*ErrOpts)
+
+func WithErrType(tp ErrType) ErrOpt {
+	return func(opts *ErrOpts) {
+		opts.Type = tp
+	}
+}
+
+func WithErrClass(c string) ErrOpt {
+	return func(opts *ErrOpts) {
+		opts.Class = c
+	}
+}
+
+func WithErrMsg(msg string) ErrOpt {
+	return func (opts *ErrOpts) {
+		opts.Msg = msg
+	}
+}
+
+func WithErrBackTrace(withBackTrace bool) ErrOpt {
+	return func(opts *ErrOpts) {
+		opts.WithBackTrace = withBackTrace
+	}
+}
+
+func (s *span) ErrorWithOpts(opts... ErrOpt) {
+	errOpts := &ErrOpts{
+		Type: "exception",
+		Class: "error",
+	}
+
+	for _, opt := range opts {
+		opt(errOpts)
+	}
+
+	var backTrace string
+	if errOpts.WithBackTrace {
+		backTrace = string(debug.Stack())
+	}
+
+	if errOpts.Type == ErrTypeStatus {
+		errOpts.Class = ErrClassHTTPError
+	}
+	
+  args := []interface{}{
+    	keySpec, "error",
+			keyErrorType, errOpts.Type,
+			keyErrorClass, errOpts.Class,
+			keyErrorMsg, errOpts.Msg,
+			KeyBackTrace, backTrace,
+  }
+  
+  if !opts.Timestamp.IsZero() {
+		args = append(args, "Timestamp_u", opts.Timestamp.UnixNano()/1000)
+	}
+  
 	if s.ok() {
-		args := []interface{}{keySpec, "error",
-			keyErrorClass, opts.Class,
-			keyErrorMsg, opts.Msg,
-			KeyBackTrace, string(debug.Stack()),
-		}
-		if !opts.Timestamp.IsZero() {
-			args = append(args, "Timestamp_u", opts.Timestamp.UnixNano()/1000)
-		}
 		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(), args...)
 	}
+}
+
+// Error reports an error, distinguished by its class and message
+func (s *span) Error(class, msg string) {
+	s.ErrorWithOpts(WithErrType(ErrTypeException), WithErrClass(class), WithErrMsg(msg), WithErrBackTrace(true))
 }
 
 // Err reports the provided error type
@@ -372,7 +448,7 @@ func (s *span) Err(err error) {
 	if err == nil {
 		return
 	}
-	s.ErrWithOptions(ErrorOptions{Class: "error", Msg: err.Error()})
+	s.Error("error", err.Error())
 }
 
 // span satisfies the Extent interface and consolidates common reporting routines used by
@@ -399,6 +475,7 @@ func (s nullSpan) BeginProfile(name string, args ...interface{}) Profile { retur
 func (s nullSpan) End(args ...interface{})                               {}
 func (s nullSpan) AddEndArgs(args ...interface{})                        {}
 func (s nullSpan) Error(class, msg string)                               {}
+func (s nullSpan) ErrorWithOpts(opts... ErrOpt) {}
 func (s nullSpan) Err(err error)                                         {}
 func (s nullSpan) ErrWithOptions(ErrorOptions)                           {}
 func (s nullSpan) Info(args ...interface{})                              {}
@@ -458,6 +535,10 @@ func (l spanLabeler) layerName() string          { return l.name }
 func (l spanLabeler) setName(name string)        { l.name = name }
 
 func newSpan(aoCtx reporter.Context, spanName string, parent Span, args ...interface{}) Span {
+	if spanName == "" {
+		return nullSpan{}
+	}
+
 	ll := spanLabeler{spanName}
 	if err := aoCtx.ReportEvent(ll.entryLabel(), ll.layerName(), args...); err != nil {
 		return nullSpan{}

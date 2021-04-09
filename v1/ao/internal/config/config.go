@@ -36,24 +36,30 @@ const (
 	maxConfigFileSize = 1024 * 1024
 	// the default collector url
 	defaultSSLCollector = "collector.appoptics.com:443"
+	maxTokenBucketCapacity = 8
+	maxTokenBucketRate =4
 )
 
 // The environment variables
 const (
-	envAppOpticsCollector           = "APPOPTICS_COLLECTOR"
-	envAppOpticsServiceKey          = "APPOPTICS_SERVICE_KEY"
-	envAppOpticsTrustedPath         = "APPOPTICS_TRUSTEDPATH"
-	envAppOpticsCollectorUDP        = "APPOPTICS_COLLECTOR_UDP"
-	envAppOpticsReporter            = "APPOPTICS_REPORTER"
-	envAppOpticsTracingMode         = "APPOPTICS_TRACING_MODE"
-	envAppOpticsSampleRate          = "APPOPTICS_SAMPLE_RATE"
-	envAppOpticsPrependDomain       = "APPOPTICS_PREPEND_DOMAIN"
-	envAppOpticsHostnameAlias       = "APPOPTICS_HOSTNAME_ALIAS"
-	envAppOpticsHistogramPrecision  = "APPOPTICS_HISTOGRAM_PRECISION"
-	envAppOpticsEventsFlushInterval = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
-	envAppOpticsMaxReqBytes         = "APPOPTICS_MAX_REQUEST_BYTES"
-	envAppOpticsDisabled            = "APPOPTICS_DISABLED"
-	EnvAppOpticsConfigFile          = "APPOPTICS_CONFIG_FILE"
+	envAppOpticsCollector             = "APPOPTICS_COLLECTOR"
+	envAppOpticsServiceKey            = "APPOPTICS_SERVICE_KEY"
+	envAppOpticsTrustedPath           = "APPOPTICS_TRUSTEDPATH"
+	envAppOpticsCollectorUDP          = "APPOPTICS_COLLECTOR_UDP"
+	envAppOpticsReporter              = "APPOPTICS_REPORTER"
+	envAppOpticsTracingMode           = "APPOPTICS_TRACING_MODE"
+	envAppOpticsSampleRate            = "APPOPTICS_SAMPLE_RATE"
+	envAppOpticsPrependDomain         = "APPOPTICS_PREPEND_DOMAIN"
+	envAppOpticsHostnameAlias         = "APPOPTICS_HOSTNAME_ALIAS"
+	envAppOpticsHistogramPrecision    = "APPOPTICS_HISTOGRAM_PRECISION"
+	envAppOpticsEventsFlushInterval   = "APPOPTICS_EVENTS_FLUSH_INTERVAL"
+	envAppOpticsMaxReqBytes           = "APPOPTICS_MAX_REQUEST_BYTES"
+	envAppOpticsDisabled              = "APPOPTICS_DISABLED"
+	envAppOpticsConfigFile            = "APPOPTICS_CONFIG_FILE"
+	envAppOpticsServerlessServiceName = "APPOPTICS_SERVICE_NAME"
+	envAppOpticsTokenBucketCap        = "APPOPTICS_TOKEN_BUCKET_CAPACITY"
+	envAppOpticsTokenBucketRate       = "APPOPTICS_TOKEN_BUCKET_RATE"
+	envAppOpticsTransactionName       = "APPOPTICS_TRANSACTION_NAME"
 )
 
 // Errors
@@ -121,6 +127,12 @@ type Config struct {
 	ProxyCertPath string `yaml:"ProxyCertPath" env:"APPOPTICS_PROXY_CERT_PATH"`
 	// Report runtime metrics or not
 	RuntimeMetrics bool `yaml:"RuntimeMetrics" env:"APPOPTICS_RUNTIME_METRICS" default:"true"`
+	// ReportQueryString indicates if the query string should be reported as part of the URL
+	ReportQueryString bool    `yaml:"ReportQueryString" env:"APPOPTICS_REPORT_QUERY_STRING" default:"true"`
+	TokenBucketCap    float64 `yaml:"TokenBucketCap" env:"APPOPTICS_TOKEN_BUCKET_CAPACITY" default:"8"`
+	TokenBucketRate   float64 `yaml:"TokenBucketRate" env:"APPOPTICS_TOKEN_BUCKET_RATE" default:"0.17"`
+	// The user-defined transaction name. It's only available in the AWS Lambda environment.
+	TransactionName string `yaml:"TransactionName" env:"APPOPTICS_TRANSACTION_NAME"`
 }
 
 // SamplingConfig defines the configuration options for the sampling decision
@@ -324,15 +336,15 @@ const (
 	may be different from your setting.`
 )
 
+// hasLambdaEnv checks if the AWS Lambda env var is set.
+func hasLambdaEnv() bool {
+	return os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" && os.Getenv("LAMBDA_TASK_ROOT") != ""
+}
+
 func (c *Config) validate() error {
 	if ok := IsValidHost(c.Collector); !ok {
 		log.Info(InvalidEnv("Collector", c.Collector))
 		c.Collector = getFieldDefaultValue(c, "Collector")
-	}
-
-	c.ServiceKey = ToServiceKey(c.ServiceKey)
-	if ok := IsValidServiceKey(c.ServiceKey); !ok {
-		return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("service key: \"%s\"", c.ServiceKey))
 	}
 
 	if ok := IsValidFile(c.TrustedPath); !ok {
@@ -346,10 +358,28 @@ func (c *Config) validate() error {
 		c.Ec2MetadataTimeout = t
 	}
 
-	c.ReporterType = strings.ToLower(strings.TrimSpace(c.ReporterType))
+	if hasLambdaEnv() {
+		c.ReporterType = reporterTypeServerless
+	} else {
+		c.ReporterType = strings.ToLower(strings.TrimSpace(c.ReporterType))
+	}
 	if ok := IsValidReporterType(c.ReporterType); !ok {
 		log.Info(InvalidEnv("ReporterType", c.ReporterType))
 		c.ReporterType = getFieldDefaultValue(c, "ReporterType")
+	}
+
+	if c.TransactionName != "" && c.ReporterType != reporterTypeServerless {
+		log.Info(InvalidEnv("TransactionName", c.TransactionName))
+		c.TransactionName = getFieldDefaultValue(c, "TransactionName")
+	}
+
+	if c.ReporterType != reporterTypeServerless {
+		if c.ServiceKey != "" {
+			c.ServiceKey = ToServiceKey(c.ServiceKey)
+			if ok := IsValidServiceKey(c.ServiceKey); !ok {
+				return errors.Wrap(ErrInvalidServiceKey, fmt.Sprintf("service key: \"%s\"", c.ServiceKey))
+			}
+		}
 	}
 
 	c.Sampling.validate()
@@ -362,6 +392,24 @@ func (c *Config) validate() error {
 	if _, valid := log.ToLogLevel(c.DebugLevel); !valid {
 		log.Warning(InvalidEnv("DebugLevel", c.DebugLevel))
 		c.DebugLevel = getFieldDefaultValue(c, "DebugLevel")
+	}
+
+	if valid := IsValidTokenBucketCap(c.TokenBucketCap); !valid {
+		log.Warning(InvalidEnv("TokenBucketCap", fmt.Sprintf("%f", c.TokenBucketCap)))
+		if c.TokenBucketCap < 0 {
+			c.TokenBucketCap = 0;
+		} else {
+			c.TokenBucketCap = maxTokenBucketCapacity
+		}
+	}
+
+	if valid := IsValidTokenBucketRate(c.TokenBucketRate); !valid {
+		log.Warning(InvalidEnv("TokenBucketRate", fmt.Sprintf("%f", c.TokenBucketRate)))
+		if c.TokenBucketRate < 0 {
+			c.TokenBucketRate = 0
+		} else {
+			c.TokenBucketRate = maxTokenBucketRate
+		}
 	}
 
 	return c.ReporterProperties.validate()
@@ -533,7 +581,7 @@ func initStruct(c interface{}) interface{} {
 			initStruct(getValPtr(cVal.Field(i)).Interface())
 		} else {
 			tagVal := getFieldDefaultValue(c, field.Name)
-			defaultVal := stringToValue(tagVal, field.Type)
+			defaultVal, _ := stringToValue(tagVal, field.Type)
 
 			resetMethod := fmt.Sprintf("%s%s", "Reset", field.Name)
 			var prefix string
@@ -615,7 +663,7 @@ func getValPtr(val reflect.Value) reflect.Value {
 
 // getConfigPath returns the absolute path of the config file.
 func (c *Config) getConfigPath() string {
-	path, ok := os.LookupEnv(EnvAppOpticsConfigFile)
+	path, ok := os.LookupEnv(envAppOpticsConfigFile)
 	if ok {
 		if abs, err := filepath.Abs(path); err == nil {
 			return abs
@@ -838,11 +886,40 @@ func (c *Config) GetRuntimeMetrics() bool {
 	return c.RuntimeMetrics
 }
 
+// GetTokenBucketCap returns the token bucket capacity
+func (c *Config) GetTokenBucketCap() float64 {
+	c.RLock()
+	defer c.RUnlock()
+	return c.TokenBucketCap
+}
+
+// GetTokenBucketRate returns the token bucket rate
+func (c *Config) GetTokenBucketRate() float64 {
+	c.RLock()
+	defer c.RUnlock()
+	return c.TokenBucketRate
+}
+
+// GetReportQueryString returns the ReportQueryString flag
+func (c *Config) GetReportQueryString() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.ReportQueryString
+}
+
 // GetTransactionFiltering returns the transaction filtering config
 func (c *Config) GetTransactionFiltering() []TransactionFilter {
 	c.RLock()
 	defer c.RUnlock()
 	return c.TransactionSettings
+}
+
+// GetTransactionName returns the user-defined transaction name. It's only available
+// in the AWS Lambda environment.
+func (c *Config) GetTransactionName() string {
+	c.RLock()
+	defer c.RUnlock()
+	return c.TransactionName
 }
 
 // GetSQLSanitize returns the SQL sanitization level.

@@ -33,6 +33,13 @@ const (
 	invalidCharReplacer = ""
 )
 
+// reporter types
+const (
+	reporterTypeSSL = "ssl"
+	reporterTypeUDP = "udp"
+	reporterTypeServerless = "serverless"
+)
+
 var (
 	// IsValidServiceKey verifies if the service key is a valid one.
 	// A valid service key is something like 'service_token:service_name'.
@@ -88,7 +95,7 @@ func IsValidFile(file string) bool {
 // IsValidReporterType checks if the reporter type is valid.
 func IsValidReporterType(t string) bool {
 	t = strings.ToLower(strings.TrimSpace(t))
-	return t == "ssl" || t == "udp"
+	return t == reporterTypeSSL || t == reporterTypeUDP || t == reporterTypeServerless
 }
 
 // IsValidEc2MetadataTimeout checks if the timeout is within the designated range
@@ -104,6 +111,14 @@ func IsValidTracingMode(m TracingMode) bool {
 // IsValidSampleRate checks if the rate is valid
 func IsValidSampleRate(rate int) bool {
 	return rate >= MinSampleRate && rate <= MaxSampleRate
+}
+
+func IsValidTokenBucketRate(rate float64) bool {
+	return rate >= 0 && rate <= maxTokenBucketRate
+}
+
+func IsValidTokenBucketCap(cap float64) bool {
+	return cap >= 0 && cap <= maxTokenBucketCapacity
 }
 
 // NormalizeTracingMode converts an old-style tracing mode (always/never) to a
@@ -151,5 +166,9 @@ func MaskServiceKey(validKey string) string {
 	tk = tk[0:4] + strings.Repeat(mask,
 		utf8.RuneCountInString(tk)-hLen-tLen) + tk[len(tk)-4:]
 
-	return tk + sep + s[1]
+	masked := tk + sep
+	if len(s) >= 2 {
+		masked += s[1]
+	}
+	return masked
 }

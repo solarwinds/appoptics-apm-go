@@ -3,7 +3,6 @@
 package ao
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,7 +43,7 @@ func TestSetLogOutput(t *testing.T) {
 	_ = SetLogLevel("DEBUG")
 	defer SetLogLevel(oldLevel)
 
-	var buf bytes.Buffer
+	var buf utils.SafeBuffer
 	log.SetOutput(&buf)
 	defer func() {
 		log.SetOutput(os.Stderr)

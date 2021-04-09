@@ -136,6 +136,20 @@ func (_m *Method) RetryOnErr(_a0 error) bool {
 	return r0
 }
 
+// ServiceKey provides a mock function with given fields:
+func (_m *Method) ServiceKey() string {
+	ret := _m.Called()
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
 // String provides a mock function with given fields:
 func (_m *Method) String() string {
 	ret := _m.Called()

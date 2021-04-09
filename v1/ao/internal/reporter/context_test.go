@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"errors"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -152,11 +153,13 @@ type errorReader struct {
 	callCount int
 }
 
+var errRandReadError = errors.New("rand error")
+
 func (r *errorReader) Read(p []byte) (n int, err error) {
 	// fail always, or on specified calls
 	r.callCount++
 	if r.failOn == nil || r.failOn[r.callCount-1] {
-		return 0, errors.New("rand error")
+		return 0, errRandReadError
 	}
 	return rand.Read(p)
 }
@@ -327,4 +330,35 @@ func TestParseTriggerTraceFlag(t *testing.T) {
 	mode, kvs, ignored, err = parseTriggerTraceFlag(opts, sig)
 	assert.EqualValues(t, ModeInvalidTriggerTrace, mode)
 	assert.NotNil(t, err)
+}
+
+func TestAllZeroTaskID(t *testing.T) {
+	var md oboeMetadata
+	assert.EqualValues(t, errInvalidTaskID, md.FromString("2B0000000000000000000000000000000000000000AB2198D447EA220300"))
+}
+
+type AllZeroThenRandReader struct {
+	allZero int
+	rand io.Reader
+}
+
+func (r *AllZeroThenRandReader) Read(p []byte) (n int, err error) {
+	if r.allZero > 0 {
+		r.allZero--
+		for i := range p {
+			p[i] = 0
+		}
+		return len(p), nil
+	} else {
+		return rand.Read(p)
+	}
+}
+
+func TestSetRandomTaskID(t *testing.T) {
+	var md oboeMetadata
+	md.Init()
+	assert.Nil(t, md.SetRandomTaskID(randReader))
+	assert.EqualValues(t, errRandReadError, md.SetRandomTaskID(&errorReader{failOn: map[int]bool{0: true}}))
+	assert.Nil(t, nil, md.SetRandomTaskID(&AllZeroThenRandReader{allZero: 1, rand: randReader}))
+	assert.EqualValues(t, errInvalidTaskID, md.SetRandomTaskID(&AllZeroThenRandReader{allZero: 2, rand: randReader}))
 }

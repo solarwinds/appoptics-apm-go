@@ -3,11 +3,13 @@
 package reporter
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,8 +42,23 @@ const HTTPHeaderXTraceOptions = "X-Trace-Options"
 const HTTPHeaderXTraceOptionsSignature = "X-Trace-Options-Signature"
 const HTTPHeaderXTraceOptionsResponse = "X-Trace-Options-Response"
 
+var (
+	errInvalidTaskID = errors.New("invalid task id")
+)
+
+// All-zero slice to validate the task ID, do not modify it
+var allZeroTaskID = make([]byte, oboeMaxTaskIDLen)
+
 // orchestras tune to the oboe.
 type oboeIDs struct{ taskID, opID []byte }
+
+func (ids oboeIDs) validate() error {
+	if bytes.Compare(allZeroTaskID, ids.taskID) != 0 {
+		return nil
+	} else {
+		return errInvalidTaskID
+	}
+}
 
 type oboeMetadata struct {
 	version uint8
@@ -108,11 +125,29 @@ func (md *oboeMetadata) SetRandom() error {
 	if md == nil {
 		return errors.New("md.SetRandom: nil md")
 	}
-	_, err := randReader.Read(md.ids.taskID)
-	if err != nil {
+
+	if err := md.SetRandomTaskID(randReader); err != nil {
 		return err
 	}
-	_, err = randReader.Read(md.ids.opID)
+	return md.SetRandomOpID()
+}
+
+// SetRandomTaskID randomize the task ID. It will retry if the random reader returns
+// an error or produced task ID is all-zero, which rarely happens though.
+func (md *oboeMetadata) SetRandomTaskID(rand io.Reader) (err error) {
+	retried := 0
+	for retried < 2 {
+		if _, err = rand.Read(md.ids.taskID); err != nil {
+			break
+		}
+
+		if err = md.ids.validate(); err != nil {
+			retried++
+			continue
+		}
+		break
+	}
+
 	return err
 }
 
@@ -250,7 +285,11 @@ func (md *oboeMetadata) FromString(buf string) error {
 		return errors.New("md.FromString: hex not valid")
 	}
 	ubuf = ubuf[:ret] // truncate buffer to fit decoded bytes
-	return md.Unpack(ubuf)
+	err = md.Unpack(ubuf)
+	if err != nil {
+		return err
+	}
+	return md.ids.validate()
 }
 
 func (md *oboeMetadata) ToString() (string, error) {
@@ -496,6 +535,7 @@ func tsInScope(tsStr string) (string, error) {
 // function returns, calling cb if provided for additional KV pairs.
 func NewContext(layer string, reportEntry bool, opts ContextOptions,
 	cb func() KVMap) (ctx Context, ok bool, headers map[string]string) {
+
 	traced := false
 	addCtxEdge := false
 
@@ -535,6 +575,8 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		}
 	}()
 
+	continuedTrace := false
+
 	if opts.MdStr != "" {
 		var err error
 		if ctx, err = newContextFromMetadataString(opts.MdStr); err != nil {
@@ -544,6 +586,7 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 		} else if ctx.IsSampled() {
 			traced = true
 			addCtxEdge = true
+			continuedTrace = true
 		} else {
 			setting, has := getSetting(layer)
 			if !has {
@@ -585,8 +628,13 @@ func NewContext(layer string, reportEntry bool, opts ContextOptions,
 				kvs[k] = v
 			}
 
-			kvs["SampleRate"] = decision.rate
-			kvs["SampleSource"] = decision.source
+			if !continuedTrace {
+				kvs["SampleRate"] = decision.rate
+				kvs["SampleSource"] = decision.source
+				kvs["BucketCapacity"] = fmt.Sprintf("%f", decision.bucketCap)
+				kvs["BucketRate"] = fmt.Sprintf("%f", decision.bucketRate)
+			}
+
 			if tMode.Enabled() && !traced {
 				kvs["TriggeredTrace"] = true
 			}

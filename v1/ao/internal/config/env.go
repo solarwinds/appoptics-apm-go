@@ -20,7 +20,7 @@ func toBool(s string) (bool, error) {
 	} else if s == "no" || s == "false" || s == "disabled" {
 		return false, nil
 	}
-	return false, errors.New("cannot convert input to bool")
+	return false, fmt.Errorf("cannot convert %s to bool", s)
 }
 
 // c must be a pointer to a struct object
@@ -55,13 +55,16 @@ func loadEnvsInternal(c interface{}) {
 				continue
 			}
 
-			setField(c, "Set", field, stringToValue(envVal, fieldV.Type()))
+			val, err := stringToValue(envVal, fieldV.Type())
+			if err == nil {
+				setField(c, "Set", field, val)
+			}
 		}
 	}
 }
 
 // stringToValue converts a string to a value of the type specified by typ.
-func stringToValue(s string, typ reflect.Type) reflect.Value {
+func stringToValue(s string, typ reflect.Type) (reflect.Value, error) {
 	s = strings.TrimSpace(s)
 
 	var val interface{}
@@ -85,6 +88,14 @@ func stringToValue(s string, typ reflect.Type) reflect.Value {
 		if err != nil {
 			log.Warningf("Ignore invalid int64 value: %s", s)
 		}
+	case reflect.Float64:
+		if s == "" {
+			s = "0"
+		}
+		val, err = strconv.ParseFloat(s, 64)
+		if err != nil {
+			log.Warningf("Ignore invalid float64 value: %s", s)
+		}
 	case reflect.String:
 		val = s
 	case reflect.Bool:
@@ -97,7 +108,7 @@ func stringToValue(s string, typ reflect.Type) reflect.Value {
 		}
 	case reflect.Slice:
 		if s == "" {
-			return reflect.Zero(typ)
+			return reflect.Zero(typ), nil
 		} else {
 			panic(fmt.Sprintf("Slice with non-empty value is not supported"))
 		}
@@ -106,5 +117,5 @@ func stringToValue(s string, typ reflect.Type) reflect.Value {
 		panic(fmt.Sprintf("Unsupported kind: %v, val: %s", kind, s))
 	}
 	// convert to the target type as `typ` may be a user defined type
-	return reflect.ValueOf(val).Convert(typ)
+	return reflect.ValueOf(val).Convert(typ), err
 }
