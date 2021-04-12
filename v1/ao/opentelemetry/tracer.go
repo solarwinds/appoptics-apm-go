@@ -7,57 +7,33 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
-	"go.opentelemetry.io/otel/api/core"
-	"go.opentelemetry.io/otel/api/key"
-	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
-// tracer implements the Tracer interface of OpenTelemetry
-type tracer struct {
+// tracerImpl implements the Tracer interface of OpenTelemetry
+type tracerImpl struct {
 	name string
 }
 
-var _ trace.Tracer = &tracer{}
-
-// WithSpan wraps the execution of the fn function with a spanImpl.
-// It starts a new spanImpl, sets it as an active spanImpl in the context,
-// executes the fn function and closes the spanImpl before returning the
-// result of fn.
-func (t *tracer) WithSpan(ctx context.Context, name string,
-	body func(context.Context) error, opts ...trace.StartOption) error {
-	ctx, span := t.Start(ctx, name, opts...)
-	defer span.End()
-
-	if err := body(ctx); err != nil {
-		return err
-	}
-	return nil
-}
+var _ trace.Tracer = &tracerImpl{}
 
 // Start a span
-func (t *tracer) Start(ctx context.Context, name string,
-	o ...trace.StartOption) (context.Context, trace.Span) {
-	var opts trace.StartConfig
+func (t *tracerImpl) Start(ctx context.Context, name string, options ...trace.SpanOption) (context.Context, trace.Span) {
+	config := trace.NewSpanConfig(options...)
 
-	for _, op := range o {
-		op(&opts)
-	}
-
-	parentSpan, remoteSpanCtx, links := GetSpanContextAndLinks(ctx, opts.NewRoot)
+	parentSpan, links := GetSpanContextAndLinks(ctx, config.NewRoot)
 	s := &spanImpl{tracer: t}
 	if parentSpan != nil {
 		s.parent = parentSpan // TODO we don't seem to need it?
 		parentAoSpan := parentSpan.(*spanImpl)
 		s.aoSpan = parentAoSpan.aoSpan.BeginSpanWithOptions(name, ao.SpanOptions{
-			StartTime: opts.StartTime,
+			StartTime: config.Timestamp,
 		})
 	} else {
 		mdStr := ""
-		if remoteSpanCtx != core.EmptySpanContext() {
-			mdStr = OTSpanContext2MdStr(remoteSpanCtx)
-		}
 		s.aoSpan = ao.NewTraceWithOptions(s.name, ao.SpanOptions{
-			StartTime: opts.StartTime,
+			StartTime: config.Timestamp,
 			ContextOptions: ao.ContextOptions{
 				MdStr: mdStr,
 			},
@@ -69,7 +45,7 @@ func (t *tracer) Start(ctx context.Context, name string,
 	for _, l := range links {
 		s.addLink(l)
 	}
-	for _, l := range opts.Links {
+	for _, l := range config.Links {
 		s.addLink(l)
 	}
 
@@ -80,51 +56,46 @@ func (t *tracer) Start(ctx context.Context, name string,
 // produces the links accordingly.
 // This is based from the OpenTelemetry sdk code.
 func GetSpanContextAndLinks(ctx context.Context,
-	ignoreContext bool) (trace.Span, core.SpanContext, []trace.Link) {
+	ignoreContext bool) (trace.Span, []trace.Link) {
 	local := trace.SpanFromContext(ctx)
-	remoteContext := trace.RemoteSpanContextFromContext(ctx)
 
 	if ignoreContext {
 		links := addLinkIfValid(nil, local.SpanContext(), "current")
-		links = addLinkIfValid(links, remoteContext, "remote")
-
-		return nil, core.EmptySpanContext(), links
+		return nil, links
 	}
 	if local.SpanContext().IsValid() {
-		return local, core.EmptySpanContext(), nil
+		return local, nil
 	}
-	if remoteContext.IsValid() {
-		return nil, remoteContext, nil
-	}
-	return nil, core.EmptySpanContext(), nil
+
+	return nil, nil
 }
 
-func addLinkIfValid(links []trace.Link, sc core.SpanContext, kind string) []trace.Link {
+func addLinkIfValid(links []trace.Link, sc trace.SpanContext, kind string) []trace.Link {
 	if !sc.IsValid() {
 		return links
 	}
 	return append(links, trace.Link{
 		SpanContext: sc,
-		Attributes: []core.KeyValue{
-			key.String("ignored-on-demand", kind),
+		Attributes: []attribute.KeyValue{
+			attribute.String("ignored-on-demand", kind),
 		},
 	})
 }
 
 // OTSpanContext2MdStr generates the X-Trace ID from the OpenTelemetry span context.
-func OTSpanContext2MdStr(context core.SpanContext) string {
-	return getXTraceID(context.SpanID, context.TraceID, context.IsSampled())
+func OTSpanContext2MdStr(context trace.SpanContext) string {
+	return getXTraceID(context.SpanID(), context.TraceID(), context.IsSampled())
 }
 
-func MdStr2OTSpanContext(mdStr string) core.SpanContext {
+func MdStr2OTSpanContext(mdStr string) trace.SpanContext {
 	// TODO
 	//
 	//  we are not able to convert it back seamlessly as the task ID will be
 	// truncated and lose precision.
-	return core.EmptySpanContext()
+	return trace.SpanContext{}
 }
 
-func getXTraceID(spanID core.SpanID, traceID core.TraceID, sampled bool) string {
+func getXTraceID(spanID trace.SpanID, traceID trace.TraceID, sampled bool) string {
 	buf := bytes.Buffer{}
 	buf.WriteString("2B")
 

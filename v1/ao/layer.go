@@ -92,8 +92,6 @@ type Span interface {
 	// Err reports details about error err (along with a stack trace) for this Span.
 	Err(error)
 
-	ErrWithOptions(ErrorOptions)
-
 	// MetadataString returns a string representing this Span for use
 	// in distributed tracing, e.g. to provide as an "X-Trace" header
 	// in an outgoing HTTP request.
@@ -420,17 +418,13 @@ func (s *span) ErrorWithOpts(opts... ErrOpt) {
 	if errOpts.Type == ErrTypeStatus {
 		errOpts.Class = ErrClassHTTPError
 	}
-	
-  args := []interface{}{
+
+	args := []interface{}{
     	keySpec, "error",
 			keyErrorType, errOpts.Type,
 			keyErrorClass, errOpts.Class,
 			keyErrorMsg, errOpts.Msg,
 			KeyBackTrace, backTrace,
-  }
-  
-  if !opts.Timestamp.IsZero() {
-		args = append(args, "Timestamp_u", opts.Timestamp.UnixNano()/1000)
 	}
   
 	if s.ok() {

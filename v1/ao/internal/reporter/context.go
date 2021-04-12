@@ -47,7 +47,7 @@ var (
 )
 
 // All-zero slice to validate the task ID, do not modify it
-var allZeroTaskID = make([]byte, oboeMaxTaskIDLen)
+var allZeroTaskID = make([]byte, OboeMaxTaskIDLen)
 
 // orchestras tune to the oboe.
 type oboeIDs struct{ taskID, opID []byte }

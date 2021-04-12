@@ -2,15 +2,14 @@ package opentelemetry
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
-	"go.opentelemetry.io/otel/api/core"
-	"go.opentelemetry.io/otel/api/key"
-	"go.opentelemetry.io/otel/api/trace"
-	"google.golang.org/grpc/codes"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/attribute"
+
+	"go.opentelemetry.io/otel/codes"
 )
 
 // TODO test
@@ -18,20 +17,20 @@ type spanImpl struct {
 	mu            sync.Mutex
 	tracer        trace.Tracer
 	aoSpan        ao.Span
-	context       core.SpanContext
+	context       trace.SpanContext
 	name          string
 	statusCode    codes.Code
 	statusMessage string
-	attributes    []core.KeyValue
+	attributes    []attribute.KeyValue
 	links         []trace.Link
 	parent        trace.Span
 }
 
-var _ trace.Span = &spanImpl{}
+var _ trace.Span = (*spanImpl)(nil)
 
 func Wrapper(aoSpan ao.Span) trace.Span {
 	return &spanImpl{
-		tracer:  nil, // TODO no tracer for it, should be OK?
+		tracer:  nil, // TODO no tracerImpl for it, should be OK?
 		aoSpan:  aoSpan,
 		context: MdStr2OTSpanContext(aoSpan.MetadataString()),
 		name:    "", // TODO expose AO span name
@@ -44,7 +43,7 @@ func (s *spanImpl) Tracer() trace.Tracer {
 	return s.tracer
 }
 
-func (s *spanImpl) End(options ...trace.EndOption) {
+func (s *spanImpl) End(options ...trace.SpanOption) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var args []interface{}
@@ -55,25 +54,25 @@ func (s *spanImpl) End(options ...trace.EndOption) {
 		args = append(args, string(attr.Key), attr.Value.AsInterface())
 	}
 
-	cfg := &trace.EndConfig{}
-	for _, opt := range options {
-		opt(cfg)
-	}
-
-	if !cfg.EndTime.IsZero() {
-		args = append(args, "Timestamp_u", cfg.EndTime.UnixNano()/1000)
+	cfg := trace.NewSpanConfig(options...)
+	if !cfg.Timestamp.IsZero() {
+		args = append(args, "Timestamp_u", cfg.Timestamp.UnixNano()/1000)
 	}
 	s.aoSpan.End(args...)
 }
 
-func (s *spanImpl) AddEvent(ctx context.Context, name string, attrs ...core.KeyValue) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.addEventWithTimestamp(ctx, time.Now(), name, attrs...)
+func (s *spanImpl) 	AddEvent(name string, options ...trace.EventOption) {
+	// TODO
 }
 
+// func (s *spanImpl) AddEvent(ctx context.Context, name string, attrs ...core.KeyValue) {
+// 	s.mu.Lock()
+// 	defer s.mu.Unlock()
+// 	s.addEventWithTimestamp(ctx, time.Now(), name, attrs...)
+// }
+
 func (s *spanImpl) addEventWithTimestamp(ctx context.Context, timestamp time.Time,
-	name string, attrs ...core.KeyValue) {
+	name string, attrs ...attribute.KeyValue) {
 	var args []interface{}
 	args = append(args, "Name", name)
 	for _, attr := range attrs {
@@ -84,13 +83,13 @@ func (s *spanImpl) addEventWithTimestamp(ctx context.Context, timestamp time.Tim
 	}
 	s.aoSpan.Info(args...)
 }
-
-func (s *spanImpl) AddEventWithTimestamp(ctx context.Context, timestamp time.Time,
-	name string, attrs ...core.KeyValue) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.addEventWithTimestamp(ctx, timestamp, name, attrs...)
-}
+//
+// func (s *spanImpl) AddEventWithTimestamp(ctx context.Context, timestamp time.Time,
+// 	name string, attrs ...core.KeyValue) {
+// 	s.mu.Lock()
+// 	defer s.mu.Unlock()
+// 	s.addEventWithTimestamp(ctx, timestamp, name, attrs...)
+// }
 
 func (s *spanImpl) IsRecording() bool {
 	s.mu.Lock()
@@ -98,31 +97,35 @@ func (s *spanImpl) IsRecording() bool {
 	return s.aoSpan.IsReporting()
 }
 
-func (s *spanImpl) RecordError(ctx context.Context, err error, opts ...trace.ErrorOption) {
-	// Do not lock s.mu here otherwise there will be a deadlock as it calls s.SetStatus
-	if err == nil {
-		return
-	}
-
-	cfg := &trace.ErrorConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	if cfg.Timestamp.IsZero() {
-		cfg.Timestamp = time.Now()
-	}
-	if cfg.StatusCode != codes.OK {
-		s.SetStatus(cfg.StatusCode, "")
-	}
-	s.aoSpan.ErrWithOptions(ao.ErrorOptions{
-		Timestamp: cfg.Timestamp,
-		Class:     fmt.Sprintf("error-%d", cfg.StatusCode),
-		Msg:       err.Error(),
-	})
+func (s *spanImpl) 	RecordError(err error, options ...trace.EventOption) {
+	// TODO
 }
 
-func (s *spanImpl) SpanContext() core.SpanContext {
+// func (s *spanImpl) RecordError(ctx context.Context, err error, opts ...trace.ErrorOption) {
+// 	// Do not lock s.mu here otherwise there will be a deadlock as it calls s.SetStatus
+// 	if err == nil {
+// 		return
+// 	}
+//
+// 	cfg := &trace.ErrorConfig{}
+// 	for _, opt := range opts {
+// 		opt(cfg)
+// 	}
+//
+// 	if cfg.Timestamp.IsZero() {
+// 		cfg.Timestamp = time.Now()
+// 	}
+// 	if cfg.StatusCode != codes.OK {
+// 		s.SetStatus(cfg.StatusCode, "")
+// 	}
+// 	s.aoSpan.ErrWithOptions(ao.ErrorOptions{
+// 		Timestamp: cfg.Timestamp,
+// 		Class:     fmt.Sprintf("error-%d", cfg.StatusCode),
+// 		Msg:       err.Error(),
+// 	})
+// }
+
+func (s *spanImpl) SpanContext() trace.SpanContext {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.context
@@ -141,7 +144,7 @@ func (s *spanImpl) SetName(name string) {
 	s.name = name
 }
 
-func (s *spanImpl) SetAttributes(attrs ...core.KeyValue) {
+func (s *spanImpl) SetAttributes(attrs ...attribute.KeyValue) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.attributes = append(s.attributes, attrs...)
@@ -150,7 +153,7 @@ func (s *spanImpl) SetAttributes(attrs ...core.KeyValue) {
 func (s *spanImpl) SetAttribute(k string, v interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.attributes = append(s.attributes, key.Infer(k, v))
+	s.attributes = append(s.attributes, attribute.Any(k, v))
 }
 
 func (s *spanImpl) addLink(link trace.Link) {

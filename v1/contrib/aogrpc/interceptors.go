@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/opentelemetry"
-	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/context"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
-	otgrpc "go.opentelemetry.io/otel/plugin/grpctrace"
+	otgrpc "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
