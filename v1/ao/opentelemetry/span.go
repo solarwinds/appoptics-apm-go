@@ -19,6 +19,7 @@ type spanImpl struct {
 	aoSpan        ao.Span
 	context       trace.SpanContext
 	name          string
+	spanKind trace.SpanKind
 	statusCode    codes.Code
 	statusMessage string
 	attributes    []attribute.KeyValue
@@ -97,33 +98,22 @@ func (s *spanImpl) IsRecording() bool {
 	return s.aoSpan.IsReporting()
 }
 
-func (s *spanImpl) 	RecordError(err error, options ...trace.EventOption) {
-	// TODO
-}
+func (s *spanImpl) RecordError(err error, opts ...trace.EventOption) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if err == nil {
+		return
+	}
 
-// func (s *spanImpl) RecordError(ctx context.Context, err error, opts ...trace.ErrorOption) {
-// 	// Do not lock s.mu here otherwise there will be a deadlock as it calls s.SetStatus
-// 	if err == nil {
-// 		return
-// 	}
-//
-// 	cfg := &trace.ErrorConfig{}
-// 	for _, opt := range opts {
-// 		opt(cfg)
-// 	}
-//
-// 	if cfg.Timestamp.IsZero() {
-// 		cfg.Timestamp = time.Now()
-// 	}
-// 	if cfg.StatusCode != codes.OK {
-// 		s.SetStatus(cfg.StatusCode, "")
-// 	}
-// 	s.aoSpan.ErrWithOptions(ao.ErrorOptions{
-// 		Timestamp: cfg.Timestamp,
-// 		Class:     fmt.Sprintf("error-%d", cfg.StatusCode),
-// 		Msg:       err.Error(),
-// 	})
-// }
+	cfg := trace.NewEventConfig(opts...)
+
+	if cfg.Timestamp.IsZero() {
+		cfg.Timestamp = time.Now()
+	}
+
+	s.aoSpan.ErrorWithOpts(ao.WithErrMsg(err.Error()), ao.WithErrBackTrace(true))
+}
 
 func (s *spanImpl) SpanContext() trace.SpanContext {
 	s.mu.Lock()

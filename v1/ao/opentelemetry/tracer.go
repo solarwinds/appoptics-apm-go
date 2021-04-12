@@ -23,11 +23,11 @@ func (t *tracerImpl) Start(ctx context.Context, name string, options ...trace.Sp
 	config := trace.NewSpanConfig(options...)
 
 	parentSpan, links := GetSpanContextAndLinks(ctx, config.NewRoot)
-	s := &spanImpl{tracer: t}
+	s := &spanImpl{tracer: t, name: name, spanKind: config.SpanKind}
 	if parentSpan != nil {
 		s.parent = parentSpan // TODO we don't seem to need it?
 		parentAoSpan := parentSpan.(*spanImpl)
-		s.aoSpan = parentAoSpan.aoSpan.BeginSpanWithOptions(name, ao.SpanOptions{
+		s.aoSpan = parentAoSpan.aoSpan.BeginSpanWithOptions(s.name, ao.SpanOptions{
 			StartTime: config.Timestamp,
 		})
 	} else {
@@ -48,6 +48,7 @@ func (t *tracerImpl) Start(ctx context.Context, name string, options ...trace.Sp
 	for _, l := range config.Links {
 		s.addLink(l)
 	}
+	s.SetAttributes(config.Attributes...)
 
 	return ctx, s
 }
