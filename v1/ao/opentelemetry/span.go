@@ -46,7 +46,11 @@ func (s *spanImpl) End(options ...trace.SpanOption) {
 	defer s.mu.Unlock()
 	var args []interface{}
 	for _, link := range s.links {
-		args = append(args, "link", OTSpanContext2MdStr(link.SpanContext))
+		mdStr := OTSpanContext2MdStr(link.SpanContext)
+		args = append(args, "Link", mdStr)
+		for _, attr := range link.Attributes {
+			args = append(args, mdStr + "_" + string(attr.Key), attr.Value.AsInterface())
+		}
 	}
 	for _, attr := range s.attributes {
 		args = append(args, string(attr.Key), attr.Value.AsInterface())
