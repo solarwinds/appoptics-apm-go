@@ -1,18 +1,15 @@
 package opentelemetry
 
 import (
-	"context"
 	"sync"
 	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
-	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/attribute"
-
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
-// TODO test
 type spanImpl struct {
 	mu            sync.Mutex
 	tracer        trace.Tracer
@@ -31,10 +28,10 @@ var _ trace.Span = (*spanImpl)(nil)
 
 func Wrapper(aoSpan ao.Span) trace.Span {
 	return &spanImpl{
-		tracer:  nil, // TODO no tracerImpl for it, should be OK?
+		tracer:  nil,
 		aoSpan:  aoSpan,
 		context: MdStr2OTSpanContext(aoSpan.MetadataString()),
-		name:    "", // TODO expose AO span name
+		name:    "",
 	}
 }
 
@@ -63,17 +60,13 @@ func (s *spanImpl) End(options ...trace.SpanOption) {
 }
 
 func (s *spanImpl) 	AddEvent(name string, options ...trace.EventOption) {
-	// TODO
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := trace.NewEventConfig(options...)
+	s.addEventWithTimestamp(c.Timestamp, name, c.Attributes...)
 }
 
-// func (s *spanImpl) AddEvent(ctx context.Context, name string, attrs ...core.KeyValue) {
-// 	s.mu.Lock()
-// 	defer s.mu.Unlock()
-// 	s.addEventWithTimestamp(ctx, time.Now(), name, attrs...)
-// }
-
-func (s *spanImpl) addEventWithTimestamp(ctx context.Context, timestamp time.Time,
-	name string, attrs ...attribute.KeyValue) {
+func (s *spanImpl) addEventWithTimestamp(timestamp time.Time, name string, attrs ...attribute.KeyValue) {
 	var args []interface{}
 	args = append(args, "Name", name)
 	for _, attr := range attrs {
@@ -84,13 +77,6 @@ func (s *spanImpl) addEventWithTimestamp(ctx context.Context, timestamp time.Tim
 	}
 	s.aoSpan.Info(args...)
 }
-//
-// func (s *spanImpl) AddEventWithTimestamp(ctx context.Context, timestamp time.Time,
-// 	name string, attrs ...core.KeyValue) {
-// 	s.mu.Lock()
-// 	defer s.mu.Unlock()
-// 	s.addEventWithTimestamp(ctx, timestamp, name, attrs...)
-// }
 
 func (s *spanImpl) IsRecording() bool {
 	s.mu.Lock()
@@ -101,7 +87,7 @@ func (s *spanImpl) IsRecording() bool {
 func (s *spanImpl) RecordError(err error, opts ...trace.EventOption) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if err == nil {
 		return
 	}
