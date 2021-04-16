@@ -64,7 +64,7 @@ func GetSpanContextAndLinks(ctx context.Context,
 		links := addLinkIfValid(nil, local.SpanContext(), "current")
 		return nil, links
 	}
-	if local.SpanContext().IsValid() {
+	if _, ok := local.(*spanImpl); ok && local.SpanContext().IsValid() {
 		return local, nil
 	}
 
@@ -91,7 +91,7 @@ func OTSpanContext2MdStr(context trace.SpanContext) string {
 func MdStr2OTSpanContext(mdStr string) trace.SpanContext {
 	// TODO
 	//
-	//  we are not able to convert it back seamlessly as the task ID will be
+	// we are not able to convert it back seamlessly as the task ID will be
 	// truncated and lose precision.
 	return trace.SpanContext{}
 }

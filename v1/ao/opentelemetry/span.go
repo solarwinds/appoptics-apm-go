@@ -127,7 +127,11 @@ func (s *spanImpl) SetName(name string) {
 func (s *spanImpl) SetAttributes(attrs ...attribute.KeyValue) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.attributes = append(s.attributes, attrs...)
+	for _, attr := range attrs {
+		if attr.Valid() {
+			s.attributes = append(s.attributes, attrs...)
+		}
+	}
 }
 
 func (s *spanImpl) SetAttribute(k string, v interface{}) {
