@@ -40,6 +40,7 @@ func (t *tracerImpl) Start(ctx context.Context, name string, options ...trace.Sp
 		})
 	}
 
+	s.context = MdStr2OTSpanContext(s.aoSpan.MetadataString())
 	ctx = trace.ContextWithSpan(ctx, s)
 
 	for _, l := range links {
@@ -64,7 +65,7 @@ func GetSpanContextAndLinks(ctx context.Context,
 		links := addLinkIfValid(nil, local.SpanContext(), "current")
 		return nil, links
 	}
-	if _, ok := local.(*spanImpl); ok && local.SpanContext().IsValid() {
+	if _, ok := local.(*spanImpl); ok {
 		return local, nil
 	}
 
