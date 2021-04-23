@@ -99,9 +99,13 @@ github.com/ugorji/go/codec v1.1.7 h1:2SvQaVZ1ouYrrKKwoSk2pzd4A9evlKJb9oTL+OaLUSs
 github.com/ugorji/go/codec v1.1.7/go.mod h1:Ax+UKWsSmolVDwsd+7N3ZtXu+yMGCf907BLYF3GoBXY=
 go.opentelemetry.io/contrib v0.19.0 h1:x6Josyb/V+aDHg6IozzmZMaOhE+0Jb2NvEAM4/0Gftc=
 go.opentelemetry.io/contrib v0.19.0/go.mod h1:G/EtFaa6qaN7+LxqfIAT3GiZa7Wv5DTBUzl5H4LY0Kc=
+go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.19.0 h1:Zoze5qNTAwR8IQmiclOvraH7AsjZ7jmnbfxu4AvLC2A=
+go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.19.0/go.mod h1:3oxodV81msk5l1NHWpZSMB/VRZKbjNA18oCo5mfH3+E=
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.19.0/go.mod h1:7wygtVHuEK+CYnKcZXn2/FNFW+xPMW0p9BcBXI7NzlU=
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.19.0 h1:HOKafMKQkF8/+m57PrGDgV2OAbWKFKhbb1wbgLZ0+J4=
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.19.0/go.mod h1:7RDsakVbjb124lYDEjKuHTuzdqf04hLMEvPv/ufmqMs=
+go.opentelemetry.io/contrib/propagators v0.19.0 h1:HrixVNZYFjUl/Db+Tr3DhqzLsVW9GeVf/Gye+C5dNUY=
+go.opentelemetry.io/contrib/propagators v0.19.0/go.mod h1:4QOdZClXISU5S43xZxk5tYaWcpb+lehqfKtE6PK6msE=
 go.opentelemetry.io/otel v0.19.0 h1:Lenfy7QHRXPZVsw/12CWpxX6d/JkrX8wrx2vO8G80Ng=
 go.opentelemetry.io/otel v0.19.0/go.mod h1:j9bF567N9EfomkSidSfmMwIwIBuP37AMAIzVW85OxSg=
 go.opentelemetry.io/otel/metric v0.19.0 h1:dtZ1Ju44gkJkYvo+3qGqVXmf88tc+a42edOywypengg=
