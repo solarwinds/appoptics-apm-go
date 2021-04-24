@@ -1,0 +1,57 @@
+# Example distributed app using AppOptics
+# http://www.appoptics.com
+version: '2'
+services:
+  redis:
+    image: redis
+
+  # Alice is a Go service
+  alice:
+    build:
+      context: ./alice
+    environment:
+      APPOPTICS_SERVICE_KEY: ${APPOPTICS_API_TOKEN}:example-alice
+    links:
+      - bob
+      - carolpy:carol
+      - davepy:dave
+      - otto:otto
+    ports:
+      - "8890:8890"
+
+  # Bob is a Go service
+  bob:
+    build:
+      context: ./bob
+    environment:
+      APPOPTICS_SERVICE_KEY: ${APPOPTICS_API_TOKEN}:example-bob
+    links:
+      - redis
+      - carolpy:carol
+
+  # Carol runs Python
+  carolpy:
+    build:
+      context: ./carolpy
+    environment:
+      APPOPTICS_SERVICE_KEY: ${APPOPTICS_API_TOKEN}:example-carol
+
+  # Dave is a Flask app running on uWSGI
+  davepy:
+    build:
+      context: ./davepy
+    environment:
+      APPOPTICS_SERVICE_KEY: ${APPOPTICS_API_TOKEN}:example-dave
+
+  # Otto is a Go app using the OpenTracing API
+  otto:
+    build:
+      context: ./otto
+    environment:
+      APPOPTICS_SERVICE_KEY: ${APPOPTICS_API_TOKEN}:example-otto
+    links:
+      - bob
+      - carolpy:carol
+      - davepy:dave
+    ports:
+      - "8084:8084"

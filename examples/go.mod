@@ -10,6 +10,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.19.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.19.0
 	go.opentelemetry.io/otel v0.19.0
+	go.opentelemetry.io/otel/trace v0.19.0
 )
 
 replace github.com/appoptics/appoptics-apm-go => ../
