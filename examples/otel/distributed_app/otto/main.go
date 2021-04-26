@@ -12,9 +12,6 @@ import (
 	"sync"
 
 	ao "github.com/appoptics/appoptics-apm-go/v1/ao/opentelemetry"
-	ot "github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
-	otlog "github.com/opentracing/opentracing-go/log"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -66,16 +63,11 @@ func ottoHandler(w http.ResponseWriter, r *http.Request) {
 
 func concurrentOttoHandler(w http.ResponseWriter, r *http.Request) {
 	// trace this request
-	carrier := ot.HTTPHeadersCarrier(r.Header)
-	wireCtx, err := ot.GlobalTracer().Extract(ot.HTTPHeaders, carrier)
-	if err != nil {
-		log.Printf("concurrent HTTPHeaders Extract err: %v", err)
-	}
-	serverSpan := ot.GlobalTracer().StartSpan("concurrentOttoHandler", ext.RPCServerOption(wireCtx))
-	serverSpan.SetTag("HTTP-Host", r.Host)
-	ext.HTTPUrl.Set(serverSpan, r.URL.String())
-	ext.HTTPMethod.Set(serverSpan, r.Method)
-	defer serverSpan.Finish()
+	ctx := r.Context()
+	serverSpan := trace.SpanFromContext(ctx)
+	serverSpan.SetAttributes(attribute.String("HTTP-Host", r.Host))
+	serverSpan.SetAttributes(attribute.String("HTTP-URL", r.URL.String()))
+	serverSpan.SetAttributes(attribute.String("HTTP-Method", r.Method))
 
 	// call an HTTP endpoint and propagate the distributed trace context
 	var wg sync.WaitGroup
@@ -95,25 +87,22 @@ func concurrentOttoHandler(w http.ResponseWriter, r *http.Request) {
 			client := &http.Client{}
 			req, _ := http.NewRequest("GET", url, nil)
 			// begin layer for the client side of the HTTP service request
-			clientSpan := ot.StartSpan("ottoHTTPClient", ot.ChildOf(serverSpan.Context()))
-			err = clientSpan.Tracer().Inject(clientSpan.Context(), ot.HTTPHeaders, ot.HTTPHeadersCarrier(req.Header))
-			if err != nil {
-				log.Printf("HTTPHeaders Inject error: %v", err)
-			}
+			_, clientSpan := serverSpan.Tracer().Start(ctx, "ottoHTTPClient")
 
 			// make HTTP request to external API
 			resp, err := client.Do(req)
 			if err != nil {
-				clientSpan.LogFields(otlog.Error(err))
-				clientSpan.Finish() // end HTTP client timing
-				ext.HTTPStatusCode.Set(serverSpan, 500)
+				clientSpan.RecordError(err)
+				clientSpan.End() // end HTTP client timing
+				serverSpan.SetAttributes(attribute.Int("HTTP-StatusCode", 500))
+
 				w.WriteHeader(500)
 				return
 			}
 			// read response body
 			defer resp.Body.Close()
 			buf, err := ioutil.ReadAll(resp.Body)
-			clientSpan.Finish() // end HTTP client timing
+			clientSpan.End() // end HTTP client timing
 			if err != nil {
 				outCh <- []byte(fmt.Sprintf(`{"error":"%v"}`, err))
 			} else {
@@ -126,7 +115,7 @@ func concurrentOttoHandler(w http.ResponseWriter, r *http.Request) {
 	close(outCh)
 	<-doneCh
 
-	ext.HTTPStatusCode.Set(serverSpan, 200)
+	serverSpan.SetAttributes(attribute.Int("HTTP-StatusCode", 200))
 	w.Write(out)
 }
 
