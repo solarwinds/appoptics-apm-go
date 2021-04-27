@@ -8,6 +8,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -31,7 +32,10 @@ func (t *tracerImpl) Start(ctx context.Context, name string, options ...trace.Sp
 			StartTime: config.Timestamp,
 		})
 	} else {
-		mdStr := ""
+		var mdStr string
+		if xTrace, ok := ctx.Value(xTraceHeader).(string); ok {
+			mdStr = xTrace
+		}
 		s.aoSpan = ao.NewTraceWithOptions(s.name, ao.SpanOptions{
 			StartTime: config.Timestamp,
 			ContextOptions: ao.ContextOptions{
@@ -114,4 +118,26 @@ func getXTraceID(spanID trace.SpanID, traceID trace.TraceID, sampled bool) strin
 		buf.WriteString("00")
 	}
 	return strings.ToUpper(buf.String())
+}
+
+type AOTraceContext struct{}
+const xTraceHeader = "X-Trace"
+var _ propagation.TextMapPropagator = AOTraceContext{}
+
+func (tc AOTraceContext) Inject(ctx context.Context, carrier propagation.TextMapCarrier) {
+	local := trace.SpanFromContext(ctx)
+
+	if span, ok := local.(*spanImpl); ok {
+		carrier.Set(xTraceHeader, span.aoSpan.MetadataString())
+	}
+
+}
+
+func (tc AOTraceContext) Extract(ctx context.Context, carrier propagation.TextMapCarrier) context.Context {
+	xTrace := carrier.Get(xTraceHeader)
+	return context.WithValue(ctx, xTraceHeader, xTrace)
+}
+
+func (tc AOTraceContext) Fields() []string {
+	return []string{xTraceHeader}
 }
