@@ -40,6 +40,7 @@ func increasinglySlowHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	tp, _ := ao.NewTracerProvider()
 	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(ao.AOTraceContext{})
 
 	slow := otelhttp.NewHandler(http.HandlerFunc(slowHandler), "Slow")
 	slowly := otelhttp.NewHandler(http.HandlerFunc(increasinglySlowHandler), "Slowly")
