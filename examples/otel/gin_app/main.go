@@ -3,15 +3,16 @@ package main
 import (
 	"net/http"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/opentelemetry"
+	ao "github.com/appoptics/appoptics-apm-go/v1/ao/opentelemetry"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/otel"
 )
 
 func main() {
-	tp, _ := opentelemetry.NewTracerProvider()
+	tp, _ := ao.NewTracerProvider()
 	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(ao.AOTraceContext{})
 
 	// Creates a gin router with default middleware:
 	// logger and recovery (crash-free) middleware
