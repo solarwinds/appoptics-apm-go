@@ -179,8 +179,9 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 		return errors.New("invalid event, same as context")
 	}
 
-	us := time.Now().UnixNano() / 1000
-	e.AddInt64("Timestamp_u", us)
+	if !e.TimestampOverride {
+		e.AddInt64("Timestamp_u", time.Now().UnixNano()/1000)
+	}
 
 	e.AddString("Hostname", host.Hostname())
 	e.AddInt("PID", host.PID())

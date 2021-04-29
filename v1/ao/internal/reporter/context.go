@@ -27,8 +27,8 @@ const (
 	maskVersion           = 0xF0
 
 	xtrCurrentVersion      = 2
-	oboeMaxTaskIDLen       = 20
-	oboeMaxOpIDLen         = 8
+	OboeMaxTaskIDLen       = 20
+	OboeMaxOpIDLen         = 8
 	oboeMaxMetadataPackLen = 512
 )
 
@@ -47,7 +47,7 @@ var (
 )
 
 // All-zero slice to validate the task ID, do not modify it
-var allZeroTaskID = make([]byte, oboeMaxTaskIDLen)
+var allZeroTaskID = make([]byte, OboeMaxTaskIDLen)
 
 // orchestras tune to the oboe.
 type oboeIDs struct{ taskID, opID []byte }
@@ -111,10 +111,10 @@ func (md *oboeMetadata) Init() {
 		return
 	}
 	md.version = xtrCurrentVersion
-	md.taskLen = oboeMaxTaskIDLen
-	md.opLen = oboeMaxOpIDLen
-	md.ids.taskID = make([]byte, oboeMaxTaskIDLen)
-	md.ids.opID = make([]byte, oboeMaxOpIDLen)
+	md.taskLen = OboeMaxTaskIDLen
+	md.opLen = OboeMaxOpIDLen
+	md.ids.taskID = make([]byte, OboeMaxTaskIDLen)
+	md.ids.opID = make([]byte, OboeMaxOpIDLen)
 }
 
 // randReader provides random IDs, and can be overridden for testing.
@@ -747,6 +747,15 @@ func (ctx *oboeContext) report(e *event, addCtxEdge bool, args ...interface{}) e
 	for i := 0; i+1 < len(args); i += 2 {
 		if err := e.AddKV(args[i], args[i+1]); err != nil {
 			return err
+		}
+		if !e.TimestampOverride {
+			key, ok := args[i].(string)
+			if !ok {
+				continue
+			}
+			if key == "Timestamp_u" {
+				e.TimestampOverride = true
+			}
 		}
 	}
 	if addCtxEdge {

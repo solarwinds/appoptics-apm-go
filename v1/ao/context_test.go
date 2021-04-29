@@ -118,7 +118,7 @@ func TestNilContext(t *testing.T) {
 	assert.NotPanics(t, func() { Info(nil, "k", "v") })
 	assert.NotPanics(t, func() { assert.Empty(t, MetadataString(nil)) })
 	assert.NotPanics(t, func() { assert.False(t, IsSampled(nil)) })
-	if strings.HasPrefix(runtime.Version(), "go1.15") {
+	if !strings.HasPrefix(runtime.Version(), "go1.14") {
 		// Go 1.15 introduced panic behavior when passing nil contexts around https://golang.org/doc/go1.15#context
 		assert.Panics(t, func() { NewContext(nil, TraceFromContext(nil)) })
 	} else {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
@@ -133,6 +134,12 @@ type Profile interface {
 	Err(error)
 }
 
+type ErrorOptions struct {
+	Timestamp time.Time
+	Class     string
+	Msg       string
+}
+
 // SpanOptions defines the options of creating a span
 type SpanOptions struct {
 	// WithBackTrace indicates whether to include the backtrace in BeginSpan
@@ -140,7 +147,8 @@ type SpanOptions struct {
 	// `debug.Stack()` internally to gather the stack trace. Please consider
 	// the impact on performance/memory footprint carefully.
 	WithBackTrace bool
-
+	StartTime     time.Time
+	EndTime       time.Time
 	ContextOptions
 	TransactionName string
 }
@@ -214,6 +222,9 @@ func (s *layerSpan) BeginSpan(spanName string, args ...interface{}) Span {
 func (s *layerSpan) BeginSpanWithOptions(spanName string, opts SpanOptions, args ...interface{}) Span {
 	if s.ok() { // copy parent context and report entry from child
 		kvs := addKVsFromOpts(opts, args...)
+		if !opts.StartTime.IsZero() {
+			kvs = append(kvs, "Timestamp_u", opts.StartTime.UnixNano()/1000)
+		}
 		return newSpan(s.aoCtx.Copy(), spanName, s, kvs...)
 	}
 	return nullSpan{}
@@ -407,14 +418,17 @@ func (s *span) ErrorWithOpts(opts... ErrOpt) {
 	if errOpts.Type == ErrTypeStatus {
 		errOpts.Class = ErrClassHTTPError
 	}
-	
-	if s.ok() {
-		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(),
-			keySpec, "error",
+
+	args := []interface{}{
+    	keySpec, "error",
 			keyErrorType, errOpts.Type,
 			keyErrorClass, errOpts.Class,
 			keyErrorMsg, errOpts.Msg,
-			KeyBackTrace, backTrace)
+			KeyBackTrace, backTrace,
+	}
+  
+	if s.ok() {
+		s.aoCtx.ReportEvent(reporter.LabelError, s.layerName(), args...)
 	}
 }
 
@@ -457,6 +471,7 @@ func (s nullSpan) AddEndArgs(args ...interface{})                        {}
 func (s nullSpan) Error(class, msg string)                               {}
 func (s nullSpan) ErrorWithOpts(opts... ErrOpt) {}
 func (s nullSpan) Err(err error)                                         {}
+func (s nullSpan) ErrWithOptions(ErrorOptions)                           {}
 func (s nullSpan) Info(args ...interface{})                              {}
 func (s nullSpan) InfoWithOptions(opts SpanOptions, args ...interface{}) {}
 func (s nullSpan) IsReporting() bool                                     { return false }

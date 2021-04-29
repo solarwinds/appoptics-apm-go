@@ -125,6 +125,10 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 			kvs[k] = v
 		}
 
+		if !opts.StartTime.IsZero() {
+			kvs["Timestamp_u"] = opts.StartTime.UnixNano() / 1000
+		}
+
 		return kvs
 	})
 	if !ok {
@@ -156,6 +160,8 @@ func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
 func NewTraceFromIDForURL(spanName, mdStr string, url string, cb func() KVMap) Trace {
 	return NewTraceWithOptions(spanName, SpanOptions{
 		WithBackTrace: false,
+		StartTime:     time.Time{},
+		EndTime:       time.Time{},
 		ContextOptions: ContextOptions{
 			MdStr: mdStr,
 			URL:   url,

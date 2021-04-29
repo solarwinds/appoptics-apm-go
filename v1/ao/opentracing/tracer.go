@@ -53,6 +53,7 @@ func (t *Tracer) startSpanWithOptions(operationName string, opts ot.StartSpanOpt
 			if refCtx.span == nil { // referenced spanContext created by Extract()
 				var aoTrace ao.Trace
 				if refCtx.sampled {
+					// TODO: explicitly set span start time
 					aoTrace = ao.NewTraceFromID(operationName, refCtx.remoteMD, nil)
 				} else {
 					aoTrace = ao.NewNullTrace()

@@ -17,6 +17,10 @@ import (
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
+	// "github.com/appoptics/appoptics-apm-go/v1/ao/opentelemetry"
+	// "go.opentelemetry.io/otel/api/global"
+	// "go.opentelemetry.io/otel/api/propagation"
+	// "go.opentelemetry.io/otel/api/trace"
 )
 
 const (
@@ -158,6 +162,14 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 		f(so)
 	}
 
+	mdStr := r.Header.Get(HTTPHeaderName)
+	// // Get OT trace context TODO
+	// if mdStr == "" {
+	// 	ctx := propagation.ExtractHTTP(context.Background(), global.Propagators(), r.Header)
+	// 	otSpanContext := trace.RemoteSpanContextFromContext(ctx)
+	// 	mdStr = opentelemetry.OTSpanContext2MdStr(otSpanContext)
+	// }
+  
 	urlStr := r.URL.RequestURI()
 	origURL := r.RequestURI
 	if !config.GetReportQueryString() {
@@ -171,8 +183,10 @@ func traceFromHTTPRequest(spanName string, r *http.Request, isNewContext bool, o
 	// start trace, passing in metadata header
 	t := NewTraceWithOptions(spanName, SpanOptions{
 		WithBackTrace: false,
+		StartTime:     time.Time{},
+		EndTime:       time.Time{},
 		ContextOptions: reporter.ContextOptions{
-			MdStr:                  r.Header.Get(HTTPHeaderName),
+			MdStr:                  mdStr,
 			URL:                    r.URL.EscapedPath(),
 			XTraceOptions:          r.Header.Get(HTTPHeaderXTraceOptions),
 			XTraceOptionsSignature: r.Header.Get(HTTPHeaderXTraceOptionsSignature),
