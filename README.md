@@ -306,7 +306,7 @@ For the full list of the configuration items and descriptions, including YAML co
 ### Support
 
 While we use AppOptics to trace our own production Go services, this version of our Go instrumentation is currently in beta
-and under active development. We welcome your feedback, issues and feature requests, and please contact us at support@appoptics.com!
+and under active development. We welcome your feedback, issues and feature requests, and please contact us at technicalsupport@solarwinds.com!
 
 ### Demo web app
 
@@ -385,7 +385,7 @@ func tracer() stdopentracing.Tracer {
 ```
 
 Currently, `opentracing.NewTracer()` does not accept any options, but this may change in the future.
-Please let us know if you are using this package while it is in preview by contacting us at support@appoptics.com.
+Please let us know if you are using this package while it is in preview by contacting us at technicalsupport@solarwinds.com.
 
 ## License
 
