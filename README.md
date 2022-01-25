@@ -48,7 +48,7 @@ check out the [demo](#demo) app below to get a quick start!
 
 ### Minimum Supported Go Version
 
-* [Go >= 1.12](https://golang.org/dl/)
+* [Go >= 1.14](https://golang.org/dl/)
 
 ### Installing
 
