@@ -1,13 +1,17 @@
 certgen:
-	@cd /Users/yang/go/src/github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter && ./certgen.sh
+	@cd v1/ao/internal/reporter && ./certgen.sh
 
 runtest:
+	@cd v1 && go test -race -timeout 3m -count=1 -short ./... && echo "All tests passed."
+
+runtestfast:
 	@cd v1 && go test -race -timeout 3m -short ./... && echo "All tests passed."
 
 removecert:
-	@cd /Users/yang/go/src/github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter && rm for_test.crt for_test.key
+	@cd v1/ao/internal/reporter && rm for_test.crt for_test.key
 
 test: certgen runtest removecert
+testfast: certgen runtestfast removecert
 
 examples:
 	@cd examples && go test -race -timeout 1m -short ./... && echo "All examples passed."

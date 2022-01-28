@@ -25,7 +25,7 @@ type HTTPClientSpan struct{ Span }
 // metadata.
 func BeginHTTPClientSpan(ctx context.Context, req *http.Request) HTTPClientSpan {
 	if req != nil {
-		l := BeginRemoteURLSpan(ctx, "http.Client", req.URL.String())
+		l := BeginRemoteURLSpan(ctx, "http.Client", req.URL.String(), "HTTPMethod", req.Method)
 		req.Header.Set(HTTPHeaderName, l.MetadataString())
 		return HTTPClientSpan{Span: l}
 	}

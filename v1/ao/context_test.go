@@ -11,6 +11,7 @@ import (
 
 	g "github.com/appoptics/appoptics-apm-go/v1/ao/internal/graphtest"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
+	"github.com/hashicorp/go-version"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -118,7 +119,11 @@ func TestNilContext(t *testing.T) {
 	assert.NotPanics(t, func() { Info(nil, "k", "v") })
 	assert.NotPanics(t, func() { assert.Empty(t, MetadataString(nil)) })
 	assert.NotPanics(t, func() { assert.False(t, IsSampled(nil)) })
-	if strings.HasPrefix(runtime.Version(), "go1.15") {
+
+	baselineV, _ := version.NewSemver("1.15")
+	v, _ := version.NewSemver(strings.TrimLeft(runtime.Version(), "go"))
+
+	if v.GreaterThanOrEqual(baselineV) {
 		// Go 1.15 introduced panic behavior when passing nil contexts around https://golang.org/doc/go1.15#context
 		assert.Panics(t, func() { NewContext(nil, TraceFromContext(nil)) })
 	} else {

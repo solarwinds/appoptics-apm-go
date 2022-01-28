@@ -251,7 +251,7 @@ func TestGRPCReporter(t *testing.T) {
 
 	assert.Equal(t, addr, r.conn.address)
 
-	assert.Equal(t, TestServiceKey, r.serviceKey)
+	assert.Equal(t, TestServiceKey, r.serviceKey.Load())
 
 	assert.Equal(t, int32(grpcMetricIntervalDefault), r.collectMetricInterval)
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)
@@ -451,6 +451,7 @@ func TestInvokeRPC(t *testing.T) {
 	// Test reporter exiting
 	mockMethod := &mocks.Method{}
 	mockMethod.On("String").Return("mock")
+	mockMethod.On("ServiceKey").Return("")
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("Message").Return(nil)
@@ -470,6 +471,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("String").Return("mock")
+	mockMethod.On("ServiceKey").Return("serviceKey")
 	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("RequestSize").Return(int64(1))
@@ -486,6 +488,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("String").Return("mock")
+	mockMethod.On("ServiceKey").Return("serviceKey")
 	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("RequestSize").Return(int64(1))
@@ -502,6 +505,7 @@ func TestInvokeRPC(t *testing.T) {
 
 	mockMethod = &mocks.Method{}
 	mockMethod.On("String").Return("mock")
+	mockMethod.On("ServiceKey").Return("serviceKey")
 	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("RequestSize").Return(int64(1))
@@ -528,6 +532,7 @@ func TestInvokeRPC(t *testing.T) {
 	redirectNum := 1
 	mockMethod = &mocks.Method{}
 	mockMethod.On("String").Return("mock")
+	mockMethod.On("ServiceKey").Return("serviceKey")
 	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("RequestSize").Return(int64(1))
@@ -556,6 +561,7 @@ func TestInvokeRPC(t *testing.T) {
 	mockMethod.On("Call", mock.Anything, mock.Anything).
 		Return(nil)
 	mockMethod.On("String").Return("mock")
+	mockMethod.On("ServiceKey").Return("serviceKey")
 	mockMethod.On("Message").Return(nil)
 	mockMethod.On("MessageLen").Return(int64(0))
 	mockMethod.On("RequestSize").Return(int64(6*1024*1024 + 1))
@@ -711,7 +717,7 @@ func testProxy(t *testing.T, proxyUrl string) {
 
 	assert.Equal(t, addr, r.conn.address)
 
-	assert.Equal(t, TestServiceKey, r.serviceKey)
+	assert.Equal(t, TestServiceKey, r.serviceKey.Load())
 
 	assert.Equal(t, int32(grpcMetricIntervalDefault), r.collectMetricInterval)
 	assert.Equal(t, grpcGetSettingsIntervalDefault, r.getSettingsInterval)

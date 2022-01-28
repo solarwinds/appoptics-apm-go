@@ -783,9 +783,9 @@ func TestConcurrentApp(t *testing.T) {
 func TestConcurrentAppNoTrace(t *testing.T) {
 	r := reporter.SetTestReporter(reporter.TestReporterDisableTracing())
 
-	aliceLn, err := net.Listen("tcp", ":8084")
+	aliceLn, err := net.Listen("tcp", ":8094")
 	assert.NoError(t, err)
-	bobLn, err := net.Listen("tcp", ":8085")
+	bobLn, err := net.Listen("tcp", ":8095")
 	assert.NoError(t, err)
 	go func() {
 		s := &http.Server{Handler: http.HandlerFunc(concurrentAliceHandler)}
@@ -796,7 +796,7 @@ func TestConcurrentAppNoTrace(t *testing.T) {
 		assert.NoError(t, s.Serve(bobLn))
 	}()
 
-	resp, err := http.Get("http://localhost:8084/alice")
+	resp, err := http.Get("http://localhost:8094/alice")
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
