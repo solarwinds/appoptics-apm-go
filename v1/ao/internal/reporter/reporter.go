@@ -85,7 +85,7 @@ func (r *nullReporter) CustomSummaryMetric(name string, value float64, opts metr
 func (r *nullReporter) CustomIncrementMetric(name string, opts metrics.MetricOptions) error {
 	return nil
 }
-func (r *nullReporter) Flush() error { return nil }
+func (r *nullReporter) Flush() error         { return nil }
 func (r *nullReporter) SetServiceKey(string) {}
 
 // init() is called only once on program startup. Here we create the reporter

@@ -8,10 +8,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/bson"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
-	"math"
 )
 
 type event struct {
@@ -231,6 +233,38 @@ func (e *event) AddEdge(ctx *oboeContext) {
 	e.bbuf.AppendString(EdgeKey, ctx.metadata.opString())
 }
 
+func (e *event) AddInt64Slice(key string, values []int64) {
+	start := e.bbuf.AppendStartArray(key)
+	for i, value := range values {
+		e.bbuf.AppendInt64(strconv.Itoa(i), value)
+	}
+	e.bbuf.AppendFinishObject(start)
+}
+
+func (e *event) AddStringSlice(key string, values []string) {
+	start := e.bbuf.AppendStartArray(key)
+	for i, value := range values {
+		e.bbuf.AppendString(strconv.Itoa(i), value)
+	}
+	e.bbuf.AppendFinishObject(start)
+}
+
+func (e *event) AddFloat64Slice(key string, values []float64) {
+	start := e.bbuf.AppendStartArray(key)
+	for i, value := range values {
+		e.bbuf.AppendFloat64(strconv.Itoa(i), value)
+	}
+	e.bbuf.AppendFinishObject(start)
+}
+
+func (e *event) AddBoolSlice(key string, values []bool) {
+	start := e.bbuf.AppendStartArray(key)
+	for i, value := range values {
+		e.bbuf.AppendBool(strconv.Itoa(i), value)
+	}
+	e.bbuf.AppendFinishObject(start)
+}
+
 func (e *event) AddEdgeFromMetadataString(mdstr string) {
 	var md oboeMetadata
 	md.Init()
@@ -340,6 +374,22 @@ func (e *event) AddKV(key, value interface{}) error {
 	case *bool:
 		if v != nil {
 			e.AddBool(k, *v)
+		}
+	case []int64:
+		if v != nil {
+			e.AddInt64Slice(k, v)
+		}
+	case []string:
+		if v != nil {
+			e.AddStringSlice(k, v)
+		}
+	case []float64:
+		if v != nil {
+			e.AddFloat64Slice(k, v)
+		}
+	case []bool:
+		if v != nil {
+			e.AddBoolSlice(k, v)
 		}
 	default:
 		log.Debugf("Ignoring unrecognized Event key %v val %v valType %T", k, v, v)

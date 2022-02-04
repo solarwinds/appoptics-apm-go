@@ -33,10 +33,10 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 
+	uatomic "go.uber.org/atomic"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	uatomic "go.uber.org/atomic"
 )
 
 const (
@@ -211,7 +211,7 @@ type grpcReporter struct {
 	getSettingsInterval          int             // settings retrieval interval in seconds
 	settingsTimeoutCheckInterval int             // check interval for timed out settings in seconds
 
-	serviceKey  *uatomic.String // service key
+	serviceKey *uatomic.String // service key
 
 	eventMessages  chan []byte              // channel for event messages (sent from agent)
 	spanMessages   chan metrics.SpanMessage // channel for span messages (sent from agent)
@@ -693,7 +693,6 @@ func (r *grpcReporter) eventSender() {
 		// Pour as much water as we can into the bucket. It blocks until it's
 		// full or timeout.
 		evtBucket.PourIn()
-
 		// The events can only be pushed into the channel when the bucket
 		// is drainable (either full or timeout) and we've got the token
 		// to push events.
@@ -1095,7 +1094,6 @@ func (c *grpcConnection) InvokeRPC(exit chan struct{}, m Method) error {
 			}
 		default:
 		}
-
 		var err = errConnStale
 		// Protect the call to the client object or we could run into problems
 		// if another goroutine is messing with it at the same time, e.g. doing

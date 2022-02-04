@@ -6,9 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 	"runtime/debug"
 	"sync"
+
+	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter"
 )
 
 const (
@@ -87,6 +88,9 @@ type Span interface {
 
 	// InfoWithOptions reports a new info event with the KVs and options provided
 	InfoWithOptions(opts SpanOptions, args ...interface{})
+
+	// InfoWithOverrides reports a new info event with the KVs, options and overrides
+	InfoWithOverrides(overrides Overrides, opts SpanOptions, args ...interface{})
 
 	// Error reports details about an error (along with a stack trace) for this Span.
 	Error(class, msg string)
@@ -254,7 +258,25 @@ func (s *layerSpan) BeginProfile(profileName string, args ...interface{}) Profil
 }
 
 func (s *span) End(args ...interface{}) {
-	s.End(nil, args)
+	if s.ok() {
+		s.lock.Lock()
+		defer s.lock.Unlock()
+		for _, prof := range s.childProfiles {
+			prof.End()
+		}
+		args = append(args, s.endArgs...)
+		for _, edge := range s.childEdges { // add Edge KV for each joined child
+			args = append(args, keyEdge, edge)
+		}
+		_ = s.aoCtx.ReportEvent(s.exitLabel(), s.layerName(), args...)
+		s.childEdges = nil // clear child edge list
+		s.endArgs = nil
+		s.ended = true
+		// add this span's context to list to be used as Edge by parent exit
+		if s.parent != nil && s.parent.ok() {
+			s.parent.addChildEdge(s.aoCtx)
+		}
+	}
 }
 
 // End a profiled block or method.
@@ -307,6 +329,17 @@ func (s *layerSpan) InfoWithOptions(opts SpanOptions, args ...interface{}) {
 	if s.ok() {
 		kvs := addKVsFromOpts(opts, args...)
 		s.aoCtx.ReportEvent(reporter.LabelInfo, s.layerName(), kvs...)
+	}
+}
+
+// InfoWithOverrides reports a new info event with the KVs, options and overrides
+func (s *layerSpan) InfoWithOverrides(overrides Overrides, opts SpanOptions, args ...interface{}) {
+	if s.ok() {
+		kvs := addKVsFromOpts(opts, args...)
+		s.aoCtx.ReportEventWithOverrides(reporter.LabelInfo, s.layerName(), reporter.Overrides{
+			ExplicitTS:    overrides.ExplicitTS,
+			ExplicitMdStr: overrides.ExplicitMdStr,
+		}, kvs...)
 	}
 }
 
@@ -409,25 +442,26 @@ func (s nullSpan) BeginSpanWithOverrides(spanName string, opts SpanOptions, over
 	return nullSpan{}
 }
 
-func (s nullSpan) BeginProfile(name string, args ...interface{}) Profile     { return nullSpan{} }
-func (s nullSpan) End(args ...interface{})                                   {}
-func (s nullSpan) EndWithOverrides(overrides Overrides, args ...interface{}) {}
-func (s nullSpan) AddEndArgs(args ...interface{})                            {}
-func (s nullSpan) Error(class, msg string)                                   {}
-func (s nullSpan) Err(err error)                                             {}
-func (s nullSpan) Info(args ...interface{})                                  {}
-func (s nullSpan) InfoWithOptions(opts SpanOptions, args ...interface{})     {}
-func (s nullSpan) IsReporting() bool                                         { return false }
-func (s nullSpan) addChildEdge(reporter.Context)                             {}
-func (s nullSpan) addProfile(Profile)                                        {}
-func (s nullSpan) ok() bool                                                  { return false }
-func (s nullSpan) aoContext() reporter.Context                               { return reporter.NewNullContext() }
-func (s nullSpan) MetadataString() string                                    { return "" }
-func (s nullSpan) IsSampled() bool                                           { return false }
-func (s nullSpan) SetAsync(bool)                                             {}
-func (s nullSpan) SetOperationName(string)                                   {}
-func (s nullSpan) SetTransactionName(string) error                           { return nil }
-func (s nullSpan) GetTransactionName() string                                { return "" }
+func (s nullSpan) BeginProfile(name string, args ...interface{}) Profile                        { return nullSpan{} }
+func (s nullSpan) End(args ...interface{})                                                      {}
+func (s nullSpan) EndWithOverrides(overrides Overrides, args ...interface{})                    {}
+func (s nullSpan) AddEndArgs(args ...interface{})                                               {}
+func (s nullSpan) Error(class, msg string)                                                      {}
+func (s nullSpan) Err(err error)                                                                {}
+func (s nullSpan) Info(args ...interface{})                                                     {}
+func (s nullSpan) InfoWithOptions(opts SpanOptions, args ...interface{})                        {}
+func (s nullSpan) InfoWithOverrides(overrides Overrides, opts SpanOptions, args ...interface{}) {}
+func (s nullSpan) IsReporting() bool                                                            { return false }
+func (s nullSpan) addChildEdge(reporter.Context)                                                {}
+func (s nullSpan) addProfile(Profile)                                                           {}
+func (s nullSpan) ok() bool                                                                     { return false }
+func (s nullSpan) aoContext() reporter.Context                                                  { return reporter.NewNullContext() }
+func (s nullSpan) MetadataString() string                                                       { return "" }
+func (s nullSpan) IsSampled() bool                                                              { return false }
+func (s nullSpan) SetAsync(bool)                                                                {}
+func (s nullSpan) SetOperationName(string)                                                      {}
+func (s nullSpan) SetTransactionName(string) error                                              { return nil }
+func (s nullSpan) GetTransactionName() string                                                   { return "" }
 
 func (s contextSpan) aoContext() reporter.Context { return s.aoCtx }
 func (s contextSpan) ok() bool                    { return true }
