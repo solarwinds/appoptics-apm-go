@@ -106,7 +106,7 @@ func TestPrintDelta(t *testing.T) {
 	changed.ReporterProperties.EventFlushInterval = 100
 
 	assert.Equal(t,
-		` - Collector (APPOPTICS_COLLECTOR) = test.com:443 (default: apm-collector.dc-01.st-ssp.solarwinds.com:443)
+		` - Collector (APPOPTICS_COLLECTOR) = test.com:443 (default: collector.appoptics.com:443)
  - PrependDomain (APPOPTICS_PREPEND_DOMAIN) = true (default: false)
  - ReporterProperties.EventFlushInterval (APPOPTICS_EVENTS_FLUSH_INTERVAL) = 100 (default: 2)`,
 		getDelta(newConfig().reset(), changed, "").sanitize().String())

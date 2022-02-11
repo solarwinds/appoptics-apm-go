@@ -35,9 +35,9 @@ const (
 	// max config file size = 1MB
 	maxConfigFileSize = 1024 * 1024
 	// the default collector url
-	defaultSSLCollector    = "apm-collector.dc-01.st-ssp.solarwinds.com:443"
+	defaultSSLCollector = "collector.appoptics.com:443"
 	maxTokenBucketCapacity = 8
-	maxTokenBucketRate     = 4
+	maxTokenBucketRate =4
 )
 
 // The environment variables
@@ -76,7 +76,7 @@ type Config struct {
 	sync.RWMutex `yaml:"-"`
 
 	// Collector defines the host and port of the AppOptics collector
-	Collector string `yaml:"Collector,omitempty" env:"APPOPTICS_COLLECTOR" default:"apm-collector.dc-01.st-ssp.solarwinds.com:443"`
+	Collector string `yaml:"Collector,omitempty" env:"APPOPTICS_COLLECTOR" default:"collector.appoptics.com:443"`
 
 	// ServiceKey defines the service key and service name
 	ServiceKey string `yaml:"ServiceKey,omitempty" env:"APPOPTICS_SERVICE_KEY"`
@@ -397,7 +397,7 @@ func (c *Config) validate() error {
 	if valid := IsValidTokenBucketCap(c.TokenBucketCap); !valid {
 		log.Warning(InvalidEnv("TokenBucketCap", fmt.Sprintf("%f", c.TokenBucketCap)))
 		if c.TokenBucketCap < 0 {
-			c.TokenBucketCap = 0
+			c.TokenBucketCap = 0;
 		} else {
 			c.TokenBucketCap = maxTokenBucketCapacity
 		}
