@@ -203,7 +203,7 @@ func fromKVs(kvs ...interface{}) KVMap {
 
 // BeginSpanWithOptions starts a span with provided options
 func BeginSpanWithOptions(ctx context.Context, spanName string, opts SpanOptions, args ...interface{}) (Span, context.Context) {
-	return BeginSpanWithOverrides(ctx, spanName, opts, Overrides{}, args)
+	return BeginSpanWithOverrides(ctx, spanName, opts, Overrides{}, args...)
 }
 
 func BeginSpanWithOverrides(ctx context.Context, spanName string, opts SpanOptions, overrides Overrides, args ...interface{}) (Span, context.Context) {
