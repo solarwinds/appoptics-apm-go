@@ -18,6 +18,9 @@ type Exporter struct {
 const (
 	xtraceVersionHeader = "2B"
 	sampledFlags        = "01"
+	otEventNameKey      = "ot.event_name"
+	otStatusCodeKey     = "ot.span_status.code"
+	otSpanStatusDescKey = "ot.span_status.description"
 )
 
 func fromAttributeValue(attributeValue attribute.Value) interface{} {
@@ -84,18 +87,24 @@ func extractSpecKvs(span sdktrace.ReadOnlySpan, lookup map[string]string, specVa
 func extractKvs(span sdktrace.ReadOnlySpan) []interface{} {
 	var kvs []interface{}
 	for _, attributeValue := range span.Attributes() {
+		if _, ok := wsKeyMap[string(attributeValue.Key)]; ok { // in wsKeyMap, skip it and handle later
+			continue
+		}
+		if _, ok := queryKeyMap[string(attributeValue.Key)]; ok { // in queryKeyMap, skip it and handle later
+			continue
+		}
+		// all other keys
 		kvs = append(kvs, string(attributeValue.Key))
 		kvs = append(kvs, fromAttributeValue(attributeValue.Value))
 	}
 
 	spanStatus := span.Status()
-	kvs = append(kvs, "ot.span_status.code")
+	kvs = append(kvs, otStatusCodeKey)
 	kvs = append(kvs, uint32(spanStatus.Code))
 	if spanStatus.Code == 1 { // if the span status code is an error, send the description. otel will ignore the description on any other status code
-		kvs = append(kvs, "ot.span_status.description")
+		kvs = append(kvs, otSpanStatusDescKey)
 		kvs = append(kvs, spanStatus.Description)
 	}
-
 	if !span.Parent().IsValid() { // root span, attempt to extract webserver KVs
 		kvs = append(kvs, extractWebserverKvs(span)...)
 	}
@@ -110,7 +119,7 @@ func extractInfoEvents(span sdktrace.ReadOnlySpan) [][]interface{} {
 
 	for i, event := range events {
 		kvs[i] = make([]interface{}, 0)
-		kvs[i] = append(kvs[i], "ot.event_name")
+		kvs[i] = append(kvs[i], otEventNameKey)
 		kvs[i] = append(kvs[i], string(event.Name))
 		for _, attr := range event.Attributes {
 			kvs[i] = append(kvs[i], string(attr.Key))
