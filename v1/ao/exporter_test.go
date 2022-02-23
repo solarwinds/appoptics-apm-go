@@ -2,7 +2,9 @@ package ao
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -296,6 +298,25 @@ func Test_extractKvs_Query_Basic(t *testing.T) {
 			}
 		}
 	}
-
 	require.Equal(t, len(queryKeyMap), found, "should find all queryKeyMap keys in extracted kvs")
+
+	// ensure we have the Spec key that's set to query
+	for idx, v := range kvs {
+		if v == "Spec" {
+			require.Equal(t, "query", kvs[idx+1], "spec should be query")
+			break
+		}
+	}
+}
+
+func Test_getXTraceID(t *testing.T) {
+	var traceID ot.TraceID
+	var spanID ot.SpanID
+
+	traceID = [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	spanID = [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
+	xTraceID := getXTraceID(traceID[:], spanID[:])
+	//2B 0102030405060708090A0B0C0D0E0F10 00000000 0102030405060708 01
+	expectedXTraceID := strings.ToUpper(xtraceVersionHeader + hex.EncodeToString(traceID[:]) + "00000000" + hex.EncodeToString(spanID[:]) + sampledFlags)
+	require.Equal(t, expectedXTraceID, xTraceID, "xTraceID should be equal")
 }
