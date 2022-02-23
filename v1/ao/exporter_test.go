@@ -119,12 +119,15 @@ func Test_extractKvs_WS_Basic(t *testing.T) {
 	sp.End()
 	kvs := extractKvs(sp.(trace.ReadOnlySpan))
 
-	require.Equal(t, len(kvs), 10, "kvs length didn't match")
+	require.Equal(t, 10, len(kvs), "kvs length didn't match")
 	for idx, v := range kvs {
 		if v == "Status" {
 			require.Equal(t, kvs[idx+1], int64(200), "status code should be 200")
-			break
 		}
+		if v == "Spec" {
+			require.Equal(t, kvs[idx+1], "ws", "spec should be ws")
+		}
+
 	}
 }
 
@@ -261,4 +264,38 @@ func Test_extractKvs_WS_NotRootSpan(t *testing.T) {
 			break
 		}
 	}
+}
+
+func Test_extractKvs_Query_Basic(t *testing.T) {
+	tr, teardown := setup()
+	defer teardown()
+	_, sp := tr.Start(context.Background(), "ROOT SPAN NAME aaaa")
+	sp.SetName("span name")
+
+	// "db.connection_string": "RemoteHost",
+	// "db.name":              "Database",
+	// "db.statement":         "Query",
+	// "db.system":            "Flavor",
+
+	attrs := make([]attribute.KeyValue, len(queryKeyMap))
+	for k := range queryKeyMap {
+		attr := attribute.KeyValue(attribute.String(k, "value for "+k))
+		attrs = append(attrs, attr)
+	}
+	sp.SetAttributes(attrs...)
+	sp.End()
+	kvs := extractKvs(sp.(trace.ReadOnlySpan))
+	require.Equal(t, 12, len(kvs), "kvs length didn't match")
+
+	found := 0
+	// ensure all queryKeyMap keys are found in the kvs produced since we populated them all above when creating the span attributes
+	for _, queryKey := range queryKeyMap {
+		for _, v := range kvs {
+			if queryKey == v {
+				found++
+			}
+		}
+	}
+
+	require.Equal(t, len(queryKeyMap), found, "should find all queryKeyMap keys in extracted kvs")
 }
