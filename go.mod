@@ -18,6 +18,7 @@ require (
 )
 
 require (
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9 // indirect
 	google.golang.org/genproto v0.0.0-20220118154757-00ab72f36ad5 // indirect
