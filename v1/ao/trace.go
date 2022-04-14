@@ -154,17 +154,32 @@ func NewTraceWithOptions(spanName string, opts SpanOptions) Trace {
 // incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
 func NewTraceFromID(spanName, mdStr string, cb func() KVMap) Trace {
-	return NewTraceFromIDForURL(spanName, mdStr, "", Overrides{}, cb)
+	return NewTraceFromIDForURL(spanName, mdStr, "", cb)
 }
 
 func NewTraceWithOverrides(spanName string, overrides Overrides, cb func() KVMap) Trace {
-	return NewTraceFromIDForURL(spanName, "", "", overrides, cb)
+	return NewTraceFromIDForURLWithOverrides(spanName, "", "", overrides, cb)
 }
 
 // NewTraceFromIDForURL creates a new Trace for the provided URL to report to AppOptics,
 // provided an incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
 // If callback is provided & trace is sampled, cb will be called for entry event KVs
-func NewTraceFromIDForURL(spanName, mdStr string, url string, overrides Overrides, cb func() KVMap) Trace {
+func NewTraceFromIDForURL(spanName, mdStr string, url string, cb func() KVMap) Trace {
+	return NewTraceWithOptions(spanName, SpanOptions{
+		WithBackTrace: false,
+		ContextOptions: ContextOptions{
+			MdStr: mdStr,
+			URL:   url,
+			CB:    cb,
+		},
+	})
+}
+
+// NewTraceFromIDForURLWithOverrides creates a new Trace for the provided URL to report to AppOptics,
+// provided an incoming trace ID (e.g. from a incoming RPC or service call's "X-Trace" header).
+// Adds ability to provide overrides.
+// If callback is provided & trace is sampled, cb will be called for entry event KVs
+func NewTraceFromIDForURLWithOverrides(spanName, mdStr string, url string, overrides Overrides, cb func() KVMap) Trace {
 	return NewTraceWithOptions(spanName, SpanOptions{
 		WithBackTrace: false,
 		ContextOptions: ContextOptions{
