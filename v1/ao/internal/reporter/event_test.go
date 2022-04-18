@@ -105,13 +105,13 @@ func TestOboeEvent(t *testing.T) {
 	// oboe_event_init
 	evt := &event{}
 	var md, emptyMd oboeMetadata
-	assert.Error(t, oboeEventInit(nil, nil))      // init nil evt, md
-	assert.Error(t, oboeEventInit(evt, nil))      // init evt, nil md
-	assert.Error(t, oboeEventInit(evt, &emptyMd)) // init evt, uninit'd md
-	md.Init()                                     // init valid md
-	assert.NoError(t, md.SetRandom())             // make random md
+	assert.Error(t, oboeEventInit(nil, nil, ""))      // init nil evt, md
+	assert.Error(t, oboeEventInit(evt, nil, ""))      // init evt, nil md
+	assert.Error(t, oboeEventInit(evt, &emptyMd, "")) // init evt, uninit'd md
+	md.Init()                                         // init valid md
+	assert.NoError(t, md.SetRandom())                 // make random md
 	t.Logf("TestEvent md: %v", md.String())
-	assert.NoError(t, oboeEventInit(evt, &md))                 // init valid evt, md
+	assert.NoError(t, oboeEventInit(evt, &md, ""))             // init valid evt, md
 	assert.Equal(t, evt.metadata.ids.taskID, md.ids.taskID)    // task IDs should match
 	assert.NotEqual(t, evt.metadata.ids.opID, md.ids.opID)     // op IDs should not match
 	assert.Len(t, evt.MetadataString(), oboeMetadataStringLen) // event md string correct length

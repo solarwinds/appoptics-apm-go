@@ -63,7 +63,7 @@ func (s *oboeSettings) hasOverrideFlag() bool {
 
 func newOboeSettings() *oboeSettings {
 	return &oboeSettings{
-		bucket: globalTokenBucket,
+		bucket:                    globalTokenBucket,
 		triggerTraceRelaxedBucket: triggerTraceRelaxedBucket,
 		triggerTraceStrictBucket:  triggerTraceStrictBucket,
 	}

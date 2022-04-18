@@ -2,7 +2,9 @@
 
 package bson
 
-import "math"
+import (
+	"math"
+)
 
 type Buffer struct {
 	buf []byte
