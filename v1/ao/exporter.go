@@ -110,6 +110,8 @@ func extractKvs(span sdktrace.ReadOnlySpan) []interface{} {
 	}
 	kvs = append(kvs, extractQueryKvs(span)...)
 
+	fmt.Println("tracestate FULL:", span.SpanContext().TraceState().String())
+	fmt.Println("tracestate key:", VendorID, ", value:", span.SpanContext().TraceState().Get("foo"))
 	return kvs
 }
 

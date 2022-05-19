@@ -203,6 +203,12 @@ func prepareEvent(ctx *oboeContext, e *event) error {
 	return nil
 }
 
+// ShouldTraceRequestWithURL returns a bool and xTraceOptionsResponse string based on layer, traced flag, url and a trigger trace mode.
+func ShouldTraceRequestWithURL(layer string, traced bool, url string, triggerTrace TriggerTraceMode) (bool, string) {
+	d := shouldTraceRequestWithURL(layer, traced, url, triggerTrace)
+	return d.trace, d.xTraceOptsRsp
+}
+
 func shouldTraceRequestWithURL(layer string, traced bool, url string, triggerTrace TriggerTraceMode) SampleDecision {
 	return oboeSampleRequest(layer, traced, url, triggerTrace)
 }

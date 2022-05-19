@@ -542,6 +542,14 @@ func tsInScope(tsStr string) (string, error) {
 	return strconv.FormatInt(ts, 10), nil
 }
 
+// ParseTriggerTrace returns the trigger trace mode based on X-Trace-Options and X-Trace-Options-Signature passed in.
+func ParseTriggerTrace(xTraceOptions string, xTraceOptionsSig string) TriggerTraceMode {
+	tMode, tKVs, tIgnoredKeys, authErr := parseTriggerTraceFlag(xTraceOptions, xTraceOptionsSig)
+	fmt.Println("reporter/context.go, ParseTriggerTrace xTraceOptions", xTraceOptions, "xTraceOptionsSig", xTraceOptionsSig, "tMode", tMode)
+	fmt.Println("reporter/context.go, ParseTriggerTrace, tKVs", tKVs, "tIgnoredKeys", tIgnoredKeys, "authErr", authErr)
+	return tMode
+}
+
 // NewContext starts a trace for the provided URL, possibly continuing one, if
 // mdStr is provided. Setting reportEntry will report an entry event before this
 // function returns, calling cb if provided for additional KV pairs.
