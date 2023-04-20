@@ -1,6 +1,6 @@
 module github.com/appoptics/appoptics-apm-go
 
-go 1.15
+go 1.18
 
 require (
 	github.com/coocood/freecache v1.2.0
