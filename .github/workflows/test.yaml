@@ -30,6 +30,7 @@ jobs:
       - name: Run tests
         working-directory: ./v1
         run: |
+          export PATH=${PATH}:`go env GOPATH`/bin
           pushd ao/internal/reporter
           ./certgen.sh
           popd
