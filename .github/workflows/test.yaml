@@ -30,7 +30,6 @@ jobs:
       - name: Run tests
         working-directory: ./v1
         run: |
-          export PATH=${PATH}:`go env GOPATH`/bin
           pushd ao/internal/reporter
           ./certgen.sh
           popd
@@ -60,7 +59,7 @@ jobs:
           pushd contrib/aogrpc
           go test -v -race -covermode=atomic -coverprofile=cov.out
           popd
-          gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/metrics/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
+          $GOBIN/gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/metrics/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
           pushd ao/internal/reporter
           rm for_test.crt for_test.key
           popd
