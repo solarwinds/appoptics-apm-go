@@ -24,7 +24,7 @@ jobs:
         run: |
           go get golang.org/x/tools/cmd/cover
           go get github.com/mattn/goveralls
-          go get github.com/wadey/gocovmerge
+          go get -v github.com/wadey/gocovmerge
           go get -t -v ./...
 
       - name: Run tests
@@ -59,7 +59,7 @@ jobs:
           pushd contrib/aogrpc
           go test -v -race -covermode=atomic -coverprofile=cov.out
           popd
-          $GOBIN/gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/metrics/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
+          gocovmerge ao/cov.out ao/internal/reporter/cov.out ao/internal/metrics/cov.out ao/internal/log/cov.out ao/internal/config/cov.out ao/internal/host/cov.out ao/opentracing/cov.out contrib/aogrpc/cov.out> coverage.txt
           pushd ao/internal/reporter
           rm for_test.crt for_test.key
           popd
