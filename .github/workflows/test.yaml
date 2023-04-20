@@ -63,6 +63,3 @@ jobs:
           pushd ao/internal/reporter
           rm for_test.crt for_test.key
           popd
-
-      - uses: codecov/codecov-action@v1
-        if: matrix.goversion == '1.20'
