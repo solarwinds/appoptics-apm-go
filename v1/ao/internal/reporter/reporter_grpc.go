@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	collector "github.com/solarwindscloud/apm-proto/go/collectorpb"
 	"io"
 	"io/ioutil"
 	"math"
@@ -31,8 +32,6 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/config"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/log"
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
-
 	uatomic "go.uber.org/atomic"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

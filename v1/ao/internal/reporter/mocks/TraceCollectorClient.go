@@ -2,7 +2,7 @@
 
 package mocks
 
-import "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
+import collector "github.com/solarwindscloud/apm-proto/go/collectorpb"
 
 // FIX: gRPC generated file use x/net/context - import context "context"
 import "golang.org/x/net/context"

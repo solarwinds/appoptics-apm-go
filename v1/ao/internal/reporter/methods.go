@@ -5,9 +5,9 @@ package reporter
 import (
 	"context"
 	"fmt"
+	collector "github.com/solarwindscloud/apm-proto/go/collectorpb"
 	"time"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/pkg/errors"
 )
 

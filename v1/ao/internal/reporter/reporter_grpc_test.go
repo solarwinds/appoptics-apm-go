@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
 	"github.com/pkg/errors"
+	pb "github.com/solarwindscloud/apm-proto/go/collectorpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
