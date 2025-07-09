@@ -6,8 +6,9 @@ import (
 	"context"
 	"testing"
 
+	collector "github.com/solarwinds/apm-proto/go/collectorpb"
+
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/host"
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/mocks"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"

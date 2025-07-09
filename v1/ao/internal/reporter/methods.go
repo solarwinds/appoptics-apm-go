@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/collector"
+	collector "github.com/solarwinds/apm-proto/go/collectorpb"
+
 	"github.com/pkg/errors"
 )
 
