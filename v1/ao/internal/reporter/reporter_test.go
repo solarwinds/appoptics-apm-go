@@ -21,7 +21,7 @@ import (
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/reporter/mocks"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
-	pb "github.com/solarwindscloud/apm-proto/go/collectorpb"
+	pb "github.com/solarwinds/apm-proto/go/collectorpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

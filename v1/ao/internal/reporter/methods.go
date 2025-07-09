@@ -5,8 +5,9 @@ package reporter
 import (
 	"context"
 	"fmt"
-	collector "github.com/solarwindscloud/apm-proto/go/collectorpb"
 	"time"
+
+	collector "github.com/solarwinds/apm-proto/go/collectorpb"
 
 	"github.com/pkg/errors"
 )

@@ -8,18 +8,19 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
-	collector "github.com/solarwindscloud/apm-proto/go/collectorpb"
 	"io"
-	"io/ioutil"
 	"math"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	collector "github.com/solarwinds/apm-proto/go/collectorpb"
 
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/metrics"
 	"github.com/appoptics/appoptics-apm-go/v1/ao/internal/utils"
@@ -262,7 +263,7 @@ func newGRPCReporter() reporter {
 	// certificate override
 	if certPath := config.GetTrustedPath(); certPath != "" {
 		var err error
-		cert, err := ioutil.ReadFile(certPath)
+		cert, err := os.ReadFile(certPath)
 		if err != nil {
 			log.Errorf("Error reading cert file %s: %v", certPath, err)
 			return &nullReporter{}
@@ -1312,7 +1313,7 @@ func newGRPCProxyDialer(p DialParams) func(context.Context, string) (net.Conn, e
 		}
 
 		if proxy.Scheme == "https" {
-			cert, err := ioutil.ReadFile(p.ProxyCertPath)
+			cert, err := os.ReadFile(p.ProxyCertPath)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to load proxy cert")
 			}
