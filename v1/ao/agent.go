@@ -1,5 +1,5 @@
 // Copyright (C) 2016 Librato, Inc. All rights reserved.
-
+// Deprecated: AppOptics has reached end of service life, please use https://github.com/solarwinds/apm-go instead.
 package ao
 
 import (
