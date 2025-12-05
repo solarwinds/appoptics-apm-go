@@ -1,5 +1,8 @@
 # AppOptics APM instrumentation for Go
 
+> [!CAUTION]
+> AppOptics has reached end of service life. This codebase is no longer maintained, please migrate to [SolarWinds Observability](https://www.solarwinds.com/solarwinds-observability) and [SolarWinds APM Go](https://github.com/solarwinds/apm-go).
+
 [![GoDoc](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao?status.svg)](https://godoc.org/github.com/appoptics/appoptics-apm-go/v1/ao)
 [![Build Status](https://travis-ci.org/appoptics/appoptics-apm-go.svg?branch=master)](https://travis-ci.org/appoptics/appoptics-apm-go)
 [![codecov](https://codecov.io/gh/appoptics/appoptics-apm-go/branch/master/graph/badge.svg)](https://codecov.io/gh/appoptics/appoptics-apm-go)
